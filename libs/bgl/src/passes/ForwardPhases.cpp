@@ -172,8 +172,7 @@ namespace bgl
 		return desc.geom != GeometryStage::kGrass;
 	}
 
-	void
-	ForwardPhases::Init(const PassInitContext& ctx)
+	ForwardPhases::ForwardPhases(const PassInitContext& ctx)
 	{
 		core::ensure(ctx.device != nullptr, "Device must be initialized");
 

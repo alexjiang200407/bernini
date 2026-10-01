@@ -29,7 +29,17 @@ namespace bgl
 	class CullState
 	{
 	public:
-		CullState() noexcept = default;
+		/**
+		 * @param paddedInstances the instance buffer's capacity rounded up to the histogram group
+		 *        size; every per-slot buffer here must cover it exactly or a cull writes past the end.
+		 * @param placements the placement buffer's capacity, which the level-of-detail words are
+		 *        indexed by.
+		 * @throws std::runtime_error if the device cannot allocate.
+		 */
+		CullState(
+			const bgpu::ResourceManagerRef& resourceManager,
+			uint32_t                        paddedInstances,
+			uint32_t                        placements);
 
 		CullState(const CullState&)     = delete;
 		CullState(CullState&&) noexcept = default;
@@ -39,19 +49,6 @@ namespace bgl
 
 		CullState&
 		operator=(CullState&&) noexcept = default;
-
-		/**
-		 * @param paddedInstances the instance buffer's capacity rounded up to the histogram group
-		 *        size; every per-slot buffer here must cover it exactly or a cull writes past the end.
-		 * @param placements the placement buffer's capacity, which the level-of-detail words are
-		 *        indexed by.
-		 * @throws std::runtime_error if the device cannot allocate.
-		 */
-		void
-		Init(
-			uint32_t                 paddedInstances,
-			uint32_t                 placements,
-			bgpu::ResourceManagerRef resourceManager);
 
 		/**
 		 * Grows the per-slot buffers to `paddedInstances` and the per-placement ones to `placements`.
@@ -75,9 +72,6 @@ namespace bgl
 		 */
 		void
 		AdvanceLodHistory() noexcept;
-
-		void
-		Release(bool deferred = true) noexcept;
 
 		// Retires the resources a Resize superseded; nothing is carried forward.
 		void

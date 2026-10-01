@@ -95,7 +95,7 @@ registered handler.
 
 | Type / entry | File | Role |
 |---|---|---|
-| `DebugBuffer` | [libs/bgpu/include/bgpu/debug/DebugBuffer.h](libs/bgpu/include/bgpu/debug/DebugBuffer.h) | CPU wrapper over the uint UAV; owns layout constants, `Init`/`Reset`/`Release` |
+| `DebugBuffer` | [libs/bgpu/include/bgpu/debug/DebugBuffer.h](libs/bgpu/include/bgpu/debug/DebugBuffer.h) | CPU wrapper over the uint UAV; owns layout constants and `Reset`, and frees the UAV when destroyed |
 | `InspectDebugReadback` | [libs/bgl/src/debug/DebugReadback.h](libs/bgl/src/debug/DebugReadback.h) | Pure decode of a mapped readback → `DebugReport` (`nullopt` if nothing fired) |
 | `ICommandList::SetActiveDebugBuffer` | [libs/bgpu/include/bgpu/cmd/CommandList.h](libs/bgpu/include/bgpu/cmd/CommandList.h) | Binds the UAV that subsequent dispatches auto-wire into `gDebug` (see [RHI](docs/rhi.md)) |
 | Orchestration | [libs/bgl/src/gfx/RenderContext.cpp](libs/bgl/src/gfx/RenderContext.cpp) | Owns the buffer + readback ring; resets/binds each `BeginFrame`, copies out each `EndFrame`, inspects and crashes-or-forwards |
@@ -144,7 +144,7 @@ flowchart TD
 * **Setters do no GPU sync and are not thread-safe.** `SetGpuAssertionHandler` /
   `DiscardPendingGpuAssertions` only swap CPU state; call them on the render thread alongside
   `BeginFrame`/`Draw`/`EndFrame`. They take effect at the next frame's inspection.
-* **`DebugBuffer::Reset` @pre**: the buffer must be in copy-dest state, and `Init` must have run.
+* **`DebugBuffer::Reset` @pre**: the buffer must be in copy-dest state.
 * **Capacity is small on purpose** (256 records). The whole buffer is copied every frame and the
   first firing frame crashes anyway, so overflow just sets a flag.
 * **Editing a `.slang` file requires a build to re-stage the source** — shaders are compiled at

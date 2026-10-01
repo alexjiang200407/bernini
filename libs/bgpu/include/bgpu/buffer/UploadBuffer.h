@@ -25,6 +25,27 @@ namespace bgpu
 		// bound where a shader declares a ComputeBuffer it only reads: the descriptor's type must
 		// match the declaration, or the read is undefined.
 		bool unorderedAccessView = false;
+
+		UploadBufferDesc&
+		SetInitialCount(uint32_t value) noexcept
+		{
+			initialCount = value;
+			return *this;
+		}
+
+		UploadBufferDesc&
+		SetDebugName(std::string value) noexcept
+		{
+			debugName = std::move(value);
+			return *this;
+		}
+
+		UploadBufferDesc&
+		SetUnorderedAccessView(bool value) noexcept
+		{
+			unorderedAccessView = value;
+			return *this;
+		}
 	};
 
 	/**
@@ -39,10 +60,18 @@ namespace bgpu
 	class UploadBuffer
 	{
 	public:
-		UploadBuffer() noexcept = default;
-		UploadBuffer(UploadBufferDesc desc, ResourceManagerRef resourceManager)
+		/**
+		 * @throws std::runtime_error if the device cannot allocate the initial resource.
+		 */
+		UploadBuffer(ResourceManagerRef resourceManager, UploadBufferDesc desc) :
+			m_Desc(std::move(desc)), m_Storage(
+										 std::move(resourceManager),
+										 m_Desc.debugName,
+										 sizeof(T),
+										 m_Desc.initialCount,
+										 m_Desc.unorderedAccessView)
 		{
-			Init(std::move(desc), std::move(resourceManager));
+			m_Values.reserve(m_Desc.initialCount);
 		}
 
 		UploadBuffer(const UploadBuffer&)     = delete;
@@ -55,36 +84,6 @@ namespace bgpu
 		operator=(UploadBuffer&&) noexcept = default;
 
 		/**
-		 * @throws std::runtime_error if the device cannot allocate the initial resource.
-		 */
-		void
-		Init(UploadBufferDesc desc, ResourceManagerRef resourceManager)
-		{
-			core::ensure(desc.initialCount > 0, "UploadBuffer must have a positive initial count");
-			core::ensure(
-				resourceManager != nullptr,
-				"UploadBuffer requires a valid ResourceManager");
-
-			m_Desc = std::move(desc);
-
-			m_Storage.Init(
-				std::move(resourceManager),
-				m_Desc.debugName,
-				sizeof(T),
-				m_Desc.initialCount,
-				m_Desc.unorderedAccessView);
-
-			m_Values.reserve(m_Desc.initialCount);
-		}
-
-		// True once Init() has created the GPU buffer and before Release().
-		[[nodiscard]] bool
-		IsInitialized() const noexcept
-		{
-			return m_Storage.IsInitialized();
-		}
-
-		/**
 		 * Replaces the contents; the next Update uploads them. An assign equal to what the buffer
 		 * already holds is a no-op, so a caller may re-derive its list without forcing uploads.
 		 *
@@ -94,8 +93,6 @@ namespace bgpu
 		void
 		Assign(std::span<const T> values)
 		{
-			core::ensure(IsInitialized(), "UploadBuffer is uninitialized; call Init() first");
-
 			// Empty short-circuits before the memcmp: two empty spans may both be null, which
 			// memcmp's nonnull contract forbids.
 			const auto equal = [&] {
@@ -141,7 +138,6 @@ namespace bgpu
 		void
 		Update(ICommandList* cmdList)
 		{
-			core::ensure(IsInitialized(), "UploadBuffer is uninitialized; call Init() first");
 			core::ensure(cmdList != nullptr, "Update requires a valid ICommandList");
 
 			m_Storage.FlushGrowth(cmdList);
@@ -167,26 +163,13 @@ namespace bgpu
 		[[nodiscard]] BufferHandle
 		GetBufferHandle() const noexcept
 		{
-			core::ensure(IsInitialized(), "UploadBuffer is uninitialized; call Init() first");
 			return m_Storage.GetHandle();
 		}
 
 		[[nodiscard]] DescriptorHandle
 		GetDescriptorHandle() const noexcept
 		{
-			core::ensure(IsInitialized(), "UploadBuffer is uninitialized; call Init() first");
 			return DescriptorHandle(m_Storage.GetHandle().bindlessIndex);
-		}
-
-		void
-		Release(bool deferred = true) noexcept
-		{
-			if (IsInitialized())
-			{
-				m_Storage.Release(deferred);
-				m_Values.clear();
-				m_Dirty = false;
-			}
 		}
 
 	private:

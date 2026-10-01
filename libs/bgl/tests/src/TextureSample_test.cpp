@@ -64,8 +64,7 @@ TEST_CASE(
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-	auto debugBuffer = bgpu::DebugBuffer();
-	debugBuffer.Init(c_Capacity, resourceManager);
+	auto debugBuffer = bgpu::DebugBuffer(resourceManager, c_Capacity);
 
 	// A 1x1 RGBA8 texture we will upload a known red texel into.
 	auto texDesc          = bgpu::TextureDesc();
@@ -169,7 +168,6 @@ TEST_CASE(
 
 	resourceManager->UnmapReadback(rb);
 
-	debugBuffer.Release(false);
 	resourceManager->DestroyReadbackBuffer(rb, false);
 	resourceManager->DestroySampler(sampler, false);
 	resourceManager->DestroySrv(srv, false);

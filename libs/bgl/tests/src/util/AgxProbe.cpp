@@ -66,8 +66,7 @@ namespace bgl::test
 			rbDesc.debugName                    = "Probe Readback";
 			const bgpu::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
 
-			auto lut = TonemapLut();
-			lut.Init(resourceManager, c_TonemapLutFile);
+			auto                      lut        = TonemapLut(resourceManager, c_TonemapLutFile);
 			const bgpu::SamplerHandle lutSampler = resourceManager->CreateSampler(
 				bgpu::SamplerDesc().SetAllFilters(true).SetAllAddressModes(
 					bgpu::SamplerAddressMode::kClamp));
@@ -113,7 +112,6 @@ namespace bgl::test
 			resourceManager->DestroyReadbackBuffer(rb, false);
 			resourceManager->DestroyBuffer(outBuffer, false);
 			resourceManager->DestroySampler(lutSampler, false);
-			lut.Release();
 
 			return result;
 		}

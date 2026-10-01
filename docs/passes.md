@@ -6,7 +6,7 @@ owns whatever GPU objects it needs across frames (kernels, scratch buffers) and 
 graph then culls, orders, derives barriers, and records — see [Frame Graph](docs/framegraph.md) for
 that machinery. This page is the catalog of the passes `bgl` ships.
 
-A pass's `Init` does not build its kernels: it requests them from the
+A pass's constructor does not build its kernels: it requests them from the
 [PipelineBatch](libs/bgpu/include/bgpu/pipeline/PipelineBatch.h) in the
 [PassInitContext](libs/bgl/src/passes/PassInitContext.h) it is handed -- one argument for
 every pass, holding the device, the batch, the resource manager and the draw-bucket table -- naming
@@ -16,6 +16,11 @@ lands in, and `RenderContext` builds each batch's requests at once across thread
 kernels in the first `Draw` whose view demands each draw bucket. Anything in a pass that reads a built
 kernel — the `BindingNameCheck` of the cbuffer names it binds — lives in `CheckBindings`, which
 `RenderContext` calls after every batch.
+
+A pass exists only built: there is no `Init` and no `Release`, and its destructor frees what it
+owns. `RenderContext` builds the always-on passes in its member-init list, handing each one shared
+context over the start-up batch through a private delegating constructor, since that batch must
+outlive every request made into it; `BrdfLutGenPass`, which the first PBR-lit `Draw` builds, is held in a `std::optional`.
 
 **This document is a map, not a mirror.** It captures each pass's role, the resources it reads and
 writes, and the non-obvious contracts — not full signatures. The header at each linked path is the
@@ -1024,5 +1029,5 @@ pinned with `SetSideEffect()`. Added last, in `EndFrame`, after all draws.
   optional keys (no assert), so keep the string and the shader declaration in step.
 * **Passes are rebuilt every frame; the pass objects are not.** `AttachToFrameGraph` re-adds the
   `PassDesc` (and everything its `exec` lambda captured) each frame, but the kernels and scratch
-  buffers on `ForwardPhases`/`SkyboxPass`/`CompactInstancesPass` persist. Release them through their
-  `Release(...)` with the queue's fence before destroying the device.
+  buffers on `ForwardPhases`/`SkyboxPass`/`CompactInstancesPass` persist. Their destructors hand
+  what they hold to the resource manager's deferred destroy, so the owner flushes nothing first.

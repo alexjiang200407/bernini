@@ -65,10 +65,10 @@ namespace
 
 		// This suite's own table, not the RenderContext's: the point is to exercise the generation,
 		// and a second one costs a single 256x256 draw.
-		auto lut         = bgl::BrdfLutGenPass();
 		auto pipelines   = bgpu::PipelineBatch(device);
 		auto drawBuckets = bgl::DrawBucketTable();
-		lut.Init(bgl::PassInitContext{ device, &pipelines, resourceManager, &drawBuckets });
+		auto lut         = bgl::BrdfLutGenPass(
+			bgl::PassInitContext{ device, &pipelines, resourceManager, &drawBuckets });
 		pipelines.Build();
 
 		// Nothing exists until Generate: laziness is the pass's contract now, and the texture the
@@ -132,7 +132,6 @@ namespace
 
 		resourceManager->UnmapReadback(readback);
 		resourceManager->DestroyReadbackBuffer(readback, false);
-		lut.Release();
 		resourceManager->UnregisterQueue(cmdQueue.Get());
 
 		return table;

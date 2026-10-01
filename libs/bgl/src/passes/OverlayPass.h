@@ -59,7 +59,7 @@ namespace bgl
 			bgpu::SamplerHandle sampler;
 		};
 
-		OverlayPass() = default;
+		explicit OverlayPass(const PassInitContext& ctx);
 		~OverlayPass() noexcept { spdlog::trace("~OverlayPass"); }
 
 		OverlayPass(const OverlayPass&) noexcept = delete;
@@ -71,16 +71,7 @@ namespace bgl
 		OverlayPass&
 		operator=(OverlayPass&&) noexcept = delete;
 
-		void
-		Release()
-		{
-			m_Kernel.Reset();
-		}
-
-		void
-		Init(const PassInitContext& ctx);
-
-		/** @pre the batch Init requested into has been built. Fatal on a binder name the PSO lacks. */
+		/** @pre the constructor's batch has been built. Fatal on a binder name the PSO lacks. */
 		void
 		CheckBindings() const;
 

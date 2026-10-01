@@ -57,7 +57,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "PackedBuffer Emplace";
 
-		auto pb = PackedInt(desc, resourceManager);
+		auto pb = PackedInt(resourceManager, desc);
 
 		CHECK(pb.IsEmpty());
 		CHECK(pb.Count() == 0);
@@ -92,7 +92,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "PackedBuffer Set";
 
-		auto pb = PackedInt(desc, resourceManager);
+		auto pb = PackedInt(resourceManager, desc);
 
 		auto h0 = pb.EmplaceBack(1);
 		pb.Update(cmdList);
@@ -111,7 +111,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "PackedBuffer Erase";
 
-		auto pb = PackedInt(desc, resourceManager);
+		auto pb = PackedInt(resourceManager, desc);
 
 		auto h0 = pb.EmplaceBack(10);
 		auto h1 = pb.EmplaceBack(20);
@@ -143,7 +143,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "PackedBuffer EraseLast";
 
-		auto pb = PackedInt(desc, resourceManager);
+		auto pb = PackedInt(resourceManager, desc);
 
 		auto h0 = pb.EmplaceBack(10);
 		auto h1 = pb.EmplaceBack(20);  // dense tail
@@ -168,7 +168,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "PackedBuffer EraseDirty";
 
-		auto pb = PackedInt(desc, resourceManager);
+		auto pb = PackedInt(resourceManager, desc);
 
 		auto h0 = pb.EmplaceBack(10);  // dense 0
 		auto h1 = pb.EmplaceBack(20);  // dense 1
@@ -193,7 +193,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "PackedBuffer Refill";
 
-		auto pb = PackedInt(desc, resourceManager);
+		auto pb = PackedInt(resourceManager, desc);
 
 		auto h0 = pb.EmplaceBack(1);
 		auto h1 = pb.EmplaceBack(2);
@@ -220,7 +220,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "PackedBuffer Update";
 
-		auto pb = PackedInt(desc, resourceManager);
+		auto pb = PackedInt(resourceManager, desc);
 
 		pb.EmplaceBack(1);
 		pb.EmplaceBack(2);
@@ -241,7 +241,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 		desc.blockSize    = 4 * sizeof(int);  // Four elements per block => 2 blocks.
 		desc.debugName    = "PackedBuffer Blocks";
 
-		auto pb = PackedInt(desc, resourceManager);
+		auto pb = PackedInt(resourceManager, desc);
 
 		// First four entries land in block 0.
 		pb.EmplaceBack(0);
@@ -268,7 +268,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 		desc.blockSize    = 2 * sizeof(int);  // Two elements per block => 4 blocks.
 		desc.debugName    = "PackedBuffer Underflow";
 
-		auto pb = PackedInt(desc, resourceManager);
+		auto pb = PackedInt(resourceManager, desc);
 
 		std::vector<PackedInt::Handle> handles;
 		for (int i = 0; i < 8; ++i) handles.push_back(pb.EmplaceBack(i));
@@ -299,7 +299,7 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 		desc.blockSize    = 4 * sizeof(int);  // Four elements per block => 4 blocks.
 		desc.debugName    = "PackedBuffer Offset Upload";
 
-		auto pb = PackedInt(desc, resourceManager);
+		auto pb = PackedInt(resourceManager, desc);
 
 		std::vector<PackedInt::Handle> handles;
 		for (int i = 0; i < 9; ++i) handles.push_back(pb.EmplaceBack(100 + i));
@@ -339,7 +339,6 @@ TEST_CASE("PackedBuffer", "[packed][scene]")
 
 		resourceManager->UnmapReadback(readback);
 		resourceManager->DestroyReadbackBuffer(readback, false);
-		pb.Release(false);
 
 		// The case-wide Close below expects an open list.
 		cmdList->Open(cmdQueue, cmdAllocator);

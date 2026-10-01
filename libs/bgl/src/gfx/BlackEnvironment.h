@@ -4,7 +4,6 @@
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Srv.h>
 #include <bgpu/resource/Texture.h>
-#include <spdlog/spdlog.h>
 
 namespace bgl
 {
@@ -19,8 +18,10 @@ namespace bgl
 	class BlackEnvironment
 	{
 	public:
-		BlackEnvironment() = default;
-		~BlackEnvironment() noexcept { spdlog::trace("~BlackEnvironment"); }
+		/** @throws GraphicsError if a texture or its view cannot be created. */
+		explicit BlackEnvironment(bgpu::ResourceManagerRef resourceManager);
+
+		~BlackEnvironment() noexcept;
 
 		BlackEnvironment(const BlackEnvironment&) noexcept = delete;
 		BlackEnvironment(BlackEnvironment&&) noexcept      = delete;
@@ -31,11 +32,7 @@ namespace bgl
 		BlackEnvironment&
 		operator=(BlackEnvironment&&) noexcept = delete;
 
-		/** @throws GraphicsError if a texture or its view cannot be created. */
-		void
-		Init(bgpu::ResourceManagerRef resourceManager);
-
-		/** Records the zero fill and the barriers that make both sampleable. @pre Init succeeded. */
+		/** Records the zero fill and the barriers that make both sampleable. */
 		void
 		Upload(bgpu::ICommandList* cmdList);
 
@@ -43,10 +40,10 @@ namespace bgl
 		[[nodiscard]] EnvironmentMap
 		Complete(EnvironmentMap env) const noexcept;
 
-		void
-		Release() noexcept;
-
 	private:
+		void
+		Free() noexcept;
+
 		bgpu::ResourceManagerRef m_ResourceManager;
 		bgpu::TextureHandle      m_Cube;
 		bgpu::SrvHandle          m_CubeSrv;

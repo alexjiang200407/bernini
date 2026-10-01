@@ -45,6 +45,7 @@
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <optional>
 
 // What the grass stage's amplification groups decided, read off cull.stats: every chunk of a field
 // in view is tested and none culled, a field behind the camera is culled whole, and one past the fade
@@ -110,19 +111,19 @@ namespace
 
 	struct Harness
 	{
-		bgl::GraphicsRef                        gfx;
-		bgl::GraphicsBase*                      gfxBase = nullptr;
-		core::SharedRef<bgpu::IResourceManager> resourceManager;
-		bgpu::IDevice*                          device = nullptr;
-		bgl::RenderTargetRef                    target;
-		bgl::RenderTargetBase*                  targetBase = nullptr;
-		bgl::SceneRef                           sceneRef;
-		bgl::SceneViewRef                       viewRef;
-		bgl::Scene*                             scene = nullptr;
-		bgl::SceneView*                         view  = nullptr;
-		bgl::CompactInstancesPass               compactPass;
-		bgl::ForwardPhases                      forwardPhases;
-		bgl::BrdfLutGenPass                     brdfLut;
+		bgl::GraphicsRef                         gfx;
+		bgl::GraphicsBase*                       gfxBase = nullptr;
+		core::SharedRef<bgpu::IResourceManager>  resourceManager;
+		bgpu::IDevice*                           device = nullptr;
+		bgl::RenderTargetRef                     target;
+		bgl::RenderTargetBase*                   targetBase = nullptr;
+		bgl::SceneRef                            sceneRef;
+		bgl::SceneViewRef                        viewRef;
+		bgl::Scene*                              scene = nullptr;
+		bgl::SceneView*                          view  = nullptr;
+		std::optional<bgl::CompactInstancesPass> compactPass;
+		std::optional<bgl::ForwardPhases>        forwardPhases;
+		std::optional<bgl::BrdfLutGenPass>       brdfLut;
 
 		Harness()
 		{
@@ -173,12 +174,12 @@ namespace
 			const bgl::DrawBucketTable& table     = gfxBase->GetRenderContext()->DrawBuckets();
 			auto                        pipelines = bgpu::PipelineBatch(device);
 			const auto ctx = bgl::PassInitContext{ device, &pipelines, resourceManager, &table };
-			compactPass.Init(ctx);
-			forwardPhases.Init(ctx);
-			forwardPhases.AddDrawBucketKernels(ctx, view->GrassDrawBuckets());
-			brdfLut.Init(ctx);
+			compactPass.emplace(ctx);
+			forwardPhases.emplace(ctx);
+			forwardPhases->AddDrawBucketKernels(ctx, view->GrassDrawBuckets());
+			brdfLut.emplace(ctx);
 			pipelines.Build();
-			forwardPhases.CheckBindings();
+			forwardPhases->CheckBindings();
 
 			// The blade shader samples the table; an unset handle indexes past the heap.
 			auto allocator = device->CreateCommandAllocator();
@@ -189,7 +190,7 @@ namespace
 			auto cmdQueue = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 			resourceManager->RegisterQueue(cmdQueue.Get());
 			cmdList->Open(cmdQueue, allocator);
-			brdfLut.Generate(cmdList.Get());
+			brdfLut->Generate(cmdList.Get());
 			cmdList->Close();
 			cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList));
 			resourceManager->UnregisterQueue(cmdQueue.Get());
@@ -201,13 +202,6 @@ namespace
 		operator=(const Harness&) = delete;
 		Harness&
 		operator=(Harness&&) = delete;
-
-		~Harness()
-		{
-			compactPass.Release(false);
-			forwardPhases.Release();
-			brdfLut.Release();
-		}
 
 		/** One frame from `eye` looking at `at`, and the counters it left. */
 		[[nodiscard]] bgl::idl::CullStats
@@ -259,11 +253,11 @@ namespace
 			draw.samplers.linearClamp =
 				scene->GetSampler(bgl::Scene::StandardSampler::kLinearClamp);
 			draw.lighting.env         = view->GetEnvironmentMap();
-			draw.lighting.env.brdfLut = brdfLut.GetSrv();
+			draw.lighting.env.brdfLut = brdfLut->GetSrv();
 
 			fg.SetResourceNamespace(view->GetCullNamespace(0));
-			compactPass.AttachToFrameGraph(fg, draw);
-			forwardPhases.AttachToFrameGraph(fg, draw, bgl::ForwardPhase::kGrass);
+			compactPass->AttachToFrameGraph(fg, draw);
+			forwardPhases->AttachToFrameGraph(fg, draw, bgl::ForwardPhase::kGrass);
 
 			fg.AddPass(
 				bgl::PassDesc()

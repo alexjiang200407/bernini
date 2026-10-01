@@ -6,7 +6,6 @@
 #include <bgpu/resource/Srv.h>
 #include <bgpu/resource/Texture.h>
 #include <cstdint>
-#include <spdlog/spdlog.h>
 
 namespace bgpu
 {
@@ -28,8 +27,10 @@ namespace bgl
 	class BrdfLutGenPass
 	{
 	public:
-		BrdfLutGenPass() = default;
-		~BrdfLutGenPass() noexcept { spdlog::trace("~BrdfLutGenPass"); }
+		/** Requests the pipeline; Generate needs `pipelines` built first. Creates no resource. */
+		explicit BrdfLutGenPass(const PassInitContext& ctx);
+
+		~BrdfLutGenPass() noexcept;
 
 		BrdfLutGenPass(const BrdfLutGenPass&) noexcept = delete;
 		BrdfLutGenPass(BrdfLutGenPass&&) noexcept      = delete;
@@ -40,10 +41,6 @@ namespace bgl
 		BrdfLutGenPass&
 		operator=(BrdfLutGenPass&&) noexcept = delete;
 
-		/** Requests the pipeline; Generate needs `pipelines` built first. Creates no resource. */
-		void
-		Init(const PassInitContext& ctx);
-
 		/**
 		 * Creates the texture and records the integration into `cmdList`, leaving the texture
 		 * readable by a pixel shader: commands recorded after this on the same list may sample it.
@@ -51,7 +48,7 @@ namespace bgl
 		 * sampled afterwards, so holding the view would spend a slot of the caller's RTV budget for
 		 * the lifetime of the device.
 		 *
-		 * @pre `cmdList` is open, and Init's pipeline batch has been built.
+		 * @pre `cmdList` is open, and the constructor's pipeline batch has been built.
 		 */
 		void
 		Generate(bgpu::ICommandList* cmdList);
@@ -76,10 +73,6 @@ namespace bgl
 		{
 			return m_Srv;
 		}
-
-		// @pre the GPU is idle -- the frees are immediate.
-		void
-		Release() noexcept;
 
 	private:
 		// Square, and matching the mip-0 face size the prefilter chain is sampled at: the table is

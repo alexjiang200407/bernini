@@ -17,8 +17,7 @@
 
 namespace bgl
 {
-	void
-	TransparentSortPass::Init(const PassInitContext& ctx)
+	TransparentSortPass::TransparentSortPass(const PassInitContext& ctx)
 	{
 		core::ensure(ctx.device != nullptr, "Device pointer is null");
 
@@ -33,15 +32,6 @@ namespace bgl
 			bgpu::ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.culling.TransparentSort"))
 				.SetDebugName("Transparent Sort"));
-	}
-
-	void
-	TransparentSortPass::Release()
-	{
-		spdlog::trace("TransparentSortPass::Release");
-
-		m_DepthKeys.Reset();
-		m_Sort.Reset();
 	}
 
 	void

@@ -16,6 +16,7 @@
 #include <bgpu/types/QueueType.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <optional>
 
 namespace
 {
@@ -24,13 +25,13 @@ namespace
 	// so is neither copyable nor movable.
 	struct PoisonFixture
 	{
-		bgl::GraphicsRef          gfx;
-		bgpu::ResourceManagerRef  resourceManager;
-		bgpu::IDevice*            device = nullptr;
-		bgpu::CommandAllocatorRef cmdAllocator;
-		bgpu::CommandListRef      cmdList;
-		bgpu::CommandQueueRef     cmdQueue;
-		bgl::BufferPoisoner       poisoner;
+		bgl::GraphicsRef                   gfx;
+		bgpu::ResourceManagerRef           resourceManager;
+		bgpu::IDevice*                     device = nullptr;
+		bgpu::CommandAllocatorRef          cmdAllocator;
+		bgpu::CommandListRef               cmdList;
+		bgpu::CommandQueueRef              cmdQueue;
+		std::optional<bgl::BufferPoisoner> poisoner;
 
 		PoisonFixture()
 		{
@@ -55,10 +56,8 @@ namespace
 			cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 			cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-			poisoner.Init(resourceManager);
+			poisoner.emplace(resourceManager);
 		}
-
-		~PoisonFixture() { poisoner.Release(false); }
 
 		PoisonFixture(const PoisonFixture&) = delete;
 		PoisonFixture(PoisonFixture&&)      = delete;
@@ -104,7 +103,7 @@ TEST_CASE("Poisoning fills a buffer larger than the pattern chunk", "[poison][re
 	auto readback = fixture.resourceManager->CreateReadbackBuffer(rbDesc);
 
 	fixture.cmdList->Open(fixture.cmdQueue, fixture.cmdAllocator);
-	fixture.poisoner.Poison(fixture.cmdList, target);
+	fixture.poisoner->Poison(fixture.cmdList, target);
 	fixture.cmdList->Barrier(target, ToCopySource());
 	fixture.cmdList->CopyBufferToReadback(readback, target);
 	fixture.cmdList->Close();
@@ -167,7 +166,7 @@ TEST_CASE("A dispatch overwrites the poison it was given, and only that", "[pois
 
 	fixture.cmdList->Open(fixture.cmdQueue, fixture.cmdAllocator);
 
-	fixture.poisoner.Poison(fixture.cmdList, target);
+	fixture.poisoner->Poison(fixture.cmdList, target);
 	fixture.cmdList->Barrier(
 		target,
 		bgpu::BufferBarrierDesc()

@@ -29,7 +29,7 @@ namespace bgl
 	class SkinnedPosePass
 	{
 	public:
-		SkinnedPosePass() = default;
+		explicit SkinnedPosePass(const PassInitContext& ctx);
 		~SkinnedPosePass() noexcept { spdlog::trace("~SkinnedPosePass"); }
 
 		SkinnedPosePass(const SkinnedPosePass&) noexcept = delete;
@@ -40,12 +40,6 @@ namespace bgl
 
 		SkinnedPosePass&
 		operator=(SkinnedPosePass&&) noexcept = delete;
-
-		void
-		Init(const PassInitContext& ctx);
-
-		void
-		Release();
 
 		void
 		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw);

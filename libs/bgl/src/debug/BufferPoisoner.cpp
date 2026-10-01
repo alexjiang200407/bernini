@@ -11,16 +11,12 @@
 
 namespace bgl
 {
-	void
-	BufferPoisoner::Init(bgpu::ResourceManagerRef resourceManager)
+	BufferPoisoner::BufferPoisoner(bgpu::ResourceManagerRef resourceManager) :
+		m_ResourceManager(std::move(resourceManager))
 	{
-		core::ensure(
-			resourceManager != nullptr,
-			"BufferPoisoner::Init requires a resource manager");
+		core::ensure(m_ResourceManager != nullptr, "BufferPoisoner requires a resource manager");
 
-		m_ResourceManager = std::move(resourceManager);
-		m_PatternUploaded = false;
-		m_Pattern         = m_ResourceManager->CreateStructBuffer(
+		m_Pattern = m_ResourceManager->CreateStructBuffer(
 			bgpu::StructBufferDesc()
 				.SetElement<uint32_t>()
 				.SetElementCount(c_PatternWords)
@@ -28,29 +24,16 @@ namespace bgl
 
 		if (m_Pattern.IsNull())
 		{
-			core::throw_runtime_error(
-				"BufferPoisoner::Init: the pattern buffer could not be created");
+			core::throw_runtime_error("BufferPoisoner: the pattern buffer could not be created");
 		}
 	}
 
-	void
-	BufferPoisoner::Release(bool deferred) noexcept
-	{
-		if (!m_Pattern.IsNull())
-		{
-			m_ResourceManager->DestroyBuffer(m_Pattern, deferred);
-			m_Pattern = bgpu::BufferHandle{};
-		}
-
-		m_ResourceManager.Reset();
-		m_PatternUploaded = false;
-	}
+	BufferPoisoner::~BufferPoisoner() noexcept { m_ResourceManager->DestroyBuffer(m_Pattern); }
 
 	void
 	BufferPoisoner::Poison(bgpu::ICommandList* cmdList, bgpu::BufferHandle buffer) noexcept
 	{
 		core::ensure(cmdList != nullptr, "BufferPoisoner::Poison requires a command list");
-		core::ensure(!m_Pattern.IsNull(), "BufferPoisoner::Poison before Init");
 		core::ensure(
 			m_ResourceManager->ValidBufferHandle(buffer),
 			"BufferPoisoner::Poison on an invalid buffer handle");

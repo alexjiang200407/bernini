@@ -200,6 +200,12 @@ copies must be kept in step by hand:
 GPU-mirrored containers that back the geometry buffers and hand out the offsets the structs above
 store. All dirty-track writes and flush via `Update(cmdList)`.
 
+Each exists only fully built: its constructor takes the resource manager and a desc and allocates,
+and its destructor hands every resource it holds -- a growth's superseded ones included -- to the
+manager's deferred destroy, so a frame still in flight may keep reading them. There is no `Init` and
+no `Release`. A moved-from buffer holds nothing and frees nothing; an owner that builds one late
+holds it in a `std::optional`.
+
 | Type | File | Role |
 |---|---|---|
 | `RangeBuffer<T,Meta>` | [RangeBuffer.h](libs/bgpu/include/bgpu/buffer/RangeBuffer.h) | Variable-length-range allocator; `Add(span)` returns a `multi_slot_handle` assignable into a `Range`/`RangeWithCount`. Backs the index, meshlet, meshlet-group and submesh buffers; the vertex arena reaches it through `RawBuffer`. |

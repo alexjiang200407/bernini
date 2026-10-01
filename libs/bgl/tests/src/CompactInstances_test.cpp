@@ -82,13 +82,9 @@ TEST_CASE(
 	constexpr uint32_t c_Buckets[]   = { 1u, 130u, bgl::idl::cMaxDrawBuckets - 1u, c_CulledBucket };
 	constexpr uint32_t c_BucketCount = static_cast<uint32_t>(std::size(c_Buckets));
 
-	auto instanceBuffer = bgpu::PackedBuffer<bgl::SubmeshInstance>();
-	{
-		auto desc         = bgpu::PackedBufferDesc();
-		desc.initialCount = c_PaddedCount;
-		desc.debugName    = "Compact Instances";
-		instanceBuffer.Init(desc, resourceManager);
-	}
+	auto instanceBuffer = bgpu::PackedBuffer<bgl::SubmeshInstance>(
+		resourceManager,
+		bgpu::PackedBufferDesc().SetInitialCount(c_PaddedCount).SetDebugName("Compact Instances"));
 
 	// The lane each instance index belongs in, so a compacted index can be checked against the
 	// lane it was filed under. Every third instance of bucket 130 is dissolving, so it files under
@@ -131,13 +127,12 @@ TEST_CASE(
 	}
 
 	const auto makeCompute = [&](auto element, uint32_t count, const char* name) {
-		auto buffer = bgpu::ComputeBuffer();
-		auto desc   = bgpu::ComputeBufferDesc();
-		desc.SetElement<decltype(element)>();
-		desc.initialCount = count;
-		desc.debugName    = name;
-		buffer.Init(desc, resourceManager);
-		return buffer;
+		return bgpu::ComputeBuffer(
+			resourceManager,
+			bgpu::ComputeBufferDesc()
+				.SetElement<decltype(element)>()
+				.SetInitialCount(count)
+				.SetDebugName(name));
 	};
 
 	auto drawBucketPrefixSum =
@@ -410,11 +405,6 @@ TEST_CASE(
 
 	resourceManager->UnmapReadback(rbCompacted);
 
-	instanceBuffer.Release(false);
-	drawBucketPrefixSum.Release(false);
-	dispatchArgs.Release(false);
-	compacted.Release(false);
-	visibility.Release(false);
 	resourceManager->DestroyReadbackBuffer(rbCompacted, false);
 	resourceManager->DestroyReadbackBuffer(rbPrefixSum, false);
 	resourceManager->DestroyReadbackBuffer(rbArgs, false);

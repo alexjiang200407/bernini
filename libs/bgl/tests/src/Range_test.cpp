@@ -67,7 +67,7 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		desc.blockSize    = sizeof(int);  // One element per block.
 		desc.debugName    = "RangeBuffer Allocate";
 
-		auto rb = bgpu::RangeBuffer<int>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<int>(resourceManager, desc);
 
 		// Construction reserves element 0 and leaves its block dirty; flushing it leaves the counts
 		// below the caller's writes alone.
@@ -107,7 +107,7 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "RangeBuffer Add";
 
-		auto rb = bgpu::RangeBuffer<int>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<int>(resourceManager, desc);
 		rb.Update(cmdList);  // Flushes the reserved null element.
 
 		const int values[] = { 10, 20, 30 };
@@ -128,7 +128,7 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "RangeBuffer Set";
 
-		auto rb = bgpu::RangeBuffer<int>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<int>(resourceManager, desc);
 
 		const int values[] = { 1, 2, 3 };
 		auto      handle   = rb.Add(std::span<const int>(values, 3));
@@ -154,7 +154,7 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "RangeBuffer Erase";
 
-		auto rb = bgpu::RangeBuffer<int>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<int>(resourceManager, desc);
 
 		auto handle = rb.AllocateRange(4);
 		CHECK(handle.index == 1);
@@ -180,7 +180,7 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		desc.blockSize    = 4 * sizeof(int);  // Four elements per block => 2 blocks.
 		desc.debugName    = "RangeBuffer Spanning";
 
-		auto rb = bgpu::RangeBuffer<int>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<int>(resourceManager, desc);
 		rb.Update(cmdList);  // Flushes the reserved null element.
 
 		// A 5-element range straddles block 0 (elems 1-3) and block 1 (elems 4-5).
@@ -198,7 +198,7 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "RangeBuffer IsValid";
 
-		auto rb = bgpu::RangeBuffer<int>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<int>(resourceManager, desc);
 
 		// The reserved element is not a live range, so a null offset read back from a GPU-side
 		// struct resolves to nothing rather than to element 0.
@@ -238,7 +238,7 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		desc.blockSize    = 4 * sizeof(uint32_t);  // Four elements per block => 4 blocks.
 		desc.debugName    = "RangeBuffer Offset Upload";
 
-		auto rb = bgpu::RangeBuffer<uint32_t>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<uint32_t>(resourceManager, desc);
 
 		// Fill blocks 0-1 and flush, so the next upload's dirty run cannot start at block 0.
 		const uint32_t low[]     = { 100, 101, 102, 103, 104, 105, 106, 107 };
@@ -282,7 +282,6 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 		resourceManager->UnmapReadback(readback);
 		resourceManager->DestroyReadbackBuffer(readback, false);
-		rb.Release(false);
 
 		// The case-wide Close below expects an open list.
 		cmdList->Open(cmdQueue, cmdAllocator);
@@ -295,7 +294,7 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		desc.blockSize    = sizeof(uint32_t);
 		desc.debugName    = "RangeBuffer Grow";
 
-		auto rb = bgpu::RangeBuffer<uint32_t>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<uint32_t>(resourceManager, desc);
 
 		// initialCount is the caller's budget; the reserved null element rides on top of it.
 		REQUIRE(rb.Capacity() == desc.initialCount + 1);
@@ -314,8 +313,6 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 		// The pre-growth handle still addresses the same slots -- growth must not renumber.
 		CHECK(firstHandle.index == 1);
-
-		rb.Release(false);
 	}
 
 	// The whole point of copy-on-grow. The first range is uploaded into the original resource, which
@@ -328,7 +325,7 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		desc.blockSize    = sizeof(uint32_t);
 		desc.debugName    = "RangeBuffer Grow Preserve";
 
-		auto rb = bgpu::RangeBuffer<uint32_t>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<uint32_t>(resourceManager, desc);
 
 		const uint32_t before[]     = { 111, 222, 333, 444 };
 		auto           beforeHandle = rb.Add(std::span<const uint32_t>(before, std::size(before)));
@@ -380,7 +377,6 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 		resourceManager->UnmapReadback(readback);
 		resourceManager->DestroyReadbackBuffer(readback, false);
-		rb.Release(false);
 
 		cmdAllocator->ResetAllocator();
 		cmdList->Open(cmdQueue, cmdAllocator);
@@ -395,7 +391,7 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		desc.blockSize    = sizeof(uint32_t);
 		desc.debugName    = "RangeBuffer Double Grow";
 
-		auto rb = bgpu::RangeBuffer<uint32_t>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<uint32_t>(resourceManager, desc);
 
 		const uint32_t seed[]     = { 7, 8 };
 		auto           seedHandle = rb.Add(std::span<const uint32_t>(seed, std::size(seed)));
@@ -442,7 +438,6 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 		resourceManager->UnmapReadback(readback);
 		resourceManager->DestroyReadbackBuffer(readback, false);
-		rb.Release(false);
 
 		cmdAllocator->ResetAllocator();
 		cmdList->Open(cmdQueue, cmdAllocator);
@@ -459,7 +454,7 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 		desc.blockSize    = sizeof(uint32_t);
 		desc.debugName    = "RangeBuffer Grow Overlap";
 
-		auto rb = bgpu::RangeBuffer<uint32_t>(desc, resourceManager);
+		auto rb = bgpu::RangeBuffer<uint32_t>(resourceManager, desc);
 
 		// Fits the initial capacity, dirties slots below it, and is NOT flushed -- so the original
 		// resource never receives these bytes.
@@ -504,7 +499,6 @@ TEST_CASE("RangeBuffer", "[range][scene]")
 
 		resourceManager->UnmapReadback(readback);
 		resourceManager->DestroyReadbackBuffer(readback, false);
-		rb.Release(false);
 
 		cmdAllocator->ResetAllocator();
 		cmdList->Open(cmdQueue, cmdAllocator);

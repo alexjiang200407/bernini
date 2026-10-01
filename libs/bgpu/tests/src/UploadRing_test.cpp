@@ -34,10 +34,9 @@ TEST_CASE("The upload ring's chunks are charged to device buffer", "[compute][re
 		auto alloc = device->CreateCommandAllocator(bgpu::QueueType::kCompute);
 		auto list  = device->CreateCommandList(listDesc, alloc, rm);
 
-		auto valuesDesc         = bgpu::EntryBufferDesc();
-		valuesDesc.initialCount = 16;
-		valuesDesc.debugName    = "Upload ring values";
-		auto values             = bgpu::EntryBuffer<uint32_t>(valuesDesc, rm);
+		auto values = bgpu::EntryBuffer<uint32_t>(
+			rm,
+			bgpu::EntryBufferDesc().SetInitialCount(16).SetDebugName("Upload ring values"));
 		// Fewer than its capacity, so Update writes through the ring and never regrows the buffer.
 		for (uint32_t i = 0; i < 8; ++i)
 		{
@@ -54,8 +53,6 @@ TEST_CASE("The upload ring's chunks are charged to device buffer", "[compute][re
 		CHECK(
 			core::profiling::tag_totals(bgpu::MemoryTag::kDeviceBuffer).live >=
 			before + listDesc.uploadChunkSize);
-
-		values.Release(false);
 	}
 
 	queue->Flush();

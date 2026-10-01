@@ -86,7 +86,7 @@ provides higher level abstractions of Mesh, Light and Material while hiding the 
   `pipeline_util::BuildPipelineLayout`, which links all of a PSO's entry points into one program.
   Because bytecode and reflection come from the same link, bindings always agree — shaders do
   **not** need explicit `register(bN, spaceM)` on their constant buffers.
-- The renderer's PSOs are built together, in parallel: a pass's `Init` requests its always-on
+- The renderer's PSOs are built together, in parallel: a pass's constructor requests its always-on
   kernels from the `PipelineBatch` in the `PassInitContext` it is handed
   (`src/passes/PassInitContext.h`: the device, the batch, the resource manager and the draw-bucket
   table, borrowed for the call) and
@@ -94,8 +94,8 @@ provides higher level abstractions of Mesh, Light and Material while hiding the 
   meshlet kernels are the exception: `RenderContext::EnsureDrawBucketPipelinesExist` builds each draw bucket in
   the first `Draw` whose view demands it (`SceneView::DemandedDrawBuckets`), so a scene pays only for
   the draw buckets it uses and an unbuilt draw bucket's kernel is skipped by `Execute` as having nothing to
-  draw. A new pass follows the `Init` shape — request in `Init`, read kernels only from `CheckBindings`
-  or later — and pipeline creation stays safe from any thread.
+  draw. A new pass follows the same shape — request in its constructor, read kernels only from
+  `CheckBindings` or later — and pipeline creation stays safe from any thread.
 - A persistent shader cache (`bgpu::GpuContextDesc::shaderCacheDir`) short-circuits compilation
   across runs: the programs in the GPU context's store, the driver pipelines in this renderer's
   library beside them. See [Shader Cache](../../docs/shader_cache.md) for the two-layer design, lazy module

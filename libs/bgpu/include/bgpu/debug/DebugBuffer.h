@@ -42,7 +42,15 @@ namespace bgpu
 		static constexpr uint32_t c_OverflowWord = 1;
 		static constexpr uint32_t c_CapacityWord = 2;
 
-		DebugBuffer() noexcept = default;
+		DebugBuffer(ResourceManagerRef resourceManager, uint32_t recordCapacity) :
+			m_Buffer(
+				std::move(resourceManager),
+				ComputeBufferDesc()
+					.SetElement<uint32_t>()
+					.SetInitialCount(c_HeaderWords + recordCapacity * c_RecordWords)
+					.SetDebugName("GPU Debug Buffer")),
+			m_Capacity(recordCapacity)
+		{}
 
 		DebugBuffer(const DebugBuffer&)     = delete;
 		DebugBuffer(DebugBuffer&&) noexcept = default;
@@ -52,25 +60,6 @@ namespace bgpu
 
 		DebugBuffer&
 		operator=(DebugBuffer&&) noexcept = default;
-
-		void
-		Init(uint32_t recordCapacity, ResourceManagerRef resourceManager)
-		{
-			m_Capacity = recordCapacity;
-
-			auto desc = ComputeBufferDesc()
-			                .SetElement<uint32_t>()
-			                .SetInitialCount(c_HeaderWords + recordCapacity * c_RecordWords)
-			                .SetDebugName("GPU Debug Buffer");
-
-			m_Buffer.Init(std::move(desc), std::move(resourceManager));
-		}
-
-		[[nodiscard]] bool
-		IsInitialized() const noexcept
-		{
-			return m_Buffer.IsInitialized();
-		}
 
 		[[nodiscard]] BufferHandle
 		GetBufferHandle() const noexcept
@@ -99,16 +88,9 @@ namespace bgpu
 		Reset(ICommandList* cmd) const noexcept
 		{
 			core::ensure(cmd != nullptr, "Command list cannot be null");
-			core::ensure(IsInitialized(), "DebugBuffer is uninitialized; call Init() first");
 
 			const std::array<uint32_t, c_HeaderWords> header = { 0u, 0u, m_Capacity, 0u };
 			cmd->WriteBuffer(m_Buffer.GetBufferHandle(), header.data(), sizeof(header));
-		}
-
-		void
-		Release(bool deferred = true) noexcept
-		{
-			m_Buffer.Release(deferred);
 		}
 
 	private:

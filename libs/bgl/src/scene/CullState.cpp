@@ -10,74 +10,65 @@
 #include <bgpu/resource/ResourceManager.h>
 #include <cstdint>
 #include <format>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
 namespace bgl
 {
-	void
-	CullState::Init(
-		uint32_t                 paddedInstances,
-		uint32_t                 placements,
-		bgpu::ResourceManagerRef resourceManager)
+	namespace
 	{
+		bgpu::ComputeBuffer
+		CreateLodWords(
+			uint32_t                        placements,
+			const bgpu::ResourceManagerRef& resourceManager,
+			std::string                     debugName)
 		{
-			// Twice the slots: a placement fading between two levels draws both, one entry each.
-			auto desc         = bgpu::ComputeBufferDesc();
-			desc.initialCount = paddedInstances * 2;
-			desc.debugName    = "Compacted Instances";
-			desc.SetElement<uint32_t>();
-
-			m_CompactedInstances.Init(std::move(desc), resourceManager);
-		}
-
-		{
-			auto desc         = bgpu::ComputeBufferDesc();
-			desc.initialCount = paddedInstances;
-			desc.debugName    = "Instance Visibility";
-			desc.SetElement<idl::InstanceVisibility>();
-
-			m_InstanceVisibility.Init(std::move(desc), resourceManager);
-		}
-
-		{
-			auto desc = bgpu::ComputeBufferDesc();
-			desc.SetElement<uint32_t>()
-				.SetInitialCount(idl::cMaxDrawLanes)
-				.SetDebugName("Draw Bucket Prefix Sum");
-
-			m_DrawBucketPrefixSum.Init(std::move(desc), resourceManager);
-		}
-
-		{
-			auto desc = bgpu::ComputeBufferDesc();
-			desc.SetElement<idl::DispatchArgs>()
-				.SetInitialCount(idl::cMaxDrawLanes)
-				.SetDebugName("Compacted Dispatch Args");
-
-			m_CompactedDispatchArgs.Init(std::move(desc), resourceManager);
-		}
-
-		for (uint32_t i = 0; i < m_InstanceLod.size(); ++i)
-		{
-			auto desc         = bgpu::ComputeBufferDesc();
-			desc.initialCount = std::max(placements, 1u);
-			desc.debugName    = i == 0 ? "Instance LOD A" : "Instance LOD B";
-			desc.SetElement<idl::InstanceLod>();
-
-			m_InstanceLod[i].Init(std::move(desc), resourceManager);
-		}
-		m_LodNeedsClear = true;
-
-		{
-			auto desc         = bgpu::UploadBufferDesc();
-			desc.initialCount = 1;
-			desc.debugName    = "Cull View";
-
-			m_CullView.Init(std::move(desc), std::move(resourceManager));
+			return bgpu::ComputeBuffer(
+				resourceManager,
+				bgpu::ComputeBufferDesc()
+					.SetElement<idl::InstanceLod>()
+					.SetInitialCount(std::max(placements, 1u))
+					.SetDebugName(std::move(debugName)));
 		}
 	}
+
+	CullState::CullState(
+		const bgpu::ResourceManagerRef& resourceManager,
+		uint32_t                        paddedInstances,
+		uint32_t                        placements) :
+		// Twice the slots: a placement fading between two levels draws both, one entry each.
+		m_CompactedInstances(
+			resourceManager,
+			bgpu::ComputeBufferDesc()
+				.SetElement<uint32_t>()
+				.SetInitialCount(paddedInstances * 2)
+				.SetDebugName("Compacted Instances")),
+		m_InstanceVisibility(
+			resourceManager,
+			bgpu::ComputeBufferDesc()
+				.SetElement<idl::InstanceVisibility>()
+				.SetInitialCount(paddedInstances)
+				.SetDebugName("Instance Visibility")),
+		m_DrawBucketPrefixSum(
+			resourceManager,
+			bgpu::ComputeBufferDesc()
+				.SetElement<uint32_t>()
+				.SetInitialCount(idl::cMaxDrawLanes)
+				.SetDebugName("Draw Bucket Prefix Sum")),
+		m_CompactedDispatchArgs(
+			resourceManager,
+			bgpu::ComputeBufferDesc()
+				.SetElement<idl::DispatchArgs>()
+				.SetInitialCount(idl::cMaxDrawLanes)
+				.SetDebugName("Compacted Dispatch Args")),
+		m_CullView(
+			resourceManager,
+			bgpu::UploadBufferDesc().SetInitialCount(1).SetDebugName("Cull View")),
+		m_InstanceLod{ CreateLodWords(placements, resourceManager, "Instance LOD A"),
+		               CreateLodWords(placements, resourceManager, "Instance LOD B") }
+	{}
 
 	void
 	CullState::Resize(uint32_t paddedInstances, uint32_t placements)
@@ -99,17 +90,6 @@ namespace bgl
 	CullState::AdvanceLodHistory() noexcept
 	{
 		m_LodCurrent ^= 1u;
-	}
-
-	void
-	CullState::Release(bool deferred) noexcept
-	{
-		m_CompactedInstances.Release(deferred);
-		m_InstanceVisibility.Release(deferred);
-		m_DrawBucketPrefixSum.Release(deferred);
-		m_CompactedDispatchArgs.Release(deferred);
-		m_CullView.Release(deferred);
-		for (bgpu::ComputeBuffer& words : m_InstanceLod) words.Release(deferred);
 	}
 
 	void

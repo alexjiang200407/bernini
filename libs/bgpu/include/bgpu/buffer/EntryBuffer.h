@@ -27,6 +27,27 @@ namespace bgpu
 		uint32_t    initialCount = 0;
 		uint32_t    blockSize    = 65536;
 		std::string debugName;
+
+		EntryBufferDesc&
+		SetInitialCount(uint32_t value) noexcept
+		{
+			initialCount = value;
+			return *this;
+		}
+
+		EntryBufferDesc&
+		SetBlockSize(uint32_t value) noexcept
+		{
+			blockSize = value;
+			return *this;
+		}
+
+		EntryBufferDesc&
+		SetDebugName(std::string value) noexcept
+		{
+			debugName = std::move(value);
+			return *this;
+		}
 	};
 
 	template <typename T>
@@ -48,10 +69,28 @@ namespace bgpu
 		using MetaStorage = std::conditional_t<c_HasMeta, std::vector<MetaElem>, std::monostate>;
 
 	public:
-		EntryBuffer() noexcept = default;
-		EntryBuffer(EntryBufferDesc desc, ResourceManagerRef resourceManager)
+		EntryBuffer(ResourceManagerRef resourceManager, EntryBufferDesc desc) :
+			m_Desc(std::move(desc)), m_Storage(
+										 std::move(resourceManager),
+										 m_Desc.debugName,
+										 sizeof(T),
+										 m_Desc.initialCount + 1,
+										 false)
 		{
-			Init(std::move(desc), std::move(resourceManager));
+			core::ensure(m_Desc.initialCount > 0, "EntryBuffer must have a positive initial count");
+			core::ensure(m_Desc.blockSize > 0, "Block size must be greater than zero");
+
+			const uint32_t capacity = m_Desc.initialCount + 1;
+
+			m_Entries.reset(capacity);
+
+			if constexpr (c_HasMeta)
+			{
+				m_Metadata.assign(capacity, Meta{});
+			}
+
+			ResizeDirtyBlocks(capacity);
+			ReserveNullEntry();
 		}
 
 		EntryBuffer(const EntryBuffer&)     = delete;
@@ -62,42 +101,6 @@ namespace bgpu
 
 		EntryBuffer&
 		operator=(EntryBuffer&&) noexcept = default;
-
-		void
-		Init(EntryBufferDesc desc, ResourceManagerRef resourceManager)
-		{
-			core::ensure(desc.initialCount > 0, "EntryBuffer must have a positive initial count");
-			core::ensure(desc.blockSize > 0, "Block size must be greater than zero");
-			core::ensure(
-				resourceManager != nullptr,
-				"EntryBuffer requires a valid ResourceManager");
-
-			m_Desc = std::move(desc);
-
-			const uint32_t capacity = m_Desc.initialCount + 1;
-
-			m_Storage
-				.Init(std::move(resourceManager), m_Desc.debugName, sizeof(T), capacity, false);
-
-			m_Entries.reset(capacity);
-
-			if constexpr (c_HasMeta)
-			{
-				m_Metadata.assign(capacity, Meta{});
-			}
-
-			ResizeDirtyBlocks(capacity);
-			m_HasAnyDirtyBlocks = false;
-
-			ReserveNullEntry();
-		}
-
-		// True once Init() has created the GPU buffer and before Release().
-		[[nodiscard]] bool
-		IsInitialized() const noexcept
-		{
-			return m_Storage.IsInitialized();
-		}
 
 		[[nodiscard]] bool
 		IsValid(core::slot_handle handle) const noexcept
@@ -123,8 +126,6 @@ namespace bgpu
 		core::slot_handle
 		EmplaceBack(Args&&... args)
 		{
-			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
-
 			auto slot = m_Entries.try_allocate_and_emplace(std::forward<Args>(args)...);
 			if (slot.is_null())
 			{
@@ -148,7 +149,6 @@ namespace bgpu
 		core::slot_handle
 		Add(T value)
 		{
-			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			auto slot = EmplaceBack();
 			Set(slot, std::move(value));
 			return slot;
@@ -157,7 +157,6 @@ namespace bgpu
 		void
 		Set(core::slot_handle slot, T value) noexcept
 		{
-			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			core::ensure(m_Entries.valid(slot.index, slot.generation), "Invalid slot handle");
 			MarkDirty(slot.index);
 			m_Entries[slot.index] = std::move(value);
@@ -166,7 +165,6 @@ namespace bgpu
 		const T&
 		operator[](core::slot_handle slot) const noexcept
 		{
-			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			core::ensure(m_Entries.valid(slot.index, slot.generation), "Invalid slot handle");
 			return m_Entries[slot.index];
 		}
@@ -174,7 +172,6 @@ namespace bgpu
 		const T&
 		AtIndex(uint32_t index) const noexcept
 		{
-			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			core::ensure(m_Entries.allocated(index), "AtIndex on an unallocated slot");
 			return m_Entries[index];
 		}
@@ -182,7 +179,6 @@ namespace bgpu
 		void
 		Erase(core::slot_handle slot) noexcept
 		{
-			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			core::ensure(m_Entries.valid(slot.index, slot.generation), "Invalid slot handle");
 			m_Entries.release_slot(slot.index);
 		}
@@ -190,7 +186,6 @@ namespace bgpu
 		void
 		EraseByIndex(uint32_t index) noexcept
 		{
-			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			core::ensure(m_Entries.allocated(index), "EraseByIndex on an unallocated slot");
 			m_Entries.release_slot(index);
 		}
@@ -200,7 +195,6 @@ namespace bgpu
 		MetaAt(uint32_t index) noexcept
 			requires(!std::is_void_v<M>)
 		{
-			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			core::ensure(m_Entries.allocated(index), "MetaAt on an unallocated slot");
 			return m_Metadata[index];
 		}
@@ -210,7 +204,6 @@ namespace bgpu
 		MetaAt(uint32_t index) const noexcept
 			requires(!std::is_void_v<M>)
 		{
-			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			core::ensure(m_Entries.allocated(index), "MetaAt on an unallocated slot");
 			return m_Metadata[index];
 		}
@@ -218,7 +211,6 @@ namespace bgpu
 		void
 		Update(ICommandList* cmdList) noexcept
 		{
-			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			core::ensure(cmdList != nullptr, "Update requires a valid ICommandList");
 			core::ensure(cmdList->IsOpen(), "ICommandList must be open to update EntryBuffer");
 
@@ -271,14 +263,12 @@ namespace bgpu
 		DescriptorHandle
 		GetDescriptorHandle() const noexcept
 		{
-			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			return DescriptorHandle(m_Storage.GetHandle().bindlessIndex);
 		}
 
 		[[nodiscard]] BufferHandle
 		GetBufferHandle() const noexcept
 		{
-			core::ensure(IsInitialized(), "EntryBuffer is uninitialized; call Init() first");
 			return m_Storage.GetHandle();
 		}
 
@@ -293,22 +283,6 @@ namespace bgpu
 		{
 			return static_cast<uint32_t>(
 				std::count(m_DirtyBlocks.begin(), m_DirtyBlocks.end(), true));
-		}
-
-		void
-		Release(bool deferred = true) noexcept
-		{
-			if (IsInitialized())
-			{
-				m_Storage.Release(deferred);
-				m_Entries.clear();
-				m_DirtyBlocks.clear();
-				if constexpr (c_HasMeta)
-				{
-					m_Metadata.clear();
-				}
-				m_HasAnyDirtyBlocks = false;
-			}
 		}
 
 	private:
@@ -385,8 +359,6 @@ namespace bgpu
 			uint32_t      endBlk,
 			uint32_t      totalBytes) noexcept
 		{
-			core::ensure(IsInitialized(), "EntryBuffer storage cannot be null");
-
 			const uint32_t offset = startBlk * m_Desc.blockSize;
 			uint32_t       size   = (endBlk - startBlk) * m_Desc.blockSize;
 

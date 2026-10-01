@@ -81,7 +81,7 @@ namespace bgl
 			bool historyValid = false;
 		};
 
-		TaaResolvePass() = default;
+		explicit TaaResolvePass(const PassInitContext& ctx);
 		~TaaResolvePass() noexcept { spdlog::trace("~TaaResolvePass"); }
 
 		TaaResolvePass(const TaaResolvePass&) noexcept = delete;
@@ -93,16 +93,7 @@ namespace bgl
 		TaaResolvePass&
 		operator=(TaaResolvePass&&) noexcept = delete;
 
-		void
-		Release()
-		{
-			m_Kernel.Reset();
-		}
-
-		void
-		Init(const PassInitContext& ctx);
-
-		/** @pre the batch Init requested into has been built. Fatal on a binder name the PSO lacks. */
+		/** @pre the constructor's batch has been built. Fatal on a binder name the PSO lacks. */
 		void
 		CheckBindings() const;
 

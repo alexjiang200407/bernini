@@ -106,21 +106,15 @@ TEST_CASE(
 
 	constexpr uint32_t c_PaddedCount = c_ThreadsPerGroup;
 
-	auto meshBuffer = bgpu::EntryBuffer<bgl::idl::MeshInstance>();
-	{
-		auto desc         = bgpu::EntryBufferDesc();
-		desc.initialCount = c_PaddedCount;
-		desc.debugName    = "Keys Mesh Buffer";
-		meshBuffer.Init(std::move(desc), resourceManager);
-	}
+	auto meshBuffer = bgpu::EntryBuffer<bgl::idl::MeshInstance>(
+		resourceManager,
+		bgpu::EntryBufferDesc().SetInitialCount(c_PaddedCount).SetDebugName("Keys Mesh Buffer"));
 
-	auto instanceBuffer = bgpu::PackedBuffer<bgl::SubmeshInstance>();
-	{
-		auto desc         = bgpu::PackedBufferDesc();
-		desc.initialCount = c_PaddedCount;
-		desc.debugName    = "Keys Instance Buffer";
-		instanceBuffer.Init(desc, resourceManager);
-	}
+	auto instanceBuffer = bgpu::PackedBuffer<bgl::SubmeshInstance>(
+		resourceManager,
+		bgpu::PackedBufferDesc()
+			.SetInitialCount(c_PaddedCount)
+			.SetDebugName("Keys Instance Buffer"));
 
 	// instanceIndex -> the z it was placed at, so the readback can be checked without assuming
 	// which slot the GPU's atomic append handed each instance.
@@ -153,39 +147,33 @@ TEST_CASE(
 		(void)instanceHandle;
 	}
 
-	auto drawBucketFlags = bgpu::UploadBuffer<uint32_t>();
-	{
-		auto desc         = bgpu::UploadBufferDesc();
-		desc.initialCount = bgl::idl::cMaxDrawBuckets;
-		desc.debugName    = "Draw Bucket Flags";
-		drawBucketFlags.Init(std::move(desc), resourceManager);
-	}
+	auto drawBucketFlags = bgpu::UploadBuffer<uint32_t>(
+		resourceManager,
+		bgpu::UploadBufferDesc()
+			.SetInitialCount(bgl::idl::cMaxDrawBuckets)
+			.SetDebugName("Draw Bucket Flags"));
 	drawBucketFlags.Assign(buckets.Flags());
 
-	auto entries = bgpu::ComputeBuffer();
-	{
-		auto desc = bgpu::ComputeBufferDesc();
-		desc.SetElement<SortEntry>().SetInitialCount(c_PaddedCount).SetDebugName("Sort Entries");
-		entries.Init(desc, resourceManager);
-	}
+	auto entries = bgpu::ComputeBuffer(
+		resourceManager,
+		bgpu::ComputeBufferDesc()
+			.SetElement<SortEntry>()
+			.SetInitialCount(c_PaddedCount)
+			.SetDebugName("Sort Entries"));
 
-	auto counter = bgpu::ComputeBuffer();
-	{
-		auto desc = bgpu::ComputeBufferDesc();
-		desc.SetElement<uint32_t>().SetInitialCount(1).SetDebugName("Sort Entry Count");
-		counter.Init(desc, resourceManager);
-	}
+	auto counter = bgpu::ComputeBuffer(
+		resourceManager,
+		bgpu::ComputeBufferDesc().SetElement<uint32_t>().SetInitialCount(1).SetDebugName(
+			"Sort Entry Count"));
 
 	// The depth-key pass now skips frustum-culled instances via a visibility word the cull pass
 	// writes. This test isolates the keying, so it seeds every instance visible below.
-	auto visibility = bgpu::ComputeBuffer();
-	{
-		auto desc = bgpu::ComputeBufferDesc();
-		desc.SetElement<bgl::idl::InstanceVisibility>()
+	auto visibility = bgpu::ComputeBuffer(
+		resourceManager,
+		bgpu::ComputeBufferDesc()
+			.SetElement<bgl::idl::InstanceVisibility>()
 			.SetInitialCount(c_PaddedCount)
-			.SetDebugName("Visibility");
-		visibility.Init(desc, resourceManager);
-	}
+			.SetDebugName("Visibility"));
 
 	auto kernel = device->CreateComputeKernel(
 		bgpu::ComputePipelineDesc()

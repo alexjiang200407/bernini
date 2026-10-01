@@ -76,8 +76,7 @@ namespace bgl
 		}
 	}
 
-	void
-	PostProcessPass::Init(const PassInitContext& ctx)
+	PostProcessPass::PostProcessPass(const PassInitContext& ctx)
 	{
 		core::ensure(ctx.device != nullptr, "Device must be initialized");
 

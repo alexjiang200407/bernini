@@ -47,8 +47,7 @@ namespace bgl
 		constexpr uint32_t c_TrianglesPerGroup = 64;
 	}
 
-	void
-	OverlayPass::Init(const PassInitContext& ctx)
+	OverlayPass::OverlayPass(const PassInitContext& ctx)
 	{
 		core::ensure(ctx.device != nullptr, "Device must be initialized");
 

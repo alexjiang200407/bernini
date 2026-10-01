@@ -43,8 +43,7 @@ namespace bgl
 		};
 	}
 
-	void
-	SkyboxPass::Init(const PassInitContext& ctx)
+	SkyboxPass::SkyboxPass(const PassInitContext& ctx)
 	{
 		core::ensure(ctx.device != nullptr, "Device must be initialized");
 

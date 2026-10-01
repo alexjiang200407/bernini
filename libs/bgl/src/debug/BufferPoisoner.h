@@ -24,7 +24,12 @@ namespace bgl
 	class BufferPoisoner final
 	{
 	public:
-		BufferPoisoner() noexcept = default;
+		/**
+		 * @throws std::runtime_error if the pattern buffer cannot be allocated.
+		 */
+		explicit BufferPoisoner(bgpu::ResourceManagerRef resourceManager);
+
+		~BufferPoisoner() noexcept;
 
 		// Owns a GPU resource, and one handle to it is the only one that may free it.
 		BufferPoisoner(const BufferPoisoner&) noexcept = delete;
@@ -35,15 +40,6 @@ namespace bgl
 
 		BufferPoisoner&
 		operator=(BufferPoisoner&&) noexcept = delete;
-
-		/**
-		 * @throws std::runtime_error if the pattern buffer cannot be allocated.
-		 */
-		void
-		Init(bgpu::ResourceManagerRef resourceManager);
-
-		void
-		Release(bool deferred = true) noexcept;
 
 		/**
 		 * Fills every byte of `buffer` with the poison word.

@@ -28,7 +28,7 @@ namespace bgl
 	class TransparentSortPass
 	{
 	public:
-		TransparentSortPass() = default;
+		explicit TransparentSortPass(const PassInitContext& ctx);
 		~TransparentSortPass() noexcept { spdlog::trace("~TransparentSortPass"); }
 
 		TransparentSortPass(const TransparentSortPass&) noexcept = delete;
@@ -39,14 +39,6 @@ namespace bgl
 
 		TransparentSortPass&
 		operator=(TransparentSortPass&&) noexcept = delete;
-
-		void
-		Init(const PassInitContext& ctx);
-
-		// Owns no GPU storage -- the sort buffers live on the view's TransparentSortState, one set
-		// per view rather than per frustum -- so this only drops the kernels.
-		void
-		Release();
 
 		void
 		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw);

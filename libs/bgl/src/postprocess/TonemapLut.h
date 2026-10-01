@@ -7,7 +7,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
-#include <spdlog/spdlog.h>
 #include <string_view>
 #include <vector>
 
@@ -21,14 +20,22 @@ namespace bgl
 	 * strip of `size` slices uploaded once and sampled by the post pass through `TonemapLut` in
 	 * lib/screen. See docs/passes.md.
 	 *
-	 * Two steps because the bytes need a command list: Init reads the file and creates the texture,
-	 * Upload records the write on whichever list the caller has open and drops the bytes.
+	 * Two steps because the bytes need a command list: the constructor reads the file and creates the
+	 * texture, Upload records the write on whichever list the caller has open and drops the bytes.
 	 */
 	class TonemapLut
 	{
 	public:
-		TonemapLut() = default;
-		~TonemapLut() noexcept { spdlog::trace("~TonemapLut"); }
+		/**
+		 * Reads the strip at `file` and creates the texture it fills.
+		 *
+		 * @throws GraphicsError if the file cannot be read, is not a `BLUT` version 1, or the
+		 *         texture cannot be created.
+		 */
+		TonemapLut(bgpu::ResourceManagerRef resourceManager, const std::filesystem::path& file);
+
+		~TonemapLut() noexcept;
+
 		TonemapLut(const TonemapLut&) noexcept = delete;
 		TonemapLut(TonemapLut&&) noexcept      = delete;
 		TonemapLut&
@@ -36,16 +43,7 @@ namespace bgl
 		TonemapLut&
 		operator=(TonemapLut&&) noexcept = delete;
 
-		/**
-		 * Reads the strip at `file` and creates the texture it fills.
-		 *
-		 * @throws GraphicsError if the file cannot be read, is not a `BLUT` version 1, or the
-		 *         texture cannot be created.
-		 */
-		void
-		Init(bgpu::ResourceManagerRef resourceManager, const std::filesystem::path& file);
-
-		/** Records the upload and the barrier that makes it sampleable. @pre Init succeeded. */
+		/** Records the upload and the barrier that makes it sampleable. */
 		void
 		Upload(bgpu::ICommandList* cmdList);
 
@@ -55,10 +53,10 @@ namespace bgl
 			return m_Srv;
 		}
 
-		void
-		Release() noexcept;
-
 	private:
+		void
+		Free() noexcept;
+
 		bgpu::ResourceManagerRef m_ResourceManager;
 		bgpu::TextureHandle      m_Texture;
 		bgpu::SrvHandle          m_Srv;

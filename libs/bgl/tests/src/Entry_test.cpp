@@ -52,7 +52,7 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "Test Entry Buffer";
 
-		auto entryBuffer = bgpu::EntryBuffer<int>(desc, resourceManager);
+		auto entryBuffer = bgpu::EntryBuffer<int>(resourceManager, desc);
 
 		// Construction reserves the null element and leaves its block dirty, so the GPU is given a
 		// zeroed element 0 on the first flush.
@@ -108,7 +108,7 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "EntryBuffer Null Offset";
 
-		auto entryBuffer = bgpu::EntryBuffer<int>(desc, resourceManager);
+		auto entryBuffer = bgpu::EntryBuffer<int>(resourceManager, desc);
 
 		// The reserved element is not a live entry, so an offset read back from a GPU-side struct
 		// that never had a handle assigned resolves to nothing.
@@ -133,7 +133,7 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "EntryBuffer Add/Set";
 
-		auto entryBuffer = bgpu::EntryBuffer<int>(desc, resourceManager);
+		auto entryBuffer = bgpu::EntryBuffer<int>(resourceManager, desc);
 
 		// Flushes the reserved null element, so the counts below are the caller's writes alone.
 		entryBuffer.Update(cmdList);
@@ -164,7 +164,7 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "EntryBuffer Erase";
 
-		auto entryBuffer = bgpu::EntryBuffer<int>(desc, resourceManager);
+		auto entryBuffer = bgpu::EntryBuffer<int>(resourceManager, desc);
 
 		auto a = entryBuffer.EmplaceBack(10);
 		auto b = entryBuffer.EmplaceBack(20);
@@ -193,7 +193,7 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 		desc.blockSize    = 4 * sizeof(int);  // Four elements per block => 2 blocks.
 		desc.debugName    = "EntryBuffer Blocks";
 
-		auto entryBuffer = bgpu::EntryBuffer<int>(desc, resourceManager);
+		auto entryBuffer = bgpu::EntryBuffer<int>(resourceManager, desc);
 
 		// The reserved null element already occupies the first of block 0's four, so three entries
 		// fill it.
@@ -227,7 +227,7 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "EntryBuffer IsValid";
 
-		auto entryBuffer = bgpu::EntryBuffer<int>(desc, resourceManager);
+		auto entryBuffer = bgpu::EntryBuffer<int>(resourceManager, desc);
 
 		auto a = entryBuffer.EmplaceBack(10);
 		CHECK(entryBuffer.IsValid(a));
@@ -260,7 +260,7 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 		desc.blockSize    = sizeof(int);
 		desc.debugName    = "EntryBuffer Meta";
 
-		auto entryBuffer = bgpu::EntryBuffer<int, RefMeta>(desc, resourceManager);
+		auto entryBuffer = bgpu::EntryBuffer<int, RefMeta>(resourceManager, desc);
 
 		auto a = entryBuffer.Add(1);
 		CHECK(entryBuffer.MetaAt(a.index).refCount == 0);
@@ -284,7 +284,7 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 		desc.blockSize    = 4 * sizeof(int);  // Four elements per block => 4 blocks.
 		desc.debugName    = "EntryBuffer Offset Upload";
 
-		auto entryBuffer = bgpu::EntryBuffer<int>(desc, resourceManager);
+		auto entryBuffer = bgpu::EntryBuffer<int>(resourceManager, desc);
 
 		core::slot_handle handles[9];
 		for (int i = 0; i < 9; ++i) handles[i] = entryBuffer.EmplaceBack(100 + i);
@@ -328,7 +328,6 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 
 		resourceManager->UnmapReadback(readback);
 		resourceManager->DestroyReadbackBuffer(readback, false);
-		entryBuffer.Release(false);
 
 		// The case-wide Close below expects an open list.
 		cmdList->Open(cmdQueue, cmdAllocator);

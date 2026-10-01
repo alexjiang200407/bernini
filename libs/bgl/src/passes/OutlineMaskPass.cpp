@@ -44,8 +44,7 @@ namespace bgl
 		constexpr auto c_MaskFormat = bgpu::Format::R8_UNORM;
 	}
 
-	void
-	OutlineMaskPass::Init(const PassInitContext& ctx)
+	OutlineMaskPass::OutlineMaskPass(const PassInitContext& ctx)
 	{
 		core::ensure(ctx.device != nullptr, "Device must be initialized");
 

@@ -28,7 +28,7 @@ namespace bgl
 	class OutlineMaskPass
 	{
 	public:
-		OutlineMaskPass() = default;
+		explicit OutlineMaskPass(const PassInitContext& ctx);
 		~OutlineMaskPass() noexcept { spdlog::trace("~OutlineMaskPass"); }
 
 		OutlineMaskPass(const OutlineMaskPass&) noexcept = delete;
@@ -39,15 +39,6 @@ namespace bgl
 
 		OutlineMaskPass&
 		operator=(OutlineMaskPass&&) noexcept = delete;
-
-		void
-		Init(const PassInitContext& ctx);
-
-		void
-		Release()
-		{
-			m_Kernel.Reset();
-		}
 
 		/** @pre `selectedCount` > 0 -- the caller skips the pass for an empty selection. */
 		void

@@ -41,6 +41,41 @@ namespace bgpu
 		bool isRaw = false;
 
 		std::string debugName;
+
+		RangeBufferDesc&
+		SetInitialCount(uint32_t value) noexcept
+		{
+			initialCount = value;
+			return *this;
+		}
+
+		RangeBufferDesc&
+		SetBlockSize(uint32_t value) noexcept
+		{
+			blockSize = value;
+			return *this;
+		}
+
+		RangeBufferDesc&
+		SetMaxBytes(uint64_t value) noexcept
+		{
+			maxBytes = value;
+			return *this;
+		}
+
+		RangeBufferDesc&
+		SetRaw(bool value) noexcept
+		{
+			isRaw = value;
+			return *this;
+		}
+
+		RangeBufferDesc&
+		SetDebugName(std::string value) noexcept
+		{
+			debugName = std::move(value);
+			return *this;
+		}
 	};
 
 	template <typename T>
@@ -165,10 +200,30 @@ namespace bgpu
 		using MetaStorage = std::conditional_t<c_HasMeta, std::vector<MetaElem>, std::monostate>;
 
 	public:
-		RangeBuffer() noexcept = default;
-		RangeBuffer(RangeBufferDesc desc, ResourceManagerRef resourceManager)
+		/**
+		 * @throws std::runtime_error if the initial count is already past `maxBytes`, or the device
+		 *         cannot allocate it.
+		 */
+		RangeBuffer(ResourceManagerRef resourceManager, RangeBufferDesc desc) :
+			m_Desc(std::move(desc)), m_Storage(
+										 std::move(resourceManager),
+										 m_Desc.debugName,
+										 sizeof(T),
+										 InitialCapacity(m_Desc),
+										 false,
+										 m_Desc.isRaw)
 		{
-			Init(std::move(desc), std::move(resourceManager));
+			const uint32_t capacity = m_Storage.GetCapacity();
+
+			m_Data.reset(capacity);
+
+			if constexpr (c_HasMeta)
+			{
+				m_Metadata.assign(capacity, Meta{});
+			}
+
+			ResizeDirtyBlocks(capacity);
+			ReserveNullRange();
 		}
 
 		RangeBuffer(const RangeBuffer&)     = delete;
@@ -180,58 +235,6 @@ namespace bgpu
 		RangeBuffer&
 		operator=(RangeBuffer&&) noexcept = default;
 
-		void
-		Init(RangeBufferDesc desc, ResourceManagerRef resourceManager)
-		{
-			core::ensure(desc.initialCount > 0, "RangeBuffer must have a positive initial count");
-			core::ensure(desc.blockSize > 0, "Block size must be greater than zero");
-			core::ensure(
-				resourceManager != nullptr,
-				"RangeBuffer requires a valid ResourceManager");
-
-			m_Desc = std::move(desc);
-
-			const uint32_t capacity = m_Desc.initialCount + 1;
-
-			if (m_Desc.maxBytes != 0 &&
-			    static_cast<uint64_t>(capacity) * sizeof(T) > m_Desc.maxBytes)
-			{
-				core::throw_runtime_error(
-					"RangeBuffer '{}': an initial {} elements is already past the {} bytes its "
-					"view can address",
-					m_Desc.debugName,
-					m_Desc.initialCount,
-					m_Desc.maxBytes);
-			}
-
-			m_Storage.Init(
-				std::move(resourceManager),
-				m_Desc.debugName,
-				sizeof(T),
-				capacity,
-				false,
-				m_Desc.isRaw);
-
-			m_Data.reset(capacity);
-
-			if constexpr (c_HasMeta)
-			{
-				m_Metadata.assign(capacity, Meta{});
-			}
-
-			ResizeDirtyBlocks(capacity);
-			m_HasAnyDirtyBlocks = false;
-
-			ReserveNullRange();
-		}
-
-		// True once Init() has created the GPU buffer and before Release().
-		[[nodiscard]] bool
-		IsInitialized() const noexcept
-		{
-			return m_Storage.IsInitialized();
-		}
-
 		[[nodiscard]] uint32_t
 		Capacity() const noexcept
 		{
@@ -241,7 +244,6 @@ namespace bgpu
 		core::multi_slot_handle
 		Add(std::span<const T> elem)
 		{
-			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			core::ensure(
 				elem.size() < std::numeric_limits<uint32_t>::max(),
 				"Element count exceeds uint32_t limits");
@@ -267,21 +269,18 @@ namespace bgpu
 		DescriptorHandle
 		GetDescriptorHandle() const noexcept
 		{
-			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			return DescriptorHandle(m_Storage.GetHandle().bindlessIndex);
 		}
 
 		[[nodiscard]] BufferHandle
 		GetBufferHandle() const noexcept
 		{
-			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			return m_Storage.GetHandle();
 		}
 
 		[[nodiscard]] core::multi_slot_handle
 		AllocateRange(uint32_t count)
 		{
-			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			core::ensure(count > 0, "AllocateRange requires a positive count");
 
 			auto handle = TryAllocateSlots(count);
@@ -331,7 +330,6 @@ namespace bgpu
 		void
 		Set(core::multi_slot_handle handle, uint32_t relativeIndex, T value)
 		{
-			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			core::ensure(
 				relativeIndex < handle.count,
 				"Relative index exceeds allocated range count bounds");
@@ -352,7 +350,6 @@ namespace bgpu
 		void
 		SetAtIndex(uint32_t index, T value)
 		{
-			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			core::ensure(m_Data.valid(index), "SetAtIndex on an inactive element slot");
 			MarkRangeDirty(index, 1);
 			m_Data[index] = std::move(value);
@@ -361,7 +358,6 @@ namespace bgpu
 		void
 		Erase(core::multi_slot_handle handle)
 		{
-			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			MarkRangeDirty(handle.index, handle.count);
 			m_Data.erase(handle);
 		}
@@ -372,7 +368,6 @@ namespace bgpu
 		void
 		EraseByIndex(uint32_t rootIndex)
 		{
-			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			core::ensure(
 				m_Data.valid(rootIndex, m_Data.generation(rootIndex)),
 				"EraseByIndex on an index with no live range");
@@ -384,7 +379,6 @@ namespace bgpu
 		MetaAt(uint32_t rootIndex) noexcept
 			requires(!std::is_void_v<M>)
 		{
-			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			core::ensure(
 				m_Data.valid(rootIndex, m_Data.generation(rootIndex)),
 				"MetaAt on an index with no live range");
@@ -396,7 +390,6 @@ namespace bgpu
 		MetaAt(uint32_t rootIndex) const noexcept
 			requires(!std::is_void_v<M>)
 		{
-			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			core::ensure(
 				m_Data.valid(rootIndex, m_Data.generation(rootIndex)),
 				"MetaAt on an index with no live range");
@@ -406,7 +399,6 @@ namespace bgpu
 		[[nodiscard]] const T&
 		Get(core::multi_slot_handle handle, uint32_t relativeIndex) const
 		{
-			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			core::ensure(
 				relativeIndex < handle.count,
 				"Relative index exceeds allocated range count bounds");
@@ -419,7 +411,6 @@ namespace bgpu
 		[[nodiscard]] core::multi_slot_handle
 		HandleAt(uint32_t rootIndex) const
 		{
-			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			core::ensure(IsIndexValid(rootIndex), "HandleAt on an index with no live range");
 			return m_Data.handle_at(rootIndex);
 		}
@@ -436,7 +427,6 @@ namespace bgpu
 		[[nodiscard]] std::span<std::byte>
 		MutableRangeBytes(core::multi_slot_handle handle)
 		{
-			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			core::ensure(IsValid(handle), "MutableRangeBytes on a range that is not live");
 
 			MarkRangeDirty(handle.index, handle.count);
@@ -449,7 +439,6 @@ namespace bgpu
 		[[nodiscard]] const T&
 		AtIndex(uint32_t index) const
 		{
-			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			core::ensure(m_Data.valid(index), "AtIndex on an inactive element slot");
 			return m_Data[index];
 		}
@@ -457,7 +446,6 @@ namespace bgpu
 		void
 		Update(ICommandList* cmdList)
 		{
-			core::ensure(IsInitialized(), "RangeBuffer is uninitialized; call Init() first");
 			core::ensure(cmdList != nullptr, "Update requires a valid ICommandList");
 			core::ensure(cmdList->IsOpen(), "ICommandList must be open to update RangeBuffer");
 
@@ -511,23 +499,29 @@ namespace bgpu
 			return m_DirtyBlocks;
 		}
 
-		void
-		Release(bool deferred = true) noexcept
+	private:
+		// The caller's count plus the reserved null element.
+		[[nodiscard]] static uint32_t
+		InitialCapacity(const RangeBufferDesc& desc)
 		{
-			if (IsInitialized())
+			core::ensure(desc.initialCount > 0, "RangeBuffer must have a positive initial count");
+			core::ensure(desc.blockSize > 0, "Block size must be greater than zero");
+
+			const uint32_t capacity = desc.initialCount + 1;
+
+			if (desc.maxBytes != 0 && static_cast<uint64_t>(capacity) * sizeof(T) > desc.maxBytes)
 			{
-				m_Storage.Release(deferred);
-				m_Data.clear();
-				m_DirtyBlocks.clear();
-				if constexpr (c_HasMeta)
-				{
-					m_Metadata.clear();
-				}
-				m_HasAnyDirtyBlocks = false;
+				core::throw_runtime_error(
+					"RangeBuffer '{}': an initial {} elements is already past the {} bytes its "
+					"view can address",
+					desc.debugName,
+					desc.initialCount,
+					desc.maxBytes);
 			}
+
+			return capacity;
 		}
 
-	private:
 		// Held for the buffer's lifetime so no caller is handed the offset that means null. Marked
 		// dirty so the GPU sees a zeroed element there rather than whatever the allocation held.
 		void

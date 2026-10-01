@@ -31,7 +31,10 @@ namespace bgl
 	class BonePaletteBuffer
 	{
 	public:
-		BonePaletteBuffer() noexcept = default;
+		/**
+		 * @throws std::runtime_error if the device cannot allocate the initial storage.
+		 */
+		explicit BonePaletteBuffer(bgpu::ResourceManagerRef resourceManager);
 
 		BonePaletteBuffer(const BonePaletteBuffer&)     = delete;
 		BonePaletteBuffer(BonePaletteBuffer&&) noexcept = default;
@@ -43,12 +46,6 @@ namespace bgl
 		operator=(BonePaletteBuffer&&) noexcept = default;
 
 		/**
-		 * @throws std::runtime_error if the device cannot allocate the initial storage.
-		 */
-		void
-		Init(bgpu::ResourceManagerRef resourceManager);
-
-		/**
 		 * Reserves `float4Count` contiguous float4s, growing the arena when it is full.
 		 *
 		 * @throws std::runtime_error if the growth cannot be allocated; nothing is reserved.
@@ -58,12 +55,6 @@ namespace bgl
 
 		void
 		Free(core::multi_slot_handle handle) noexcept;
-
-		[[nodiscard]] bool
-		IsInitialized() const noexcept
-		{
-			return m_Storage.IsInitialized();
-		}
 
 		// Re-read every frame: a growth mints a new handle and retires the old one.
 		[[nodiscard]] bgpu::BufferHandle
@@ -84,16 +75,9 @@ namespace bgl
 			m_Storage.Update(cmdList);
 		}
 
-		void
-		Release(bool deferred = true) noexcept
-		{
-			m_Storage.Release(deferred);
-		}
-
 	private:
 		// Offsets only; see the class comment on why the element type is a placeholder.
 		core::multi_slot_vector<uint32_t> m_Offsets;
 		bgpu::ComputeBuffer               m_Storage;
-		bgpu::ResourceManagerRef          m_ResourceManager;
 	};
 }

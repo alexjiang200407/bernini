@@ -81,7 +81,7 @@ namespace bgl
 			bool               colorGradeEnabled = false;
 		};
 
-		PostProcessPass() = default;
+		explicit PostProcessPass(const PassInitContext& ctx);
 		~PostProcessPass() noexcept { spdlog::trace("~PostProcessPass"); }
 
 		PostProcessPass(const PostProcessPass&) noexcept = delete;
@@ -93,16 +93,7 @@ namespace bgl
 		PostProcessPass&
 		operator=(PostProcessPass&&) noexcept = delete;
 
-		void
-		Release()
-		{
-			m_Kernel.Reset();
-		}
-
-		void
-		Init(const PassInitContext& ctx);
-
-		/** @pre the batch Init requested into has been built. Fatal on a binder name the PSO lacks. */
+		/** @pre the constructor's batch has been built. Fatal on a binder name the PSO lacks. */
 		void
 		CheckBindings() const;
 

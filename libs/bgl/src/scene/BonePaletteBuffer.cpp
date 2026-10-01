@@ -16,17 +16,14 @@ namespace bgl
 		constexpr uint32_t c_InitialFloat4s = 256;
 	}
 
-	void
-	BonePaletteBuffer::Init(bgpu::ResourceManagerRef resourceManager)
+	BonePaletteBuffer::BonePaletteBuffer(bgpu::ResourceManagerRef resourceManager) :
+		m_Storage(
+			std::move(resourceManager),
+			bgpu::ComputeBufferDesc()
+				.SetElement<glm::vec4>()
+				.SetInitialCount(c_InitialFloat4s)
+				.SetDebugName("Bone Palette Arena"))
 	{
-		m_ResourceManager = std::move(resourceManager);
-
-		auto desc = bgpu::ComputeBufferDesc();
-		desc.SetElement<glm::vec4>()
-			.SetInitialCount(c_InitialFloat4s)
-			.SetDebugName("Bone Palette Arena");
-
-		m_Storage.Init(std::move(desc), m_ResourceManager);
 		m_Offsets.grow(c_InitialFloat4s);
 
 		// Element 0 is spent so an offset of 0 reads as null, the same sentinel every other
@@ -38,7 +35,6 @@ namespace bgl
 	core::multi_slot_handle
 	BonePaletteBuffer::Allocate(uint32_t float4Count)
 	{
-		core::ensure(IsInitialized(), "BonePaletteBuffer is uninitialized; call Init() first");
 		core::ensure(float4Count > 0, "BonePaletteBuffer::Allocate requires a positive count");
 
 		// allocate_slots throws when nothing fits rather than returning null, and "does not fit" is
@@ -83,7 +79,6 @@ namespace bgl
 	void
 	BonePaletteBuffer::Free(core::multi_slot_handle handle) noexcept
 	{
-		core::ensure(IsInitialized(), "BonePaletteBuffer is uninitialized; call Init() first");
 		m_Offsets.erase(handle);
 	}
 }

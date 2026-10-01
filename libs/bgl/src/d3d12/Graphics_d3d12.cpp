@@ -247,7 +247,10 @@ namespace bgl
 	{
 		spdlog::trace("~Graphics");
 
+		// The context's members free deferred once its queue is gone, so the sweep that reclaims
+		// them runs here rather than whenever the manager's last holder lets go.
 		m_Context.reset();
+		m_ResourceManager->CleanupExpiredResources();
 		m_ResourceManager.Reset();
 		m_Device.Reset();
 	}

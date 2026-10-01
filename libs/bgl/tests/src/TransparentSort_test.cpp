@@ -77,37 +77,33 @@ TEST_CASE(
 		input[i]           = SortEntry{ key, key ^ 0xA5A5A5A5u };
 	}
 
-	auto entries = bgpu::ComputeBuffer();
-	{
-		auto desc = bgpu::ComputeBufferDesc();
-		desc.SetElement<SortEntry>().SetInitialCount(c_SortCapacity).SetDebugName("Sort Entries");
-		entries.Init(desc, resourceManager);
-	}
+	auto entries = bgpu::ComputeBuffer(
+		resourceManager,
+		bgpu::ComputeBufferDesc()
+			.SetElement<SortEntry>()
+			.SetInitialCount(c_SortCapacity)
+			.SetDebugName("Sort Entries"));
 
-	auto counter = bgpu::ComputeBuffer();
-	{
-		auto desc = bgpu::ComputeBufferDesc();
-		desc.SetElement<uint32_t>().SetInitialCount(1).SetDebugName("Sort Count");
-		counter.Init(desc, resourceManager);
-	}
+	auto counter = bgpu::ComputeBuffer(
+		resourceManager,
+		bgpu::ComputeBufferDesc().SetElement<uint32_t>().SetInitialCount(1).SetDebugName(
+			"Sort Count"));
 
 	// Written alongside the sorted entries; this case only asserts on the entries, so these exist to
 	// give the shader somewhere legal to write.
-	auto sortedInstances = bgpu::ComputeBuffer();
-	{
-		auto desc = bgpu::ComputeBufferDesc();
-		desc.SetElement<uint32_t>()
+	auto sortedInstances = bgpu::ComputeBuffer(
+		resourceManager,
+		bgpu::ComputeBufferDesc()
+			.SetElement<uint32_t>()
 			.SetInitialCount(c_SortCapacity)
-			.SetDebugName("Sorted Instances");
-		sortedInstances.Init(desc, resourceManager);
-	}
+			.SetDebugName("Sorted Instances"));
 
-	auto dispatchArgs = bgpu::ComputeBuffer();
-	{
-		auto desc = bgpu::ComputeBufferDesc();
-		desc.SetElement<bgl::idl::DispatchArgs>().SetInitialCount(1).SetDebugName("Dispatch Args");
-		dispatchArgs.Init(desc, resourceManager);
-	}
+	auto dispatchArgs = bgpu::ComputeBuffer(
+		resourceManager,
+		bgpu::ComputeBufferDesc()
+			.SetElement<bgl::idl::DispatchArgs>()
+			.SetInitialCount(1)
+			.SetDebugName("Dispatch Args"));
 
 	auto kernel = device->CreateComputeKernel(
 		bgpu::ComputePipelineDesc()

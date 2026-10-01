@@ -32,6 +32,34 @@ namespace bgpu
 		// Every capacity, grown ones included, is rounded up to this.
 		uint32_t    capacityAlignment = 1;
 		std::string debugName;
+
+		PackedBufferDesc&
+		SetInitialCount(uint32_t value) noexcept
+		{
+			initialCount = value;
+			return *this;
+		}
+
+		PackedBufferDesc&
+		SetBlockSize(uint32_t value) noexcept
+		{
+			blockSize = value;
+			return *this;
+		}
+
+		PackedBufferDesc&
+		SetCapacityAlignment(uint32_t value) noexcept
+		{
+			capacityAlignment = value;
+			return *this;
+		}
+
+		PackedBufferDesc&
+		SetDebugName(std::string value) noexcept
+		{
+			debugName = std::move(value);
+			return *this;
+		}
 	};
 
 	template <typename T>
@@ -45,10 +73,21 @@ namespace bgpu
 		using Handle = core::slot_handle;
 
 	public:
-		PackedBuffer() noexcept = default;
-		PackedBuffer(PackedBufferDesc desc, ResourceManagerRef resourceManager)
+		PackedBuffer(ResourceManagerRef resourceManager, PackedBufferDesc desc) :
+			m_Desc(Aligned(std::move(desc))), m_Storage(
+												  std::move(resourceManager),
+												  m_Desc.debugName,
+												  sizeof(T),
+												  m_Desc.initialCount,
+												  false)
 		{
-			Init(std::move(desc), std::move(resourceManager));
+			core::ensure(m_Desc.blockSize > 0, "Block size must be greater than zero");
+
+			m_Entries.reset(m_Desc.initialCount);
+			m_HandleToIndex.reset(m_Desc.initialCount);
+			m_IndexToHandle.assign(m_Desc.initialCount, core::slot_handle::invalid_index);
+
+			ResizeDirtyBlocks(m_Desc.initialCount);
 		}
 
 		PackedBuffer(const PackedBuffer&)     = delete;
@@ -60,43 +99,6 @@ namespace bgpu
 		PackedBuffer&
 		operator=(PackedBuffer&&) noexcept = default;
 
-		void
-		Init(PackedBufferDesc desc, ResourceManagerRef resourceManager)
-		{
-			core::ensure(desc.initialCount > 0, "PackedBuffer must have a positive initial count");
-			core::ensure(desc.blockSize > 0, "Block size must be greater than zero");
-			core::ensure(
-				desc.capacityAlignment > 0,
-				"Capacity alignment must be greater than zero");
-			core::ensure(
-				resourceManager != nullptr,
-				"PackedBuffer requires a valid ResourceManager");
-
-			m_Desc              = std::move(desc);
-			m_Desc.initialCount = core::round_up(m_Desc.initialCount, m_Desc.capacityAlignment);
-
-			m_Storage.Init(
-				std::move(resourceManager),
-				m_Desc.debugName,
-				sizeof(T),
-				m_Desc.initialCount,
-				false);
-
-			m_Entries.reset(m_Desc.initialCount);
-			m_HandleToIndex.reset(m_Desc.initialCount);
-			m_IndexToHandle.assign(m_Desc.initialCount, core::slot_handle::invalid_index);
-
-			ResizeDirtyBlocks(m_Desc.initialCount);
-			m_HasAnyDirtyBlocks = false;
-		}
-
-		// True once Init() has created the GPU buffer and before Release().
-		[[nodiscard]] bool
-		IsInitialized() const noexcept
-		{
-			return m_Storage.IsInitialized();
-		}
-
 		[[nodiscard]] uint32_t
 		Capacity() const noexcept
 		{
@@ -107,8 +109,6 @@ namespace bgpu
 		Handle
 		EmplaceBack(Args&&... args)
 		{
-			core::ensure(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
-
 			if (m_Entries.size() >= Capacity())
 			{
 				Grow();
@@ -150,7 +150,6 @@ namespace bgpu
 		void
 		Set(Handle handle, T value)
 		{
-			core::ensure(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
 			core::ensure(IsValid(handle), "Invalid PackedBuffer handle");
 
 			uint32_t denseIndex   = m_HandleToIndex[handle.index];
@@ -161,7 +160,6 @@ namespace bgpu
 		const T&
 		operator[](Handle handle) const
 		{
-			core::ensure(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
 			core::ensure(IsValid(handle), "Invalid PackedBuffer handle");
 			return m_Entries[m_HandleToIndex[handle.index]];
 		}
@@ -170,7 +168,6 @@ namespace bgpu
 		[[nodiscard]] uint32_t
 		GetDenseIndex(Handle handle) const
 		{
-			core::ensure(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
 			core::ensure(IsValid(handle), "Invalid PackedBuffer handle");
 			return m_HandleToIndex[handle.index];
 		}
@@ -178,7 +175,6 @@ namespace bgpu
 		void
 		Erase(Handle handle)
 		{
-			core::ensure(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
 			core::ensure(IsValid(handle), "Invalid PackedBuffer handle");
 
 			uint32_t denseIndex = m_HandleToIndex[handle.index];
@@ -216,7 +212,6 @@ namespace bgpu
 		void
 		Update(ICommandList* cmdList)
 		{
-			core::ensure(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
 			core::ensure(cmdList != nullptr, "Update requires a valid ICommandList");
 			core::ensure(cmdList->IsOpen(), "ICommandList must be open to update PackedBuffer");
 
@@ -269,14 +264,12 @@ namespace bgpu
 		DescriptorHandle
 		GetDescriptorHandle() const noexcept
 		{
-			core::ensure(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
 			return DescriptorHandle(m_Storage.GetHandle().bindlessIndex);
 		}
 
 		[[nodiscard]] BufferHandle
 		GetBufferHandle() const noexcept
 		{
-			core::ensure(IsInitialized(), "PackedBuffer is uninitialized; call Init() first");
 			return m_Storage.GetHandle();
 		}
 
@@ -293,21 +286,19 @@ namespace bgpu
 				std::count(m_DirtyBlocks.begin(), m_DirtyBlocks.end(), true));
 		}
 
-		void
-		Release(bool deferred = true) noexcept
+	private:
+		[[nodiscard]] static PackedBufferDesc
+		Aligned(PackedBufferDesc desc) noexcept
 		{
-			if (IsInitialized())
-			{
-				m_Storage.Release(deferred);
-				m_Entries.clear();
-				m_HandleToIndex.clear();
-				m_IndexToHandle.clear();
-				m_DirtyBlocks.clear();
-				m_HasAnyDirtyBlocks = false;
-			}
+			core::ensure(desc.initialCount > 0, "PackedBuffer must have a positive initial count");
+			core::ensure(
+				desc.capacityAlignment > 0,
+				"Capacity alignment must be greater than zero");
+
+			desc.initialCount = core::round_up(desc.initialCount, desc.capacityAlignment);
+			return desc;
 		}
 
-	private:
 		void
 		Grow()
 		{

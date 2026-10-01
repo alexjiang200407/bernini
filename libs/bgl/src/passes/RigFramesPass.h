@@ -29,7 +29,7 @@ namespace bgl
 	class RigFramesPass
 	{
 	public:
-		RigFramesPass() = default;
+		explicit RigFramesPass(const PassInitContext& ctx);
 		~RigFramesPass() noexcept { spdlog::trace("~RigFramesPass"); }
 
 		RigFramesPass(const RigFramesPass&) noexcept = delete;
@@ -40,12 +40,6 @@ namespace bgl
 
 		RigFramesPass&
 		operator=(RigFramesPass&&) noexcept = delete;
-
-		void
-		Init(const PassInitContext& ctx);
-
-		void
-		Release();
 
 		void
 		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw);

@@ -49,8 +49,7 @@ namespace bgl
 		constexpr float c_BlendWeight = 0.05f;
 	}
 
-	void
-	TaaResolvePass::Init(const PassInitContext& ctx)
+	TaaResolvePass::TaaResolvePass(const PassInitContext& ctx)
 	{
 		core::ensure(ctx.device != nullptr, "Device must be initialized");
 

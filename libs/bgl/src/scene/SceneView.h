@@ -581,15 +581,6 @@ namespace bgl
 		RebuildSelectedList();
 
 		/**
-		 * Sizes every per-view buffer to its starting point.
-		 *
-		 * @throws std::runtime_error if the device cannot allocate one; the constructor converts it
-		 *         to SceneError, so a caller only ever sees the documented type.
-		 */
-		void
-		InitBuffers();
-
-		/**
 		 * Brings the cull state back in line with the instance buffer after it has grown. A no-op
 		 * when it already covers it.
 		 */

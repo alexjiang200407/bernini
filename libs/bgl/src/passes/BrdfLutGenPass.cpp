@@ -17,6 +17,7 @@
 #include <bgpu/types/RasterState.h>
 #include <bgpu/types/RenderState.h>
 #include <bgpu/types/TextureDimension.h>
+#include <spdlog/spdlog.h>
 #include <string_view>
 #include <utility>
 
@@ -31,12 +32,10 @@ namespace bgl
 		constexpr bgpu::Format c_Format = bgpu::Format::RG16_FLOAT;
 	}
 
-	void
-	BrdfLutGenPass::Init(const PassInitContext& ctx)
+	BrdfLutGenPass::BrdfLutGenPass(const PassInitContext& ctx) :
+		m_ResourceManager(ctx.resourceManager)
 	{
 		core::ensure(ctx.device != nullptr, "Device must be initialized");
-
-		m_ResourceManager = ctx.resourceManager;
 
 		auto pipelineDesc        = bgpu::MeshletPipelineDesc();
 		pipelineDesc.meshShader  = ctx.device->CreateShader(std::string(c_Src), "MSMain");
@@ -121,18 +120,13 @@ namespace bgl
 		m_ResourceManager->DestroyRtv(rtv, true);
 	}
 
-	void
-	BrdfLutGenPass::Release() noexcept
+	BrdfLutGenPass::~BrdfLutGenPass() noexcept
 	{
-		if (m_ResourceManager == nullptr)
-			return;
+		spdlog::trace("~BrdfLutGenPass");
 
 		if (!m_Srv.IsNull())
-			m_ResourceManager->DestroySrv(m_Srv, false);
+			m_ResourceManager->DestroySrv(m_Srv);
 		if (!m_Texture.IsNull())
-			m_ResourceManager->DestroyTexture(m_Texture, false);
-
-		m_Kernel.Reset();
-		m_ResourceManager = nullptr;
+			m_ResourceManager->DestroyTexture(m_Texture);
 	}
 }

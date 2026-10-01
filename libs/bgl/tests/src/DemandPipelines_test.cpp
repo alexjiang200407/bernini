@@ -246,12 +246,10 @@ TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand
 		opaqueShaped.set(bucket, !table.Transparent(bucket));
 	}
 
-	bgl::ForwardPhases forward;
-
 	auto       pipelines       = bgpu::PipelineBatch(device);
 	const auto resourceManager = gfxBase->GetResourceManagerCpy();
-	const auto passes = bgl::PassInitContext{ device, &pipelines, resourceManager, &table };
-	forward.Init(passes);
+	const auto passes  = bgl::PassInitContext{ device, &pipelines, resourceManager, &table };
+	auto       forward = bgl::ForwardPhases(passes);
 	forward.AddDrawBucketKernels(passes, opaqueShaped);
 	forward.AddTransparentKernel(passes);
 	pipelines.Build();
@@ -265,6 +263,4 @@ TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand
 	// core::fatal on a binder name no built variant declares, which with every bucket built is the
 	// original full check.
 	forward.CheckBindings();
-
-	forward.Release();
 }

@@ -14,6 +14,7 @@
 #include <cstring>
 #include <exception>
 #include <filesystem>
+#include <spdlog/spdlog.h>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -37,11 +38,10 @@ namespace bgl
 		static_assert(sizeof(Header) == c_HeaderBytes);
 	}
 
-	void
-	TonemapLut::Init(bgpu::ResourceManagerRef resourceManager, const std::filesystem::path& file)
+	TonemapLut::TonemapLut(
+		bgpu::ResourceManagerRef     resourceManager,
+		const std::filesystem::path& file) : m_ResourceManager(std::move(resourceManager))
 	{
-		m_ResourceManager = std::move(resourceManager);
-
 		std::vector<std::byte> bytes;
 		try
 		{
@@ -93,14 +93,23 @@ namespace bgl
 		srvDesc.debugName = "Tone map LUT SRV";
 		m_Srv             = m_ResourceManager->CreateSrv(m_Texture, srvDesc);
 		if (m_Srv.IsNull())
+		{
+			Free();
 			throw GraphicsError("Tone map LUT SRV could not be created");
+		}
+	}
+
+	TonemapLut::~TonemapLut() noexcept
+	{
+		spdlog::trace("~TonemapLut");
+		Free();
 	}
 
 	void
 	TonemapLut::Upload(bgpu::ICommandList* cmdList)
 	{
 		core::ensure(cmdList != nullptr, "Command list must be initialized");
-		core::ensure(!m_Pixels.empty(), "TonemapLut::Upload before Init, or twice");
+		core::ensure(!m_Pixels.empty(), "TonemapLut::Upload called twice");
 
 		const uint64_t rowPitch = static_cast<uint64_t>(m_Size) * m_Size * c_BytesPerTexel;
 		const bgpu::TextureSubresourceData subresource{ m_Pixels.data(),
@@ -124,18 +133,17 @@ namespace bgl
 	}
 
 	void
-	TonemapLut::Release() noexcept
+	TonemapLut::Free() noexcept
 	{
 		if (!m_Srv.IsNull())
 		{
-			m_ResourceManager->DestroySrv(m_Srv, false);
+			m_ResourceManager->DestroySrv(m_Srv);
 			m_Srv = bgpu::SrvHandle{};
 		}
 		if (!m_Texture.IsNull())
 		{
-			m_ResourceManager->DestroyTexture(m_Texture, false);
+			m_ResourceManager->DestroyTexture(m_Texture);
 			m_Texture = bgpu::TextureHandle{};
 		}
-		m_Pixels.clear();
 	}
 }

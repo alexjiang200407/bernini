@@ -771,15 +771,9 @@ namespace
 		core::SharedRef<MockResourceManager> rm    = core::SharedRef<MockResourceManager>::Make();
 		core::SharedRef<NullCommandList>     list  = core::SharedRef<NullCommandList>::Make();
 		bgpu::CommandQueueRef                queue = core::SharedRef<NullCommandQueue>::Make();
-		BufferPoisoner                       poisoner;
+		BufferPoisoner                       poisoner{ rm };
 
-		PoisonHarness()
-		{
-			list->log = &log;
-			poisoner.Init(rm);
-		}
-
-		~PoisonHarness() { poisoner.Release(false); }
+		PoisonHarness() { list->log = &log; }
 
 		PoisonHarness(const PoisonHarness&) = delete;
 		PoisonHarness(PoisonHarness&&)      = delete;

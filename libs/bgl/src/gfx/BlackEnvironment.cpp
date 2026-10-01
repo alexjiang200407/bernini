@@ -11,6 +11,7 @@
 #include <bgpu/types/TextureDimension.h>
 #include <core/err/util.h>
 #include <cstdint>
+#include <spdlog/spdlog.h>
 #include <string>
 #include <utility>
 
@@ -91,26 +92,37 @@ namespace bgl
 		}
 	}
 
-	void
-	BlackEnvironment::Init(bgpu::ResourceManagerRef resourceManager)
+	BlackEnvironment::BlackEnvironment(bgpu::ResourceManagerRef resourceManager) :
+		m_ResourceManager(std::move(resourceManager))
 	{
-		m_ResourceManager = std::move(resourceManager);
-
 		const Created cube =
 			Create(*m_ResourceManager, bgpu::TextureDimension::kTextureCube, c_CubeFaces);
 		m_Cube    = cube.texture;
 		m_CubeSrv = cube.srv;
 
-		const Created lut = Create(*m_ResourceManager, bgpu::TextureDimension::kTexture2D, 1);
-		m_Lut             = lut.texture;
-		m_LutSrv          = lut.srv;
+		try
+		{
+			const Created lut = Create(*m_ResourceManager, bgpu::TextureDimension::kTexture2D, 1);
+			m_Lut             = lut.texture;
+			m_LutSrv          = lut.srv;
+		}
+		catch (...)
+		{
+			Free();
+			throw;
+		}
+	}
+
+	BlackEnvironment::~BlackEnvironment() noexcept
+	{
+		spdlog::trace("~BlackEnvironment");
+		Free();
 	}
 
 	void
 	BlackEnvironment::Upload(bgpu::ICommandList* cmdList)
 	{
 		core::ensure(cmdList != nullptr, "Command list must be initialized");
-		core::ensure(!m_Cube.IsNull() && !m_Lut.IsNull(), "BlackEnvironment::Upload before Init");
 
 		Fill(*cmdList, m_Cube, c_CubeFaces);
 		Fill(*cmdList, m_Lut, 1);
@@ -129,13 +141,13 @@ namespace bgl
 	}
 
 	void
-	BlackEnvironment::Release() noexcept
+	BlackEnvironment::Free() noexcept
 	{
 		for (bgpu::SrvHandle* srv : { &m_CubeSrv, &m_LutSrv })
 		{
 			if (!srv->IsNull())
 			{
-				m_ResourceManager->DestroySrv(*srv, false);
+				m_ResourceManager->DestroySrv(*srv);
 				*srv = bgpu::SrvHandle{};
 			}
 		}
@@ -143,7 +155,7 @@ namespace bgl
 		{
 			if (!texture->IsNull())
 			{
-				m_ResourceManager->DestroyTexture(*texture, false);
+				m_ResourceManager->DestroyTexture(*texture);
 				*texture = bgpu::TextureHandle{};
 			}
 		}
