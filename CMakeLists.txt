@@ -329,7 +329,7 @@ if (PROJECT_IS_TOP_LEVEL AND TARGET gamelib)
     set(BERNINI_PACKAGE_DIR "${CMAKE_BINARY_DIR}/bernini_sdk")
     set(BERNINI_PACKAGE_TARGETS
         core_process core assetlib_structs bgpu bgl_headers bgl_idl bgl_objects
-        bgl assetlib gamelib crowdlib)
+        bgl assetlib gamelib crowdlib_objects crowdlib)
     # Exports the Agility SDK's version from the executable; it must be linked into the consumer's.
     if (RENDERER_BACKEND STREQUAL "DX12")
         list(APPEND BERNINI_PACKAGE_TARGETS bgpu_d3d12_agility)

@@ -18,18 +18,24 @@ endif()
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" PREFIX "Source Files"
 	FILES ${CROWDLIB_SOURCES} ${CROWDLIB_HEADERS})
 
-add_library(crowdlib ${BERNINI_RENDERER_LIBRARY_TYPE}
+# One set of objects for the library and for the suite, which tests src/ directly: a test cannot
+# reach an unexported symbol through the DLL an editor SDK build makes of crowdlib.
+add_library(crowdlib_objects OBJECT
 	${CROWDLIB_SOURCES}
 	${CROWDLIB_HEADERS}
 )
 
+add_library(crowdlib ${BERNINI_RENDERER_LIBRARY_TYPE}
+	$<TARGET_OBJECTS:crowdlib_objects>
+)
+
 if (BERNINI_RENDERER_LIBRARY_TYPE STREQUAL "SHARED")
-	target_compile_definitions(crowdlib
+	target_compile_definitions(crowdlib_objects
 		PUBLIC CROWD_SHARED
 		PRIVATE CROWD_EXPORTS)
 endif()
 
-target_include_directories(crowdlib
+target_include_directories(crowdlib_objects
 	PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
@@ -98,12 +104,13 @@ foreach(src ${CROWDLIB_IDL_SOURCES})
 endforeach()
 
 add_custom_target(crowdlib_idl_generate ALL DEPENDS ${CROWDLIB_IDL_OUTPUTS})
-add_dependencies(crowdlib crowdlib_idl_generate)
-target_include_directories(crowdlib PRIVATE ${CROWDLIB_IDL_OUT_ROOT})
+add_dependencies(crowdlib_objects crowdlib_idl_generate)
+target_include_directories(crowdlib_objects PRIVATE ${CROWDLIB_IDL_OUT_ROOT})
 
-target_link_libraries(crowdlib PUBLIC bgpu core)
+target_link_libraries(crowdlib_objects PUBLIC bgpu core)
+target_link_libraries(crowdlib PUBLIC crowdlib_objects)
 
-target_precompile_headers(crowdlib PRIVATE ${BERNINI_ROOT}/PCH/pch.h)
+target_precompile_headers(crowdlib_objects PRIVATE ${BERNINI_ROOT}/PCH/pch.h)
 
 # The kernels are compiled at runtime through the context's sessions, which resolve modules from
 # ./shaders/src, so they are staged there -- under crowd/, which no other copier writes. Ordered
@@ -151,8 +158,9 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	add_dependencies(crowdlib crowdlib_check_shaders)
 endif()
 
+enable_strict_compiler(crowdlib_objects)
+enable_coverage(crowdlib_objects)
 enable_strict_compiler(crowdlib)
-enable_coverage(crowdlib)
 
 if (BUILD_TESTS)
 	find_package(Catch2 CONFIG REQUIRED)
@@ -161,7 +169,10 @@ if (BUILD_TESTS)
 		${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp
 	)
 
-	add_executable(crowdlib_tests ${CROWDLIB_TESTS_SOURCES})
+	add_executable(crowdlib_tests
+		${CROWDLIB_TESTS_SOURCES}
+		$<TARGET_OBJECTS:crowdlib_objects>
+	)
 
 	# The library's src/ and generated IDL too: the tests check its internals, the formation's CPU
 	# reference and the GPU records, directly.
@@ -169,13 +180,13 @@ if (BUILD_TESTS)
 		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src ${CMAKE_CURRENT_SOURCE_DIR}/src
 				${CROWDLIB_IDL_OUT_ROOT}
 	)
-	add_dependencies(crowdlib_tests crowdlib_idl_generate)
+	add_dependencies(crowdlib_tests crowdlib_idl_generate crowdlib_copy_shaders)
 
 	# bgl for the case that runs beside a renderer on the same context; the library itself
 	# never links it.
 	target_link_libraries(crowdlib_tests
 		PRIVATE
-			crowdlib
+			crowdlib_objects
 			bgpu
 			bgl
 			core

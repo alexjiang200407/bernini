@@ -127,7 +127,7 @@ editor SDK implies it; [core_process.md](core_process.md#linkage)) and nearly al
 
 `bgl_tests` is the exception that proves the rule: it embeds `bgl_objects`' and the backend's
 object files directly rather than linking the dylib, so its own binary carries the `libs/bgl`
-mapping.
+mapping. `crowdlib_tests` does the same with `crowdlib_objects`.
 
 ## What the report can and cannot say
 

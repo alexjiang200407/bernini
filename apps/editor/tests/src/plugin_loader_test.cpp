@@ -57,6 +57,8 @@ namespace
 		fs::create_directories(root);
 		const fs::path module = fixture.filename();
 		fs::copy_file(fixture, root / module, fs::copy_options::overwrite_existing);
+		// The copy keeps the fixture's link time, which falls behind any stamp set relative to now.
+		fs::last_write_time(root / module, fs::file_time_type::clock::now());
 		std::ofstream(root / editor::c_PluginDescriptorFileName)
 			<< nlohmann::json{
 				   { "version", editor::c_PluginDescriptorVersion },
