@@ -1,6 +1,7 @@
 #pragma once
 #include <bgl/IMeshInstanceWriter.h>
 #include <bgl/types/GeomHandle.h>
+#include <bgpu/buffer/EntryBuffer.h>
 #include <bgpu/uniforms/Uniforms.h>
 #include <cstdint>
 #include <memory>
@@ -25,6 +26,9 @@ namespace bgl
 		GeomHandle            geom;
 		uint32_t              capacity = 0;
 		MeshInstanceWriterRef writer;
+
+		// Its run of the view's MeshInstance buffer: slot i is element range.first + i.
+		bgpu::EntryRange range;
 
 		// Null while `writer` is.
 		std::unique_ptr<bgpu::Uniforms> uniforms;

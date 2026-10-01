@@ -373,6 +373,16 @@ namespace bgl
 			return m_MeshBuffer;
 		}
 
+		// A live block's record. The block pass reads it, and so do the tests.
+		[[nodiscard]] const MeshInstanceBlock&
+		GetInstanceBlock(MeshInstanceBlockHandle block) const
+		{
+			core::ensure(
+				block.IsValid() && m_InstanceBlocks.valid(block.handle),
+				"GetInstanceBlock of a block that is not live");
+			return m_InstanceBlocks[block.handle.index];
+		}
+
 		[[nodiscard]] auto&
 		GetPlaybackArena() noexcept
 		{

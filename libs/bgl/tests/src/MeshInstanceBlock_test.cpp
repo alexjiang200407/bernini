@@ -1,5 +1,6 @@
 #include "gfx/GraphicsBase.h"
 #include "scene/SceneView.h"
+#include "util/TestEnvironment.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IExternalBuffer.h>
@@ -36,6 +37,7 @@
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -446,4 +448,121 @@ TEST_CASE("An import refuses a buffer that is not one", "[instance_block]")
 				.SetBuffer(
 					bgpu::StructBufferDesc().SetElement<uint32_t>().SetElementCount(4).SetIsUav())),
 		Catch::Matchers::ContainsSubstring("read-only"));
+}
+
+TEST_CASE(
+	"A block claims its own upload blocks, and a neighbour's write leaves them clean",
+	"[instance_block]")
+{
+	auto  gfx       = bgl::test::CreateGraphics(HeadlessOptions());
+	auto  scene     = MakeScene(*gfx);
+	auto  view      = gfx->CreateSceneView(scene, 8);
+	auto* sceneView = view->As<bgl::SceneView>();
+	REQUIRE(sceneView != nullptr);
+
+	const auto cube = scene->AddCubeGeom(scene->CreatePbrMaterial(bgl::PbrMaterialDesc()));
+
+	const auto     before   = view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
+	const uint32_t baseline = view->GetInstanceCount();
+
+	// Past one upload block (256 MeshInstances), so the run spans two.
+	constexpr uint32_t c_Capacity = 300;
+	const auto         block      = view->CreateMeshInstanceBlock(
+		bgl::MeshInstanceBlockDesc().SetGeom(cube).SetCapacity(c_Capacity));
+	const auto after = view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
+
+	const bgpu::EntryRange range = sceneView->GetInstanceBlock(block).range;
+	CHECK(range.count == c_Capacity);
+	CHECK(range.first % 256 == 0);
+	CHECK(view->GetInstanceCount() == baseline + c_Capacity + 1);
+
+	auto& meshes = sceneView->GetMeshBuffer();
+	for (uint32_t slot = 0; slot < c_Capacity; ++slot)
+	{
+		const bgl::idl::MeshInstance& mesh = meshes.AtIndex(range.first + slot);
+		CHECK(bgl::MeshInstanceFlags(mesh.flags).any(bgl::MeshInstanceFlag::kHidden));
+	}
+
+	// Neither neighbour landed in the block's two upload blocks.
+	const uint32_t firstBlock = range.first / 256;
+	for (const auto neighbour : { before, after })
+	{
+		CHECK(neighbour.handle.index / 256 != firstBlock);
+		CHECK(neighbour.handle.index / 256 != firstBlock + 1);
+	}
+
+	// Draw once to flush the block's one upload, then move both neighbours.
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 64;
+	targetDesc.height   = 64;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+	auto job            = bgl::RenderJob();
+	job.view            = view;
+	job.camera =
+		bgl::Camera()
+			.LookAt(glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))
+			.Perspective(glm::radians(60.0f), 1.0f, 0.1f, 100.0f);
+	job.viewport = bgl::Viewport(64.0f, 64.0f);
+	gfx->DrawFrame(target, job);
+	CHECK_FALSE(meshes.IsBlockDirty(firstBlock));
+
+	view->SetInstanceTransform(before, glm::translate(glm::mat4(1.0f), glm::vec3(1.0f)));
+	view->SetInstanceTransform(after, glm::translate(glm::mat4(1.0f), glm::vec3(-1.0f)));
+	CHECK_FALSE(meshes.IsBlockDirty(firstBlock));
+	CHECK_FALSE(meshes.IsBlockDirty(firstBlock + 1));
+	CHECK(meshes.IsBlockDirty(after.handle.index / 256));
+
+	view->DeleteMeshInstanceBlock(block);
+	CHECK(view->GetInstanceCount() == baseline + 1);
+	CHECK_FALSE(meshes.IsIndexValid(range.first));
+	gfx->WaitIdle();
+}
+
+TEST_CASE("A block with no writer draws nothing", "[instance_block][render]")
+{
+	auto gfx   = bgl::test::CreateGraphics(HeadlessOptions());
+	auto scene = MakeScene(*gfx);
+	auto view  = gfx->CreateSceneView(scene, 8);
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	auto white            = bgl::PbrMaterialDesc();
+	white.baseColorFactor = glm::vec4(1.0f);
+	white.metallicFactor  = 0.0f;
+	const auto cube       = scene->AddCubeGeom(scene->CreatePbrMaterial(white));
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 64;
+	targetDesc.height   = 64;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+	auto job            = bgl::RenderJob();
+	job.view            = view;
+	job.camera =
+		bgl::Camera()
+			.LookAt(glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))
+			.Perspective(glm::radians(60.0f), 1.0f, 0.1f, 100.0f);
+	job.viewport = bgl::Viewport(64.0f, 64.0f);
+
+	const auto draw = [&] {
+		// A few frames, so TAA's history settles on what this scene draws.
+		for (int i = 0; i < 4; ++i)
+		{
+			gfx->DrawFrame(target, job);
+		}
+		const auto image = gfx->ScreenshotToMemory(target);
+		return std::vector<std::byte>(image.pixels.begin(), image.pixels.end());
+	};
+
+	const auto empty = draw();
+
+	// Its slots sit at the origin the camera looks at, hidden: drawn, they would show a cube.
+	const auto block =
+		view->CreateMeshInstanceBlock(bgl::MeshInstanceBlockDesc().SetGeom(cube).SetCapacity(16));
+	CHECK(draw() == empty);
+
+	// The control: one cube there is visible.
+	view->DeleteMeshInstanceBlock(block);
+	view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
+	CHECK(draw() != empty);
 }
