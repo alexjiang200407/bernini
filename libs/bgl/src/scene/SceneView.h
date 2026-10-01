@@ -373,6 +373,22 @@ namespace bgl
 			return m_MeshBuffer;
 		}
 
+		// Calls `place(block)` for every live block that has a writer, which is what the block pass
+		// records a dispatch for.
+		template <typename F>
+		void
+		ForEachWrittenBlock(F&& place)
+		{
+			for (uint32_t index = 0; index < m_InstanceBlocks.capacity(); ++index)
+			{
+				if (m_InstanceBlocks.allocated(index) &&
+				    m_InstanceBlocks[index].writer.IsInitialized())
+				{
+					place(m_InstanceBlocks[index]);
+				}
+			}
+		}
+
 		// A live block's record. The block pass reads it, and so do the tests.
 		[[nodiscard]] const MeshInstanceBlock&
 		GetInstanceBlock(MeshInstanceBlockHandle block) const

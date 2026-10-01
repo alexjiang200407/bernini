@@ -912,6 +912,9 @@ namespace bgl
 		// per cull -- and it must be attached under the view's namespace, where its output buffer was
 		// imported. Under a cull namespace the write would resolve to a name nothing imported, which
 		// makes the pass no longer a root and culls it.
+		// First: every pass below reads a placement, and a block's are written here.
+		m_PlaceBlocks.AttachToFrameGraph(m_FrameGraph, draw);
+
 		// Before the pose pass and the forward pass, both of which may read a table filled here.
 		m_RigFrames.AttachToFrameGraph(m_FrameGraph, draw);
 		m_SkinnedPose.AttachToFrameGraph(m_FrameGraph, draw);

@@ -1683,10 +1683,15 @@ namespace bgl
 
 		MeshInstanceBlock& record = m_InstanceBlocks[block.handle.index];
 		record.writer             = std::move(writer);
-		record.uniforms =
-			compiled == nullptr ?
-				nullptr :
-				std::make_unique<bgpu::Uniforms>(compiled->GetKernel().pipeline.Get(), "gUniforms");
+		record.kernel             = bgpu::ComputeKernel();
+		if (compiled != nullptr)
+		{
+			record.kernel.pipeline = compiled->GetKernel().pipeline;
+			record.kernel.uniforms.try_emplace(
+				"gUniforms",
+				record.kernel.pipeline.Get(),
+				"gUniforms");
+		}
 	}
 
 	bgpu::UniformsBase::Accessor
@@ -1699,12 +1704,12 @@ namespace bgl
 		}
 
 		MeshInstanceBlock& record = m_InstanceBlocks[block.handle.index];
-		if (record.uniforms == nullptr)
+		if (!record.writer.IsInitialized())
 		{
 			throw SceneError("GetBlockParams: the block has no writer");
 		}
 
-		return (*record.uniforms)["params"];
+		return record.kernel["gUniforms"]["params"];
 	}
 
 	void
