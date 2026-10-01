@@ -28,7 +28,7 @@ namespace bgpu
 		D3D12_RESOURCE_DESC1  resDesc   = {};
 		D3D12_HEAP_FLAGS      heapFlags = D3D12_HEAP_FLAG_NONE;
 
-		if (desc.isUav)
+		if (desc.isUav || desc.allowsUav)
 			resDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
 		// Setup raw buffer resource description

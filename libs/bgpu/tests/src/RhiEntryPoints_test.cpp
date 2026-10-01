@@ -58,7 +58,7 @@ TEST_CASE("Every RHI entry point runs on a device no renderer owns", "[render][r
 	auto list     = device->CreateCommandList(listDesc, alloc, rm);
 	auto timing   = device->CreateTimestampHeap(2);
 
-	// Buffers, and a second view of one.
+	// Buffers, and a second view of one, read-only and writable.
 	const auto structBuffer = rm->CreateStructBuffer(
 		bgpu::StructBufferDesc().SetElement<uint32_t>().SetElementCount(16).SetIsUav().SetDebugName(
 			"entry points: struct"));
@@ -74,6 +74,17 @@ TEST_CASE("Every RHI entry point runs on a device no renderer owns", "[render][r
 	REQUIRE(rm->ValidBufferHandle(rawBuffer));
 	REQUIRE(rm->ValidBufferHandle(computeBuffer));
 	REQUIRE(rm->ValidBufferSrvHandle(bufferSrv));
+
+	const auto readOnlyBuffer = rm->CreateStructBuffer(
+		bgpu::StructBufferDesc()
+			.SetElement<uint32_t>()
+			.SetElementCount(16)
+			.SetAllowsUav()
+			.SetDebugName("entry points: read-only, writable view"));
+	const auto bufferUav = rm->CreateBufferUav(
+		readOnlyBuffer,
+		bgpu::BufferUavDesc().SetElement<uint32_t>().SetDebugName("entry points: writable view"));
+	REQUIRE(rm->ValidBufferUavHandle(bufferUav));
 
 	// A colour target with its three views, a depth target, a sampler.
 	auto colorDesc   = bgpu::TextureDesc();
@@ -173,6 +184,8 @@ TEST_CASE("Every RHI entry point runs on a device no renderer owns", "[render][r
 
 	// Deferred destroys, reclaimed once the queue has passed them; then the immediate ones.
 	rm->DestroyBufferSrv(bufferSrv);
+	rm->DestroyBufferUav(bufferUav);
+	rm->DestroyBuffer(readOnlyBuffer);
 	rm->DestroyBuffer(structBuffer);
 	rm->DestroyBuffer(rawBuffer);
 	rm->DestroyBuffer(computeBuffer);

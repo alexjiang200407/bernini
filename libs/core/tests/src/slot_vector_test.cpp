@@ -248,3 +248,82 @@ TEST_CASE("slot_vector grow to a smaller or equal capacity does nothing", "[slot
 	REQUIRE_FALSE(slots.grow(1u));
 	REQUIRE(slots.capacity() == 4u);
 }
+
+TEST_CASE("slot_vector claims a run that single allocation then skips", "[slot_vector][range]")
+{
+	core::slot_vector<int> slots(8);
+
+	REQUIRE(slots.try_claim_range(2, 4));
+	for (uint32_t i = 2; i < 6; ++i)
+	{
+		REQUIRE(slots.allocated(i));
+		REQUIRE(slots[i] == 0);
+	}
+
+	// The free list skips the run: 0, 1, then past it.
+	REQUIRE(slots.allocate_slot().index == 0u);
+	REQUIRE(slots.allocate_slot().index == 1u);
+	REQUIRE(slots.allocate_slot().index == 6u);
+	REQUIRE(slots.allocate_slot().index == 7u);
+	REQUIRE(slots.try_allocate_slot().is_null());
+}
+
+TEST_CASE("slot_vector refuses a run it cannot claim whole", "[slot_vector][range]")
+{
+	core::slot_vector<int> slots(8);
+	const auto             taken = slots.allocate_slot();
+	REQUIRE(taken.index == 0u);
+
+	SECTION("a run over an allocated index") { REQUIRE_FALSE(slots.try_claim_range(0, 2)); }
+	SECTION("a run past capacity") { REQUIRE_FALSE(slots.try_claim_range(6, 3)); }
+	SECTION("a run starting past capacity") { REQUIRE_FALSE(slots.try_claim_range(9, 1)); }
+	SECTION("an empty run") { REQUIRE_FALSE(slots.try_claim_range(2, 0)); }
+
+	// Untouched: the next free index is still 1.
+	REQUIRE(slots.allocate_slot().index == 1u);
+}
+
+TEST_CASE("slot_vector releases a run back to ascending allocation", "[slot_vector][range]")
+{
+	core::slot_vector<int> slots(4);
+	REQUIRE(slots.try_claim_range(0, 4));
+	const uint32_t generation = slots.generation(1);
+
+	slots.release_range(0, 4);
+	REQUIRE_FALSE(slots.allocated(1));
+	REQUIRE(slots.generation(1) == generation + 1);
+
+	REQUIRE(slots.allocate_slot().index == 0u);
+	REQUIRE(slots.allocate_slot().index == 1u);
+}
+
+TEST_CASE(
+	"slot_vector release_range releases nothing when part of the run is free",
+	"[slot_vector][range]")
+{
+	core::slot_vector<int> slots(4);
+	REQUIRE(slots.try_claim_range(0, 2));
+
+	REQUIRE_THROWS_AS(slots.release_range(0, 3), std::runtime_error);
+	REQUIRE(slots.allocated(0));
+	REQUIRE(slots.allocated(1));
+}
+
+TEST_CASE("slot_vector claims a run in the indices grow adds", "[slot_vector][range][grow]")
+{
+	core::slot_vector<int> slots(2);
+	REQUIRE(slots.grow(8));
+
+	REQUIRE(slots.try_claim_range(4, 4));
+
+	// Every index outside the run, in whatever order the free list keeps, and none inside it.
+	auto handedOut = std::array<bool, 8>();
+	for (int i = 0; i < 4; ++i)
+	{
+		const uint32_t index = slots.allocate_slot().index;
+		REQUIRE(index < 4u);
+		REQUIRE_FALSE(handedOut[index]);
+		handedOut[index] = true;
+	}
+	REQUIRE(slots.try_allocate_slot().is_null());
+}

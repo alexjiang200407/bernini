@@ -17,16 +17,18 @@ namespace bgpu
 										 desc.maxCbvSrvUavs,
 										 D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE),
 		m_Buffers(desc.maxBuffers), m_Srvs(desc.maxSrvs), m_BufferSrvs(desc.maxBufferSrvs),
-		m_Samplers(desc.maxSamplers), m_Textures(desc.maxTextures),
-		m_ReadbackBuffers(desc.maxReadbackBuffers), m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs)
+		m_BufferUavs(desc.maxBufferUavs), m_Samplers(desc.maxSamplers),
+		m_Textures(desc.maxTextures), m_ReadbackBuffers(desc.maxReadbackBuffers),
+		m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs)
 	{
 		core::ensure(desc.maxBuffers > 0, "maxBuffers must be greater than zero");
 		// Every buffer, every SRV and every second view of a buffer takes a descriptor, so a heap
 		// smaller than the pools it serves turns a legal create into an exhausted-heap failure. The
 		// +1 is the unbound sentinel the allocator burns at index 0 and never hands out.
 		core::ensure(
-			desc.maxCbvSrvUavs >= desc.maxBuffers + desc.maxSrvs + desc.maxBufferSrvs + 1,
-			"maxCbvSrvUavs must cover maxBuffers + maxSrvs + maxBufferSrvs, and the unbound slot");
+			desc.maxCbvSrvUavs >=
+				desc.maxBuffers + desc.maxSrvs + desc.maxBufferSrvs + desc.maxBufferUavs + 1,
+			"maxCbvSrvUavs must cover every buffer, SRV and second view, and the unbound slot");
 		core::ensure(desc.maxSamplers <= 2048, "maxSamplers must be at most 2048");
 
 		// D3D12 refuses a heap of no descriptors, and a pool of zero is how a compute owner says it
@@ -118,6 +120,7 @@ namespace bgpu
 		BufferDesc bufferDesc;
 		bufferDesc.byteSize  = static_cast<uint64_t>(desc.stride) * desc.elementCount;
 		bufferDesc.isUav     = desc.isUav;
+		bufferDesc.allowsUav = desc.allowsUav;
 		bufferDesc.debugName = desc.debugName;
 
 		auto allocation = AllocateBuffer(bufferDesc);
@@ -303,6 +306,86 @@ namespace bgpu
 	ResourceManager::ValidBufferSrvHandle(const BufferSrvHandle& handle) const noexcept
 	{
 		return m_BufferSrvs.valid(handle.slot);
+	}
+
+	BufferUavHandle
+	ResourceManager::CreateBufferUav(BufferHandle buffer, const BufferUavDesc& desc) noexcept
+	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		core::ensure(ValidBufferHandle(buffer), "CreateBufferUav on an invalid buffer");
+		core::ensure(desc.stride > 0, "A structured view requires a stride");
+
+		const BufferDesc& bufferDesc = m_Buffers[buffer.slot].GetDesc();
+		core::ensure(
+			bufferDesc.isUav || bufferDesc.allowsUav,
+			"CreateBufferUav on a buffer created without allowsUav");
+		core::ensure(!bufferDesc.isRaw, "CreateBufferUav on a raw buffer");
+		core::ensure(
+			bufferDesc.byteSize % desc.stride == 0,
+			"A structured view must divide the buffer it views");
+
+		auto slot = TryAllocateBounded(m_BufferUavs);
+		if (slot.is_null())
+		{
+			spdlog::error("CreateBufferUav '{}': buffer view pool exhausted", desc.debugName);
+			return BufferUavHandle{};
+		}
+
+		uint32_t descriptorIndex = 0xFFFFFFFF;
+		try
+		{
+			descriptorIndex = m_CbvSrvUavDescriptors.Allocate();
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("CreateBufferUav '{}': {}", desc.debugName, e.what());
+			m_BufferUavs.release_slot(slot.index);
+			return BufferUavHandle{};
+		}
+
+		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+		uavDesc.ViewDimension                    = D3D12_UAV_DIMENSION_BUFFER;
+		uavDesc.Format                           = DXGI_FORMAT_UNKNOWN;
+		uavDesc.Buffer.FirstElement              = 0;
+		uavDesc.Buffer.NumElements = static_cast<uint32_t>(bufferDesc.byteSize / desc.stride);
+		uavDesc.Buffer.StructureByteStride = desc.stride;
+		uavDesc.Buffer.Flags               = D3D12_BUFFER_UAV_FLAG_NONE;
+
+		m_Device->CreateUnorderedAccessView(
+			m_Buffers[buffer.slot].GetD3D12Resource(),
+			nullptr,
+			&uavDesc,
+			m_CbvSrvUavDescriptors.GetCpuHandle(descriptorIndex));
+
+		m_BufferUavs[slot.index] = descriptorIndex;
+
+		return BufferUavHandle{ slot, descriptorIndex };
+	}
+
+	void
+	ResourceManager::DestroyBufferUav(BufferUavHandle handle, bool deferred) noexcept
+	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		core::ensure(ValidBufferUavHandle(handle), "Cannot destroy invalid buffer view handle");
+
+		const uint32_t descriptorIndex = m_BufferUavs[handle.slot.index];
+
+		if (deferred)
+		{
+			m_BufferUavs.retire_slot(handle.slot.index);
+			RetireDeferred(PendingType::kBufferUav, handle.slot.index, descriptorIndex);
+		}
+		else
+		{
+			m_BufferUavs.release_slot(handle.slot.index);
+			m_CbvSrvUavDescriptors.Free(descriptorIndex);
+		}
+	}
+
+	bool
+	ResourceManager::ValidBufferUavHandle(const BufferUavHandle& handle) const noexcept
+	{
+		return m_BufferUavs.valid(handle.slot);
 	}
 
 	BufferHandle
@@ -732,6 +815,13 @@ namespace bgpu
 				break;
 			case PendingType::kBufferSrv:
 				m_BufferSrvs.reclaim_slot(pending.slotIndex);
+				if (pending.descriptorIndex != 0xFFFFFFFF)
+				{
+					m_CbvSrvUavDescriptors.Free(pending.descriptorIndex);
+				}
+				break;
+			case PendingType::kBufferUav:
+				m_BufferUavs.reclaim_slot(pending.slotIndex);
 				if (pending.descriptorIndex != 0xFFFFFFFF)
 				{
 					m_CbvSrvUavDescriptors.Free(pending.descriptorIndex);

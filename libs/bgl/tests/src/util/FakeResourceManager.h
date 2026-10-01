@@ -145,6 +145,21 @@ namespace bgl::test
 		{
 			return false;
 		}
+		bgpu::BufferUavHandle
+		CreateBufferUav(bgpu::BufferHandle, const bgpu::BufferUavDesc&) noexcept override
+		{
+			std::abort();
+		}
+		void
+		DestroyBufferUav(bgpu::BufferUavHandle, bool) noexcept override
+		{
+			std::abort();
+		}
+		bool
+		ValidBufferUavHandle(const bgpu::BufferUavHandle&) const noexcept override
+		{
+			return false;
+		}
 		bgpu::SamplerHandle
 		CreateSampler(const bgpu::SamplerDesc&) noexcept override
 		{

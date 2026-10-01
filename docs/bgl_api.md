@@ -92,7 +92,7 @@ disagrees, trust the header, then fix this doc.
   device could not allocate, not that a budget was hit.
 
   `GraphicsOptions` is the opposite: `maxCbvSrvUavs`, `maxBuffers`, `maxSrvs`, `maxBufferSrvs`,
-  `maxRtvs`, `maxDsvs`, `maxTextures`, `maxSamplers` and `maxReadbackBuffers` size fixed pools that
+  `maxBufferUavs`, `maxRtvs`, `maxDsvs`, `maxTextures`, `maxSamplers` and `maxReadbackBuffers` size fixed pools that
   never grow. Exhausting one fails that creation and nothing else: the call logs and returns a null
   handle rather than throwing, so a caller that stores the result holds something it must check
   before using or releasing it.

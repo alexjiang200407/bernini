@@ -37,7 +37,11 @@ namespace bgpu
 		// The view the buffer was created with: a shader reads a raw buffer as a ByteAddressBuffer
 		// and a structured one as a StructuredBuffer<T>, and the wrong wrapper on either is
 		// undefined. A second, structured view may be added with CreateBufferSrv.
-		bool        isRaw     = false;
+		bool isRaw = false;
+
+		// The resource also accepts a writable second view (CreateBufferUav) while its own view stays
+		// the one above. Implied by isUav.
+		bool        allowsUav = false;
 		std::string debugName = "Unnamed Buffer";
 	};
 
@@ -66,6 +70,44 @@ namespace bgpu
 	{
 		BufferHandle    buffer;
 		BufferSrvHandle handles;
+	};
+
+	// A writable view of a buffer whose own view is read-only, for the one pass that writes what
+	// every other pass reads. Like BufferSrvHandle it is not the resource, and destroying the buffer
+	// does not destroy it.
+	struct BufferUavHandle
+	{
+		core::slot_handle slot;
+		uint32_t          bindlessIndex = core::slot_handle::invalid_index;
+
+		[[nodiscard]] bool
+		IsNull() const
+		{
+			return slot.index == core::slot_handle::invalid_index;
+		}
+	};
+
+	struct BufferUavDesc
+	{
+		// Element size of the view: the same bytes are written as elements of this.
+		uint32_t    stride    = 0;
+		std::string debugName = "Unnamed Buffer Uav";
+
+		template <core::type_traits::trivially_copyable T, typename Self>
+		Self&&
+		SetElement(this Self&& self) noexcept
+		{
+			self.stride = sizeof(T);
+			return std::forward<Self>(self);
+		}
+
+		template <typename Self>
+		Self&&
+		SetDebugName(this Self&& self, std::string value) noexcept
+		{
+			self.debugName = std::move(value);
+			return std::forward<Self>(self);
+		}
 	};
 
 	struct BufferSrvDesc
@@ -138,6 +180,9 @@ namespace bgpu
 		std::string debugName    = "Unnamed Buffer";
 		bool        isUav        = false;
 
+		// Read-only to every reader, and writable through a second view (CreateBufferUav).
+		bool allowsUav = false;
+
 		template <core::type_traits::trivially_copyable T, typename Self>
 		Self&&
 		SetElement(this Self&& self) noexcept
@@ -159,6 +204,14 @@ namespace bgpu
 		SetIsUav(this Self&& self, bool value = true) noexcept
 		{
 			self.isUav = value;
+			return std::forward<Self>(self);
+		}
+
+		template <typename Self>
+		Self&&
+		SetAllowsUav(this Self&& self, bool value = true) noexcept
+		{
+			self.allowsUav = value;
 			return std::forward<Self>(self);
 		}
 

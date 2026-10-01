@@ -81,6 +81,13 @@ doc and a header disagree, trust the header, then fix this doc.
   destroying the buffer does not destroy it. On D3D12 that is a second descriptor; on Metal it is
   the buffer's own slot, a Metal buffer being an address whose type is whatever the shader declares.
 
+  **A read-only buffer may also have a writable view.** `CreateBufferUav(BufferHandle,
+  BufferUavDesc)` is the same thing writable, for a buffer one pass writes and every other pass
+  reads: the buffer keeps its SRV, so no reader is handed a UAV. It needs the resource made for it
+  (`StructBufferDesc::allowsUav`), since D3D12 fixes whether a resource accepts unordered access when
+  it is created and a buffer's one descriptor is its SRV; on Metal it is again the buffer's own slot.
+  The pools are `maxBufferSrvs` and `maxBufferUavs`, and both draw on `maxCbvSrvUavs`.
+
   A growth replaces the resource a view describes and announces nothing, so **whoever owns the
   buffer owns the view**: `scene::RawBuffer` re-issues its own inside its `Allocate`, where the two
   change together. Re-issuing anywhere else — at a frame boundary, say — leaves an instant where a

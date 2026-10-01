@@ -28,7 +28,8 @@ namespace bgpu
 			uint32_t                  stride,
 			uint32_t                  capacity,
 			bool                      isUav,
-			bool                      isRaw)
+			bool                      isRaw,
+			bool                      allowsUav)
 		{
 			if (isRaw)
 			{
@@ -45,6 +46,7 @@ namespace bgpu
 			desc.elementCount = capacity;
 			desc.stride       = stride;
 			desc.isUav        = isUav;
+			desc.allowsUav    = allowsUav;
 
 			return resourceManager->CreateStructBuffer(desc);
 		}
@@ -74,18 +76,26 @@ namespace bgpu
 		uint32_t           stride,
 		uint32_t           capacity,
 		bool               isUav,
-		bool               isRaw) :
+		bool               isRaw,
+		bool               allowsUav) :
 		m_ResourceManager(std::move(resourceManager)), m_DebugName(std::move(debugName)),
-		m_Stride(stride), m_IsUav(isUav), m_IsRaw(isRaw)
+		m_Stride(stride), m_IsUav(isUav), m_IsRaw(isRaw), m_AllowsUav(allowsUav)
 	{
 		core::ensure(
 			m_ResourceManager != nullptr,
 			"GrowableGpuBuffer requires a valid ResourceManager");
 		core::ensure(stride > 0, "GrowableGpuBuffer requires a positive stride");
 		core::ensure(capacity > 0, "GrowableGpuBuffer requires a positive capacity");
+		core::ensure(!(isRaw && allowsUav), "A writable second view is structured, not raw");
 
-		m_Handle =
-			CreateStorage(m_ResourceManager, m_DebugName, m_Stride, capacity, m_IsUav, m_IsRaw);
+		m_Handle = CreateStorage(
+			m_ResourceManager,
+			m_DebugName,
+			m_Stride,
+			capacity,
+			m_IsUav,
+			m_IsRaw,
+			m_AllowsUav);
 		if (m_Handle.IsNull())
 		{
 			core::throw_runtime_error(
@@ -105,8 +115,14 @@ namespace bgpu
 		if (newCapacity <= m_Capacity)
 			return;
 
-		auto grown =
-			CreateStorage(m_ResourceManager, m_DebugName, m_Stride, newCapacity, m_IsUav, m_IsRaw);
+		auto grown = CreateStorage(
+			m_ResourceManager,
+			m_DebugName,
+			m_Stride,
+			newCapacity,
+			m_IsUav,
+			m_IsRaw,
+			m_AllowsUav);
 		if (grown.IsNull())
 		{
 			core::throw_runtime_error(
@@ -182,7 +198,7 @@ namespace bgpu
 		m_Superseded(std::exchange(other.m_Superseded, {})),
 		m_CopyBytes(std::exchange(other.m_CopyBytes, 0)),
 		m_Capacity(std::exchange(other.m_Capacity, 0)), m_Stride(other.m_Stride),
-		m_IsUav(other.m_IsUav), m_IsRaw(other.m_IsRaw)
+		m_IsUav(other.m_IsUav), m_IsRaw(other.m_IsRaw), m_AllowsUav(other.m_AllowsUav)
 	{}
 
 	GrowableGpuBuffer&
@@ -200,6 +216,7 @@ namespace bgpu
 			m_Stride          = other.m_Stride;
 			m_IsUav           = other.m_IsUav;
 			m_IsRaw           = other.m_IsRaw;
+			m_AllowsUav       = other.m_AllowsUav;
 		}
 		return *this;
 	}

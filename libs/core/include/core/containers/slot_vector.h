@@ -242,6 +242,74 @@ namespace core
 			release_slot(slot.index);
 		}
 
+		/**
+		 * Allocates every index in [first, first + count) at once, each holding a default element,
+		 * for a caller that addresses the run by index rather than by handle. Single-slot
+		 * allocation never returns one of them until release_range.
+		 *
+		 * @return false, with the container untouched, if the run passes capacity() or any index
+		 *         in it is allocated or retired.
+		 */
+		[[nodiscard]] bool
+		try_claim_range(uint32_t first, uint32_t count)
+		{
+			if (count == 0 || first > capacity() || count > capacity() - first)
+				return false;
+
+			for (uint32_t i = first; i < first + count; ++i)
+			{
+				if (m_Meta[i].is_allocated || m_Meta[i].is_retired)
+					return false;
+			}
+
+			std::erase_if(m_FreeIndices, [first, count](uint32_t index) {
+				return index - first < count;
+			});
+
+			for (uint32_t i = first; i < first + count; ++i)
+			{
+				m_Meta[i].is_allocated = true;
+				m_Data[i]              = T();
+			}
+			return true;
+		}
+
+		/**
+		 * Frees a run try_claim_range allocated, invalidating every index in it; the caller
+		 * guarantees nothing is still reading the elements.
+		 *
+		 * @throws std::runtime_error, releasing nothing, if the run passes capacity() or an index in
+		 *         it is not allocated.
+		 */
+		void
+		release_range(uint32_t first, uint32_t count)
+		{
+			if (first > capacity() || count > capacity() - first)
+			{
+				core::throw_runtime_error(
+					"slot_vector: release_range [{}, {}) out of bounds (size {})",
+					first,
+					static_cast<uint64_t>(first) + count,
+					capacity());
+			}
+
+			for (uint32_t i = first; i < first + count; ++i)
+			{
+				if (!m_Meta[i].is_allocated)
+				{
+					core::throw_runtime_error(
+						"slot_vector: release_range index {} is not allocated",
+						i);
+				}
+			}
+
+			// Highest first, so the free list hands the run back out in ascending order.
+			for (uint32_t i = first + count; i > first; --i)
+			{
+				release_slot(i - 1);
+			}
+		}
+
 		[[nodiscard]] bool
 		valid(uint32_t index, uint32_t generation) const
 		{

@@ -102,6 +102,16 @@ namespace bgpu
 		}
 	};
 
+	template <>
+	struct UniformAssign<BufferUavHandle>
+	{
+		static void
+		Assign(UniformsBase::Accessor accessor, BufferUavHandle handle)
+		{
+			UniformAssign<BufferHandle>::Assign(accessor, BufferHandle{ {}, handle.bindlessIndex });
+		}
+	};
+
 	// A raw arena's two descriptors from one assignment: the members below are each a struct of one
 	// handle, so each lands through the BufferHandle rule.
 	template <>
