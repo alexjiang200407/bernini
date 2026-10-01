@@ -81,8 +81,15 @@ option(BERNINI_PROFILING "Compile Tracy zones and its client into the build" OFF
 # Before any add_subdirectory: a compiler launcher is read when a target is created.
 enable_compiler_cache()
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# CMake's 23 is MSVC's /std:c++latest, which admits C++26 on VS 2026; /std:c++23preview (19.43+)
+# does not.
+if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 19.43)
+    set(CMAKE_CXX23_STANDARD_COMPILE_OPTION "-std:c++23preview")
+    set(CMAKE_CXX23_EXTENSION_COMPILE_OPTION "-std:c++23preview")
+endif()
 
 add_compile_definitions($<$<CONFIG:Debug>:BERNINI_GPU_DEBUG>)
 

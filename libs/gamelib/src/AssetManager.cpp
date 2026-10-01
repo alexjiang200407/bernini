@@ -395,6 +395,15 @@ namespace game
 		return paths;
 	}
 
+	// The references ReadMesh and its siblings hand back stay valid as these grow:
+	// std::unordered_map is node-based, so an insert never moves an existing value.
+	struct AssetManager::ContainerReads
+	{
+		core::str::unordered_str_map<Cached<assetlib::RegenMesh>>    meshes;
+		core::str::unordered_str_map<Cached<assetlib::Skeleton>>     skeletons;
+		core::str::unordered_str_map<Cached<assetlib::AnimationSet>> animations;
+	};
+
 	AssetManager::AssetManager(
 		bgl::SceneRef         scene,
 		std::filesystem::path dataRoot,
@@ -711,15 +720,6 @@ namespace game
 
 		return handle;
 	}
-
-	// The references ReadMesh and its siblings hand back stay valid as these grow:
-	// std::unordered_map is node-based, so an insert never moves an existing value.
-	struct AssetManager::ContainerReads
-	{
-		core::str::unordered_str_map<Cached<assetlib::RegenMesh>>    meshes;
-		core::str::unordered_str_map<Cached<assetlib::Skeleton>>     skeletons;
-		core::str::unordered_str_map<Cached<assetlib::AnimationSet>> animations;
-	};
 
 	namespace
 	{
