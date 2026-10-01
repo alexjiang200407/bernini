@@ -3,6 +3,7 @@
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/Dsv.h>
 #include <bgpu/resource/NativeBufferDesc.h>
+#include <bgpu/resource/NativeTextureDesc.h>
 #include <bgpu/resource/Readback.h>
 #include <bgpu/resource/Rtv.h>
 #include <bgpu/resource/Sampler.h>
@@ -258,18 +259,14 @@ namespace bgpu
 		/**
 		 * Adopts a texture made outside this manager -- a swapchain's backbuffer -- so it is viewed,
 		 * barriered and destroyed like any other. The manager adds its own reference, and destroying
-		 * the texture releases only that. Null when this backend cannot adopt a `type`.
+		 * the texture releases only that. Null when this backend cannot adopt a `desc.type`.
 		 *
-		 * @pre `desc` describes the object, and `desc.initialLayout` is the layout it is in now.
+		 * @pre `desc.texture` describes the object, and `desc.texture.initialLayout` is the layout it
+		 *      is in now.
 		 */
 		[[nodiscard]] virtual TextureHandle
-		ImportNativeTexture(
-			NativeObjectType   type,
-			NativeObject       object,
-			const TextureDesc& desc) noexcept
+		ImportNativeTexture(const NativeTextureDesc& desc) noexcept
 		{
-			(void)type;
-			(void)object;
 			(void)desc;
 			return {};
 		}
@@ -289,7 +286,7 @@ namespace bgpu
 
 		/**
 		 * Adopts a buffer another owner on the same native device made, as a read-only structured
-		 * buffer of `desc.elementCount` elements of `desc.stride` bytes. The bytes are shared, not
+		 * buffer as `desc.buffer` describes it. The bytes are shared, not
 		 * copied: this manager adds its own reference and a descriptor in its own heap, so the
 		 * memory outlives the producer's release until this handle is destroyed too. Null when this
 		 * backend cannot adopt a `desc.type`.
@@ -299,7 +296,8 @@ namespace bgpu
 		 * that reuses the memory waits on the reader's -- see docs/rhi.md.
 		 *
 		 * @pre `desc.object` is a buffer on this manager's native device, at least
-		 *      `desc.stride * desc.elementCount` bytes long.
+		 *      `desc.buffer.stride * desc.buffer.elementCount` bytes long; `desc.buffer.isUav` is
+		 *      false.
 		 */
 		[[nodiscard]] virtual BufferHandle
 		ImportNativeBuffer(const NativeBufferDesc& desc) noexcept

@@ -3,14 +3,14 @@
 #include <bgl/IExternalBuffer.h>
 #include <bgl/IGpuAssertionHandler.h>
 #include <bgl/IGraphics.h>
-#include <bgl/IInstanceWriter.h>
+#include <bgl/IMeshInstanceWriter.h>
 #include <bgl/IOverlay.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/SurfaceType.h>
 #include <bgl/api.h>
-#include <bgl/types/InstanceWriterDesc.h>
+#include <bgl/types/MeshInstanceWriterDesc.h>
 #include <bgl/types/PassTiming.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
@@ -338,10 +338,10 @@ namespace bgl
 			return m_Context->GetPassTimings(target);
 		}
 
-		InstanceWriterRef
-		CreateInstanceWriter(const InstanceWriterDesc& desc) override
+		MeshInstanceWriterRef
+		CreateMeshInstanceWriter(const MeshInstanceWriterDesc& desc) override
 		{
-			return m_Context->CreateInstanceWriter(desc);
+			return m_Context->CreateMeshInstanceWriter(desc);
 		}
 
 		ExternalBufferRef

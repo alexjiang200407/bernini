@@ -22,7 +22,7 @@ The same surface has a Slang half, [libs/bgl/shaders/include/bgl](libs/bgl/shade
 surface written outside the engine conforms to and reads through, and nothing that names a handle,
 an arena or a draw bucket. `bgl_check_shaders` holds it to the same rule, compiling each module with
 only that tree on the search path; [Slang Shaders](docs/slang_shaders.md) has the three trees. Two
-kinds of client code conform to it: a surface, and an instance writer (`bgl.InstanceWriter`), which
+kinds of client code conform to it: a surface, and an instance writer (`bgl.MeshInstanceWriter`), which
 places a block's slots through `IMeshInstanceBlock` and never learns where the placements live.
 
 **This document is a map, not a mirror.** It captures design choices, topology, and the *non-obvious*
@@ -285,17 +285,17 @@ flowchart TD
   Returning an image spends it; `nullopt` leaves it live for a later call.
 * **`DiscardCapture(ticket)`** — `noexcept`, and spending a ticket twice is a no-op, so teardown paths
   need no bookkeeping.
-* **`CreateInstanceWriter(desc)`** — @pre not between `BeginFrame`/`EndFrame`; `desc.module` a
-  dotted import name and `desc.type` an identifier. Generates a program that calls the type's
+* **`CreateMeshInstanceWriter(desc)`** — @pre not between `BeginFrame`/`EndFrame`; `desc.slangModuleName`
+  a dotted import name and `desc.slangTypeName` an identifier. Generates a program that calls the type's
   `Write` once per slot and compiles it at once, so a type that does not conform to
-  `IInstanceWriter` throws `GraphicsError` here with the compiler's diagnostic, not at the first
+  `IMeshInstanceWriter` throws `GraphicsError` here with the compiler's diagnostic, not at the first
   frame. The program is registered with `IDevice::AddSourceModule`, which drops the context's Slang
   sessions and moves its source salt: create writers at start-up, before the frames that demand
   pipelines, and the same writers in the same order every run keep the shader cache warm.
 * **`ImportBuffer(desc)`** — another owner's buffer, described by a `bgpu::NativeBufferDesc` and
   adopted read-only into the renderer's resource manager
   (`bgpu::IResourceManager::ImportNativeBuffer`); `GraphicsError` for a null object, a zero
-  stride or count, or an object the backend cannot adopt. The renderer orders nothing against the
+  stride or count, a writable `buffer`, or an object the backend cannot adopt. The renderer orders nothing against the
   exporter: the caller pairs it with the two calls below.
 * **`WaitBeforeNextFrame(point)` / `GetLastFrameDone()`** — the two halves of a GPU-side handshake with
   another owner's queue, and both refuse mid-frame. A wait is inserted ahead of the next frame's

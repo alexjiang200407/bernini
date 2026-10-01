@@ -6,8 +6,8 @@
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include <bgl/IExternalBuffer.h>
-#include <bgl/IInstanceWriter.h>
-#include <bgl/types/InstanceWriterDesc.h>
+#include <bgl/IMeshInstanceWriter.h>
+#include <bgl/types/MeshInstanceWriterDesc.h>
 #include <bgl/types/PassTiming.h>
 #include <bgpu/GpuContext.h>
 #include <bgpu/cmd/CommandQueue.h>
@@ -190,10 +190,10 @@ namespace bgl
 			return m_Context->GetPassTimings(target);
 		}
 
-		InstanceWriterRef
-		CreateInstanceWriter(const InstanceWriterDesc& desc) override
+		MeshInstanceWriterRef
+		CreateMeshInstanceWriter(const MeshInstanceWriterDesc& desc) override
 		{
-			return m_Context->CreateInstanceWriter(desc);
+			return m_Context->CreateMeshInstanceWriter(desc);
 		}
 
 		ExternalBufferRef

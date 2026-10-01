@@ -1,6 +1,6 @@
-import bgl.InstanceWriter;
+import bgl.MeshInstanceWriter;
 import lib.types.ComputeBuffer;
-import InstanceWriterProbe;
+import MeshInstanceWriterProbe;
 
 // A fake behind IMeshInstanceBlock: one float4 per slot, the placed translation with w = 1, or w = -1
 // for a hidden slot.
@@ -22,7 +22,7 @@ struct RecordingBlock : IMeshInstanceBlock
 struct Uniforms
 {
     RecordingBlock block;
-    InstanceWriterProbe.Params params;
+    MeshInstanceWriterProbe.Params params;
 };
 
 ConstantBuffer<Uniforms> gUniforms;
@@ -33,5 +33,5 @@ void main(uint slot: SV_DispatchThreadID)
 {
     if (slot >= gUniforms.block.Capacity())
         return;
-    InstanceWriterProbe.Write(gUniforms.block, gUniforms.params, slot);
+    MeshInstanceWriterProbe.Write(gUniforms.block, gUniforms.params, slot);
 }

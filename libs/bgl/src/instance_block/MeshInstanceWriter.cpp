@@ -1,4 +1,4 @@
-#include "instance_block/InstanceWriter.h"
+#include "instance_block/MeshInstanceWriter.h"
 #include <algorithm>
 #include <bgl/types/MeshInstanceBlockDesc.h>
 #include <cctype>
@@ -23,30 +23,30 @@ namespace bgl
 		}
 	}
 
-	InstanceWriter::InstanceWriter(
-		InstanceWriterDesc            desc,
+	MeshInstanceWriter::MeshInstanceWriter(
+		MeshInstanceWriterDesc        desc,
 		bgpu::ComputeKernel           kernel,
 		const bgpu::IResourceManager* owner) noexcept :
 		m_Desc(std::move(desc)), m_Kernel(std::move(kernel)), m_Owner(owner)
 	{}
 
 	static_assert(
-		InstanceWriter::c_GroupSize * 65535u >= c_MaxMeshInstanceBlockCapacity,
+		MeshInstanceWriter::c_GroupSize * 65535u >= c_MaxMeshInstanceBlockCapacity,
 		"a full block must fit one dispatch dimension");
 
 	uint32_t
-	InstanceWriter::DispatchGroups(uint32_t capacity) noexcept
+	MeshInstanceWriter::DispatchGroups(uint32_t capacity) noexcept
 	{
 		return core::div_ceil(capacity, c_GroupSize);
 	}
 
 	bool
-	IsInstanceWriterDescValid(const InstanceWriterDesc& desc) noexcept
+	IsMeshInstanceWriterDescValid(const MeshInstanceWriterDesc& desc) noexcept
 	{
-		if (!IsIdentifier(desc.type) || desc.module.empty())
+		if (!IsIdentifier(desc.slangTypeName) || desc.slangModuleName.empty())
 			return false;
 
-		auto rest = std::string_view(desc.module);
+		auto rest = std::string_view(desc.slangModuleName);
 		while (true)
 		{
 			const size_t dot = rest.find('.');
@@ -59,24 +59,24 @@ namespace bgl
 	}
 
 	std::string
-	InstanceWriterProgramName(const InstanceWriterDesc& desc)
+	MeshInstanceWriterProgramName(const MeshInstanceWriterDesc& desc)
 	{
-		auto module = desc.module;
+		auto module = desc.slangModuleName;
 		std::ranges::replace(module, '.', '_');
-		return std::format("programs.instance_writer.{}__{}", module, desc.type);
+		return std::format("programs.mesh_instance_writer.{}__{}", module, desc.slangTypeName);
 	}
 
 	std::string
-	InstanceWriterProgramSource(const InstanceWriterDesc& desc)
+	MeshInstanceWriterProgramSource(const MeshInstanceWriterDesc& desc)
 	{
 		return std::format(
-			R"(import bgl.InstanceWriter;
-import lib.instance_block.ViewMeshInstanceBlock;
+			R"(import bgl.MeshInstanceWriter;
+import lib.instance_block.MeshInstanceBufferBlock;
 import {0};
 
 struct Uniforms
 {{
-    ViewMeshInstanceBlock block;
+    MeshInstanceBufferBlock block;
     {1}.Params params;
 }};
 
@@ -91,8 +91,8 @@ void main(uint slot : SV_DispatchThreadID)
     {1}.Write(gUniforms.block, gUniforms.params, slot);
 }}
 )",
-			desc.module,
-			desc.type,
-			InstanceWriter::c_GroupSize);
+			desc.slangModuleName,
+			desc.slangTypeName,
+			MeshInstanceWriter::c_GroupSize);
 	}
 }

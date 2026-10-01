@@ -22,7 +22,7 @@ public interface IMeshInstanceBlock
  * and a function the renderer calls once per slot, every frame, before the cull. `Write` places
  * or hides `slot`, every call: a slot left alone repeats whatever it was last given, motion included.
  */
-public interface IInstanceWriter
+public interface IMeshInstanceWriter
 {
     /**
      * Everything the writer reads: buffers it imported, counts, a blend factor. Declared by the

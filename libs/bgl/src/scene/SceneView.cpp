@@ -1,7 +1,7 @@
 #include "scene/SceneView.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
-#include "instance_block/InstanceWriter.h"
+#include "instance_block/MeshInstanceWriter.h"
 #include "scene/NamedBuffer.h"
 #include "scene/Scene.h"
 #include "scene/TextureAssetStore.h"
@@ -1549,7 +1549,7 @@ namespace bgl
 	}
 
 	void
-	SceneView::SetBlockWriter(MeshInstanceBlockHandle block, const InstanceWriterRef& writer)
+	SceneView::SetBlockWriter(MeshInstanceBlockHandle block, MeshInstanceWriterRef writer)
 	{
 		if (!block.IsValid() || !m_InstanceBlocks.valid(block.handle))
 		{
@@ -1557,7 +1557,7 @@ namespace bgl
 				"MeshInstanceBlockHandle passed to SetBlockWriter is invalid or already removed");
 		}
 
-		const auto* compiled = writer.IsInitialized() ? writer->As<InstanceWriter>() : nullptr;
+		const auto* compiled = writer.IsInitialized() ? writer->As<MeshInstanceWriter>() : nullptr;
 		if (writer.IsInitialized() &&
 		    (compiled == nullptr || compiled->GetOwner() != m_ResourceManager.Get()))
 		{
@@ -1565,7 +1565,7 @@ namespace bgl
 		}
 
 		MeshInstanceBlock& record = m_InstanceBlocks[block.handle.index];
-		record.writer             = writer;
+		record.writer             = std::move(writer);
 		record.uniforms =
 			compiled == nullptr ?
 				nullptr :

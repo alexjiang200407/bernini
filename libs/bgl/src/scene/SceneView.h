@@ -12,7 +12,7 @@
 #include "types/ViewMatrices.h"
 #include <algorithm>
 #include <bgl/GeomType.h>
-#include <bgl/IInstanceWriter.h>
+#include <bgl/IMeshInstanceWriter.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/idl/BlobShadow.h>
@@ -276,7 +276,7 @@ namespace bgl
 		DeleteMeshInstanceBlock(MeshInstanceBlockHandle block) override;
 
 		void
-		SetBlockWriter(MeshInstanceBlockHandle block, const InstanceWriterRef& writer) override;
+		SetBlockWriter(MeshInstanceBlockHandle block, MeshInstanceWriterRef writer) override;
 
 		[[nodiscard]] bgpu::UniformsBase::Accessor
 		GetBlockParams(MeshInstanceBlockHandle block) override;

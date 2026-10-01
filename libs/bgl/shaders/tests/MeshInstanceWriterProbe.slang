@@ -1,8 +1,8 @@
-import bgl.InstanceWriter;
+import bgl.MeshInstanceWriter;
 
 // A writer as a client would write one: the first `shown` slots in a row along x from `origin`,
 // standing still, the rest hidden.
-public struct InstanceWriterProbe : IInstanceWriter
+public struct MeshInstanceWriterProbe : IMeshInstanceWriter
 {
     public struct Params
     {

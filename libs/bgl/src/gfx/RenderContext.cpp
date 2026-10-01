@@ -12,7 +12,7 @@
 #include "gfx/Frustum.h"
 #include "gfx/RenderTargetBase.h"
 #include "gfx/jitter.h"
-#include "instance_block/InstanceWriter.h"
+#include "instance_block/MeshInstanceWriter.h"
 #include "overlay/Overlay.h"
 #include "passes/BloomPass.h"
 #include "passes/ClearPass.h"
@@ -1569,25 +1569,25 @@ namespace bgl
 		return CaptureBackbuffer(target, "ScreenshotToMemory");
 	}
 
-	InstanceWriterRef
-	RenderContext::CreateInstanceWriter(const InstanceWriterDesc& desc)
+	MeshInstanceWriterRef
+	RenderContext::CreateMeshInstanceWriter(const MeshInstanceWriterDesc& desc)
 	{
 		if (m_FrameActive)
 		{
 			throw GraphicsError(
-				"CreateInstanceWriter cannot be called between BeginFrame and EndFrame");
+				"CreateMeshInstanceWriter cannot be called between BeginFrame and EndFrame");
 		}
-		if (!IsInstanceWriterDescValid(desc))
+		if (!IsMeshInstanceWriterDescValid(desc))
 		{
 			throw GraphicsError(
 				std::format(
-					"CreateInstanceWriter: '{}' is not a module name or '{}' not a type name",
-					desc.module,
-					desc.type));
+					"CreateMeshInstanceWriter: '{}' is not a module name or '{}' not a type name",
+					desc.slangModuleName,
+					desc.slangTypeName));
 		}
 
-		const std::string programName = InstanceWriterProgramName(desc);
-		m_Device->AddSourceModule({ programName, InstanceWriterProgramSource(desc), false });
+		const std::string programName = MeshInstanceWriterProgramName(desc);
+		m_Device->AddSourceModule({ programName, MeshInstanceWriterProgramSource(desc), false });
 
 		bgpu::GpuContext& context = m_Device->GetGpuContext();
 		{
@@ -1597,9 +1597,9 @@ namespace bgl
 				context.ReleaseSlangSessions();
 				throw GraphicsError(
 					std::format(
-						"CreateInstanceWriter: '{}' in '{}' is not an instance writer\n{}",
-						desc.type,
-						desc.module,
+						"CreateMeshInstanceWriter: '{}' in '{}' is not an instance writer\n{}",
+						desc.slangTypeName,
+						desc.slangModuleName,
 						diagnostic));
 			}
 		}
@@ -1607,10 +1607,10 @@ namespace bgl
 		auto kernel = m_Device->CreateComputeKernel(
 			bgpu::ComputePipelineDesc()
 				.SetShader(m_Device->CreateShader(programName))
-				.SetDebugName(std::format("Place Blocks ({})", desc.type)));
+				.SetDebugName(std::format("Place Blocks ({})", desc.slangTypeName)));
 		context.ReleaseSlangSessions();
 
-		return core::SharedRef<InstanceWriter>::Make(
+		return core::SharedRef<MeshInstanceWriter>::Make(
 			desc,
 			std::move(kernel),
 			m_ResourceManager.Get());
@@ -1619,9 +1619,13 @@ namespace bgl
 	ExternalBufferRef
 	RenderContext::ImportBuffer(const bgpu::NativeBufferDesc& desc)
 	{
-		if (desc.IsNull() || desc.stride == 0 || desc.elementCount == 0)
+		if (desc.IsNull() || desc.buffer.stride == 0 || desc.buffer.elementCount == 0)
 		{
 			throw GraphicsError("ImportBuffer: the buffer is null or has no elements");
+		}
+		if (desc.buffer.isUav)
+		{
+			throw GraphicsError("ImportBuffer: an imported buffer is read-only");
 		}
 
 		const bgpu::BufferHandle handle = m_ResourceManager->ImportNativeBuffer(desc);

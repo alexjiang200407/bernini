@@ -8,6 +8,7 @@
 #include "resource/Srv_d3d12.h"
 #include "resource/Texture_d3d12.h"
 #include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/resource/NativeTextureDesc.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/types/NativeObject.h>
 #include <core/containers/slot_vector.h>
@@ -76,14 +77,13 @@ namespace bgpu
 		}
 
 		[[nodiscard]] TextureHandle
-		ImportNativeTexture(
-			NativeObjectType   type,
-			NativeObject       object,
-			const TextureDesc& desc) noexcept override
+		ImportNativeTexture(const NativeTextureDesc& desc) noexcept override
 		{
-			if (type != NativeObjectType::kD3D12Resource || !object)
+			if (desc.type != NativeObjectType::kD3D12Resource || desc.IsNull())
 				return {};
-			return CreateTexture(wrl::ComPtr<ID3D12Resource>(object.As<ID3D12Resource>()), desc);
+			return CreateTexture(
+				wrl::ComPtr<ID3D12Resource>(desc.object.As<ID3D12Resource>()),
+				desc.texture);
 		}
 
 		ResourceManager(wrl::ComPtr<ID3D12Device> device, const ResourceManagerDesc& desc);

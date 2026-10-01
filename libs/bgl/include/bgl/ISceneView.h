@@ -1,5 +1,5 @@
 #pragma once
-#include <bgl/IInstanceWriter.h>
+#include <bgl/IMeshInstanceWriter.h>
 #include <bgl/IScene.h>
 #include <bgl/api.h>
 #include <bgl/types/BlobShadowDesc.h>
@@ -424,7 +424,7 @@ namespace bgl
 		 *         IGraphics.
 		 */
 		virtual void
-		SetBlockWriter(MeshInstanceBlockHandle block, const InstanceWriterRef& writer) = 0;
+		SetBlockWriter(MeshInstanceBlockHandle block, MeshInstanceWriterRef writer) = 0;
 
 		/**
 		 * The block's copy of its writer's `Params`: what the writer reads for this block, written

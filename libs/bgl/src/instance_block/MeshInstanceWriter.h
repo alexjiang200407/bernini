@@ -1,6 +1,6 @@
 #pragma once
-#include <bgl/IInstanceWriter.h>
-#include <bgl/types/InstanceWriterDesc.h>
+#include <bgl/IMeshInstanceWriter.h>
+#include <bgl/types/MeshInstanceWriterDesc.h>
 #include <bgpu/pipeline/ComputeKernel.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <core/ref/RefCounter.h>
@@ -9,7 +9,7 @@
 
 namespace bgl
 {
-	class InstanceWriter final : public core::RefCounter<IInstanceWriter>
+	class MeshInstanceWriter final : public core::RefCounter<IMeshInstanceWriter>
 	{
 	public:
 		// The generated program's thread-group width: a block of capacity N dispatches
@@ -17,23 +17,23 @@ namespace bgl
 		// inside one dispatch dimension.
 		static constexpr uint32_t c_GroupSize = 64;
 
-		InstanceWriter(
-			InstanceWriterDesc            desc,
+		MeshInstanceWriter(
+			MeshInstanceWriterDesc        desc,
 			bgpu::ComputeKernel           kernel,
 			const bgpu::IResourceManager* owner) noexcept;
 
-		InstanceWriter(InstanceWriter&&) noexcept      = delete;
-		InstanceWriter(const InstanceWriter&) noexcept = delete;
+		MeshInstanceWriter(MeshInstanceWriter&&) noexcept      = delete;
+		MeshInstanceWriter(const MeshInstanceWriter&) noexcept = delete;
 
-		InstanceWriter&
-		operator=(InstanceWriter&&) noexcept = delete;
+		MeshInstanceWriter&
+		operator=(MeshInstanceWriter&&) noexcept = delete;
 
-		InstanceWriter&
-		operator=(const InstanceWriter&) noexcept = delete;
+		MeshInstanceWriter&
+		operator=(const MeshInstanceWriter&) noexcept = delete;
 
-		~InstanceWriter() noexcept override = default;
+		~MeshInstanceWriter() noexcept override = default;
 
-		[[nodiscard]] const InstanceWriterDesc&
+		[[nodiscard]] const MeshInstanceWriterDesc&
 		GetDesc() const noexcept override
 		{
 			return m_Desc;
@@ -57,24 +57,24 @@ namespace bgl
 		DispatchGroups(uint32_t capacity) noexcept;
 
 	private:
-		InstanceWriterDesc            m_Desc;
+		MeshInstanceWriterDesc        m_Desc;
 		bgpu::ComputeKernel           m_Kernel;
 		const bgpu::IResourceManager* m_Owner = nullptr;
 	};
 
 	/** The name the program generated for `desc` is registered under. */
 	[[nodiscard]] std::string
-	InstanceWriterProgramName(const InstanceWriterDesc& desc);
+	MeshInstanceWriterProgramName(const MeshInstanceWriterDesc& desc);
 
 	/**
-	 * The compute program that runs `desc.type`'s Write once per slot of a block.
+	 * The compute program that runs `desc.slangTypeName`'s Write once per slot of a block.
 	 *
-	 * @pre IsInstanceWriterDescValid(desc): both names are spliced into the text unquoted.
+	 * @pre IsMeshInstanceWriterDescValid(desc): both names are spliced into the text unquoted.
 	 */
 	[[nodiscard]] std::string
-	InstanceWriterProgramSource(const InstanceWriterDesc& desc);
+	MeshInstanceWriterProgramSource(const MeshInstanceWriterDesc& desc);
 
-	/** Whether `desc.module` is a dotted import name and `desc.type` an identifier. */
+	/** Whether `desc.slangModuleName` is a dotted import name and `desc.slangTypeName` an identifier. */
 	[[nodiscard]] bool
-	IsInstanceWriterDescValid(const InstanceWriterDesc& desc) noexcept;
+	IsMeshInstanceWriterDescValid(const MeshInstanceWriterDesc& desc) noexcept;
 }

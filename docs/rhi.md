@@ -10,6 +10,8 @@ its backbuffers -- it asks for as nvrhi does, with `GetNativeObject(NativeObject
 a queue or a command list, `GetNativeTexture`, `ImportNativeTexture`, `GetNativeBuffer` and
 `ImportNativeBuffer` on the resource manager.
 The answer is an untyped `NativeObject` the caller casts, and null for a type the backend has none of.
+An import takes the native object with the RHI desc it is viewed as, in one desc
+(`NativeTextureDesc`, `NativeBufferDesc`).
 
 **API-agnostic means among APIs with bindless resource access and mesh shaders.** That is the bar
 this interface is drawn at, not a general one: the only graphics pipeline object is

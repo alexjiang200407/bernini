@@ -1,11 +1,11 @@
-import bgl.InstanceWriter;
+import bgl.MeshInstanceWriter;
 import idl.MeshInstance;
 import idl.MeshInstanceFlag;
 
 // An instance block over the view's MeshInstance buffer: slots [first, first + capacity).
 // ScalarDataLayout for the same reason as lib.types.EntryBuffer: the C++ mirror packs MeshInstance
 // tightly, and the default structured layout would pad its nested handles.
-public struct ViewMeshInstanceBlock : IMeshInstanceBlock
+public struct MeshInstanceBufferBlock : IMeshInstanceBlock
 {
     public RWStructuredBuffer<MeshInstance, ScalarDataLayout>.Handle meshes;
     public uint first;

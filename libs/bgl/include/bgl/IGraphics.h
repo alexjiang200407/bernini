@@ -2,7 +2,7 @@
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IExternalBuffer.h>
 #include <bgl/IGpuAssertionHandler.h>
-#include <bgl/IInstanceWriter.h>
+#include <bgl/IMeshInstanceWriter.h>
 #include <bgl/IOverlay.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
@@ -10,7 +10,7 @@
 #include <bgl/SurfaceType.h>
 #include <bgl/api.h>
 #include <bgl/error.h>
-#include <bgl/types/InstanceWriterDesc.h>
+#include <bgl/types/MeshInstanceWriterDesc.h>
 #include <bgl/types/PassTiming.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
@@ -261,16 +261,16 @@ namespace bgl
 		CreateOverlay() = 0;
 
 		/**
-		 * Compiles a caller's kernel for instance blocks: `desc.type` in `desc.module` must conform
-		 * to IInstanceWriter in `bgl.InstanceWriter`. Compiled once, here; a writer used by many
+		 * Compiles a caller's kernel for instance blocks: `desc.slangTypeName` in `desc.slangModuleName` must conform
+		 * to IMeshInstanceWriter in `bgl.MeshInstanceWriter`. Compiled once, here; a writer used by many
 		 * blocks and views is not compiled again.
 		 *
 		 * @throws GraphicsError if called between BeginFrame and EndFrame, if either name is empty,
 		 *         or if the module does not compile against the contract -- the compiler's
 		 *         diagnostics are in the message.
 		 */
-		virtual InstanceWriterRef
-		CreateInstanceWriter(const InstanceWriterDesc& desc) = 0;
+		virtual MeshInstanceWriterRef
+		CreateMeshInstanceWriter(const MeshInstanceWriterDesc& desc) = 0;
 
 		/**
 		 * Adopts another owner's buffer, read-only, so an instance writer's parameters can bind it.
@@ -278,8 +278,8 @@ namespace bgl
 		 * the exporter's writes with WaitBeforeNextFrame, and the exporter waits for the frames that
 		 * read it (GetLastFrameDone) before it writes the memory again.
 		 *
-		 * @throws GraphicsError if `desc` is null, has a zero stride or element count, or names an
-		 *         object this backend cannot adopt.
+		 * @throws GraphicsError if `desc` is null, has a zero stride or element count, asks for a
+		 *         writable buffer, or names an object this backend cannot adopt.
 		 */
 		virtual ExternalBufferRef
 		ImportBuffer(const bgpu::NativeBufferDesc& desc) = 0;

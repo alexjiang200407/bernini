@@ -29,12 +29,12 @@
 #include <bgl/IExternalBuffer.h>
 #include <bgl/IGpuAssertionHandler.h>
 #include <bgl/IGraphics.h>
-#include <bgl/IInstanceWriter.h>
+#include <bgl/IMeshInstanceWriter.h>
 #include <bgl/IOverlay.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/MaterialType.h>
 #include <bgl/SurfaceType.h>
-#include <bgl/types/InstanceWriterDesc.h>
+#include <bgl/types/MeshInstanceWriterDesc.h>
 #include <bgl/types/PassTiming.h>
 #include <bgl/types/RenderJob.h>
 #include <bgpu/cmd/CommandAllocator.h>
@@ -182,8 +182,8 @@ namespace bgl
 		[[nodiscard]] PassTimings
 		GetPassTimings(const RenderTargetRef& target);
 
-		InstanceWriterRef
-		CreateInstanceWriter(const InstanceWriterDesc& desc);
+		MeshInstanceWriterRef
+		CreateMeshInstanceWriter(const MeshInstanceWriterDesc& desc);
 
 		ExternalBufferRef
 		ImportBuffer(const bgpu::NativeBufferDesc& desc);

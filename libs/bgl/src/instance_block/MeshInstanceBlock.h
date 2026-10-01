@@ -1,5 +1,5 @@
 #pragma once
-#include <bgl/IInstanceWriter.h>
+#include <bgl/IMeshInstanceWriter.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgpu/uniforms/Uniforms.h>
 #include <cstdint>
@@ -22,9 +22,9 @@ namespace bgl
 
 		~MeshInstanceBlock() noexcept = default;
 
-		GeomHandle        geom;
-		uint32_t          capacity = 0;
-		InstanceWriterRef writer;
+		GeomHandle            geom;
+		uint32_t              capacity = 0;
+		MeshInstanceWriterRef writer;
 
 		// Null while `writer` is.
 		std::unique_ptr<bgpu::Uniforms> uniforms;

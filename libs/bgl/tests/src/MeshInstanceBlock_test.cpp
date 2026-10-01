@@ -4,7 +4,7 @@
 #include "util/TestOptions.h"
 #include <bgl/IExternalBuffer.h>
 #include <bgl/IGraphics.h>
-#include <bgl/IInstanceWriter.h>
+#include <bgl/IMeshInstanceWriter.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
@@ -12,9 +12,9 @@
 #include <bgl/glm.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/GeomHandle.h>
-#include <bgl/types/InstanceWriterDesc.h>
 #include <bgl/types/MeshInstanceBlockDesc.h>
 #include <bgl/types/MeshInstanceBlockHandle.h>
+#include <bgl/types/MeshInstanceWriterDesc.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
@@ -42,7 +42,7 @@
 
 // The instance-block contract as bgl owns it before anything draws a block: what the block, writer,
 // import and frame-wait calls refuse, the epoch a block moves, and a writer written against
-// bgl.InstanceWriter placing a fake block. What no case here can show -- that a block's
+// bgl.MeshInstanceWriter placing a fake block. What no case here can show -- that a block's
 // placements are culled and drawn from what its writer wrote -- is the block pass's.
 
 namespace
@@ -69,8 +69,9 @@ namespace
 		return gfx.CreateScene(desc);
 	}
 
-	const auto c_ProbeWriter =
-		bgl::InstanceWriterDesc().SetModule("InstanceWriterProbe").SetType("InstanceWriterProbe");
+	const auto c_ProbeWriter = bgl::MeshInstanceWriterDesc()
+	                               .SetSlangModuleName("MeshInstanceWriterProbe")
+	                               .SetSlangTypeName("MeshInstanceWriterProbe");
 
 	// Whether the view's epoch moved since the last call, as the next frame would see it.
 	bool
@@ -153,7 +154,7 @@ TEST_CASE("An instance block moves the epoch once to exist and once to go", "[in
 	CHECK(EpochMoved(*view));
 	CHECK_FALSE(EpochMoved(*view));
 
-	auto writer = gfx->CreateInstanceWriter(c_ProbeWriter);
+	auto writer = gfx->CreateMeshInstanceWriter(c_ProbeWriter);
 	view->SetBlockWriter(blocks[0], writer);
 	view->GetBlockParams(blocks[0])["shown"] = 3u;
 	CHECK_FALSE(EpochMoved(*view));
@@ -172,43 +173,47 @@ TEST_CASE("An instance writer compiles against the contract or is refused", "[in
 
 	SECTION("a conforming type compiles")
 	{
-		auto writer = gfx->CreateInstanceWriter(c_ProbeWriter);
+		auto writer = gfx->CreateMeshInstanceWriter(c_ProbeWriter);
 		REQUIRE(writer != nullptr);
-		CHECK(writer->GetDesc().type == "InstanceWriterProbe");
+		CHECK(writer->GetDesc().slangTypeName == "MeshInstanceWriterProbe");
 	}
 
 	SECTION("a type that is not a writer is refused with the compiler's reason")
 	{
 		CHECK_THROWS_WITH(
-			gfx->CreateInstanceWriter(
-				bgl::InstanceWriterDesc()
-					.SetModule("NotAnInstanceWriter")
-					.SetType("NotAnInstanceWriter")),
+			gfx->CreateMeshInstanceWriter(
+				bgl::MeshInstanceWriterDesc()
+					.SetSlangModuleName("NotAMeshInstanceWriter")
+					.SetSlangTypeName("NotAMeshInstanceWriter")),
 			Catch::Matchers::ContainsSubstring("is not an instance writer"));
 	}
 
 	SECTION("a module that does not exist is refused")
 	{
 		CHECK_THROWS_AS(
-			gfx->CreateInstanceWriter(
-				bgl::InstanceWriterDesc()
-					.SetModule("NoSuchInstanceWriterModule")
-					.SetType("Writer")),
+			gfx->CreateMeshInstanceWriter(
+				bgl::MeshInstanceWriterDesc()
+					.SetSlangModuleName("NoSuchMeshInstanceWriterModule")
+					.SetSlangTypeName("Writer")),
 			bgl::GraphicsError);
 	}
 
 	SECTION("a name that is not one is refused before it reaches the compiler")
 	{
 		CHECK_THROWS_AS(
-			gfx->CreateInstanceWriter(bgl::InstanceWriterDesc().SetModule("").SetType("T")),
+			gfx->CreateMeshInstanceWriter(
+				bgl::MeshInstanceWriterDesc().SetSlangModuleName("").SetSlangTypeName("T")),
 			bgl::GraphicsError);
 		CHECK_THROWS_AS(
-			gfx->CreateInstanceWriter(
-				bgl::InstanceWriterDesc().SetModule("InstanceWriterProbe").SetType("A; B")),
+			gfx->CreateMeshInstanceWriter(
+				bgl::MeshInstanceWriterDesc()
+					.SetSlangModuleName("MeshInstanceWriterProbe")
+					.SetSlangTypeName("A; B")),
 			bgl::GraphicsError);
 		CHECK_THROWS_AS(
-			gfx->CreateInstanceWriter(
-				bgl::InstanceWriterDesc().SetModule("a..b").SetType("InstanceWriterProbe")),
+			gfx->CreateMeshInstanceWriter(
+				bgl::MeshInstanceWriterDesc().SetSlangModuleName("a..b").SetSlangTypeName(
+					"MeshInstanceWriterProbe")),
 			bgl::GraphicsError);
 	}
 }
@@ -227,7 +232,7 @@ TEST_CASE("A block's parameters exist while it has a writer, and are its own", "
 
 	CHECK_THROWS_AS((void)view->GetBlockParams(first), bgl::SceneError);
 
-	auto writer = gfx->CreateInstanceWriter(c_ProbeWriter);
+	auto writer = gfx->CreateMeshInstanceWriter(c_ProbeWriter);
 	view->SetBlockWriter(first, writer);
 	view->SetBlockWriter(other, writer);
 
@@ -257,7 +262,7 @@ TEST_CASE("A block's parameters exist while it has a writer, and are its own", "
 	SECTION("a writer another renderer compiled is refused")
 	{
 		auto second       = bgl::test::CreateGraphics(HeadlessOptions());
-		auto secondWriter = second->CreateInstanceWriter(c_ProbeWriter);
+		auto secondWriter = second->CreateMeshInstanceWriter(c_ProbeWriter);
 		CHECK_THROWS_AS(view->SetBlockWriter(first, secondWriter), bgl::SceneError);
 	}
 }
@@ -406,7 +411,7 @@ TEST_CASE("Frame waits and the last frame's point are between frames only", "[in
 		gfx->BeginFrame(target);
 		CHECK_THROWS_AS(gfx->WaitBeforeNextFrame(done), bgl::GraphicsError);
 		CHECK_THROWS_AS((void)gfx->GetLastFrameDone(), bgl::GraphicsError);
-		CHECK_THROWS_AS(gfx->CreateInstanceWriter(c_ProbeWriter), bgl::GraphicsError);
+		CHECK_THROWS_AS(gfx->CreateMeshInstanceWriter(c_ProbeWriter), bgl::GraphicsError);
 		gfx->Draw(job);
 		gfx->EndFrame();
 	}
@@ -426,12 +431,19 @@ TEST_CASE("An import refuses a buffer that is not one", "[instance_block]")
 		gfx->ImportBuffer(
 			bgpu::NativeBufferDesc()
 				.SetObject(bgpu::NativeObjectType::kMtlBuffer, object)
-				.SetElementCount(4)),
+				.SetBuffer(bgpu::StructBufferDesc().SetElementCount(4))),
 		bgl::GraphicsError);
 	CHECK_THROWS_AS(
 		gfx->ImportBuffer(
 			bgpu::NativeBufferDesc()
 				.SetObject(bgpu::NativeObjectType::kMtlBuffer, object)
-				.SetElement<uint32_t>()),
+				.SetBuffer(bgpu::StructBufferDesc().SetElement<uint32_t>())),
 		bgl::GraphicsError);
+	CHECK_THROWS_WITH(
+		gfx->ImportBuffer(
+			bgpu::NativeBufferDesc()
+				.SetObject(bgpu::NativeObjectType::kMtlBuffer, object)
+				.SetBuffer(
+					bgpu::StructBufferDesc().SetElement<uint32_t>().SetElementCount(4).SetIsUav())),
+		Catch::Matchers::ContainsSubstring("read-only"));
 }
