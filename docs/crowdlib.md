@@ -187,7 +187,9 @@ box per agent, and drawing. In a release build on an M-series Mac the crowd's sh
 0.03 ms of CPU from 136 to 139k agents, and the GPU keeps a tick a frame, while the frame grows
 from 0.46 ms to 9.4 ms with drawing (one placement per agent, about 8.7 ms of it Forward World on
 the GPU) and posing (one `SetInstanceTransform` per agent, 5.3 ms): the cost of reading the crowd
-back to the CPU, which the GPU-to-renderer handoff, a later feature, removes. The release preset leaves examples off; measure with
+back to the CPU, which the GPU-to-renderer handoff, a later feature, removes. `--pass-timings` times
+every pass on the GPU and prints each one's mean a frame; run it apart from the frame split,
+since a timed frame costs more on Metal. The release preset leaves examples off; measure with
 `-DBERNINI_BUILD_EXAMPLES=ON` in a build directory of its own. `--frames N` exits non-zero unless
 every group's mean stands within one spacing of its goal by then (450 is enough), `--headless`
 draws offscreen, and `--screenshot <png>` writes the last frame drawn, which is how an agent looks

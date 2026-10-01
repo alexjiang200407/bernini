@@ -8,6 +8,7 @@
 #include <bgl/glm.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/DirectionalLightDesc.h>
+#include <bgl/types/PassTiming.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
@@ -60,6 +61,10 @@ namespace
 		// Every group holds this many times its agents, and the field grows by its square root so
 		// the blocks keep their shape and do not start on top of each other.
 		uint32_t units = 1;
+
+		// Times every pass on the GPU and prints each one's mean. Off by default: a timed frame
+		// costs more on Metal, so the frame split is read from a run without it.
+		bool passTimings = false;
 	};
 
 	constexpr float c_Tick = 1.0f / 30.0f;
@@ -190,6 +195,7 @@ namespace
 		targetDesc.headless = opts.headless;
 		targetDesc.wnd      = window ? window->NativeHandle() : nullptr;
 		auto target         = graphics->CreateRenderTarget(targetDesc);
+		target->SetGpuTimingEnabled(opts.passTimings);
 
 		auto scene = graphics->CreateScene(bgl::SceneDesc());
 		auto view  = graphics->CreateSceneView(scene, crowdDesc.maxAgents + 1);
@@ -264,6 +270,29 @@ namespace
 		double     drawTime  = 0.0;
 		const auto since     = [](Clock::time_point from) {
 			return std::chrono::duration<double>(Clock::now() - from).count();
+		};
+
+		// Each pass's summed GPU milliseconds and sample count, in the order passes first ran.
+		std::vector<std::string>                 passNames;
+		std::vector<std::pair<double, uint32_t>> passTotals;
+		uint64_t                                 lastTimedFrame = 0;
+		const auto                               collectTimings = [&] {
+			const bgl::PassTimings timings = graphics->GetPassTimings(target);
+			if (timings.passes.empty() || timings.frame == lastTimedFrame)
+				return;
+			lastTimedFrame = timings.frame;
+			for (const auto& pass : timings.passes)
+			{
+				const auto found = std::ranges::find(passNames, pass.name);
+				const auto index = static_cast<size_t>(found - passNames.begin());
+				if (found == passNames.end())
+				{
+					passNames.push_back(pass.name);
+					passTotals.emplace_back(0.0, 0u);
+				}
+				passTotals[index].first += pass.milliseconds;
+				++passTotals[index].second;
+			}
 		};
 
 		uint64_t drawnTick = 0;
@@ -378,6 +407,8 @@ namespace
 			const auto drawStart = Clock::now();
 			graphics->DrawFrame(target, renderJob);
 			drawTime += since(drawStart);
+			if (opts.passTimings)
+				collectTimings();
 
 			// Frame time over each few seconds: what --units is for.
 			if (++spanFrames == 300)
@@ -396,6 +427,18 @@ namespace
 
 		crowd->Wait();
 		graphics->WaitIdle();
+		if (opts.passTimings)
+		{
+			collectTimings();
+			for (size_t i = 0; i < passNames.size(); ++i)
+			{
+				std::cout << std::format(
+					"pass {:<32} {:8.3f} ms a frame over {} frames\n",
+					passNames[i],
+					passTotals[i].first / passTotals[i].second,
+					passTotals[i].second);
+			}
+		}
 		if (!opts.screenshot.empty())
 			graphics->ScreenshotPng(target, opts.screenshot);
 
@@ -457,6 +500,10 @@ main(int argc, char** argv)
 		"closed");
 	app.add_flag("--headless", opts.headless, "Render offscreen, with no window");
 	app.add_option("--screenshot", opts.screenshot, "Write the last frame drawn to this PNG");
+	app.add_flag(
+		"--pass-timings",
+		opts.passTimings,
+		"Time every pass on the GPU and print each one's mean per frame");
 	app.add_option("--units", opts.units, "Multiply every group's agents by this; 1 is 136 agents")
 		->check(CLI::PositiveNumber);
 
