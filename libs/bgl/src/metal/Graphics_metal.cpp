@@ -1,18 +1,23 @@
 #include "AutoreleaseNet_metal.h"
 #include <assetlib_structs/ImageData.h>
+#include <bgl/IExternalBuffer.h>
 #include <bgl/IGpuAssertionHandler.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IMeshInstanceWriter.h>
 #include <bgl/IOverlay.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/SurfaceType.h>
 #include <bgl/api.h>
+#include <bgl/types/MeshInstanceWriterDesc.h>
 #include <bgl/types/PassTiming.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgpu/GpuContext.h>
+#include <bgpu/cmd/QueuePoint.h>
 #include <bgpu/metal/MetalErrorChecker.h>
+#include <bgpu/resource/NativeBufferDesc.h>
 #include <bgpu/types/NativeObject.h>
 #include <core/err/util.h>
 #include <core/ref/SharedRef.h>
@@ -331,6 +336,30 @@ namespace bgl
 		GetPassTimings(const RenderTargetRef& target) override
 		{
 			return m_Context->GetPassTimings(target);
+		}
+
+		MeshInstanceWriterRef
+		CreateMeshInstanceWriter(const MeshInstanceWriterDesc& desc) override
+		{
+			return m_Context->CreateMeshInstanceWriter(desc);
+		}
+
+		ExternalBufferRef
+		ImportBuffer(const bgpu::NativeBufferDesc& desc) override
+		{
+			return m_Context->ImportBuffer(desc);
+		}
+
+		void
+		WaitBeforeNextFrame(const bgpu::QueuePoint& point) override
+		{
+			m_Context->WaitBeforeNextFrame(point);
+		}
+
+		bgpu::QueuePoint
+		GetLastFrameDone() const override
+		{
+			return m_Context->GetLastFrameDone();
 		}
 
 	private:

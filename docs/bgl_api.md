@@ -21,7 +21,9 @@ provides it. `bgl_selfcheck` enforces the dependency half (a public header that 
 The same surface has a Slang half, [libs/bgl/shaders/include/bgl](libs/bgl/shaders/include/bgl): what a
 surface written outside the engine conforms to and reads through, and nothing that names a handle,
 an arena or a draw bucket. `bgl_check_shaders` holds it to the same rule, compiling each module with
-only that tree on the search path; [Slang Shaders](docs/slang_shaders.md) has the three trees.
+only that tree on the search path; [Slang Shaders](docs/slang_shaders.md) has the three trees. Two
+kinds of client code conform to it: a surface, and an instance writer (`bgl.MeshInstanceWriter`), which
+places a block's slots through `IMeshInstanceBlock` and never learns where the placements live.
 
 **This document is a map, not a mirror.** It captures design choices, topology, and the *non-obvious*
 contracts — not full signatures. The headers are the source of truth, and the doc lists none of
@@ -283,6 +285,23 @@ flowchart TD
   Returning an image spends it; `nullopt` leaves it live for a later call.
 * **`DiscardCapture(ticket)`** — `noexcept`, and spending a ticket twice is a no-op, so teardown paths
   need no bookkeeping.
+* **`CreateMeshInstanceWriter(desc)`** — @pre not between `BeginFrame`/`EndFrame`; `desc.slangModuleName`
+  a dotted import name and `desc.slangTypeName` an identifier. Generates a program that calls the type's
+  `Write` once per slot and compiles it at once, so a type that does not conform to
+  `IMeshInstanceWriter` throws `GraphicsError` here with the compiler's diagnostic, not at the first
+  frame. The program is registered with `IDevice::AddSourceModule`, which drops the context's Slang
+  sessions and moves its source salt: create writers at start-up, before the frames that demand
+  pipelines, and the same writers in the same order every run keep the shader cache warm.
+* **`ImportBuffer(desc)`** — another owner's buffer, described by a `bgpu::NativeBufferDesc` and
+  adopted read-only into the renderer's resource manager
+  (`bgpu::IResourceManager::ImportNativeBuffer`); `GraphicsError` for a null object, a zero
+  stride or count, a writable `buffer`, or an object the backend cannot adopt. The renderer orders nothing against the
+  exporter: the caller pairs it with the two calls below.
+* **`WaitBeforeNextFrame(point)` / `GetLastFrameDone()`** — the two halves of a GPU-side handshake with
+  another owner's queue, and both refuse mid-frame. A wait is inserted ahead of the next frame's
+  command list, because a Metal command buffer sees only waits encoded before it was begun, and
+  applies to that frame alone. `GetLastFrameDone` covers every frame submitted so far; an exporter
+  waits on it before it writes memory those frames read. Null before the first frame.
 * **`SetGpuAssertionHandler(handler)`** — @pre `handler` outlives this `IGraphics`. Assertions are
   reported several frames after they fire (the readback ring is `c_SwapchainImageCount` deep), so
   clearing to `nullptr` does **not** cancel one already in flight — that would fall back to the crash
@@ -376,6 +395,17 @@ flowchart TD
 
 ### ISceneView
 
+* **`CreateMeshInstanceBlock(desc)` / `DeleteMeshInstanceBlock(block)`** — a run of placements of one
+  static geom with no handles of their own: a GPU kernel places them every frame and the CPU never
+  writes them. Creation and deletion move the temporal epoch once each, however many slots; what the
+  writer does moves nothing, since every slot it places writes its own previous transform. Like a
+  placement, a block names its geom and does not own it. **No pass draws a block yet**: the calls,
+  their refusals and the parameters are in place, and the block pass that records the writer
+  and culls its slots is not.
+* **`SetBlockWriter(block, writer)` / `GetBlockParams(block)`** — binds a writer compiled by
+  the same `IGraphics` and gives the block its own copy of the writer's `Params`, written by name
+  like any constant buffer and kept across frames. Rebinding starts from zeros; null unbinds, and
+  a block with no writer draws nothing.
 * **`SetInstanceTransform(instance, transform)` / `GetInstanceTransform(instance)`** — moves a
   placement. The move is described to the temporal filter rather than hidden from it: the record
   carries the transform the previous frame drew it with, so the frame after a write reprojects

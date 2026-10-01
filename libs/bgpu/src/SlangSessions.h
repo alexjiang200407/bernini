@@ -97,8 +97,9 @@ namespace bgpu
 		/**
 		 * The named module in the calling thread's second session, compiled for a DXIL target
 		 * whatever this device draws with: a layout read there is the scalar one `RawBuffer.Load<T>`
-		 * reads a record at on every backend. Null, with the compiler's diagnostic, when the module
-		 * does not compile -- text a client wrote, where a diagnostic is a message to hand back.
+		 * reads a record at on every backend. A registered module nothing imports is loaded from its
+		 * text, as LoadModule loads it. Null, with the compiler's diagnostic, when the module does
+		 * not compile -- text a client wrote, where a diagnostic is a message to hand back.
 		 */
 		[[nodiscard]] slang::IModule*
 		LoadScalarLayoutModule(std::string_view moduleName, std::string& diagnostic);
