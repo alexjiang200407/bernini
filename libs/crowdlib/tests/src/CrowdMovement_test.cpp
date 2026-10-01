@@ -259,7 +259,12 @@ TEST_CASE("Reports arrive by polling, with ticks in flight and no wait", "[crowd
 	const auto group =
 		crowd->CreateGroup({ .agentType = 0, .agentCount = 50, .orders = Orders(glm::vec2(0.0f)) });
 
-	while (crowd->CanStep()) crowd->Step();
+	// Not `while (CanStep())`: a small tick completes as fast as it is submitted, so that never ends.
+	for (uint32_t i = 0; i < crowd->GetDesc().maxTicksInFlight; ++i)
+	{
+		REQUIRE(crowd->CanStep());
+		crowd->Step();
+	}
 	CHECK(crowd->GetSubmittedTick() == crowd->GetDesc().maxTicksInFlight);
 
 	// Reads made while ticks are in flight answer at once, from whatever has completed.
