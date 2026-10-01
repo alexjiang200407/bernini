@@ -2,6 +2,7 @@
 #include "metal_cpp.h"
 #include <bgpu/resource/Buffer.h>
 #include <core/err/util.h>
+#include <utility>
 
 #include <bgpu/MemoryTag.h>
 
@@ -27,6 +28,12 @@ namespace bgpu
 					NS::String::string(desc.debugName.c_str(), NS::UTF8StringEncoding));
 			}
 		}
+
+		// Another owner's buffer: this reference keeps it alive, and its bytes stay charged to the
+		// owner that allocated them.
+		Buffer(NS::SharedPtr<MTL::Buffer> adopted, const BufferDesc& desc) :
+			m_Desc(desc), m_Buffer(std::move(adopted))
+		{}
 
 		[[nodiscard]] MTL::Buffer*
 		GetMTLResource() const noexcept

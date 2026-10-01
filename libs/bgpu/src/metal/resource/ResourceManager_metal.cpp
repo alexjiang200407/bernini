@@ -9,6 +9,7 @@
 #include <bgpu/constants/constants.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/Dsv.h>
+#include <bgpu/resource/NativeBufferDesc.h>
 #include <bgpu/resource/Readback.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Rtv.h>
@@ -16,6 +17,7 @@
 #include <bgpu/resource/Srv.h>
 #include <bgpu/resource/Texture.h>
 #include <bgpu/types/FormatInfo.h>
+#include <bgpu/types/NativeObject.h>
 #include <bgpu/uniforms/DescriptorHandle.h>
 #include <core/containers/slot_handle.h>
 #include <core/containers/slot_vector.h>
@@ -120,6 +122,40 @@ namespace bgpu
 		bufferDesc.debugName = desc.debugName;
 
 		return EmplaceBuffer(bufferDesc);
+	}
+
+	BufferHandle
+	ResourceManager::ImportNativeBuffer(const NativeBufferDesc& desc) noexcept
+	{
+		const auto pool = ScopeAutoreleasePool();
+		if (desc.type != NativeObjectType::kMtlBuffer || desc.IsNull())
+		{
+			return BufferHandle{};
+		}
+
+		auto*          buffer = desc.object.As<MTL::Buffer>();
+		const uint64_t byteSize =
+			static_cast<uint64_t>(desc.buffer.stride) * desc.buffer.elementCount;
+		core::ensure(buffer->device() == m_Device, "ImportNativeBuffer of another device's buffer");
+		core::ensure(
+			byteSize > 0 && byteSize <= buffer->length(),
+			"ImportNativeBuffer views more bytes than the buffer holds");
+		core::ensure(
+			!desc.buffer.isUav && !desc.buffer.allowsUav,
+			"An imported buffer is read-only");
+
+		auto bufferDesc      = BufferDesc();
+		bufferDesc.byteSize  = byteSize;
+		bufferDesc.debugName = desc.buffer.debugName;
+
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		const auto slot = TryAllocateBounded(m_Buffers, NS::RetainPtr(buffer), bufferDesc);
+		if (slot.is_null())
+		{
+			spdlog::error("ImportNativeBuffer '{}': buffer pool exhausted", bufferDesc.debugName);
+			return BufferHandle{};
+		}
+		return BufferHandle{ slot, slot.index };
 	}
 
 	BufferSrvHandle

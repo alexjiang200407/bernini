@@ -8,6 +8,7 @@
 #include "resource/Srv_d3d12.h"
 #include "resource/Texture_d3d12.h"
 #include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/resource/NativeBufferDesc.h>
 #include <bgpu/resource/NativeTextureDesc.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/types/NativeObject.h>
@@ -77,6 +78,17 @@ namespace bgpu
 			           NativeObject{ GetTexture(handle).GetD3D12Resource() } :
 			           NativeObject{};
 		}
+
+		[[nodiscard]] NativeObject
+		GetNativeBuffer(BufferHandle handle, NativeObjectType type) const noexcept override
+		{
+			return type == NativeObjectType::kD3D12Resource && ValidBufferHandle(handle) ?
+			           NativeObject{ GetBuffer(handle).GetD3D12Resource() } :
+			           NativeObject{};
+		}
+
+		[[nodiscard]] BufferHandle
+		ImportNativeBuffer(const NativeBufferDesc& desc) noexcept override;
 
 		[[nodiscard]] TextureHandle
 		ImportNativeTexture(const NativeTextureDesc& desc) noexcept override

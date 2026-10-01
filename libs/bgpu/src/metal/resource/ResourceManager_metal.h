@@ -1,6 +1,7 @@
 #pragma once
 #include "metal_cpp.h"
 #include <bgpu/device/Device.h>
+#include <bgpu/resource/NativeBufferDesc.h>
 #include <bgpu/types/NativeObject.h>
 
 #include "resource/Buffer_metal.h"
@@ -61,6 +62,17 @@ namespace bgpu
 			           NativeObject{ GetTexture(handle).GetMTLResource() } :
 			           NativeObject{};
 		}
+
+		[[nodiscard]] NativeObject
+		GetNativeBuffer(BufferHandle handle, NativeObjectType type) const noexcept override
+		{
+			return type == NativeObjectType::kMtlBuffer && ValidBufferHandle(handle) ?
+			           NativeObject{ GetBuffer(handle).GetMTLResource() } :
+			           NativeObject{};
+		}
+
+		[[nodiscard]] BufferHandle
+		ImportNativeBuffer(const NativeBufferDesc& desc) noexcept override;
 
 		ResourceManager(MTL::Device* device, const ResourceManagerDesc& desc);
 

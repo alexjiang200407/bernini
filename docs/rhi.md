@@ -308,9 +308,9 @@ Everything else is self-explanatory from the header.
   layout (the FrameGraph arranges this).
 * **`GetNativeBuffer` / `ImportNativeBuffer`** — how a buffer crosses from one owner to another on
   the same native device: the producer reads its buffer's native object and describes it with its
-  layout in a `bgpu::NativeBufferDesc`, and the consumer adopts it as a read-only structured buffer with a
-  descriptor in its own heap. Null from either when the backend cannot; both are declared ahead of
-  their backends, and neither backend adopts a buffer yet. The import holds its own native
+  layout in a `bgpu::NativeBufferDesc`, and the consumer adopts it as a read-only structured buffer
+  with a descriptor in its own heap. The object is a `kMtlBuffer` on Metal and a `kD3D12Resource` on
+  D3D12, and null from either for any other type. The import holds its own native
   reference, so the memory outlives the producer's release; what nothing guards is *reuse*: the
   consumer waits on the producer's queue before reading (`bgpu::QueuePoint`,
   `InsertWaitForQueueFence`), and the producer waits on the consumer's before writing again.

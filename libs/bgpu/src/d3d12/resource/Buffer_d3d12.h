@@ -17,6 +17,15 @@ namespace bgpu
 			uint32_t              descriptorIndex,
 			const BufferDesc&     desc);
 
+		// Another owner's resource: this reference keeps it alive, and its bytes stay charged to
+		// the owner that allocated them.
+		Buffer(
+			ID3D12Device*               device,
+			ID3D12DescriptorHeap*       descriptorHeap,
+			uint32_t                    descriptorIndex,
+			wrl::ComPtr<ID3D12Resource> adopted,
+			const BufferDesc&           desc);
+
 		~Buffer() noexcept = default;
 
 		Buffer(const Buffer&)     = delete;

@@ -3,6 +3,8 @@
 #include "convert_d3d12.h"
 #include "resource/BoundedPool.h"
 #include <bgpu/cmd/CommandList.h>
+#include <bgpu/resource/NativeBufferDesc.h>
+#include <bgpu/types/NativeObject.h>
 #include <core/err/util.h>
 #include <spdlog/spdlog.h>
 
@@ -167,6 +169,80 @@ namespace bgpu
 		m_Buffers[allocation.slot] = std::move(buffer);
 
 		return BufferHandle{ allocation.slot, allocation.descriptorIndex };
+	}
+
+	BufferHandle
+	ResourceManager::ImportNativeBuffer(const NativeBufferDesc& desc) noexcept
+	{
+		if (desc.type != NativeObjectType::kD3D12Resource || desc.IsNull())
+		{
+			return BufferHandle{};
+		}
+
+		auto*          resource = desc.object.As<ID3D12Resource>();
+		const uint64_t byteSize =
+			static_cast<uint64_t>(desc.buffer.stride) * desc.buffer.elementCount;
+		{
+			wrl::ComPtr<ID3D12Device> owner;
+			resource->GetDevice(IID_PPV_ARGS(&owner)) >> d3d12ErrChecker;
+			core::ensure(
+				owner.Get() == m_Device.Get(),
+				"ImportNativeBuffer of another device's buffer");
+		}
+		const D3D12_RESOURCE_DESC resourceDesc = resource->GetDesc();
+		core::ensure(
+			resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER,
+			"ImportNativeBuffer of a resource that is not a buffer");
+		core::ensure(
+			byteSize > 0 && byteSize <= resourceDesc.Width,
+			"ImportNativeBuffer views more bytes than the buffer holds");
+		core::ensure(
+			!desc.buffer.isUav && !desc.buffer.allowsUav,
+			"An imported buffer is read-only");
+
+		auto bufferDesc      = BufferDesc();
+		bufferDesc.byteSize  = byteSize;
+		bufferDesc.debugName = desc.buffer.debugName;
+
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		auto                        slot = TryAllocateBounded(m_Buffers);
+		if (slot.is_null())
+		{
+			spdlog::error("ImportNativeBuffer '{}': buffer pool exhausted", bufferDesc.debugName);
+			return BufferHandle{};
+		}
+
+		uint32_t descriptorIndex = 0xFFFFFFFF;
+		try
+		{
+			descriptorIndex = m_CbvSrvUavDescriptors.Allocate();
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("ImportNativeBuffer '{}': {}", bufferDesc.debugName, e.what());
+			m_Buffers.release_slot(slot.index);
+			return BufferHandle{};
+		}
+
+		auto buffer = Buffer(
+			m_Device.Get(),
+			m_CbvSrvUavDescriptors.GetD3D12Heap(),
+			descriptorIndex,
+			wrl::ComPtr<ID3D12Resource>(resource),
+			bufferDesc);
+
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_BUFFER;
+		srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Format                          = DXGI_FORMAT_UNKNOWN;
+		srvDesc.Buffer.FirstElement             = 0;
+		srvDesc.Buffer.NumElements              = desc.buffer.elementCount;
+		srvDesc.Buffer.StructureByteStride      = desc.buffer.stride;
+		srvDesc.Buffer.Flags                    = D3D12_BUFFER_SRV_FLAG_NONE;
+		m_Device->CreateShaderResourceView(resource, &srvDesc, buffer.GetCpuHandle());
+
+		m_Buffers[slot] = std::move(buffer);
+		return BufferHandle{ slot, descriptorIndex };
 	}
 
 	BufferHandle
