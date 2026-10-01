@@ -20,6 +20,7 @@ class QWidget;
 
 namespace editor
 {
+	class LodSelector;
 	/** Set on the Material list's default row, for the delegate that marks it. */
 	constexpr int c_IsDefaultMaterialRole = Qt::UserRole + 1;
 
@@ -57,7 +58,7 @@ namespace editor
 		QPushButton*       removeOverride   = nullptr;
 		QListWidget*       materialList     = nullptr;
 		QPushButton*       generateTangents = nullptr;
-		QComboBox*         lodSelector      = nullptr;
+		LodSelector*       lodSelector      = nullptr;
 		QComboBox*         submeshSelector  = nullptr;
 		QComboBox*         outputSelector   = nullptr;
 		QLabel*            tangentWarning   = nullptr;

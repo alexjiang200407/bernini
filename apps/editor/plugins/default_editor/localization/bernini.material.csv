@@ -38,12 +38,6 @@ layer_label_hashed_alpha,Hashed Alpha
 layer_label_opaque,Opaque
 layer_row_label,Layer
 layer_selector_tooltip,"How this surface material's alpha is read: discarded below a cutoff (Alpha Tested), blended back-to-front (Alpha Blend), or stochastic coverage under temporal AA (Hashed Alpha)."
-lod_auto,Auto
-lod_auto_level,Auto: LOD {0}
-lod_auto_nothing,Auto: nothing drawn
-lod_label,Level of Detail
-lod_level,LOD {0}
-lod_selector_tooltip,"Auto draws the level the game would at this size on screen. A level pins it, however near or far the camera is."
 load_mesh_failed,"Could not load '{0}':
 
 {1}"

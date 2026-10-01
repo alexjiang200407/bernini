@@ -1,0 +1,7 @@
+key,en
+auto,Auto
+auto_level,Auto: LOD {0}
+auto_nothing,Auto: nothing drawn
+label,Level of Detail
+level,LOD {0}
+selector_tooltip,"Auto draws the level the game would at this size on screen. A level pins it, however near or far the camera is."
