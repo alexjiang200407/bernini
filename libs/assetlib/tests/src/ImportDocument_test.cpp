@@ -81,7 +81,7 @@ TEST_CASE("an import document records where its textures went", "[importdoc]")
 		// So a document for such an import stays byte-identical to one written before the key
 		// existed, which is what keeps migrate's byte-compare from reporting every project once.
 		const std::string none = DocumentText(ImportDocument());
-		CHECK(none.find("texture") == std::string::npos);
+		CHECK(!none.contains("texture"));
 		CHECK(DocumentFrom(none).textureDir.empty());
 		CHECK(DocumentFrom(none).textureStamp == SourceStamp());
 		CHECK(DocumentFrom(none).textureBakeToken == 0);
@@ -167,15 +167,15 @@ TEST_CASE(
 
 	const ImportDocument document = DocumentFrom(text);
 	CHECK(document.sampleRate == 24.0f);
-	CHECK(document.extraJson.find("futureKnob") != std::string::npos);
+	CHECK(document.extraJson.contains("futureKnob"));
 	// An unknown *parameter* stays in the parameter half -- the subtree the cache key hashes --
 	// so a newer branch's knob keys even through a reader that has never heard of it.
-	CHECK(document.extraParametersJson.find("tangentMode") != std::string::npos);
-	CHECK(document.extraJson.find("tangentMode") == std::string::npos);
+	CHECK(document.extraParametersJson.contains("tangentMode"));
+	CHECK(!document.extraJson.contains("tangentMode"));
 
 	const std::string rewritten = DocumentText(document);
-	CHECK(rewritten.find("futureKnob") != std::string::npos);
-	CHECK(rewritten.find("\"tangentMode\"") != std::string::npos);
+	CHECK(rewritten.contains("futureKnob"));
+	CHECK(rewritten.contains("\"tangentMode\""));
 
 	// And the unknown keys still deserialize to the same document after the rewrite.
 	CHECK(DocumentFrom(rewritten) == document);
@@ -231,7 +231,7 @@ TEST_CASE(
 	ImportDocument bare = document;
 	bare.materialOverrides.clear();
 	CHECK(parametersHashOf(bare) == parametersHashOf(document));
-	CHECK(DocumentText(bare).find("\"materialOverrides\"") == std::string::npos);
+	CHECK(!DocumentText(bare).contains("\"materialOverrides\""));
 }
 
 TEST_CASE("a malformed override is refused with its reason", "[importdoc][overrides]")
@@ -376,7 +376,7 @@ TEST_CASE("naming the source does not move the parameter hash", "[importdoc]")
 TEST_CASE("a document with no source round-trips byte-identically", "[importdoc]")
 {
 	const std::string before = DocumentText(ImportDocument());
-	CHECK(before.find("\"source\"") == std::string::npos);
+	CHECK(!before.contains("\"source\""));
 	CHECK(DocumentText(DocumentFrom(before)) == before);
 }
 
@@ -673,7 +673,7 @@ TEST_CASE("authored LOD thresholds round-trip as a parameter", "[importdoc][lod]
 	SECTION("a document authoring none hashes as it did before the key existed")
 	{
 		const ImportDocument none;
-		CHECK(DocumentText(none).find("lodMinPixels") == std::string::npos);
+		CHECK(!DocumentText(none).contains("lodMinPixels"));
 		CHECK(parametersHashOf(none) == parametersHashOf(DocumentFrom("{}")));
 	}
 
@@ -716,7 +716,7 @@ TEST_CASE("an authored clip floor round-trips as a parameter", "[importdoc][grou
 	{
 		// Writing an empty object would stale every container in every project on this change alone.
 		const ImportDocument none;
-		CHECK(DocumentText(none).find("clipFloor") == std::string::npos);
+		CHECK(!DocumentText(none).contains("clipFloor"));
 		CHECK(parametersHashOf(none) == parametersHashOf(DocumentFrom("{}")));
 	}
 
@@ -764,7 +764,7 @@ TEST_CASE("an environment document writes no sample rate", "[importdoc][env]")
 {
 	ImportDocument document;
 	document.environment = DistinctEnvironment();
-	CHECK(DocumentText(document).find("sampleRate") == std::string::npos);
+	CHECK(!DocumentText(document).contains("sampleRate"));
 
 	const uint64_t before = parametersHashOf(document);
 	document.sampleRate   = 60.0f;
@@ -814,7 +814,7 @@ TEST_CASE("a mesh document carries none of the environment keys", "[importdoc][e
 	const std::string text = DocumentText(document);
 	for (const std::string_view key :
 	     { "environment", "envSourceStampSize", "envSourceStampHash", "envSourceBakeToken" })
-		CHECK(text.find(key) == std::string::npos);
+		CHECK(!text.contains(key));
 
 	CHECK_FALSE(DocumentFrom(text).environment.has_value());
 }
@@ -831,7 +831,7 @@ TEST_CASE("an environment key a reader does not know survives, and keys", "[impo
 	CHECK(document.environment->skyMips == EnvironmentImportParameters().skyMips);
 
 	const std::string rewritten = DocumentText(document);
-	CHECK(rewritten.find("\"denoise\"") != std::string::npos);
+	CHECK(rewritten.contains("\"denoise\""));
 	CHECK(DocumentFrom(rewritten) == document);
 
 	ImportDocument unknowing      = document;

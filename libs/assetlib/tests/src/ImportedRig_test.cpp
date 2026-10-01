@@ -424,9 +424,9 @@ TEST_CASE("A rig is found by signature, not by name", "[importedrig]")
 		catch (const std::runtime_error& e)
 		{
 			const std::string message = e.what();
-			CHECK(message.find("Derived/Skeletons/unit.bskel") != std::string::npos);
-			CHECK(message.find("Derived/Skeletons/coyote_twin.bskel") != std::string::npos);
-			CHECK(message.find(root.Data().generic_string()) == std::string::npos);
+			CHECK(message.contains("Derived/Skeletons/unit.bskel"));
+			CHECK(message.contains("Derived/Skeletons/coyote_twin.bskel"));
+			CHECK(!message.contains(root.Data().generic_string()));
 		}
 	}
 

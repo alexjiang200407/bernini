@@ -187,9 +187,8 @@ TEST_CASE("what the cha800 face close-up costs Forward, part by part", "[.cha800
 	}
 
 	// The face's own box, in world: what the camera frames.
-	const auto face = std::ranges::find_if(parts, [](const Part& p) {
-		return p.name.find("Face") != std::string::npos;
-	});
+	const auto face =
+		std::ranges::find_if(parts, [](const Part& p) { return p.name.contains("Face"); });
 	REQUIRE(face != parts.end());
 
 	const glm::vec3 faceMin = glm::vec3(face->transform * glm::vec4(face->boxMin, 1.0f));
@@ -241,9 +240,7 @@ TEST_CASE("what the cha800 face close-up costs Forward, part by part", "[.cha800
 		}
 	};
 
-	const auto has = [](const Part& p, std::string_view needle) {
-		return p.name.find(needle) != std::string::npos;
-	};
+	const auto has = [](const Part& p, std::string_view needle) { return p.name.contains(needle); };
 
 	viewFor("everything", [](const Part&) { return true; });
 	viewFor("no hair", [&](const Part& p) { return !has(p, "Hair"); });

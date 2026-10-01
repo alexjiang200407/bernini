@@ -19,8 +19,7 @@ namespace assetlib
 		requireLabel(std::string_view label)
 		{
 			if (label.empty() || label == "." || label == ".." ||
-			    label.find_first_of("/\\:") != std::string_view::npos ||
-			    label.find('\0') != std::string_view::npos)
+			    label.find_first_of("/\\:") != std::string_view::npos || label.contains('\0'))
 				core::throw_runtime_error("import identity: '{}' is not a filename", label);
 		}
 

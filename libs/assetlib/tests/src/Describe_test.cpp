@@ -105,22 +105,22 @@ TEST_CASE("describe(BMaterial) reports the routing table", "[describe]")
 {
 	const std::string text = describe(RoutedMaterial());
 
-	CHECK(text.find("skin") != std::string::npos);
+	CHECK(text.contains("skin"));
 
 	// A route names its source and the channel it draws from -- routes[5] is roughness <- mask.a, and
 	// a swizzle that silently printed the wrong letter would make the dump worse than useless.
-	CHECK(text.find("baseColor.r") != std::string::npos);
-	CHECK(text.find("Derived/SourceTextures/skin.ktx2 [r]") != std::string::npos);
-	CHECK(text.find("Derived/SourceTextures/skin.ktx2 [g]") != std::string::npos);
-	CHECK(text.find("Derived/SourceTextures/mask.ktx2 [a]") != std::string::npos);
+	CHECK(text.contains("baseColor.r"));
+	CHECK(text.contains("Derived/SourceTextures/skin.ktx2 [r]"));
+	CHECK(text.contains("Derived/SourceTextures/skin.ktx2 [g]"));
+	CHECK(text.contains("Derived/SourceTextures/mask.ktx2 [a]"));
 
 	// The channels left unrouted are exactly the ones that fall back to a default texture at render
 	// time, which is the single most common cause of a material looking wrong. They must be visible.
-	CHECK(text.find("metallic        (unrouted)") != std::string::npos);
-	CHECK(text.find("normal.x        (unrouted)") != std::string::npos);
+	CHECK(text.contains("metallic        (unrouted)"));
+	CHECK(text.contains("normal.x        (unrouted)"));
 
-	CHECK(text.find("Derived/BakedTextures/basecolor_dead.ktx2") != std::string::npos);
-	CHECK(text.find("orm             (none)") != std::string::npos);
+	CHECK(text.contains("Derived/BakedTextures/basecolor_dead.ktx2"));
+	CHECK(text.contains("orm             (none)"));
 }
 
 TEST_CASE(
@@ -128,19 +128,17 @@ TEST_CASE(
 	"[describe]")
 {
 	BMaterial material = RoutedMaterial();
-	CHECK(describe(material).find("geometryOcclusion (none)") != std::string::npos);
-	CHECK(describe(material).find("geometry occlusion source\n    (none)") != std::string::npos);
+	CHECK(describe(material).contains("geometryOcclusion (none)"));
+	CHECK(describe(material).contains("geometry occlusion source\n    (none)"));
 
 	// The authored map is the bake's source and is reported with its stamp like a route; the map
 	// baked from it sits with the triplet.
 	material.pbr.geometryOcclusionTexture      = "Derived/SourceTextures/skin_ao.ktx2";
 	material.pbr.geometryOcclusionBakedTexture = "Derived/BakedTextures/occlusion_beef.ktx2";
 	const std::string text                     = describe(material);
-	CHECK(
-		text.find("geometryOcclusion Derived/BakedTextures/occlusion_beef.ktx2") !=
-		std::string::npos);
-	CHECK(text.find("    Derived/SourceTextures/skin_ao.ktx2\n") != std::string::npos);
-	CHECK(text.find("baked from 0 B") != std::string::npos);
+	CHECK(text.contains("geometryOcclusion Derived/BakedTextures/occlusion_beef.ktx2"));
+	CHECK(text.contains("    Derived/SourceTextures/skin_ao.ktx2\n"));
+	CHECK(text.contains("baked from 0 B"));
 }
 
 // With a data root, each routed source is stat'd and compared against the stamp taken at bake time.
@@ -164,7 +162,7 @@ TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[
 	{
 		// The stamp is left zeroed: this route was never baked, so it cannot match the live source.
 		const std::string text = describe(material, &files);
-		CHECK(text.find("STALE") != std::string::npos);
+		CHECK(text.contains("STALE"));
 	}
 
 	SECTION("a source matching its stamp is up to date")
@@ -183,8 +181,8 @@ TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[
 		}
 
 		const std::string text = describe(material, &files);
-		CHECK(text.find("up to date") != std::string::npos);
-		CHECK(text.find("STALE") == std::string::npos);
+		CHECK(text.contains("up to date"));
+		CHECK(!text.contains("STALE"));
 	}
 
 	SECTION("a missing source is called out rather than reported as a mismatch")
@@ -192,7 +190,7 @@ TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[
 		material.pbr.routes[0] = { "Derived/SourceTextures/gone.ktx2", 0 };
 
 		const std::string text = describe(material, &files);
-		CHECK(text.find("source is missing") != std::string::npos);
+		CHECK(text.contains("source is missing"));
 	}
 
 	std::filesystem::remove_all(root);
@@ -213,9 +211,9 @@ TEST_CASE("describe(BMaterial) names the shading model a document takes", "[desc
 
 	const std::string text = describe(material);
 
-	CHECK(text.find("  surface           Rim\n") != std::string::npos);
-	CHECK(text.find("rimPower") != std::string::npos);
-	CHECK(text.find("Derived/SourceTextures/bear.ktx2") != std::string::npos);
+	CHECK(text.contains("  surface           Rim\n"));
+	CHECK(text.contains("rimPower"));
+	CHECK(text.contains("Derived/SourceTextures/bear.ktx2"));
 
 	constexpr std::string_view c_Label = "  shadingModel      ";
 	const size_t               at      = text.find(c_Label);
@@ -242,7 +240,7 @@ TEST_CASE("describe(BMaterial) names the lit model the parser accepts", "[descri
 
 	const std::string text = describe(material);
 
-	CHECK(text.find("  surface           Toon\n") != std::string::npos);
+	CHECK(text.contains("  surface           Toon\n"));
 
 	constexpr std::string_view c_Label = "  shadingModel      ";
 	const size_t               at      = text.find(c_Label);
@@ -275,7 +273,7 @@ TEST_CASE(
 
 	const std::string text = describe(material);
 
-	CHECK(text.find("  surface           Flat\n") != std::string::npos);
+	CHECK(text.contains("  surface           Flat\n"));
 
 	constexpr std::string_view c_Label = "  shadingModel      ";
 	const size_t               at      = text.find(c_Label);
@@ -313,14 +311,14 @@ TEST_CASE("describe(BMesh) resolves each submesh's material path", "[describe]")
 
 	const std::string text = describe(mesh);
 
-	CHECK(text.find("'head'") != std::string::npos);
-	CHECK(text.find("material slot 0") != std::string::npos);
-	CHECK(text.find("material slot 7") != std::string::npos);
+	CHECK(text.contains("'head'"));
+	CHECK(text.contains("material slot 0"));
+	CHECK(text.contains("material slot 7"));
 
 	// Brief mode keeps the material table but drops the per-submesh listing.
 	const std::string brief = describe(mesh, /*verbose*/ false);
-	CHECK(brief.find("material slot") == std::string::npos);
-	CHECK(brief.find("'head'") == std::string::npos);
+	CHECK(!brief.contains("material slot"));
+	CHECK(!brief.contains("'head'"));
 }
 
 // A .benv holds no pixels at all, so the only thing worth reading out of it is what it names -- and
@@ -333,16 +331,16 @@ TEST_CASE("describe(Skeleton) names each bone and its parent", "[describe][skele
 	const Skeleton    skeleton = TwoBoneRig();
 	const std::string text     = describe(skeleton);
 
-	CHECK(text.find("bones        2") != std::string::npos);
-	CHECK(text.find("'hips'") != std::string::npos);
-	CHECK(text.find("'spine'") != std::string::npos);
+	CHECK(text.contains("bones        2"));
+	CHECK(text.contains("'hips'"));
+	CHECK(text.contains("'spine'"));
 
 	// A root has no parent index to print, and printing c_InvalidIndex as a number would read as a
 	// bone that exists.
-	CHECK(text.find("(root)") != std::string::npos);
-	CHECK(text.find("parent 0") != std::string::npos);
+	CHECK(text.contains("(root)"));
+	CHECK(text.contains("parent 0"));
 
-	CHECK(text.find(std::format("{:016x}", skeletonSignature(skeleton))) != std::string::npos);
+	CHECK(text.contains(std::format("{:016x}", skeletonSignature(skeleton))));
 }
 
 TEST_CASE("describe(AnimationSet) reports each clip's timing and motion", "[describe][animation]")
@@ -354,21 +352,21 @@ TEST_CASE("describe(AnimationSet) reports each clip's timing and motion", "[desc
 	{
 		const std::string text = describe(animations);
 
-		CHECK(text.find("Derived/Animations/rig.bskel") != std::string::npos);
-		CHECK(text.find("clips        1") != std::string::npos);
-		CHECK(text.find("'walk'") != std::string::npos);
-		CHECK(text.find("2 frames at 30 Hz") != std::string::npos);
-		CHECK(text.find("looping") != std::string::npos);
+		CHECK(text.contains("Derived/Animations/rig.bskel"));
+		CHECK(text.contains("clips        1"));
+		CHECK(text.contains("'walk'"));
+		CHECK(text.contains("2 frames at 30 Hz"));
+		CHECK(text.contains("looping"));
 
 		// Nothing was passed to check the binding against, so the line must be absent rather than
 		// guessing an answer.
-		CHECK(text.find("binding") == std::string::npos);
+		CHECK(!text.contains("binding"));
 	}
 
 	SECTION("against the skeleton it was cooked from")
 	{
 		const std::string text = describe(animations, &skeleton);
-		CHECK(text.find("matches the skeleton") != std::string::npos);
+		CHECK(text.contains("matches the skeleton"));
 	}
 
 	// The case the signature exists for: a bone inserted since the clips were cooked. Nothing about
@@ -379,7 +377,7 @@ TEST_CASE("describe(AnimationSet) reports each clip's timing and motion", "[desc
 		reordered.bones[1].nameOffset = reordered.stringPool.add("chest");
 
 		const std::string text = describe(animations, &reordered);
-		CHECK(text.find("DOES NOT MATCH") != std::string::npos);
+		CHECK(text.contains("DOES NOT MATCH"));
 	}
 
 	SECTION("a clip that does not loop says nothing about looping")
@@ -387,7 +385,7 @@ TEST_CASE("describe(AnimationSet) reports each clip's timing and motion", "[desc
 		AnimationSet once  = animations;
 		once.clips[0].loop = 0;
 
-		CHECK(describe(once).find("looping") == std::string::npos);
+		CHECK(!describe(once).contains("looping"));
 	}
 
 	// A clip carries how far the cook moved it, not where the floor came from -- so the line may
@@ -398,8 +396,8 @@ TEST_CASE("describe(AnimationSet) reports each clip's timing and motion", "[desc
 		dropped.clips[0].groundOffset = 0.25f;
 
 		const std::string text = describe(dropped);
-		CHECK(text.find("moved down 0.25") != std::string::npos);
-		CHECK(text.find("authored") == std::string::npos);
+		CHECK(text.contains("moved down 0.25"));
+		CHECK(!text.contains("authored"));
 	}
 }
 
@@ -408,8 +406,8 @@ TEST_CASE("describe(BMesh) reports its cooked rig layout", "[describe][skeleton]
 	BMesh mesh;
 	mesh.skeletonSignature = 42;
 	mesh.skeletonBoneNames = { "root", "head" };
-	CHECK(describe(mesh).find("signature    000000000000002a") != std::string::npos);
-	CHECK(describe(mesh).find("rig bones    2") != std::string::npos);
+	CHECK(describe(mesh).contains("signature    000000000000002a"));
+	CHECK(describe(mesh).contains("rig bones    2"));
 }
 
 TEST_CASE("describe(BEnv) reports whether the files it names are there", "[describe]")
@@ -432,19 +430,19 @@ TEST_CASE("describe(BEnv) reports whether the files it names are there", "[descr
 
 	// Without a root there is nothing to resolve against, so neither is judged.
 	const std::string bare = describe(env);
-	CHECK(bare.find("forest") != std::string::npos);
-	CHECK(bare.find("Derived/Sky/forest.bsky") != std::string::npos);
-	CHECK(bare.find("(missing)") == std::string::npos);
+	CHECK(bare.contains("forest"));
+	CHECK(bare.contains("Derived/Sky/forest.bsky"));
+	CHECK(!bare.contains("(missing)"));
 
 	const std::string text = describe(env, &files);
-	CHECK(text.find("Derived/Sky/forest.bsky\n") != std::string::npos);  // present: unannotated
-	CHECK(text.find("Derived/EnvLighting/forest.benvl (missing)") != std::string::npos);
+	CHECK(text.contains("Derived/Sky/forest.bsky\n"));  // present: unannotated
+	CHECK(text.contains("Derived/EnvLighting/forest.benvl (missing)"));
 
 	// An unset half is not the same as a missing one, and must not read as a broken reference.
 	BEnv skyless;
 	skyless.lighting            = "Derived/EnvLighting/forest.benvl";
 	const std::string unsetText = describe(skyless, &files);
-	CHECK(unsetText.find("sky               (unset)") != std::string::npos);
+	CHECK(unsetText.contains("sky               (unset)"));
 
 	std::filesystem::remove_all(root);
 }
@@ -484,13 +482,11 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 	{
 		const std::string text = describe(sky, &files);
 
-		CHECK(text.find("bsky 'forest'") != std::string::npos);
-		CHECK(text.find("Derived/SourceTextures/forest.ktx2") != std::string::npos);
-		CHECK(
-			text.find("Derived/BakedTextures/sky_00000000ab120000.rgb9e5-f7276718.ktx2") !=
-			std::string::npos);
-		CHECK(text.find("source up to date") != std::string::npos);
-		CHECK(text.find("STALE") == std::string::npos);
+		CHECK(text.contains("bsky 'forest'"));
+		CHECK(text.contains("Derived/SourceTextures/forest.ktx2"));
+		CHECK(text.contains("Derived/BakedTextures/sky_00000000ab120000.rgb9e5-f7276718.ktx2"));
+		CHECK(text.contains("source up to date"));
+		CHECK(!text.contains("STALE"));
 	}
 
 	// The case the stricter rule exists for: nothing about the source moved, but what was baked from
@@ -500,8 +496,8 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 		std::filesystem::remove(baked);
 
 		const std::string text = describe(sky, &files);
-		CHECK(text.find("baked map is missing") != std::string::npos);
-		CHECK(text.find("bake              STALE") != std::string::npos);
+		CHECK(text.contains("baked map is missing"));
+		CHECK(text.contains("bake              STALE"));
 	}
 
 	SECTION("a sky whose source moved on reads as stale")
@@ -509,7 +505,7 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 		write(source, "aaaaaaaa");  // different size
 
 		const std::string text = describe(sky, &files);
-		CHECK(text.find("STALE") != std::string::npos);
+		CHECK(text.contains("STALE"));
 	}
 
 	SECTION("a sky whose source is gone says so rather than comparing stamps")
@@ -517,7 +513,7 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 		std::filesystem::remove(source);
 
 		const std::string text = describe(sky, &files);
-		CHECK(text.find("source is missing") != std::string::npos);
+		CHECK(text.contains("source is missing"));
 	}
 
 	BEnvLighting lighting;
@@ -534,12 +530,12 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 	{
 		const std::string text = describe(lighting, &files);
 
-		CHECK(text.find("benvl 'forest'") != std::string::npos);
-		CHECK(text.find("exposure          1.25") != std::string::npos);
-		CHECK(text.find("prefilter") != std::string::npos);
-		CHECK(text.find("irradiance") != std::string::npos);
-		CHECK(text.find("Derived/BakedTextures/forest_prefilter.ktx2") != std::string::npos);
-		CHECK(text.find("Derived/BakedTextures/forest_irradiance.ktx2") != std::string::npos);
+		CHECK(text.contains("benvl 'forest'"));
+		CHECK(text.contains("exposure          1.25"));
+		CHECK(text.contains("prefilter"));
+		CHECK(text.contains("irradiance"));
+		CHECK(text.contains("Derived/BakedTextures/forest_prefilter.ktx2"));
+		CHECK(text.contains("Derived/BakedTextures/forest_irradiance.ktx2"));
 	}
 
 	// The pair is one verdict: they convolve the same radiance, so one drifting makes both suspect.
@@ -548,7 +544,7 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 		lighting.irradiance.stamp = SourceStamp{ 1, 1 };
 
 		const std::string text = describe(lighting, &files);
-		CHECK(text.find("bake              STALE") != std::string::npos);
+		CHECK(text.contains("bake              STALE"));
 	}
 
 	// Without a root nothing is stat'd, so the recorded stamp is all that can be reported -- and no
@@ -557,9 +553,9 @@ TEST_CASE("describe(BSky) and describe(BEnvLighting) report bake staleness", "[d
 	{
 		const std::string text = describe(sky);
 
-		CHECK(text.find("baked from") != std::string::npos);
-		CHECK(text.find("up to date") == std::string::npos);
-		CHECK(text.find("STALE") == std::string::npos);
+		CHECK(text.contains("baked from"));
+		CHECK(!text.contains("up to date"));
+		CHECK(!text.contains("STALE"));
 	}
 
 	std::filesystem::remove_all(root);

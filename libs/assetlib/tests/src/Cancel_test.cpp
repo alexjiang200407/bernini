@@ -221,7 +221,7 @@ TEST_CASE("an OS error naming a directory is reported, not swallowed", "[io][fs]
 	catch (const std::runtime_error& e)
 	{
 		const auto message = std::string(e.what());
-		REQUIRE(message.find("occupied") != std::string::npos);
+		REQUIRE(message.contains("occupied"));
 	}
 }
 
@@ -248,7 +248,7 @@ TEST_CASE("a mesh that cannot be written reports why", "[io][fs]")
 
 		// Not just "it failed": the path, then the OS's reason after it. That reason is the entire
 		// point -- "permission denied" is actionable, "cannot open file for writing" is not.
-		REQUIRE(message.find("taken': ") != std::string::npos);
+		REQUIRE(message.contains("taken': "));
 		REQUIRE_FALSE(message.ends_with("'"));
 	}
 }
@@ -301,7 +301,7 @@ TEST_CASE("every container that cannot be written reports why", "[io][fs]")
 
 			// Names itself, names the path, and ends in the OS's reason rather than in the path.
 			REQUIRE(message.starts_with(std::string(container.name) + ": "));
-			REQUIRE(message.find("taken': ") != std::string::npos);
+			REQUIRE(message.contains("taken': "));
 			REQUIRE_FALSE(message.ends_with("'"));
 		}
 	}

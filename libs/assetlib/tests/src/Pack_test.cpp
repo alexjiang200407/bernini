@@ -159,8 +159,7 @@ TEST_CASE("pack carries what the runtime reads and nothing that produces it", "[
 		CHECK_FALSE(Contains(entries, ".overlay.json"));
 
 		// No entry anywhere under the authoring directory, however deep.
-		for (const std::string& entry : entries)
-			CHECK(entry.find("Derived/SourceTextures/") == std::string::npos);
+		for (const std::string& entry : entries) CHECK(!entry.contains("Derived/SourceTextures/"));
 	}
 
 	SECTION("sidecars ship while the imported sources stay out")

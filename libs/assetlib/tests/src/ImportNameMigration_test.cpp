@@ -30,7 +30,7 @@ TEST_CASE("naming migration refuses outputs claimed by two sources", "[migrate][
 	const auto result = store.Migrate(false);
 	CHECK(std::ranges::any_of(result.files, [](const auto& file) {
 		return file.outcome == MigratedFile::Outcome::kFailed &&
-		       file.message.find("shared by multiple sources") != std::string::npos;
+		       file.message.contains("shared by multiple sources");
 	}));
 	CHECK(store.Load<ImportDocument>(key).identity.id == 0);
 	CHECK(store.Load<ImportDocument>("Authored/Meshes/other.bimport").identity.id == 0);

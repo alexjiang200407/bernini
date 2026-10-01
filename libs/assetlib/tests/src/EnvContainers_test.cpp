@@ -263,7 +263,7 @@ TEST_CASE("an unset override serializes as absent, not as a value", "[benv][io]"
 	// Absent in the bytes too: an "exposureOverride": 0 that crept in would author a value.
 	const auto        bytes = AssetCodec<BEnv>::Serialize(BEnv{ .name = "plain" });
 	const std::string text(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-	CHECK(text.find("exposureOverride") == std::string::npos);
+	CHECK(!text.contains("exposureOverride"));
 }
 
 TEST_CASE("a benv document preserves the keys this build does not know", "[benv][io]")
@@ -282,6 +282,6 @@ TEST_CASE("a benv document preserves the keys this build does not know", "[benv]
 
 	const auto        resaved = AssetCodec<BEnv>::Serialize(env);
 	const std::string out(reinterpret_cast<const char*>(resaved.data()), resaved.size());
-	CHECK(out.find("\"weather\"") != std::string::npos);
+	CHECK(out.contains("\"weather\""));
 	CHECK(AssetCodec<BEnv>::Serialize(AssetCodec<BEnv>::Deserialize(resaved)) == resaved);
 }

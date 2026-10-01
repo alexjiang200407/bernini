@@ -149,8 +149,8 @@ TEST_CASE("Renaming a texture rewrites the graph that compiles into its routes",
 
 	const BMaterial after = StoreAt(root.path).Load<BMaterial>("Authored/Materials/m.bmaterial");
 	CHECK(after.pbr.routes[0].texture == "Authored/Textures/b.ktx2");
-	CHECK(after.editorGraph.find("Authored/Textures/b.ktx2") != std::string::npos);
-	CHECK(after.editorGraph.find("Authored/Textures/a.ktx2") == std::string::npos);
+	CHECK(after.editorGraph.contains("Authored/Textures/b.ktx2"));
+	CHECK(!after.editorGraph.contains("Authored/Textures/a.ktx2"));
 }
 
 TEST_CASE("Scanning a material with a real board terminates", "[assetrename]")
@@ -200,8 +200,8 @@ TEST_CASE("A texture only the graph names is still referenced", "[assetrename]")
 
 		const std::string after =
 			StoreAt(root.path).Load<BMaterial>("Authored/Materials/m.bmaterial").editorGraph;
-		CHECK(after.find("Authored/Textures/moved.ktx2") != std::string::npos);
-		CHECK(after.find("Authored/Textures/loose.ktx2") == std::string::npos);
+		CHECK(after.contains("Authored/Textures/moved.ktx2"));
+		CHECK(!after.contains("Authored/Textures/loose.ktx2"));
 	}
 }
 

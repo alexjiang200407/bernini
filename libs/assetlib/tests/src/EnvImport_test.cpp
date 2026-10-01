@@ -1154,7 +1154,7 @@ TEST_CASE("A document claiming the old float cubes reads without them", "[envimp
 
 	const std::vector<std::byte> bytes = sandbox.Bytes("Authored/EnvSources/forest.bimport");
 	const auto text = std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-	CHECK(text.find("_sky.ktx2") == std::string::npos);
+	CHECK(!text.contains("_sky.ktx2"));
 }
 
 namespace

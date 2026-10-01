@@ -109,8 +109,8 @@ TEST_CASE("A crash log names the address that faulted", "[crashlog]")
 	const std::string    log = CrashLogOfAChild(directory, FaultOnAPoisonedPointer);
 
 	REQUIRE_FALSE(log.empty());
-	REQUIRE(log.find("signal 11") != std::string::npos);
-	REQUIRE(log.find("0x5555555555555555") != std::string::npos);
+	REQUIRE(log.contains("signal 11"));
+	REQUIRE(log.contains("0x5555555555555555"));
 }
 
 TEST_CASE("A crash log names the function that faulted", "[crashlog]")
@@ -120,7 +120,7 @@ TEST_CASE("A crash log names the function that faulted", "[crashlog]")
 
 	// The whole point: the faulting function is the one frame a walk of return addresses cannot
 	// reach, so without the header line the log would name its caller and nothing else.
-	REQUIRE(log.find("FaultOnAPoisonedPointer") != std::string::npos);
+	REQUIRE(log.contains("FaultOnAPoisonedPointer"));
 }
 
 // The stamp is computed by the handler from time() and arithmetic, never by localtime or
@@ -171,10 +171,10 @@ TEST_CASE("A raised signal is logged without a faulting address", "[crashlog]")
 	const CrashDirectory directory("bernini_crashlog_raised");
 	const std::string    log = CrashLogOfAChild(directory, [] { std::abort(); });
 
-	REQUIRE(log.find("signal 6") != std::string::npos);
+	REQUIRE(log.contains("signal 6"));
 
 	// abort() leaves si_addr holding the pid that raised it, not an address. Reporting that would
 	// be the same misdirection the header line exists to end.
-	REQUIRE(log.find("faulting address") == std::string::npos);
+	REQUIRE(!log.contains("faulting address"));
 }
 #endif
