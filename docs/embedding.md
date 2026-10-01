@@ -51,6 +51,14 @@ environment maps a scene lights itself with, among others — beside its executa
 engine compiles its own headers behind it; a translation unit that does not compiles them
 differently from every one inside the engine. `target_precompile_headers` is the whole of it.
 
+**C++23** is not on the list because the engine imposes it: `core` carries a PUBLIC `cxx_std_23`
+requirement, every engine library a consumer links reaches `core`, and CMake compiles each target
+at the highest standard any of its requirements names. A consumer's own `CMAKE_CXX_STANDARD` of 20
+is raised to 23 on every target that links the engine, so the public headers may use C++23; a
+consumer that has to stay on 20 cannot link it. On MSVC the engine compiles itself with
+`/std:c++23preview`, so nothing newer reaches its sources; the consumer's own targets take whatever
+CMake maps 23 to there, which is `/std:c++latest`.
+
 Everything else has a host-derived default and is only worth naming to change it.
 
 ## The cache variables

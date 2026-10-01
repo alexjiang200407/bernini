@@ -83,6 +83,10 @@ enable_coverage(core_process)
 
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${CORE_PROCESS_SOURCES})
 
+# Public headers are C++23, so whatever links core -- every exported target does -- compiles as 23
+# whatever its own CMAKE_CXX_STANDARD says.
+target_compile_features(core PUBLIC cxx_std_23)
+
 target_link_libraries(
     core
     PUBLIC
