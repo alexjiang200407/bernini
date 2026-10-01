@@ -1,6 +1,7 @@
 #include "scene/SceneView.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
+#include "instance_block/MeshInstanceWriter.h"
 #include "scene/NamedBuffer.h"
 #include "scene/Scene.h"
 #include "scene/TextureAssetStore.h"
@@ -31,6 +32,8 @@
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/InstanceDesc.h>
 #include <bgl/types/MaterialHandle.h>
+#include <bgl/types/MeshInstanceBlockDesc.h>
+#include <bgl/types/MeshInstanceBlockHandle.h>
 #include <bgl/types/MeshInstanceFlags.h>
 #include <bgl/types/MeshInstanceHandle.h>
 #include <bgl/types/RigHandle.h>
@@ -40,7 +43,10 @@
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Texture.h>
 #include <bgpu/types/Barrier.h>
+#include <bgpu/uniforms/Uniforms.h>
+#include <bgpu/uniforms/UniformsBase.h>
 #include <cmath>
+#include <core/containers/slot_handle.h>
 #include <core/containers/static_vector.h>
 #include <core/err/util.h>
 #include <core/math.h>
@@ -1494,6 +1500,94 @@ namespace bgl
 		}
 
 		m_LodSelection = desc;
+	}
+
+	MeshInstanceBlockHandle
+	SceneView::CreateMeshInstanceBlock(const MeshInstanceBlockDesc& desc)
+	{
+		if (desc.geom.geomType != GeomType::kStaticMesh || !m_SceneRaw->IsGeomAlive(desc.geom))
+		{
+			throw SceneError("CreateMeshInstanceBlock: the geom is not a live static mesh");
+		}
+		if (desc.capacity == 0 || desc.capacity > c_MaxMeshInstanceBlockCapacity)
+		{
+			throw SceneError(
+				std::format(
+					"CreateMeshInstanceBlock: a block holds 1 to {} placements, not {}",
+					c_MaxMeshInstanceBlockCapacity,
+					desc.capacity));
+		}
+
+		core::slot_handle handle = m_InstanceBlocks.try_allocate_slot();
+		if (handle.is_null())
+		{
+			m_InstanceBlocks.grow(std::max(4u, 2 * m_InstanceBlocks.capacity()));
+			handle = m_InstanceBlocks.allocate_slot();
+		}
+
+		MeshInstanceBlock& block = m_InstanceBlocks[handle.index];
+		block.geom               = desc.geom;
+		block.capacity           = desc.capacity;
+
+		++m_TemporalEpoch;
+		return MeshInstanceBlockHandle{ handle };
+	}
+
+	void
+	SceneView::DeleteMeshInstanceBlock(MeshInstanceBlockHandle block)
+	{
+		if (!block.IsValid() || !m_InstanceBlocks.valid(block.handle))
+		{
+			throw SceneError(
+				"MeshInstanceBlockHandle passed to DeleteMeshInstanceBlock is invalid or already "
+				"removed");
+		}
+
+		m_InstanceBlocks[block.handle.index] = MeshInstanceBlock();
+		m_InstanceBlocks.release_slot(block.handle);
+		++m_TemporalEpoch;
+	}
+
+	void
+	SceneView::SetBlockWriter(MeshInstanceBlockHandle block, MeshInstanceWriterRef writer)
+	{
+		if (!block.IsValid() || !m_InstanceBlocks.valid(block.handle))
+		{
+			throw SceneError(
+				"MeshInstanceBlockHandle passed to SetBlockWriter is invalid or already removed");
+		}
+
+		const auto* compiled = writer.IsInitialized() ? writer->As<MeshInstanceWriter>() : nullptr;
+		if (writer.IsInitialized() &&
+		    (compiled == nullptr || compiled->GetOwner() != m_ResourceManager.Get()))
+		{
+			throw SceneError("SetBlockWriter: the writer was created by another IGraphics");
+		}
+
+		MeshInstanceBlock& record = m_InstanceBlocks[block.handle.index];
+		record.writer             = std::move(writer);
+		record.uniforms =
+			compiled == nullptr ?
+				nullptr :
+				std::make_unique<bgpu::Uniforms>(compiled->GetKernel().pipeline.Get(), "gUniforms");
+	}
+
+	bgpu::UniformsBase::Accessor
+	SceneView::GetBlockParams(MeshInstanceBlockHandle block)
+	{
+		if (!block.IsValid() || !m_InstanceBlocks.valid(block.handle))
+		{
+			throw SceneError(
+				"MeshInstanceBlockHandle passed to GetBlockParams is invalid or already removed");
+		}
+
+		MeshInstanceBlock& record = m_InstanceBlocks[block.handle.index];
+		if (record.uniforms == nullptr)
+		{
+			throw SceneError("GetBlockParams: the block has no writer");
+		}
+
+		return (*record.uniforms)["params"];
 	}
 
 	void

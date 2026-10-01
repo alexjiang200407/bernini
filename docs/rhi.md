@@ -7,8 +7,11 @@ pure-virtual interfaces (`bgpu::I*`) plus plain-old-data descriptors and state s
 and built into `bgpu` itself. Neither is ever visible to a caller, and no RHI header names a backend
 type: what a caller needs of the API underneath -- a swapchain presents on the native queue and adopts
 its backbuffers -- it asks for as nvrhi does, with `GetNativeObject(NativeObjectType)` on the device,
-a queue or a command list, `GetNativeTexture` and `ImportNativeTexture` on the resource manager.
+a queue or a command list, `GetNativeTexture`, `ImportNativeTexture`, `GetNativeBuffer` and
+`ImportNativeBuffer` on the resource manager.
 The answer is an untyped `NativeObject` the caller casts, and null for a type the backend has none of.
+An import takes the native object with the RHI desc it is viewed as, in one desc
+(`NativeTextureDesc`, `NativeBufferDesc`).
 
 **API-agnostic means among APIs with bindless resource access and mesh shaders.** That is the bar
 this interface is drawn at, not a general one: the only graphics pipeline object is
@@ -296,6 +299,14 @@ Everything else is self-explanatory from the header.
   the matching `UnmapReadback`.
 * **`ClearRtv` / `ClearDsv`** — `cmdList` must be open and the target already in the correct
   layout (the FrameGraph arranges this).
+* **`GetNativeBuffer` / `ImportNativeBuffer`** — how a buffer crosses from one owner to another on
+  the same native device: the producer reads its buffer's native object and describes it with its
+  layout in a `bgpu::NativeBufferDesc`, and the consumer adopts it as a read-only structured buffer with a
+  descriptor in its own heap. Null from either when the backend cannot; both are declared ahead of
+  their backends, and neither backend adopts a buffer yet. The import holds its own native
+  reference, so the memory outlives the producer's release; what nothing guards is *reuse*: the
+  consumer waits on the producer's queue before reading (`bgpu::QueuePoint`,
+  `InsertWaitForQueueFence`), and the producer waits on the consumer's before writing again.
 
 ### ICommandList
 

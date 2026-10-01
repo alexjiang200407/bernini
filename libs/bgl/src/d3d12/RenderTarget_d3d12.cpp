@@ -3,6 +3,7 @@
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/constants/constants.h>
 #include <bgpu/device/Device.h>
+#include <bgpu/resource/NativeTextureDesc.h>
 #include <bgpu/types/NativeObject.h>
 #include <spdlog/spdlog.h>
 
@@ -124,9 +125,11 @@ namespace bgl
 				m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)) >> d3d12ErrChecker;
 
 				m_BackBuffers[i].textureHandle = m_ResourceManager->ImportNativeTexture(
-					bgpu::NativeObjectType::kD3D12Resource,
-					bgpu::NativeObject{ backBuffer.Get() },
-					textureDesc);
+					bgpu::NativeTextureDesc()
+						.SetObject(
+							bgpu::NativeObjectType::kD3D12Resource,
+							bgpu::NativeObject{ backBuffer.Get() })
+						.SetTexture(textureDesc));
 
 				bgpu::RtvDesc rtvDesc;
 				rtvDesc.format    = bgpu::Format::SBGRA8_UNORM;

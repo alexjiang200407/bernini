@@ -1,5 +1,6 @@
 #pragma once
 #include "gfx/DrawBucketTable.h"
+#include "instance_block/MeshInstanceBlock.h"
 #include "scene/BonePaletteBuffer.h"
 #include "scene/CullState.h"
 #include "scene/NamedBuffer.h"
@@ -11,6 +12,7 @@
 #include "types/ViewMatrices.h"
 #include <algorithm>
 #include <bgl/GeomType.h>
+#include <bgl/IMeshInstanceWriter.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/idl/BlobShadow.h>
@@ -28,6 +30,8 @@
 #include <bgl/types/InstanceDesc.h>
 #include <bgl/types/LodSelectionDesc.h>
 #include <bgl/types/MaterialHandle.h>
+#include <bgl/types/MeshInstanceBlockDesc.h>
+#include <bgl/types/MeshInstanceBlockHandle.h>
 #include <bgl/types/MeshInstanceHandle.h>
 #include <bgl/types/SkyboxDesc.h>
 #include <bgl/types/WindDesc.h>
@@ -37,8 +41,11 @@
 #include <bgpu/buffer/RawBuffer.h>
 #include <bgpu/buffer/UploadBuffer.h>
 #include <bgpu/resource/ResourceManager.h>
+#include <bgpu/uniforms/Uniforms.h>
+#include <bgpu/uniforms/UniformsBase.h>
 #include <core/containers/multi_slot_handle.h>
 #include <core/containers/slot_handle.h>
+#include <core/containers/slot_vector.h>
 #include <core/err/util.h>
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
@@ -261,6 +268,18 @@ namespace bgl
 		{
 			return m_LodSelection;
 		}
+
+		MeshInstanceBlockHandle
+		CreateMeshInstanceBlock(const MeshInstanceBlockDesc& desc) override;
+
+		void
+		DeleteMeshInstanceBlock(MeshInstanceBlockHandle block) override;
+
+		void
+		SetBlockWriter(MeshInstanceBlockHandle block, MeshInstanceWriterRef writer) override;
+
+		[[nodiscard]] bgpu::UniformsBase::Accessor
+		GetBlockParams(MeshInstanceBlockHandle block) override;
 
 		[[nodiscard]] const std::optional<SkyboxDesc>&
 		GetSkybox() const noexcept
@@ -669,6 +688,8 @@ namespace bgl
 		float                     m_Exposure = 1.0f;
 		WindDesc                  m_Wind;
 		LodSelectionDesc          m_LodSelection;
+
+		core::slot_vector<MeshInstanceBlock> m_InstanceBlocks;
 
 		// The placements carrying a velocity: those SetInstanceTransform has written and whose
 		// prevTransform has not yet been brought back up to their transform. Not an upload list --

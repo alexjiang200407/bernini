@@ -5,10 +5,15 @@
 #include "overlay/Overlay.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include <bgl/IExternalBuffer.h>
+#include <bgl/IMeshInstanceWriter.h>
+#include <bgl/types/MeshInstanceWriterDesc.h>
 #include <bgl/types/PassTiming.h>
 #include <bgpu/GpuContext.h>
 #include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/cmd/QueuePoint.h>
 #include <bgpu/device/Device.h>
+#include <bgpu/resource/NativeBufferDesc.h>
 #include <core/log/log.h>
 #include <memory>
 #include <span>
@@ -183,6 +188,30 @@ namespace bgl
 		GetPassTimings(const RenderTargetRef& target) override
 		{
 			return m_Context->GetPassTimings(target);
+		}
+
+		MeshInstanceWriterRef
+		CreateMeshInstanceWriter(const MeshInstanceWriterDesc& desc) override
+		{
+			return m_Context->CreateMeshInstanceWriter(desc);
+		}
+
+		ExternalBufferRef
+		ImportBuffer(const bgpu::NativeBufferDesc& desc) override
+		{
+			return m_Context->ImportBuffer(desc);
+		}
+
+		void
+		WaitBeforeNextFrame(const bgpu::QueuePoint& point) override
+		{
+			m_Context->WaitBeforeNextFrame(point);
+		}
+
+		bgpu::QueuePoint
+		GetLastFrameDone() const override
+		{
+			return m_Context->GetLastFrameDone();
 		}
 
 	private:

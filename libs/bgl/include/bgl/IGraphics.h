@@ -1,6 +1,8 @@
 #pragma once
 #include <assetlib_structs/ImageData.h>
+#include <bgl/IExternalBuffer.h>
 #include <bgl/IGpuAssertionHandler.h>
+#include <bgl/IMeshInstanceWriter.h>
 #include <bgl/IOverlay.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
@@ -8,10 +10,13 @@
 #include <bgl/SurfaceType.h>
 #include <bgl/api.h>
 #include <bgl/error.h>
+#include <bgl/types/MeshInstanceWriterDesc.h>
 #include <bgl/types/PassTiming.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgpu/GpuContext.h>
+#include <bgpu/cmd/QueuePoint.h>
+#include <bgpu/resource/NativeBufferDesc.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
@@ -254,6 +259,51 @@ namespace bgl
 		 */
 		virtual OverlayRef
 		CreateOverlay() = 0;
+
+		/**
+		 * Compiles a caller's kernel for instance blocks: `desc.slangTypeName` in `desc.slangModuleName` must conform
+		 * to IMeshInstanceWriter in `bgl.MeshInstanceWriter`. Compiled once, here; a writer used by many
+		 * blocks and views is not compiled again.
+		 *
+		 * @throws GraphicsError if called between BeginFrame and EndFrame, if either name is empty,
+		 *         or if the module does not compile against the contract -- the compiler's
+		 *         diagnostics are in the message.
+		 */
+		virtual MeshInstanceWriterRef
+		CreateMeshInstanceWriter(const MeshInstanceWriterDesc& desc) = 0;
+
+		/**
+		 * Adopts another owner's buffer, read-only, so an instance writer's parameters can bind it.
+		 * The renderer orders nothing against the exporter: a frame that reads the buffer waits for
+		 * the exporter's writes with WaitBeforeNextFrame, and the exporter waits for the frames that
+		 * read it (GetLastFrameDone) before it writes the memory again.
+		 *
+		 * @throws GraphicsError if `desc` is null, has a zero stride or element count, asks for a
+		 *         writable buffer, or names an object this backend cannot adopt.
+		 */
+		virtual ExternalBufferRef
+		ImportBuffer(const bgpu::NativeBufferDesc& desc) = 0;
+
+		/**
+		 * Makes the next frame's GPU work wait until `point` has passed on its queue. The CPU does
+		 * not wait. Every point given before a BeginFrame applies to that frame alone.
+		 *
+		 * @throws GraphicsError if called between BeginFrame and EndFrame -- a frame's command list
+		 *         is already open by then, and a wait cannot reach it -- or if `point` is null.
+		 */
+		virtual void
+		WaitBeforeNextFrame(const bgpu::QueuePoint& point) = 0;
+
+		/**
+		 * The point on the renderer's queue past which every frame submitted so far has finished:
+		 * what an owner whose memory those frames read waits on before writing it again. Null
+		 * before the first frame.
+		 *
+		 * @throws GraphicsError if called between BeginFrame and EndFrame, when the open frame is
+		 *         not yet submitted and the point would not cover it.
+		 */
+		[[nodiscard]] virtual bgpu::QueuePoint
+		GetLastFrameDone() const = 0;
 
 		/**
 		 * Registers a sink for GPU assertions (dbg_raise) the engine detects during
