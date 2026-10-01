@@ -16,6 +16,7 @@
 #include "Windows/AnimationEditor/blend_sets.h"
 #include "Windows/AnimationEditor/blob_shadow.h"
 #include "Windows/AnimationEditor/ground_slope.h"
+#include "Windows/MeshEditor/lod_view.h"
 #include <QEvent>
 #include <QVBoxLayout>
 #include <assetlib_structs/Mesh.h>
@@ -53,6 +54,7 @@
 #include <bgl/types/FootIKDesc.h>
 #include <core/err/util.h>
 #include <core/glm.h>
+#include <core/math.h>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
@@ -331,6 +333,7 @@ AnimationPreviewWindow::Clear()
 	m_BlendKey.clear();
 
 	Q_EMIT MeshChanged(QString());
+	Q_EMIT ShownLodsChanged();
 	Q_EMIT AnimationSourcesChanged(QStringList(), -1);
 	Q_EMIT ClipsChanged({});
 	Q_EMIT SpacesChanged({});
@@ -402,6 +405,8 @@ AnimationPreviewWindow::ClearGeometry()
 	m_Geoms.clear();
 	m_Clips.clear();
 	m_Spaces.clear();
+	m_ShownLods = editor::MeshLods();
+	m_LastLod.reset();
 }
 
 void
@@ -621,6 +626,8 @@ AnimationPreviewWindow::LoadMesh(
 		}
 		auto loaded = Loaded();
 
+		if (m_ForcedLod.has_value())
+			SetForcedLod(std::nullopt);
 		ClearGeometry();
 		const background::TaskResult upload = background::RunWithLoadingScreen(
 			this,
@@ -777,6 +784,7 @@ AnimationPreviewWindow::LoadMesh(
 					"bernini.animation_preview.load_mesh_failed",
 					{ name, upload.error },
 					"Could not load '{0}':\n\n{1}"));
+			Q_EMIT ShownLodsChanged();
 			return;
 		}
 
@@ -784,6 +792,17 @@ AnimationPreviewWindow::LoadMesh(
 		// faces. Authoring conventions disagree on the forward axis, so any fixed yaw shows some rigs
 		// a profile; the coyote is one of them, and orbiting once is the answer until bones can be
 		// tagged (see docs/skinning.md).
+		// The renderer measures an animated entry by the box its clips pose it in, not by its
+		// bind pose (AddSkinnedMeshGeom's sphere), so Auto must read the same sphere.
+		const bmesh::InstancePlacement& shown =
+			!plan.animated.empty() ? plan.animated.front() : plan.statics.front();
+		m_ShownLods = editor::LodsOf(mesh, shown.meshIndex);
+		if (const auto posed = skinnedBounds.find(shown.meshIndex); posed != skinnedBounds.end())
+			m_ShownLods.levelZeroSphere =
+				core::bounding_sphere_of(posed->second.min, posed->second.max);
+		m_ShownWorld = shown.world;
+		m_LastLod.reset();
+
 		m_Orbit.FocusOn(loaded.center, loaded.radius, 0.0f, glm::radians(15.0f));
 		UpdateCamera();
 		SetTime(0.0f);
@@ -800,6 +819,7 @@ AnimationPreviewWindow::LoadMesh(
 		m_BlendKey = blend;
 
 		Q_EMIT MeshChanged(QString::fromStdString(rel));
+		Q_EMIT ShownLodsChanged();
 		Q_EMIT AnimationSourcesChanged(candidates, active < candidates.size() ? active : -1);
 		// Before SpacesChanged, and the order is read: a space is a node past the clips, so the
 		// panel cannot place one until it knows how many clips there are.
@@ -1425,7 +1445,38 @@ AnimationPreviewWindow::UpdateCamera()
 {
 	const float aspect =
 		height() > 0 ? static_cast<float>(width()) / static_cast<float>(height()) : 1.0f;
-	m_Viewport->SetCamera(m_Orbit.GetCamera(aspect));
+	m_Camera = m_Orbit.GetCamera(aspect);
+	m_Viewport->SetCamera(m_Camera);
+	Q_EMIT ViewChanged();
+}
+
+const editor::MeshLods*
+AnimationPreviewWindow::GetShownLods() const noexcept
+{
+	return m_ShownLods.minPixels.empty() ? nullptr : &m_ShownLods;
+}
+
+std::optional<editor::LodReadout>
+AnimationPreviewWindow::ReadShownLod()
+{
+	const editor::MeshLods* lods = GetShownLods();
+	if (lods == nullptr)
+		return std::nullopt;
+	return editor::ReadLodInView(
+		*lods,
+		m_ShownWorld,
+		m_Camera,
+		m_Orbit.GetEyePosition(),
+		m_Viewport->GetRenderHeight(),
+		m_ForcedLod,
+		m_LastLod);
+}
+
+void
+AnimationPreviewWindow::SetForcedLod(const std::optional<uint32_t> level)
+{
+	m_ForcedLod = level;
+	editor::PinLod(*m_Viewport, level);
 }
 
 QStringList

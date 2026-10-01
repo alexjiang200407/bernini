@@ -3,6 +3,7 @@
 #include "Windows/MeshEditor/lod_view.h"
 
 #include <QComboBox>
+#include <QObject>
 #include <QString>
 #include <qtmetamacros.h>
 
@@ -58,4 +59,30 @@ namespace editor
 		const ILanguageResolver& m_Language;
 		uint32_t                 m_LevelCount = 0;
 	};
+
+	/**
+	 * Wires `selector` to a preview that answers GetShownLods, ReadShownLod, SetForcedLod and
+	 * GetForcedLod and announces ShownLodsChanged and ViewChanged -- the Mesh and Animation
+	 * previews -- and lists what the preview shows now. The connections live as long as both do.
+	 */
+	template <class Preview>
+	void
+	Bind(LodSelector& selector, Preview& preview)
+	{
+		const auto showAuto = [&selector, &preview] { selector.ShowAuto(preview.ReadShownLod()); };
+		QObject::connect(&preview, &Preview::ShownLodsChanged, &selector, [&, showAuto] {
+			selector.Refresh(preview.GetShownLods(), preview.GetForcedLod());
+			showAuto();
+		});
+		QObject::connect(&preview, &Preview::ViewChanged, &selector, showAuto);
+		QObject::connect(
+			&selector,
+			&LodSelector::ForcedLevelChanged,
+			&preview,
+			[&, showAuto](const std::optional<uint32_t> level) {
+				preview.SetForcedLod(level);
+				showAuto();
+			});
+		selector.Refresh(preview.GetShownLods(), preview.GetForcedLod());
+	}
 }

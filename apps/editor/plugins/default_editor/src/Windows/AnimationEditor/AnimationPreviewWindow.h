@@ -2,13 +2,16 @@
 
 #include "Windows/AnimationEditor/PlaybackTransport.h"
 #include "Windows/AnimationEditor/transition_spans.h"
+#include "Windows/MeshEditor/lod_view.h"
 #include <editor_plugin_api/IEditorHost.h>
 #include <editor_plugin_api/IEditorViewport.h>
 #include <editor_sdk/OrbitCamera.h>
 #include <editor_sdk/environment.h>
 
 #include <array>
+#include <bgl/glm.h>
 #include <bgl/types/BlobShadowDesc.h>
+#include <bgl/types/Camera.h>
 #include <bgl/types/FootIKDesc.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/InstanceDesc.h>
@@ -18,6 +21,7 @@
 #include <filesystem>
 #include <gamelib/BlendSpaceInfo.h>
 #include <gamelib/ClipInfo.h>
+#include <optional>
 #include <qcontainerfwd.h>
 #include <qnamespace.h>
 #include <qobject.h>
@@ -144,6 +148,37 @@ public:
 		const std::filesystem::path& absolutePath,
 		const std::string&           animationsRelPath = {},
 		const std::string&           blendRelPath      = {});
+
+	/**
+	 * The levels of detail of the mesh the preview shows -- the first animated entry's, or the
+	 * first static entry's when none is skinned -- or null with nothing shown. Every placement
+	 * follows the pin below, so one mesh's levels are what the selector lists. An animated
+	 * entry's size is measured by the box its clips pose it in, as the renderer measures it.
+	 */
+	[[nodiscard]] const editor::MeshLods*
+	GetShownLods() const noexcept;
+
+	/**
+	 * The level the cull draws that mesh at from the camera now, or nothing with nothing shown or
+	 * before the view has a size. Remembers the level it read, since the cull's hysteresis depends
+	 * on the level it drew last.
+	 */
+	[[nodiscard]] std::optional<editor::LodReadout>
+	ReadShownLod();
+
+	/**
+	 * Pins every placement to `level` (ISceneView::SetLodSelection), or chooses by size again. The
+	 * pin is the view's, so it holds across a respawn -- a clip or a pose-source switch -- and a
+	 * load starts from Auto.
+	 */
+	void
+	SetForcedLod(std::optional<uint32_t> level);
+
+	[[nodiscard]] std::optional<uint32_t>
+	GetForcedLod() const noexcept
+	{
+		return m_ForcedLod;
+	}
 
 	/**
 	 * Respawns the animated instances on clip `index`, and resets the record onto it. `nowSeconds`
@@ -357,6 +392,14 @@ Q_SIGNALS:
 	void
 	SpacesChanged(const std::vector<game::BlendSpaceInfo>& spaces);
 
+	/** The mesh GetShownLods lists changed: a load, or a clear. */
+	void
+	ShownLodsChanged();
+
+	/** The camera moved, so the level the shown mesh draws at may have. */
+	void
+	ViewChanged();
+
 protected:
 	bool
 	eventFilter(QObject* watched, QEvent* event) override;
@@ -526,6 +569,13 @@ private:
 	editor::EnvironmentBinding m_Environment;
 
 	editor::OrbitCamera m_Orbit;
+	bgl::Camera         m_Camera;  // the GUI thread's copy of what UpdateCamera last set
+
+	// The levels GetShownLods answers with, and where that mesh stands; no levels, nothing shown.
+	editor::MeshLods        m_ShownLods;
+	glm::mat4               m_ShownWorld = glm::mat4(1.0f);
+	std::optional<uint32_t> m_ForcedLod;
+	std::optional<uint32_t> m_LastLod;
 
 	QPoint          m_LastMousePos;
 	Qt::MouseButton m_DragButton = Qt::NoButton;

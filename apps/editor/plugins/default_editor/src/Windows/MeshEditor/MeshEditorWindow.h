@@ -310,14 +310,6 @@ private:
 	void
 	RefreshActions();
 
-	/** Lists the preview's shown levels in the Level of Detail selector, with what Auto draws. */
-	void
-	RefreshLodSelector();
-
-	/** Names the level the preview draws in the selector's Auto entry. */
-	void
-	ShowAutoLod();
-
 	editor::IEditorHost& m_Host;
 	MeshEditorWindowDesc m_Desc;
 

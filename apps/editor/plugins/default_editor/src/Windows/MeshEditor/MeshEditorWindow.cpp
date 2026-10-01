@@ -356,20 +356,7 @@ MeshEditorWindow::MeshEditorWindow(
 		m_Preview  = new MeshPreviewWindow(m_Host, splitter, m_Desc.viewport, m_Desc.previewEnv);
 		rightPanel = m_Preview;
 
-		connect(
-			m_Preview,
-			&MeshPreviewWindow::ShownLodsChanged,
-			this,
-			&MeshEditorWindow::RefreshLodSelector);
-		connect(m_Preview, &MeshPreviewWindow::ViewChanged, this, &MeshEditorWindow::ShowAutoLod);
-		connect(
-			m_LodSelector,
-			&editor::LodSelector::ForcedLevelChanged,
-			this,
-			[this](std::optional<uint32_t> level) {
-				m_Preview->SetForcedLod(level);
-				ShowAutoLod();
-			});
+		editor::Bind(*m_LodSelector, *m_Preview);
 
 		// The mesh under the boards is about to go -- with Generate Tangents, the same mesh
 		// reloading -- so what they hold unwritten is written while it is still theirs.
@@ -380,7 +367,6 @@ MeshEditorWindow::MeshEditorWindow(
 		// Dropping a mesh onto the preview swaps its geometry; rebuild the submesh selector.
 		connect(m_Preview, &MeshPreviewWindow::GeometryChanged, this, [this]() {
 			SetPreviewGeometry(m_Preview->SubmeshNames());
-			RefreshLodSelector();
 			RefreshStage();
 		});
 
@@ -743,23 +729,6 @@ MeshEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 		m_SubmeshSelector->setCurrentIndex(0);
 
 	RefreshActions();
-}
-
-void
-MeshEditorWindow::RefreshLodSelector()
-{
-	if (m_Preview == nullptr)
-		return;
-	m_LodSelector->Refresh(m_Preview->GetShownLods(), m_Preview->GetForcedLod());
-	ShowAutoLod();
-}
-
-void
-MeshEditorWindow::ShowAutoLod()
-{
-	if (m_Preview == nullptr)
-		return;
-	m_LodSelector->ShowAuto(m_Preview->ReadShownLod());
 }
 
 void
