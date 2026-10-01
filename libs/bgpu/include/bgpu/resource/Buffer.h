@@ -74,19 +74,20 @@ namespace bgpu
 		uint32_t    stride    = 0;
 		std::string debugName = "Unnamed Buffer View";
 
-		template <core::type_traits::trivially_copyable T>
-		BufferSrvDesc&
-		SetElement() noexcept
+		template <core::type_traits::trivially_copyable T, typename Self>
+		Self&&
+		SetElement(this Self&& self) noexcept
 		{
-			stride = sizeof(T);
-			return *this;
+			self.stride = sizeof(T);
+			return std::forward<Self>(self);
 		}
 
-		BufferSrvDesc&
-		SetDebugName(std::string debugName_) noexcept
+		template <typename Self>
+		Self&&
+		SetDebugName(this Self&& self, std::string value) noexcept
 		{
-			debugName = std::move(debugName_);
-			return *this;
+			self.debugName = std::move(value);
+			return std::forward<Self>(self);
 		}
 	};
 
@@ -97,32 +98,36 @@ namespace bgpu
 		BarrierAccess accessBefore = BarrierAccessFlag::kNone;
 		BarrierAccess accessAfter  = BarrierAccessFlag::kNone;
 
-		BufferBarrierDesc&
-		AddSyncBefore(BarrierSyncFlag sync)
+		template <typename Self>
+		Self&&
+		AddSyncBefore(this Self&& self, BarrierSyncFlag sync)
 		{
-			syncBefore |= sync;
-			return *this;
+			self.syncBefore |= sync;
+			return std::forward<Self>(self);
 		}
 
-		BufferBarrierDesc&
-		AddSyncAfter(BarrierSyncFlag sync)
+		template <typename Self>
+		Self&&
+		AddSyncAfter(this Self&& self, BarrierSyncFlag sync)
 		{
-			syncAfter |= sync;
-			return *this;
+			self.syncAfter |= sync;
+			return std::forward<Self>(self);
 		}
 
-		BufferBarrierDesc&
-		AddAccessBefore(BarrierAccessFlag access)
+		template <typename Self>
+		Self&&
+		AddAccessBefore(this Self&& self, BarrierAccessFlag access)
 		{
-			accessBefore |= access;
-			return *this;
+			self.accessBefore |= access;
+			return std::forward<Self>(self);
 		}
 
-		BufferBarrierDesc&
-		AddAccessAfter(BarrierAccessFlag access)
+		template <typename Self>
+		Self&&
+		AddAccessAfter(this Self&& self, BarrierAccessFlag access)
 		{
-			accessAfter |= access;
-			return *this;
+			self.accessAfter |= access;
+			return std::forward<Self>(self);
 		}
 	};
 
@@ -133,33 +138,36 @@ namespace bgpu
 		std::string debugName    = "Unnamed Buffer";
 		bool        isUav        = false;
 
-		template <core::type_traits::trivially_copyable T>
-		StructBufferDesc&
-		SetElement() noexcept
+		template <core::type_traits::trivially_copyable T, typename Self>
+		Self&&
+		SetElement(this Self&& self) noexcept
 		{
-			stride = sizeof(T);
-			return *this;
+			self.stride = sizeof(T);
+			return std::forward<Self>(self);
 		}
 
-		StructBufferDesc&
-		SetElementCount(uint32_t count) noexcept
+		template <typename Self>
+		Self&&
+		SetElementCount(this Self&& self, uint32_t count) noexcept
 		{
-			elementCount = count;
-			return *this;
+			self.elementCount = count;
+			return std::forward<Self>(self);
 		}
 
-		StructBufferDesc&
-		SetIsUav(bool isUav_ = true) noexcept
+		template <typename Self>
+		Self&&
+		SetIsUav(this Self&& self, bool value = true) noexcept
 		{
-			isUav = isUav_;
-			return *this;
+			self.isUav = value;
+			return std::forward<Self>(self);
 		}
 
-		StructBufferDesc&
-		SetDebugName(std::string debugName_) noexcept
+		template <typename Self>
+		Self&&
+		SetDebugName(this Self&& self, std::string value) noexcept
 		{
-			debugName = std::move(debugName_);
-			return *this;
+			self.debugName = std::move(value);
+			return std::forward<Self>(self);
 		}
 	};
 
@@ -174,25 +182,28 @@ namespace bgpu
 		std::string debugName = "Unnamed Raw Buffer";
 		bool        isUav     = false;
 
-		RawViewDesc&
-		SetByteSize(uint64_t byteSize_) noexcept
+		template <typename Self>
+		Self&&
+		SetByteSize(this Self&& self, uint64_t value) noexcept
 		{
-			byteSize = byteSize_;
-			return *this;
+			self.byteSize = value;
+			return std::forward<Self>(self);
 		}
 
-		RawViewDesc&
-		SetIsUav(bool isUav_ = true) noexcept
+		template <typename Self>
+		Self&&
+		SetIsUav(this Self&& self, bool value = true) noexcept
 		{
-			isUav = isUav_;
-			return *this;
+			self.isUav = value;
+			return std::forward<Self>(self);
 		}
 
-		RawViewDesc&
-		SetDebugName(std::string debugName_) noexcept
+		template <typename Self>
+		Self&&
+		SetDebugName(this Self&& self, std::string value) noexcept
 		{
-			debugName = std::move(debugName_);
-			return *this;
+			self.debugName = std::move(value);
+			return std::forward<Self>(self);
 		}
 	};
 
@@ -201,19 +212,20 @@ namespace bgpu
 		uint32_t    size      = 0;
 		std::string debugName = "Unnamed Constant Buffer";
 
-		template <core::type_traits::trivially_copyable T>
-		ConstantBufferDesc&
-		SetElement() noexcept
+		template <core::type_traits::trivially_copyable T, typename Self>
+		Self&&
+		SetElement(this Self&& self) noexcept
 		{
-			size = sizeof(T);
-			return *this;
+			self.size = sizeof(T);
+			return std::forward<Self>(self);
 		}
 
-		ConstantBufferDesc&
-		SetDebugName(std::string debugName_) noexcept
+		template <typename Self>
+		Self&&
+		SetDebugName(this Self&& self, std::string value) noexcept
 		{
-			debugName = std::move(debugName_);
-			return *this;
+			self.debugName = std::move(value);
+			return std::forward<Self>(self);
 		}
 	};
 
@@ -223,26 +235,28 @@ namespace bgpu
 		uint32_t    elementSize  = 0;
 		std::string debugName    = "Unnamed Compute Buffer";
 
-		template <core::type_traits::trivially_copyable T>
-		ComputeBufferDesc&
-		SetElement() noexcept
+		template <core::type_traits::trivially_copyable T, typename Self>
+		Self&&
+		SetElement(this Self&& self) noexcept
 		{
-			elementSize = sizeof(T);
-			return *this;
+			self.elementSize = sizeof(T);
+			return std::forward<Self>(self);
 		}
 
-		ComputeBufferDesc&
-		SetInitialCount(uint32_t count) noexcept
+		template <typename Self>
+		Self&&
+		SetInitialCount(this Self&& self, uint32_t count) noexcept
 		{
-			initialCount = count;
-			return *this;
+			self.initialCount = count;
+			return std::forward<Self>(self);
 		}
 
-		ComputeBufferDesc&
-		SetDebugName(std::string debugName_) noexcept
+		template <typename Self>
+		Self&&
+		SetDebugName(this Self&& self, std::string value) noexcept
 		{
-			debugName = std::move(debugName_);
-			return *this;
+			self.debugName = std::move(value);
+			return std::forward<Self>(self);
 		}
 	};
 

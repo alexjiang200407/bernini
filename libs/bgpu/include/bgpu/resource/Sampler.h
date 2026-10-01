@@ -2,6 +2,7 @@
 #include <bgpu/types/Color.h>
 #include <core/containers/slot_handle.h>
 #include <cstdint>
+#include <utility>
 
 namespace bgpu
 {
@@ -56,88 +57,100 @@ namespace bgpu
 		SamplerAddressMode   addressW      = SamplerAddressMode::kClamp;
 		SamplerReductionType reductionType = SamplerReductionType::kStandard;
 
-		SamplerDesc&
-		SetBorderColor(const Color& color)
+		template <typename Self>
+		Self&&
+		SetBorderColor(this Self&& self, const Color& color)
 		{
-			borderColor = color;
-			return *this;
+			self.borderColor = color;
+			return std::forward<Self>(self);
 		}
 
-		SamplerDesc&
-		SetMaxAnisotropy(float value)
+		template <typename Self>
+		Self&&
+		SetMaxAnisotropy(this Self&& self, float value)
 		{
-			maxAnisotropy = value;
-			return *this;
+			self.maxAnisotropy = value;
+			return std::forward<Self>(self);
 		}
 
-		SamplerDesc&
-		SetMipBias(float value)
+		template <typename Self>
+		Self&&
+		SetMipBias(this Self&& self, float value)
 		{
-			mipBias = value;
-			return *this;
+			self.mipBias = value;
+			return std::forward<Self>(self);
 		}
 
-		SamplerDesc&
-		SetMinFilter(bool enable)
+		template <typename Self>
+		Self&&
+		SetMinFilter(this Self&& self, bool enable)
 		{
-			minFilter = enable;
-			return *this;
+			self.minFilter = enable;
+			return std::forward<Self>(self);
 		}
 
-		SamplerDesc&
-		SetMagFilter(bool enable)
+		template <typename Self>
+		Self&&
+		SetMagFilter(this Self&& self, bool enable)
 		{
-			magFilter = enable;
-			return *this;
+			self.magFilter = enable;
+			return std::forward<Self>(self);
 		}
 
-		SamplerDesc&
-		SetMipFilter(bool enable)
+		template <typename Self>
+		Self&&
+		SetMipFilter(this Self&& self, bool enable)
 		{
-			mipFilter = enable;
-			return *this;
+			self.mipFilter = enable;
+			return std::forward<Self>(self);
 		}
 
-		SamplerDesc&
-		SetAllFilters(bool enable)
+		template <typename Self>
+		Self&&
+		SetAllFilters(this Self&& self, bool enable)
 		{
-			minFilter = magFilter = mipFilter = enable;
-			return *this;
+			self.minFilter = self.magFilter = self.mipFilter = enable;
+			return std::forward<Self>(self);
 		}
 
-		SamplerDesc&
-		SetAddressU(SamplerAddressMode mode)
+		template <typename Self>
+		Self&&
+		SetAddressU(this Self&& self, SamplerAddressMode mode)
 		{
-			addressU = mode;
-			return *this;
+			self.addressU = mode;
+			return std::forward<Self>(self);
 		}
 
-		SamplerDesc&
-		SetAddressV(SamplerAddressMode mode)
+		template <typename Self>
+		Self&&
+		SetAddressV(this Self&& self, SamplerAddressMode mode)
 		{
-			addressV = mode;
-			return *this;
+			self.addressV = mode;
+			return std::forward<Self>(self);
 		}
 
-		SamplerDesc&
-		SetAddressW(SamplerAddressMode mode)
+		template <typename Self>
+		Self&&
+		SetAddressW(this Self&& self, SamplerAddressMode mode)
 		{
-			addressW = mode;
-			return *this;
+			self.addressW = mode;
+			return std::forward<Self>(self);
 		}
 
-		SamplerDesc&
-		SetAllAddressModes(SamplerAddressMode mode)
+		template <typename Self>
+		Self&&
+		SetAllAddressModes(this Self&& self, SamplerAddressMode mode)
 		{
-			addressU = addressV = addressW = mode;
-			return *this;
+			self.addressU = self.addressV = self.addressW = mode;
+			return std::forward<Self>(self);
 		}
 
-		SamplerDesc&
-		SetReductionType(SamplerReductionType type)
+		template <typename Self>
+		Self&&
+		SetReductionType(this Self&& self, SamplerReductionType type)
 		{
-			reductionType = type;
-			return *this;
+			self.reductionType = type;
+			return std::forward<Self>(self);
 		}
 	};
 }

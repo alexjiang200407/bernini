@@ -110,6 +110,25 @@ struct Vec3 {
 ```
 
 
+# Fluent setters
+
+A setter that returns its object for chaining takes it as an explicit object parameter, so one
+function serves a named desc and a temporary alike. Never write a `&` / `&&` overload pair.
+
+```cpp
+template <typename Self>
+Self&&
+SetDebugName(this Self&& self, std::string value) noexcept
+{
+	self.debugName = std::move(value);
+	return std::forward<Self>(self);
+}
+```
+
+A chain on a named object returns that object; a chain on a temporary stays an rvalue, so it moves
+into whatever takes it. A setter that delegates to another forwards too:
+`return std::forward<Self>(self).SetName(...)`.
+
 # Macros
 
 Avoid using macros except for build-specific purposes. Prefer constexpr, inline functions, or templates instead.

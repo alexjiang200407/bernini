@@ -33,32 +33,36 @@ namespace bgpu
 		uint32_t    capacityAlignment = 1;
 		std::string debugName;
 
-		PackedBufferDesc&
-		SetInitialCount(uint32_t value) noexcept
+		template <typename Self>
+		Self&&
+		SetInitialCount(this Self&& self, uint32_t value) noexcept
 		{
-			initialCount = value;
-			return *this;
+			self.initialCount = value;
+			return std::forward<Self>(self);
 		}
 
-		PackedBufferDesc&
-		SetBlockSize(uint32_t value) noexcept
+		template <typename Self>
+		Self&&
+		SetBlockSize(this Self&& self, uint32_t value) noexcept
 		{
-			blockSize = value;
-			return *this;
+			self.blockSize = value;
+			return std::forward<Self>(self);
 		}
 
-		PackedBufferDesc&
-		SetCapacityAlignment(uint32_t value) noexcept
+		template <typename Self>
+		Self&&
+		SetCapacityAlignment(this Self&& self, uint32_t value) noexcept
 		{
-			capacityAlignment = value;
-			return *this;
+			self.capacityAlignment = value;
+			return std::forward<Self>(self);
 		}
 
-		PackedBufferDesc&
-		SetDebugName(std::string value) noexcept
+		template <typename Self>
+		Self&&
+		SetDebugName(this Self&& self, std::string value) noexcept
 		{
-			debugName = std::move(value);
-			return *this;
+			self.debugName = std::move(value);
+			return std::forward<Self>(self);
 		}
 	};
 

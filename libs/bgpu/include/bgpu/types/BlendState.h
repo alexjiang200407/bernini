@@ -1,6 +1,7 @@
 #pragma once
 #include <bgpu/constants/constants.h>
 #include <cstdint>
+#include <utility>
 
 namespace bgpu
 {
@@ -56,74 +57,84 @@ namespace bgpu
 			BlendOp     blendOpAlpha   = BlendOp::kAdd;
 			ColorMask   colorWriteMask = ColorMask::kAll;
 
-			constexpr RenderTarget&
-			SetBlendEnable(bool enable)
+			template <typename Self>
+			constexpr Self&&
+			SetBlendEnable(this Self&& self, bool enable)
 			{
-				blendEnable = enable;
-				return *this;
+				self.blendEnable = enable;
+				return std::forward<Self>(self);
 			}
 
-			constexpr RenderTarget&
-			EnableBlend()
+			template <typename Self>
+			constexpr Self&&
+			EnableBlend(this Self&& self)
 			{
-				blendEnable = true;
-				return *this;
+				self.blendEnable = true;
+				return std::forward<Self>(self);
 			}
 
-			constexpr RenderTarget&
-			DisableBlend()
+			template <typename Self>
+			constexpr Self&&
+			DisableBlend(this Self&& self)
 			{
-				blendEnable = false;
-				return *this;
+				self.blendEnable = false;
+				return std::forward<Self>(self);
 			}
 
-			constexpr RenderTarget&
-			SetSrcBlend(BlendFactor value)
+			template <typename Self>
+			constexpr Self&&
+			SetSrcBlend(this Self&& self, BlendFactor value)
 			{
-				srcBlend = value;
-				return *this;
+				self.srcBlend = value;
+				return std::forward<Self>(self);
 			}
 
-			constexpr RenderTarget&
-			SetDestBlend(BlendFactor value)
+			template <typename Self>
+			constexpr Self&&
+			SetDestBlend(this Self&& self, BlendFactor value)
 			{
-				destBlend = value;
-				return *this;
+				self.destBlend = value;
+				return std::forward<Self>(self);
 			}
 
-			constexpr RenderTarget&
-			SetBlendOp(BlendOp value)
+			template <typename Self>
+			constexpr Self&&
+			SetBlendOp(this Self&& self, BlendOp value)
 			{
-				blendOp = value;
-				return *this;
+				self.blendOp = value;
+				return std::forward<Self>(self);
 			}
 
-			constexpr RenderTarget&
-			SetSrcBlendAlpha(BlendFactor value)
+			template <typename Self>
+			constexpr Self&&
+			SetSrcBlendAlpha(this Self&& self, BlendFactor value)
 			{
-				srcBlendAlpha = value;
-				return *this;
+				self.srcBlendAlpha = value;
+				return std::forward<Self>(self);
 			}
 
-			constexpr RenderTarget&
-			SetDestBlendAlpha(BlendFactor value)
+			template <typename Self>
+			constexpr Self&&
+			SetDestBlendAlpha(this Self&& self, BlendFactor value)
 			{
-				destBlendAlpha = value;
-				return *this;
+				self.destBlendAlpha = value;
+				return std::forward<Self>(self);
 			}
 
-			constexpr RenderTarget&
-			SetBlendOpAlpha(BlendOp value)
+			template <typename Self>
+			constexpr Self&&
+			SetBlendOpAlpha(this Self&& self, BlendOp value)
 			{
-				blendOpAlpha = value;
-				return *this;
+				self.blendOpAlpha = value;
+				return std::forward<Self>(self);
 			}
 
-			constexpr RenderTarget&
-			SetColorWriteMask(ColorMask value)
+			template <typename Self>
+			constexpr Self&&
+			SetColorWriteMask(this Self&& self, ColorMask value)
 			{
-				colorWriteMask = value;
-				return *this;
+				self.colorWriteMask = value;
+				return std::forward<Self>(self);
 			}
 
 			constexpr bool
@@ -146,32 +157,36 @@ namespace bgpu
 		RenderTarget targets[c_MaxRenderTargets]{};
 		bool         alphaToCoverageEnable = false;
 
-		constexpr BlendState&
-		SetRenderTarget(uint32_t index, const RenderTarget& target)
+		template <typename Self>
+		constexpr Self&&
+		SetRenderTarget(this Self&& self, uint32_t index, const RenderTarget& target)
 		{
-			targets[index] = target;
-			return *this;
+			self.targets[index] = target;
+			return std::forward<Self>(self);
 		}
 
-		constexpr BlendState&
-		SetAlphaToCoverageEnable(bool enable)
+		template <typename Self>
+		constexpr Self&&
+		SetAlphaToCoverageEnable(this Self&& self, bool enable)
 		{
-			alphaToCoverageEnable = enable;
-			return *this;
+			self.alphaToCoverageEnable = enable;
+			return std::forward<Self>(self);
 		}
 
-		constexpr BlendState&
-		EnableAlphaToCoverage()
+		template <typename Self>
+		constexpr Self&&
+		EnableAlphaToCoverage(this Self&& self)
 		{
-			alphaToCoverageEnable = true;
-			return *this;
+			self.alphaToCoverageEnable = true;
+			return std::forward<Self>(self);
 		}
 
-		constexpr BlendState&
-		DisableAlphaToCoverage()
+		template <typename Self>
+		constexpr Self&&
+		DisableAlphaToCoverage(this Self&& self)
 		{
-			alphaToCoverageEnable = false;
-			return *this;
+			self.alphaToCoverageEnable = false;
+			return std::forward<Self>(self);
 		}
 
 		constexpr bool

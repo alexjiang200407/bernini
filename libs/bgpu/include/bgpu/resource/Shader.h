@@ -17,18 +17,20 @@ namespace bgpu
 		std::string entryPointName;
 		std::string debugName;
 
-		ShaderDesc&
-		SetSlangModuleName(std::string _slangModuleName)
+		template <typename Self>
+		Self&&
+		SetSlangModuleName(this Self&& self, std::string value)
 		{
-			this->slangModuleName = std::move(_slangModuleName);
-			return *this;
+			self.slangModuleName = std::move(value);
+			return std::forward<Self>(self);
 		}
 
-		ShaderDesc&
-		SetDebugName(std::string _debugName)
+		template <typename Self>
+		Self&&
+		SetDebugName(this Self&& self, std::string value)
 		{
-			this->debugName = std::move(_debugName);
-			return *this;
+			self.debugName = std::move(value);
+			return std::forward<Self>(self);
 		}
 	};
 

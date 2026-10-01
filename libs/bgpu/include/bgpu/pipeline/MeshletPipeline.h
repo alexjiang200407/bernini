@@ -27,39 +27,44 @@ namespace bgpu
 		core::static_vector<Format, c_MaxRenderTargets> rtvFormats;
 		Format                                          dsvFormat = Format::UNKNOWN;
 
-		MeshletPipelineDesc&
-		SetAmplificationShader(core::SharedRef<IShader> shader)
+		template <typename Self>
+		Self&&
+		SetAmplificationShader(this Self&& self, core::SharedRef<IShader> shader)
 		{
-			ampShader = std::move(shader);
-			return *this;
+			self.ampShader = std::move(shader);
+			return std::forward<Self>(self);
 		}
 
-		MeshletPipelineDesc&
-		SetMeshShader(core::SharedRef<IShader> shader)
+		template <typename Self>
+		Self&&
+		SetMeshShader(this Self&& self, core::SharedRef<IShader> shader)
 		{
-			meshShader = std::move(shader);
-			return *this;
+			self.meshShader = std::move(shader);
+			return std::forward<Self>(self);
 		}
 
-		MeshletPipelineDesc&
-		SetPixelShader(core::SharedRef<IShader> shader)
+		template <typename Self>
+		Self&&
+		SetPixelShader(this Self&& self, core::SharedRef<IShader> shader)
 		{
-			pixelShader = std::move(shader);
-			return *this;
+			self.pixelShader = std::move(shader);
+			return std::forward<Self>(self);
 		}
 
-		MeshletPipelineDesc&
-		AddRtvFormat(const Format& fmt)
+		template <typename Self>
+		Self&&
+		AddRtvFormat(this Self&& self, const Format& fmt)
 		{
-			rtvFormats.push_back(fmt);
-			return *this;
+			self.rtvFormats.push_back(fmt);
+			return std::forward<Self>(self);
 		}
 
-		MeshletPipelineDesc&
-		SetDsvFormat(const Format& fmt)
+		template <typename Self>
+		Self&&
+		SetDsvFormat(this Self&& self, const Format& fmt)
 		{
-			dsvFormat = fmt;
-			return *this;
+			self.dsvFormat = fmt;
+			return std::forward<Self>(self);
 		}
 	};
 

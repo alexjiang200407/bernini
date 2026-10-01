@@ -52,39 +52,44 @@ namespace bgpu
 
 		std::string debugName;
 
-		RawBufferDesc&
-		SetInitialBytes(uint32_t value) noexcept
+		template <typename Self>
+		Self&&
+		SetInitialBytes(this Self&& self, uint32_t value) noexcept
 		{
-			initialBytes = value;
-			return *this;
+			self.initialBytes = value;
+			return std::forward<Self>(self);
 		}
 
-		RawBufferDesc&
-		SetNullRecordBytes(uint32_t value) noexcept
+		template <typename Self>
+		Self&&
+		SetNullRecordBytes(this Self&& self, uint32_t value) noexcept
 		{
-			nullRecordBytes = value;
-			return *this;
+			self.nullRecordBytes = value;
+			return std::forward<Self>(self);
 		}
 
-		RawBufferDesc&
-		SetUploadBlockBytes(uint32_t value) noexcept
+		template <typename Self>
+		Self&&
+		SetUploadBlockBytes(this Self&& self, uint32_t value) noexcept
 		{
-			uploadBlockBytes = value;
-			return *this;
+			self.uploadBlockBytes = value;
+			return std::forward<Self>(self);
 		}
 
-		RawBufferDesc&
-		SetHandleStride(uint32_t value) noexcept
+		template <typename Self>
+		Self&&
+		SetHandleStride(this Self&& self, uint32_t value) noexcept
 		{
-			handleStride = value;
-			return *this;
+			self.handleStride = value;
+			return std::forward<Self>(self);
 		}
 
-		RawBufferDesc&
-		SetDebugName(std::string value) noexcept
+		template <typename Self>
+		Self&&
+		SetDebugName(this Self&& self, std::string value) noexcept
 		{
-			debugName = std::move(value);
-			return *this;
+			self.debugName = std::move(value);
+			return std::forward<Self>(self);
 		}
 	};
 

@@ -41,18 +41,20 @@ namespace bgpu
 			return std::get<DepthStencilClearValue>(value);
 		}
 
-		ClearValue&
-		SetColor(Color color)
+		template <typename Self>
+		Self&&
+		SetColor(this Self&& self, Color color)
 		{
-			value = std::move(color);
-			return *this;
+			self.value = std::move(color);
+			return std::forward<Self>(self);
 		}
 
-		ClearValue&
-		SetDepthStencil(float depth, uint8_t stencil)
+		template <typename Self>
+		Self&&
+		SetDepthStencil(this Self&& self, float depth, uint8_t stencil)
 		{
-			value = DepthStencilClearValue{ depth, stencil };
-			return *this;
+			self.value = DepthStencilClearValue{ depth, stencil };
+			return std::forward<Self>(self);
 		}
 	};
 }
