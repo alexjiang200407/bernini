@@ -6,6 +6,7 @@
 #include "Windows/AnimationEditor/Scrubber.h"
 #include "Windows/AnimationEditor/blend_edits.h"
 #include "Windows/AnimationEditor/blend_sets.h"
+#include "Windows/LodSelector.h"
 #include <editor_plugin_api/EditorPanel.h>
 #include <editor_plugin_api/IEditorHost.h>
 #include <editor_plugin_api/IEditorViewport.h>
@@ -307,6 +308,13 @@ BlendSpaceEditorWindow::BuildPropertiesColumn()
 	m_MeshSelector->hide();
 	layout->addWidget(m_MeshCaption);
 	layout->addWidget(m_MeshSelector);
+
+	layout->addSpacing(8);
+	layout->addWidget(new QLabel(editor::LodSelector::Label(m_Host.GetLanguageResolver()), column));
+	m_LodSelector = new editor::LodSelector(m_Host.GetLanguageResolver(), column);
+	m_LodSelector->setObjectName(QStringLiteral("BlendSpaceLodSelector"));
+	editor::Bind(*m_LodSelector, *m_Preview);
+	layout->addWidget(m_LodSelector);
 
 	// Whether a space plants -- across the parameter, and at the wrap of a clip that does not close
 	// -- is a question about the space, so the ground it is judged on is here too.

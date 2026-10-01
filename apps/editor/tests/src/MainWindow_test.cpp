@@ -95,6 +95,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <core/file/file.h>
 #include <filesystem>
 #include <fstream>
@@ -1805,6 +1806,59 @@ TEST_CASE(
 		CHECK(preview->GetShownLods() == nullptr);
 		CHECK(shownChanges == 3);
 	}
+}
+
+TEST_CASE(
+	"The Animation and Blend Space editors list and pin the levels of the rig they show",
+	"[mainwindow][render][animation][blendspace][lod]")
+{
+	const HeadlessEditor editor;
+	MainWindow           window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	window.show();
+	QCoreApplication::processEvents();
+
+	// One selector per panel, each over that panel's own preview: a level pinned in one is not
+	// pinned in the other. The generator holds names, not widgets: Catch keeps it across the
+	// runs of this body, and the window is built afresh for each.
+	auto* animation = window.findChild<AnimationEditorWindow*>();
+	auto* blend     = window.findChild<BlendSpaceEditorWindow*>();
+	REQUIRE(animation != nullptr);
+	REQUIRE(blend != nullptr);
+
+	const char* selectorName = GENERATE("AnimationLodSelector", "BlendSpaceLodSelector");
+	INFO(selectorName);
+	const bool onAnimation =
+		QString::fromLatin1(selectorName) == QStringLiteral("AnimationLodSelector");
+	QWidget* panelWindow = onAnimation ? static_cast<QWidget*>(animation) : blend;
+
+	auto* preview = panelWindow->findChild<AnimationPreviewWindow*>();
+	REQUIRE(preview != nullptr);
+	auto* selector = panelWindow->findChild<QComboBox*>(QString::fromLatin1(selectorName));
+	REQUIRE(selector != nullptr);
+
+	// Nothing shown: Auto alone, and nothing to pin.
+	CHECK(selector->count() == 1);
+	CHECK_FALSE(selector->isEnabled());
+
+	preview->LoadMesh(editor.LodRigInData());
+	CHECK(selector->isEnabled());
+	REQUIRE(selector->count() == 3);
+	CHECK(selector->itemText(2) == QStringLiteral("LOD 1"));
+	CHECK(selector->currentText().startsWith(QStringLiteral("Auto: LOD")));
+
+	selector->setCurrentIndex(2);
+	CHECK(preview->GetForcedLod() == 1u);
+	CHECK(selector->itemText(0) == QStringLiteral("Auto"));
+
+	// The other panel's preview is untouched.
+	QWidget* otherPanel = onAnimation ? static_cast<QWidget*>(blend) : animation;
+	auto*    other      = otherPanel->findChild<AnimationPreviewWindow*>();
+	REQUIRE(other != nullptr);
+	CHECK_FALSE(other->GetForcedLod().has_value());
+
+	selector->setCurrentIndex(0);
+	CHECK_FALSE(preview->GetForcedLod().has_value());
+	CHECK(selector->currentText().startsWith(QStringLiteral("Auto: LOD")));
 }
 
 TEST_CASE(
