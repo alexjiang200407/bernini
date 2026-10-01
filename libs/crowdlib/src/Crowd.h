@@ -7,12 +7,16 @@
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/cmd/QueuePoint.h>
+#include <bgpu/cmd/TimestampHeap.h>
 #include <bgpu/device/Device.h>
 #include <bgpu/pipeline/ComputeKernel.h>
 #include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/NativeBufferDesc.h>
 #include <bgpu/resource/Readback.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <core/ref/RefCounter.h>
+#include <core/ref/SharedRef.h>
 #include <crowdlib/CrowdDesc.h>
 #include <crowdlib/GroupDesc.h>
 #include <crowdlib/GroupHandle.h>
@@ -20,8 +24,10 @@
 #include <crowdlib/GroupReport.h>
 #include <crowdlib/ICrowd.h>
 #include <crowdlib/ObstacleSegment.h>
+#include <crowdlib/RenderTick.h>
 #include <crowdlib/debug/CrowdReadback.h>
 #include <cstdint>
+#include <deque>
 #include <optional>
 #include <span>
 #include <vector>
@@ -95,7 +101,29 @@ namespace crowd
 		[[nodiscard]] std::optional<debug::CrowdReadback>
 		ReadDebugAgents() const override;
 
+		[[nodiscard]] bgpu::NativeBufferDesc
+		GetRenderRing() const override;
+
+		[[nodiscard]] std::optional<RenderTick>
+		GetRenderTick(uint64_t tick) const override;
+
+		void
+		ReleaseRenderReads(uint64_t throughTick, const bgpu::QueuePoint& readerDone) override;
+
+		[[nodiscard]] uint64_t
+		GetReleasedRenderTick() const noexcept override;
+
+		[[nodiscard]] std::optional<float>
+		GetTickGpuMilliseconds(uint64_t tick) const override;
+
 	private:
+		/** A reader's ReleaseRenderReads: every tick through `throughTick` is free once `done`. */
+		struct RenderRelease
+		{
+			uint64_t         throughTick = 0;
+			bgpu::QueuePoint done;
+		};
+
 		/** One tick in the ring: what it recorded into, and which group each readback row is. */
 		struct TickSlot
 		{
@@ -112,6 +140,9 @@ namespace crowd
 			// Mapped on first read, and unmapped before the slot is recorded into again.
 			const void* mappedGroupSums = nullptr;
 			const void* mappedAgents    = nullptr;
+
+			// Whether the tick recorded a timestamp pair: a tick with no agents dispatches nothing.
+			bool timed = false;
 		};
 
 		/** Everything made from the device after its queue; on a throw, what was made is released. */
@@ -130,6 +161,14 @@ namespace crowd
 
 		void
 		Unmap(TickSlot& slot) const noexcept;
+
+		void
+		RequireRenderRing() const;
+
+		// Before the tick's list opens, as a wait must on Metal: waits for the reader to be done
+		// with the records the tick overwrites.
+		void
+		WaitForRenderReader(uint64_t tick);
 
 		// Declared first so it is released last, after every queue on it is drained.
 		bgpu::GpuContextRef m_Context;
@@ -158,5 +197,14 @@ namespace crowd
 		mutable std::vector<TickSlot> m_Slots;
 		uint64_t                      m_SubmittedTick = 0;
 		mutable uint64_t              m_CompletedTick = 0;
+
+		// Two timestamps per tick slot, around the tick's dispatches.
+		core::SharedRef<bgpu::ITimestampHeap> m_TickTimer;
+
+		// Null without a render ring. One RenderTick per ring slot, the tick it holds by `tick`.
+		bgpu::BufferHandle        m_RenderRing;
+		std::vector<RenderTick>   m_RenderTicks;
+		std::deque<RenderRelease> m_RenderReleases;
+		uint64_t                  m_ReleasedRenderTick = 0;
 	};
 }

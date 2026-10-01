@@ -30,8 +30,10 @@ while (running)
 * **The async queue is a second queue, on both backends.** On D3D12 it is a
   `D3D12_COMMAND_LIST_TYPE_COMPUTE` queue with a fence. Metal has no compute-typed queue; its form of
   the same thing is a second `MTLCommandQueue`, whose command buffers the GPU may run concurrently
-  with every other queue's, with a shared event as its fence. Nothing on either queue waits on the
-  other, and the result reaches the CPU by a readback, never through a buffer the renderer reads.
+  with every other queue's, with a shared event as its fence. Without a render ring nothing on
+  either queue waits on the other, and results reach the CPU by readback alone. With one, the
+  renderer reads the ring's buffer, and the crowd's queue waits on the renderer's release point
+  before it overwrites a tick (§ The crowd interface).
 * **Kernels compile through the context's sessions.** `crowd.CSStep`, `crowd.CSReduce` and
   `crowd.CSReadAgents` are staged under `./shaders/src/crowd/` beside the executable, like every
   engine module, and built as `bgpu` compute kernels on the crowd's device: DXIL on D3D12, MSL on
@@ -126,6 +128,21 @@ each refuses; what follows is why it is shaped as it is.
   (`tests/src/FakeCrowd.h`) can promise: a tick held in flight, or a group reported standing at its
   goal the tick it is ordered there. The fake keeps its own validation rather than sharing
   `CrowdPlan`'s, so the suite checks two implementations, not one twice.
+* **A render ring for a reader on another queue.** With `CrowdDesc::renderRingTicks`, every tick
+  also has a slot of `maxAgents` `RenderAgent` records (`<crowdlib/RenderAgent.h>`): position,
+  facing, the agent's index in the tick before (`source`, or `c_RenderSpawned`) and its type. The
+  ring is one buffer for the crowd's life (`GetRenderRing`), which a renderer imports once;
+  `GetRenderTick(t)` says where tick `t`'s records are and the queue point that wrote them, from its
+  `Step` until the ring is stepped past it. The ring is at least `maxTicksInFlight + 3` ticks: those
+  in flight, the two a reader interpolates between and the one before them its motion follows
+  `source` back to. A reader hands ticks back with `ReleaseRenderReads(through, readerDone)`; the
+  `Step` that overwrites one waits for `readerDone` on the crowd's queue, and one that would
+  overwrite a tick not yet released cannot run (`CanStep`). Nothing waits on the CPU either way: a
+  slow reader stalls the crowd's stepping, by as many ticks as the ring holds past its minimum.
+  **Nothing writes the records yet**: the ring, its bookkeeping and the waits are in place, and the
+  step's write of each agent's record is not.
+* **Tick timing.** Every tick that dispatches is timed on the crowd's queue, and
+  `GetTickGpuMilliseconds(t)` reads it back while `t` is one of the last `maxTicksInFlight + 1`.
 
 ## Threading & Synchronization
 

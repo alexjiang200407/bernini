@@ -48,11 +48,17 @@ target_include_directories(crowdlib_objects
 set(CROWDLIB_IDL_SRC_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/shaders/src/crowd/idl")
 set(CROWDLIB_IDL_OUT_ROOT "${CMAKE_BINARY_DIR}/generated/crowdlib")
 
-# Public: namespace crowd::debug, emitted into include/crowdlib/debug and committed. --public refuses
-# a struct whose layout differs by backend, so every build writes the same bytes.
+# Public: emitted into the include tree and committed. --public refuses a struct whose layout
+# differs by backend, so every build writes the same bytes. The debug readback goes to
+# include/crowdlib/debug, namespace crowd::debug; what a renderer reads, to include/crowdlib,
+# namespace crowd.
 set(CROWDLIB_IDL_PUBLIC_OUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/crowdlib/debug")
 set(CROWDLIB_IDL_PUBLIC_SOURCES
 	AgentReadback.slang
+)
+set(CROWDLIB_IDL_RENDER_OUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/crowdlib")
+set(CROWDLIB_IDL_RENDER_SOURCES
+	RenderAgent.slang
 )
 
 file(GLOB CROWDLIB_IDL_SOURCES CONFIGURE_DEPENDS "${CROWDLIB_IDL_SRC_ROOT}/*.slang")
@@ -70,6 +76,9 @@ foreach(src ${CROWDLIB_IDL_SOURCES})
 	if(file IN_LIST CROWDLIB_IDL_PUBLIC_SOURCES)
 		set(cpp_args --cpp-out-dir "${CROWDLIB_IDL_PUBLIC_OUT_DIR}" --namespace "crowd::debug" --public)
 		set(output "${CROWDLIB_IDL_PUBLIC_OUT_DIR}/${name}.h")
+	elseif(file IN_LIST CROWDLIB_IDL_RENDER_SOURCES)
+		set(cpp_args --cpp-out-dir "${CROWDLIB_IDL_RENDER_OUT_DIR}" --namespace "crowd" --public)
+		set(output "${CROWDLIB_IDL_RENDER_OUT_DIR}/${name}.h")
 	else()
 		set(cpp_args --cpp-out-dir "${CROWDLIB_IDL_OUT_ROOT}/idl" --namespace "crowd::idl")
 		set(output "${CROWDLIB_IDL_OUT_ROOT}/idl/${name}.h")
