@@ -187,6 +187,7 @@ TEST_CASE("A resource pool of zero refuses every create from it", "[compute][ren
 		auto depthDesc   = bgpu::TextureDesc();
 		depthDesc.format = bgpu::Format::D32;
 		depthDesc.usage  = bgpu::TextureUsageFlag::kDepthStencil;
+		depthDesc.clearValue.SetDepthStencil(1.0f, 0);
 		const auto depth = rm->CreateTexture(depthDesc);
 		REQUIRE(rm->ValidTextureHandle(depth));
 
