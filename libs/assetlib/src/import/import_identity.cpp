@@ -9,6 +9,7 @@
 #include <random>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace assetlib
 {
@@ -76,7 +77,7 @@ namespace assetlib
 		}
 		core::throw_runtime_error(
 			"import identity: unsupported output kind {}",
-			static_cast<uint32_t>(kind));
+			std::to_underlying(kind));
 	}
 
 	std::string

@@ -9,6 +9,7 @@
 #include <core/err/util.h>
 #include <cstdint>
 #include <string>
+#include <utility>
 
 namespace bgpu
 {
@@ -272,15 +273,15 @@ namespace bgpu
 	MTL::ColorWriteMask
 	ConvertColorWriteMask(ColorMask mask) noexcept
 	{
-		const auto bits = static_cast<uint8_t>(mask);
+		const auto bits = std::to_underlying(mask);
 		auto       out  = static_cast<MTL::ColorWriteMask>(MTL::ColorWriteMaskNone);
-		if (bits & static_cast<uint8_t>(ColorMask::kRed))
+		if (bits & std::to_underlying(ColorMask::kRed))
 			out |= MTL::ColorWriteMaskRed;
-		if (bits & static_cast<uint8_t>(ColorMask::kGreen))
+		if (bits & std::to_underlying(ColorMask::kGreen))
 			out |= MTL::ColorWriteMaskGreen;
-		if (bits & static_cast<uint8_t>(ColorMask::kBlue))
+		if (bits & std::to_underlying(ColorMask::kBlue))
 			out |= MTL::ColorWriteMaskBlue;
-		if (bits & static_cast<uint8_t>(ColorMask::kAlpha))
+		if (bits & std::to_underlying(ColorMask::kAlpha))
 			out |= MTL::ColorWriteMaskAlpha;
 		return out;
 	}

@@ -41,6 +41,7 @@
 #include <cstdint>
 #include <iterator>
 #include <span>
+#include <utility>
 
 // Drives the CullInstances kernel against a crafted scene: unit-radius spheres placed at known
 // points around a known camera, one instance each. Reading back the visibility word proves the
@@ -146,7 +147,7 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	{
 		auto mesh  = bgl::idl::MeshInstance();
 		mesh.geom  = geomHandle;
-		mesh.flags = p.hidden ? static_cast<uint32_t>(bgl::MeshInstanceFlag::kHidden) : 0u;
+		mesh.flags = p.hidden ? std::to_underlying(bgl::MeshInstanceFlag::kHidden) : 0u;
 		bgl::WriteInstanceTransform(mesh, glm::translate(glm::mat4(1.0f), p.position));
 
 		const auto meshHandle = meshBuffer.Add(mesh);

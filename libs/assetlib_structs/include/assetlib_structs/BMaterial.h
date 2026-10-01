@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace assetlib
@@ -65,7 +66,7 @@ namespace assetlib
 		kCount,
 	};
 
-	inline constexpr size_t c_LooseChannelCount = static_cast<size_t>(PbrChannel::kCount);
+	inline constexpr size_t c_LooseChannelCount = std::to_underlying(PbrChannel::kCount);
 
 	/** A contiguous run of `routes` that the bake composites into one map. */
 	struct ChannelGroup

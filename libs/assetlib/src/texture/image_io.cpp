@@ -112,7 +112,7 @@ namespace assetlib
 			default:
 				core::throw_runtime_error(
 					"assetlib: no block info for Vulkan format {}",
-					static_cast<uint32_t>(vk));
+					std::to_underlying(vk));
 			}
 		}
 
@@ -300,7 +300,7 @@ namespace assetlib
 				"assetlib::loadKTX2: cannot decode '{}' to RGBA8: it is already block-compressed "
 				"(Vulkan format {})",
 				path.string(),
-				static_cast<uint32_t>(vk));
+				std::to_underlying(vk));
 		}
 
 		const BlockInfo block = blockInfo(static_cast<VkFormat>(texture->vkFormat));
@@ -458,7 +458,7 @@ namespace assetlib
 			core::throw_runtime_error(
 				"assetlib::loadKTX2Preview: '{}' has no CPU decode path for Vulkan format {}",
 				path.string(),
-				static_cast<uint32_t>(stored));
+				std::to_underlying(stored));
 		}
 
 		ktxTexture*    base = ktxTexture(owner.tex);
@@ -559,10 +559,10 @@ namespace assetlib
 		const uint32_t layers = (std::max)(1u, image.arraySize / faces);
 
 		ktxTextureCreateInfo info{};
-		info.vkFormat   = static_cast<uint32_t>(srgb ? toSrgbVk(image.vkFormat) : image.vkFormat);
-		info.baseWidth  = image.width;
-		info.baseHeight = image.height;
-		info.baseDepth  = 1;
+		info.vkFormat        = std::to_underlying(srgb ? toSrgbVk(image.vkFormat) : image.vkFormat);
+		info.baseWidth       = image.width;
+		info.baseHeight      = image.height;
+		info.baseDepth       = 1;
 		info.numDimensions   = 2;
 		info.numLevels       = image.mipLevels;
 		info.numLayers       = layers;

@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace assetlib;
@@ -96,7 +97,7 @@ TEST_CASE("a ranged read fetches the asked-for chunks and the key alone", "[cach
 	const fs::path at = fs::temp_directory_path() / "bernini_cache_ranged.bin";
 	core::file::write_atomic(at, SampleEntry(SampleSource()));
 
-	const std::array<uint32_t, 1> ids = { { static_cast<uint32_t>(Id::kA) } };
+	const std::array<uint32_t, 1> ids = { { std::to_underlying(Id::kA) } };
 	const cache::CacheData data = cache::readCacheChunksFromFile(at, 0xABCD1234u, 42, ids, "test");
 	CHECK(data.key.source == SampleSource());
 	CHECK(data.Read<uint32_t>(Id::kA, "test") == std::vector<uint32_t>{ 1, 2, 3 });

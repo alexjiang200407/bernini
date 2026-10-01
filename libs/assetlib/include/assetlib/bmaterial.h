@@ -1,6 +1,7 @@
 #pragma once
 #include <assetlib_structs/BMaterial.h>
 #include <cstddef>
+#include <utility>
 
 namespace assetlib
 {
@@ -14,7 +15,7 @@ namespace assetlib
 	[[nodiscard]] inline constexpr size_t
 	channelIndex(PbrChannel channel) noexcept
 	{
-		return static_cast<size_t>(channel);
+		return std::to_underlying(channel);
 	}
 
 	/** The index of the `component`-th channel of `group` in `PbrParams::routes`. */

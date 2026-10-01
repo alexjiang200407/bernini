@@ -15,6 +15,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <utility>
 
 // What a (geom, material kind, layer) resolves to and draws with, and the door predicate that
 // decides which keys can exist. No device: this is what every door, every counting-sort bucket and
@@ -82,7 +83,7 @@ TEST_CASE("every drawable key has a bucket of its own", "[drawbucket]")
 	// collapse to their opaque bucket (DrawBucketTable_test), so they are resolved once, opaque.
 	std::set<uint32_t> seen;
 	uint32_t           keys  = 0;
-	const uint32_t     kinds = static_cast<uint32_t>(bgl::MaterialType::kGameStart) + c_Surfaces;
+	const uint32_t     kinds = std::to_underlying(bgl::MaterialType::kGameStart) + c_Surfaces;
 	for (uint32_t kind = 0; kind < kinds; ++kind)
 	{
 		const auto material = static_cast<bgl::MaterialType>(kind);

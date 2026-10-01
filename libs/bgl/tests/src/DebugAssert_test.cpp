@@ -23,6 +23,7 @@
 #include <bgpu/types/QueueType.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #if defined(BERNINI_GPU_DEBUG)
@@ -469,12 +470,12 @@ TEST_CASE("Dereferencing a null offset is reported", "[debug][gpu-assert][comput
 		std::count(
 			raised.begin(),
 			raised.end(),
-			static_cast<uint32_t>(bgpu::idl::ErrorCode::kNullEntryDeref)) == 1);
+			std::to_underlying(bgpu::idl::ErrorCode::kNullEntryDeref)) == 1);
 	CHECK(
 		std::count(
 			raised.begin(),
 			raised.end(),
-			static_cast<uint32_t>(bgpu::idl::ErrorCode::kNullRangeDeref)) == 1);
+			std::to_underlying(bgpu::idl::ErrorCode::kNullRangeDeref)) == 1);
 
 	resourceManager->UnmapReadback(rb);
 

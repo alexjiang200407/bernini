@@ -601,7 +601,7 @@ namespace game
 		if (material.shadingModel != assetlib::ShadingModel::kPbr && !surface)
 			throw bgl::SceneError(
 				"AssetManager: shading model " +
-				std::to_string(static_cast<uint32_t>(material.shadingModel)) +
+				std::to_string(std::to_underlying(material.shadingModel)) +
 				" is not supported by the renderer");
 
 		// The disk decides: a triplet that is missing or older than the sources it was composited from

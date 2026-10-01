@@ -118,7 +118,7 @@ namespace assetlib
 					"assetlib::bakeMaterial: source '{}' decoded to an unexpected format (Vulkan "
 					"format {})",
 					name,
-					static_cast<uint32_t>(image.vkFormat));
+					std::to_underlying(image.vkFormat));
 			if (image.subresources.empty())
 				core::throw_runtime_error(
 					"assetlib::bakeMaterial: source '{}' has no image data",

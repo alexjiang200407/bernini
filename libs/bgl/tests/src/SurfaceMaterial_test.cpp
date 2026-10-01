@@ -127,7 +127,7 @@ TEST_CASE("A surface material draws what the engine's own PBR path draws", "[sur
 	// Slot 1: the staged directory is filename-ordered and Band sits ahead of PbrLike.
 	CHECK(
 		material.materialType ==
-		static_cast<MaterialType>(static_cast<uint32_t>(MaterialType::kGameStart) + 1u));
+		static_cast<MaterialType>(std::to_underlying(MaterialType::kGameStart) + 1u));
 
 	auto sphere = scene->AddSphereGeom(32, 32, 5.0f, material);
 	view->CreateStaticMeshInstance(sphere, glm::mat4(1.0f));

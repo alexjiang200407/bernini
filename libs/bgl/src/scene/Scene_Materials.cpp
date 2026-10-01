@@ -511,11 +511,11 @@ namespace bgl
 		// assetlib_structs is data, so a question about a container is answered a library up.
 		static_assert(
 			static_cast<size_t>(idl::PbrChannel::kBaseColorR) ==
-					static_cast<size_t>(assetlib::PbrChannel::kBaseColorR) &&
+					std::to_underlying(assetlib::PbrChannel::kBaseColorR) &&
 				static_cast<size_t>(idl::PbrChannel::kAo) ==
-					static_cast<size_t>(assetlib::PbrChannel::kAo) &&
+					std::to_underlying(assetlib::PbrChannel::kAo) &&
 				static_cast<size_t>(idl::PbrChannel::kNormalX) ==
-					static_cast<size_t>(assetlib::PbrChannel::kNormalX),
+					std::to_underlying(assetlib::PbrChannel::kNormalX),
 			"idl::PbrChannel and assetlib::PbrChannel must index BMaterial::routes identically");
 
 		auto material = idl::LoosePbrMaterial();
