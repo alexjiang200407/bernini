@@ -19,6 +19,7 @@
 #include <filesystem>
 #include <functional>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 using namespace assetlib;
@@ -317,9 +318,9 @@ TEST_CASE("kHashed survives a .bmaterial round trip", "[bmaterial][alphatest][ha
 
 	// The values the enum already had must not have moved, or every material baked before this
 	// reads as a different mode.
-	CHECK(static_cast<uint32_t>(AlphaMode::kOpaque) == 0u);
-	CHECK(static_cast<uint32_t>(AlphaMode::kMask) == 1u);
-	CHECK(static_cast<uint32_t>(AlphaMode::kBlend) == 2u);
+	CHECK(std::to_underlying(AlphaMode::kOpaque) == 0u);
+	CHECK(std::to_underlying(AlphaMode::kMask) == 1u);
+	CHECK(std::to_underlying(AlphaMode::kBlend) == 2u);
 }
 
 TEST_CASE("a stale .bmaterial is rejected, not silently misread", "[bmaterial][alphatest]")

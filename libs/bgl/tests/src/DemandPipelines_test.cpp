@@ -23,6 +23,7 @@
 #include <core/glm.h>
 #include <cstdint>
 #include <optional>
+#include <utility>
 
 // Bucket pipelines are built by the first Draw that demands them, and never for a bucket nothing
 // demands. The initialized set is read back from the RenderContext and compared against the view's
@@ -217,7 +218,7 @@ TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand
 
 	// Every key a material can resolve to: each tier's every layer of every engine kind and every
 	// registered surface's.
-	const uint32_t       kinds = static_cast<uint32_t>(bgl::MaterialType::kGameStart) +
+	const uint32_t       kinds = std::to_underlying(bgl::MaterialType::kGameStart) +
 	                             static_cast<uint32_t>(gfx->GetSurfaceTypes().size());
 	bgl::DrawBucketTable table;
 	for (uint32_t kind = 0; kind < kinds; ++kind)

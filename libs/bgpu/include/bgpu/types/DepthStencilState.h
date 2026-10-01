@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <utility>
 namespace bgpu
 {
 	enum class StencilOp : uint8_t
@@ -36,29 +37,33 @@ namespace bgpu
 			StencilOp      passOp      = StencilOp::kKeep;
 			ComparisonFunc stencilFunc = ComparisonFunc::kAlways;
 
-			constexpr StencilOpDesc&
-			SetFailOp(StencilOp value)
+			template <typename Self>
+			constexpr Self&&
+			SetFailOp(this Self&& self, StencilOp value)
 			{
-				failOp = value;
-				return *this;
+				self.failOp = value;
+				return std::forward<Self>(self);
 			}
-			constexpr StencilOpDesc&
-			SetDepthFailOp(StencilOp value)
+			template <typename Self>
+			constexpr Self&&
+			SetDepthFailOp(this Self&& self, StencilOp value)
 			{
-				depthFailOp = value;
-				return *this;
+				self.depthFailOp = value;
+				return std::forward<Self>(self);
 			}
-			constexpr StencilOpDesc&
-			SetPassOp(StencilOp value)
+			template <typename Self>
+			constexpr Self&&
+			SetPassOp(this Self&& self, StencilOp value)
 			{
-				passOp = value;
-				return *this;
+				self.passOp = value;
+				return std::forward<Self>(self);
 			}
-			constexpr StencilOpDesc&
-			SetStencilFunc(ComparisonFunc value)
+			template <typename Self>
+			constexpr Self&&
+			SetStencilFunc(this Self&& self, ComparisonFunc value)
 			{
-				stencilFunc = value;
-				return *this;
+				self.stencilFunc = value;
+				return std::forward<Self>(self);
 			}
 		};
 
@@ -73,115 +78,131 @@ namespace bgpu
 		StencilOpDesc  frontFaceStencil;
 		StencilOpDesc  backFaceStencil;
 
-		constexpr DepthStencilState&
-		SetDepthTestEnable(bool value)
+		template <typename Self>
+		constexpr Self&&
+		SetDepthTestEnable(this Self&& self, bool value)
 		{
-			depthTestEnable = value;
-			return *this;
+			self.depthTestEnable = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr DepthStencilState&
-		EnableDepthTest()
+		template <typename Self>
+		constexpr Self&&
+		EnableDepthTest(this Self&& self)
 		{
-			depthTestEnable = true;
-			return *this;
+			self.depthTestEnable = true;
+			return std::forward<Self>(self);
 		}
 
-		constexpr DepthStencilState&
-		DisableDepthTest()
+		template <typename Self>
+		constexpr Self&&
+		DisableDepthTest(this Self&& self)
 		{
-			depthTestEnable = false;
-			return *this;
+			self.depthTestEnable = false;
+			return std::forward<Self>(self);
 		}
 
-		constexpr DepthStencilState&
-		SetDepthWriteEnable(bool value)
+		template <typename Self>
+		constexpr Self&&
+		SetDepthWriteEnable(this Self&& self, bool value)
 		{
-			depthWriteEnable = value;
-			return *this;
+			self.depthWriteEnable = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr DepthStencilState&
-		EnableDepthWrite()
+		template <typename Self>
+		constexpr Self&&
+		EnableDepthWrite(this Self&& self)
 		{
-			depthWriteEnable = true;
-			return *this;
+			self.depthWriteEnable = true;
+			return std::forward<Self>(self);
 		}
-		constexpr DepthStencilState&
-		DisableDepthWrite()
+		template <typename Self>
+		constexpr Self&&
+		DisableDepthWrite(this Self&& self)
 		{
-			depthWriteEnable = false;
-			return *this;
-		}
-
-		constexpr DepthStencilState&
-		SetDepthFunc(ComparisonFunc value)
-		{
-			depthFunc = value;
-			return *this;
+			self.depthWriteEnable = false;
+			return std::forward<Self>(self);
 		}
 
-		constexpr DepthStencilState&
-		SetStencilEnable(bool value)
+		template <typename Self>
+		constexpr Self&&
+		SetDepthFunc(this Self&& self, ComparisonFunc value)
 		{
-			stencilEnable = value;
-			return *this;
+			self.depthFunc = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr DepthStencilState&
-		EnableStencil()
+		template <typename Self>
+		constexpr Self&&
+		SetStencilEnable(this Self&& self, bool value)
 		{
-			stencilEnable = true;
-			return *this;
+			self.stencilEnable = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr DepthStencilState&
-		DisableStencil()
+		template <typename Self>
+		constexpr Self&&
+		EnableStencil(this Self&& self)
 		{
-			stencilEnable = false;
-			return *this;
+			self.stencilEnable = true;
+			return std::forward<Self>(self);
 		}
 
-		constexpr DepthStencilState&
-		SetStencilReadMask(uint8_t value)
+		template <typename Self>
+		constexpr Self&&
+		DisableStencil(this Self&& self)
 		{
-			stencilReadMask = value;
-			return *this;
+			self.stencilEnable = false;
+			return std::forward<Self>(self);
 		}
 
-		constexpr DepthStencilState&
-		SetStencilWriteMask(uint8_t value)
+		template <typename Self>
+		constexpr Self&&
+		SetStencilReadMask(this Self&& self, uint8_t value)
 		{
-			stencilWriteMask = value;
-			return *this;
+			self.stencilReadMask = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr DepthStencilState&
-		SetStencilRefValue(uint8_t value)
+		template <typename Self>
+		constexpr Self&&
+		SetStencilWriteMask(this Self&& self, uint8_t value)
 		{
-			stencilRefValue = value;
-			return *this;
+			self.stencilWriteMask = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr DepthStencilState&
-		SetFrontFaceStencil(const StencilOpDesc& value)
+		template <typename Self>
+		constexpr Self&&
+		SetStencilRefValue(this Self&& self, uint8_t value)
 		{
-			frontFaceStencil = value;
-			return *this;
+			self.stencilRefValue = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr DepthStencilState&
-		SetBackFaceStencil(const StencilOpDesc& value)
+		template <typename Self>
+		constexpr Self&&
+		SetFrontFaceStencil(this Self&& self, const StencilOpDesc& value)
 		{
-			backFaceStencil = value;
-			return *this;
+			self.frontFaceStencil = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr DepthStencilState&
-		SetDynamicStencilRef(bool value)
+		template <typename Self>
+		constexpr Self&&
+		SetBackFaceStencil(this Self&& self, const StencilOpDesc& value)
 		{
-			dynamicStencilRef = value;
-			return *this;
+			self.backFaceStencil = value;
+			return std::forward<Self>(self);
+		}
+
+		template <typename Self>
+		constexpr Self&&
+		SetDynamicStencilRef(this Self&& self, bool value)
+		{
+			self.dynamicStencilRef = value;
+			return std::forward<Self>(self);
 		}
 	};
 }

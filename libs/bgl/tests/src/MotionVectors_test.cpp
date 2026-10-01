@@ -34,6 +34,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <ranges>
 #include <vector>
 
 namespace
@@ -495,11 +496,10 @@ TEST_CASE("The jitter sequence walks one pixel and repeats", "[jitter]")
 	const float pixelX = 2.0f / c_W;
 	const float pixelY = 2.0f / c_H;
 
-	std::vector<glm::vec2> offsets;
-	for (uint64_t frame = 0; frame < bgl::c_JitterSequenceLength; ++frame)
-	{
-		offsets.push_back(bgl::HaltonJitter(frame, c_W, c_H));
-	}
+	const auto offsets =
+		std::views::iota(uint64_t{ 0 }, bgl::c_JitterSequenceLength) |
+		std::views::transform([](uint64_t frame) { return bgl::HaltonJitter(frame, c_W, c_H); }) |
+		std::ranges::to<std::vector>();
 
 	auto mean = glm::vec2(0.0f);
 	for (const glm::vec2& offset : offsets)

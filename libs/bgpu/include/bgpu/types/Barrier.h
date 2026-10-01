@@ -1,6 +1,7 @@
 #pragma once
 #include <core/containers/enum_set.h>
 #include <cstdint>
+#include <utility>
 
 namespace bgpu
 {
@@ -23,15 +24,13 @@ namespace bgpu
 	constexpr inline BarrierSyncFlag
 	operator|(BarrierSyncFlag lhs, BarrierSyncFlag rhs)
 	{
-		return static_cast<BarrierSyncFlag>(
-			static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
+		return static_cast<BarrierSyncFlag>(std::to_underlying(lhs) | std::to_underlying(rhs));
 	}
 
 	constexpr inline BarrierSyncFlag
 	operator&(BarrierSyncFlag lhs, BarrierSyncFlag rhs)
 	{
-		return static_cast<BarrierSyncFlag>(
-			static_cast<uint32_t>(lhs) & static_cast<uint32_t>(rhs));
+		return static_cast<BarrierSyncFlag>(std::to_underlying(lhs) & std::to_underlying(rhs));
 	}
 
 	enum class BarrierAccessFlag : uint32_t
@@ -60,15 +59,13 @@ namespace bgpu
 	constexpr inline BarrierAccessFlag
 	operator|(BarrierAccessFlag lhs, BarrierAccessFlag rhs)
 	{
-		return static_cast<BarrierAccessFlag>(
-			static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
+		return static_cast<BarrierAccessFlag>(std::to_underlying(lhs) | std::to_underlying(rhs));
 	}
 
 	constexpr inline BarrierAccessFlag
 	operator&(BarrierAccessFlag lhs, BarrierAccessFlag rhs)
 	{
-		return static_cast<BarrierAccessFlag>(
-			static_cast<uint32_t>(lhs) & static_cast<uint32_t>(rhs));
+		return static_cast<BarrierAccessFlag>(std::to_underlying(lhs) & std::to_underlying(rhs));
 	}
 
 	enum class BarrierLayout : uint32_t

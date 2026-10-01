@@ -148,9 +148,7 @@ TEST_CASE(
 	const auto        bytes = AssetCodec<BMaterial>::Serialize(mat);
 	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
 	// One tab of indent is the top level of a canonical document.
-	CHECK(
-		out.find("\n\t\"geometryOcclusion\": \"Derived/SourceTextures/wall_ao.ktx2\"") !=
-		std::string::npos);
+	CHECK(out.contains("\n\t\"geometryOcclusion\": \"Derived/SourceTextures/wall_ao.ktx2\""));
 	CHECK(
 		AssetCodec<BMaterial>::Deserialize(bytes).pbr.geometryOcclusionTexture ==
 		mat.pbr.geometryOcclusionTexture);
@@ -162,7 +160,7 @@ TEST_CASE(
 	const std::string surfaceOut(
 		reinterpret_cast<const char*>(surfaceBytes.data()),
 		surfaceBytes.size());
-	CHECK(surfaceOut.find("geometryOcclusion") == std::string::npos);
+	CHECK(!surfaceOut.contains("geometryOcclusion"));
 
 	const std::string text =
 		R"({"shadingModel":"pbrSurface","surface":"Rim","geometryOcclusion":"a.ktx2"})";
@@ -181,7 +179,7 @@ TEST_CASE("a material without a geometry occlusion map writes no key for it", "[
 
 	const auto        bytes = AssetCodec<BMaterial>::Serialize(legacy);
 	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-	CHECK(out.find("geometryOcclusion") == std::string::npos);
+	CHECK(!out.contains("geometryOcclusion"));
 }
 
 TEST_CASE("a BMaterial round-trips its baked geometry occlusion map", "[bmaterial][io]")
@@ -196,9 +194,9 @@ TEST_CASE("a BMaterial round-trips its baked geometry occlusion map", "[bmateria
 
 	// The authored key keeps its meaning; the bake's output and its provenance live under `baked`
 	// beside the triplet.
-	CHECK(text.find(R"("geometryOcclusion")") != std::string_view::npos);
-	CHECK(text.find("Derived/SourceTextures/wall_ao.ktx2") != std::string_view::npos);
-	CHECK(text.find(R"("geometryOcclusionSource")") != std::string_view::npos);
+	CHECK(text.contains(R"("geometryOcclusion")"));
+	CHECK(text.contains("Derived/SourceTextures/wall_ao.ktx2"));
+	CHECK(text.contains(R"("geometryOcclusionSource")"));
 
 	const auto restored = AssetCodec<BMaterial>::Deserialize(bytes);
 	REQUIRE(restored.pbr.geometryOcclusionTexture == "Derived/SourceTextures/wall_ao.ktx2");
@@ -222,8 +220,8 @@ TEST_CASE("a BMaterial round-trips its baked geometry occlusion map", "[bmateria
 		const auto again = AssetCodec<BMaterial>::Serialize(old);
 		const auto out =
 			std::string_view(reinterpret_cast<const char*>(again.data()), again.size());
-		CHECK(out.find("geometryOcclusionSource") == std::string_view::npos);
-		CHECK(out.find("baked") == std::string_view::npos);
+		CHECK(!out.contains("geometryOcclusionSource"));
+		CHECK(!out.contains("baked"));
 	}
 }
 
@@ -304,7 +302,7 @@ TEST_CASE("a BMaterial round-trips its bake provenance", "[bmaterial][io]")
 		const auto bytes      = AssetCodec<BMaterial>::Serialize(unbaked);
 		const auto text =
 			std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-		CHECK(text.find("token") == std::string_view::npos);
+		CHECK(!text.contains("token"));
 		CHECK(AssetCodec<BMaterial>::Deserialize(bytes).pbr.bakeToken == 0);
 	}
 }
@@ -753,7 +751,7 @@ TEST_CASE("a material document preserves the keys this build does not know", "[b
 	// survives a reader that has never heard of it.
 	const auto        resaved = AssetCodec<BMaterial>::Serialize(material);
 	const std::string out(reinterpret_cast<const char*>(resaved.data()), resaved.size());
-	CHECK(out.find("\"sheenFactor\"") != std::string::npos);
+	CHECK(out.contains("\"sheenFactor\""));
 }
 
 // The layer is every model's, so its keys sit beside shadingModel rather than inside a model's
@@ -770,9 +768,9 @@ TEST_CASE("the layer's keys are the document's own, beside shadingModel", "[bmat
 	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
 
 	// One tab of indent is the top level of a canonical document.
-	CHECK(out.find("\n\t\"alphaCutoff\": 0.25,\n") != std::string::npos);
-	CHECK(out.find("\n\t\"alphaMode\": \"mask\",\n") != std::string::npos);
-	CHECK(out.find("\n\t\"doubleSided\": false,\n") != std::string::npos);
+	CHECK(out.contains("\n\t\"alphaCutoff\": 0.25,\n"));
+	CHECK(out.contains("\n\t\"alphaMode\": \"mask\",\n"));
+	CHECK(out.contains("\n\t\"doubleSided\": false,\n"));
 }
 
 TEST_CASE("a minimal hand-authored document defaults what it omits", "[bmaterial][io]")
@@ -819,8 +817,8 @@ TEST_CASE("unknown keys survive at every depth, the editor's save included", "[b
 
 	const auto        resaved = AssetCodec<BMaterial>::Serialize(material);
 	const std::string out(reinterpret_cast<const char*>(resaved.data()), resaved.size());
-	CHECK(out.find("\"sheenMap\"") != std::string::npos);
-	CHECK(out.find("\"blurRadius\"") != std::string::npos);
+	CHECK(out.contains("\"sheenMap\""));
+	CHECK(out.contains("\"blurRadius\""));
 
 	// And the round of the round-trip: the second read still holds both halves together.
 	const BMaterial again = AssetCodec<BMaterial>::Deserialize(resaved);
@@ -853,7 +851,7 @@ TEST_CASE("a preserved route outlives the channel it decorated", "[bmaterial][io
 
 	const auto        resaved = AssetCodec<BMaterial>::Serialize(material);
 	const std::string out(reinterpret_cast<const char*>(resaved.data()), resaved.size());
-	CHECK(out.find("\"blurRadius\"") != std::string::npos);
+	CHECK(out.contains("\"blurRadius\""));
 	CHECK(AssetCodec<BMaterial>::Serialize(AssetCodec<BMaterial>::Deserialize(resaved)) == resaved);
 }
 
@@ -879,12 +877,12 @@ TEST_CASE("a surface material round-trips its three keys", "[bmaterial][io][surf
 	const auto        bytes = AssetCodec<BMaterial>::Serialize(mat);
 	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
 
-	CHECK(out.find("\"shadingModel\": \"pbrSurface\"") != std::string::npos);
-	CHECK(out.find("\"surface\": \"Rim\"") != std::string::npos);
+	CHECK(out.contains("\"shadingModel\": \"pbrSurface\""));
+	CHECK(out.contains("\"surface\": \"Rim\""));
 
 	// A one-number parameter is written as a number rather than promoted to an array, so a
 	// hand-typed scalar comes back looking like one.
-	CHECK(out.find("\"rimPower\": 2.0") != std::string::npos);
+	CHECK(out.contains("\"rimPower\": 2.0"));
 
 	const BMaterial restored = AssetCodec<BMaterial>::Deserialize(bytes);
 
@@ -925,11 +923,11 @@ TEST_CASE("a surface material round-trips its three keys", "[bmaterial][io][surf
 	                                    "routes" })
 	{
 		INFO("the pbr key '" << key << "'");
-		CHECK(out.find(std::format("\n\t\"{}\"", key)) == std::string::npos);
+		CHECK(!out.contains(std::format("\n\t\"{}\"", key)));
 	}
 
 	// The parameter of that name is still there, one level down.
-	CHECK(out.find("\n\t\t\"baseColorFactor\"") != std::string::npos);
+	CHECK(out.contains("\n\t\t\"baseColorFactor\""));
 }
 
 // The other half of "the reader takes them": a document that is not drawn by a surface has no
@@ -956,10 +954,10 @@ TEST_CASE("a pbr material strips the surface keys", "[bmaterial][io][surface]")
 	const auto        bytes = AssetCodec<BMaterial>::Serialize(material);
 	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
 
-	CHECK(out.find("\"surface\"") == std::string::npos);
-	CHECK(out.find("\"parameters\"") == std::string::npos);
-	CHECK(out.find("\"rimPower\"") == std::string::npos);
-	CHECK(out.find("\"textures\"") == std::string::npos);
+	CHECK(!out.contains("\"surface\""));
+	CHECK(!out.contains("\"parameters\""));
+	CHECK(!out.contains("\"rimPower\""));
+	CHECK(!out.contains("\"textures\""));
 }
 
 // A parameter is one to four numbers. Anything else is a document nobody can pack, and it is
@@ -1001,8 +999,8 @@ TEST_CASE("a lit surface material round-trips its model", "[bmaterial][io][surfa
 	const auto        bytes = AssetCodec<BMaterial>::Serialize(mat);
 	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
 
-	CHECK(out.find("\"shadingModel\": \"litSurface\"") != std::string::npos);
-	CHECK(out.find("\"surface\": \"Band\"") != std::string::npos);
+	CHECK(out.contains("\"shadingModel\": \"litSurface\""));
+	CHECK(out.contains("\"surface\": \"Band\""));
 
 	const BMaterial restored = AssetCodec<BMaterial>::Deserialize(bytes);
 
@@ -1043,8 +1041,8 @@ TEST_CASE("a toon surface material round-trips its model", "[bmaterial][io][surf
 	const auto        bytes = AssetCodec<BMaterial>::Serialize(mat);
 	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
 
-	CHECK(out.find(std::format("\"shadingModel\": \"{}\"", name)) != std::string::npos);
-	CHECK(out.find("\"surface\": \"Flat\"") != std::string::npos);
+	CHECK(out.contains(std::format("\"shadingModel\": \"{}\"", name)));
+	CHECK(out.contains("\"surface\": \"Flat\""));
 
 	const BMaterial restored = AssetCodec<BMaterial>::Deserialize(bytes);
 

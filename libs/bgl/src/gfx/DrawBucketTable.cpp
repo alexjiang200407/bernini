@@ -3,6 +3,7 @@
 #include <core/err/util.h>
 #include <cstdint>
 #include <spdlog/spdlog.h>
+#include <utility>
 
 namespace bgl
 {
@@ -11,7 +12,7 @@ namespace bgl
 		uint64_t
 		PackKey(const GeometryStage geom, const MaterialType material, const LayerType layer)
 		{
-			return static_cast<uint64_t>(static_cast<uint32_t>(material)) |
+			return static_cast<uint64_t>(std::to_underlying(material)) |
 			       (static_cast<uint64_t>(static_cast<uint32_t>(geom)) << 32u) |
 			       (static_cast<uint64_t>(static_cast<uint32_t>(layer)) << 40u);
 		}
@@ -84,7 +85,7 @@ namespace bgl
 					"through the unlit fallback",
 					m_Ceiling,
 					static_cast<uint32_t>(geom),
-					static_cast<uint32_t>(material),
+					std::to_underlying(material),
 					static_cast<uint32_t>(layer));
 			}
 			return 0u;
@@ -92,9 +93,8 @@ namespace bgl
 
 		const auto bucket = static_cast<uint32_t>(m_Descs.size());
 		m_Descs.push_back(DrawBucketDesc{ geom, material, layer });
-		m_Flags[bucket] = layer == LayerType::kBlend ?
-		                      static_cast<uint32_t>(idl::DrawBucketFlag::kTransparent) :
-		                      0u;
+		m_Flags[bucket] =
+			layer == LayerType::kBlend ? std::to_underlying(idl::DrawBucketFlag::kTransparent) : 0u;
 		m_KeyToDrawBucket.emplace(key, bucket);
 
 		return bucket;
@@ -120,6 +120,6 @@ namespace bgl
 	DrawBucketTable::Transparent(const uint32_t bucket) const noexcept
 	{
 		core::ensure(bucket < Count(), "Transparent takes an allocated bucket");
-		return (m_Flags[bucket] & static_cast<uint32_t>(idl::DrawBucketFlag::kTransparent)) != 0u;
+		return (m_Flags[bucket] & std::to_underlying(idl::DrawBucketFlag::kTransparent)) != 0u;
 	}
 }

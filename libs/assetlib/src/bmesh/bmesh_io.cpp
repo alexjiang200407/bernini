@@ -233,8 +233,8 @@ namespace assetlib
 		if (fields.size() != fieldNames.size())
 			core::throw_runtime_error("bmesh: grass field and name counts disagree");
 		mesh.grassFields.fields.reserve(fields.size());
-		for (size_t i = 0; i < fields.size(); ++i)
-			mesh.grassFields.fields.push_back({ fieldNames[i], fields[i] });
+		for (const auto& [name, field] : std::views::zip(fieldNames, fields))
+			mesh.grassFields.fields.push_back({ name, field });
 		mesh.grassFields.chunks = reader.Read<GrassChunk>(ChunkId::kGrassChunks);
 		mesh.grassFields.clumps = reader.Read<GrassClump>(ChunkId::kGrassClumps);
 		validateGrassGeometry(mesh);
@@ -320,10 +320,8 @@ namespace assetlib
 		if (static_cast<uint64_t>(entry.firstLod) + entry.lodCount > mesh.lods.size())
 			return {};
 
-		auto minPixels = std::vector<float>();
-		for (uint32_t level = 0; level < entry.lodCount; ++level)
-			minPixels.push_back(mesh.lods[entry.firstLod + level].minPixels);
-		return minPixels;
+		return std::span(mesh.lods).subspan(entry.firstLod, entry.lodCount) |
+		       std::views::transform(&MeshLod::minPixels) | std::ranges::to<std::vector>();
 	}
 
 	uint64_t

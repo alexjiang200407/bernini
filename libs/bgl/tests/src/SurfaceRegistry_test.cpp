@@ -112,7 +112,7 @@ TEST_CASE("A surface directory fills slots in filename order", "[surface][regist
 	CHECK(types[3].name == "Tint");
 	CHECK(
 		types[3].kind ==
-		static_cast<MaterialType>(static_cast<uint32_t>(MaterialType::kGameStart) + 3u));
+		static_cast<MaterialType>(std::to_underlying(MaterialType::kGameStart) + 3u));
 	CHECK(types[4].name == "Unlit");
 	CHECK(types[4].shading == SurfaceShading::kLit);
 

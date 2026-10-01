@@ -18,6 +18,7 @@
 #include <span>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "io/mounted_io.h"
@@ -193,7 +194,7 @@ namespace assetlib
 
 	namespace
 	{
-		constexpr std::array<uint32_t, 1> c_WantedRefChunks = { { uint32_t(
+		constexpr std::array<uint32_t, 1> c_WantedRefChunks = { { std::to_underlying(
 			ChunkId::kSkeletonPath) } };
 
 		std::string

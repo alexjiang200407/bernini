@@ -504,3 +504,27 @@ TEST_CASE(
 	CHECK(desc.factory == nullptr);
 	CHECK(registry.panels.front().factory.get() == factory);
 }
+
+TEST_CASE(
+	"A descriptor chained on a temporary stays an rvalue, and on a named one returns it",
+	"[plugin][desc]")
+{
+	STATIC_CHECK(
+		std::is_same_v<
+			decltype(editor::MenuDesc().SetId("m").SetParentId("p")),
+			editor::MenuDesc&&>);
+	STATIC_CHECK(
+		std::is_same_v<
+			decltype(editor::ViewportDesc().SetTaaEnabled(false).SetRenderScale(0.5f)),
+			editor::ViewportDesc&&>);
+
+	// PanelDesc owns its factory, so only an rvalue chain can initialise one by value.
+	auto panel = editor::PanelDesc().SetId("p");
+	CHECK(panel.id == "p");
+
+	auto  menu    = editor::MenuDesc();
+	auto& chained = menu.SetId("m").SetParentId("p");
+	STATIC_CHECK(std::is_same_v<decltype(chained), editor::MenuDesc&>);
+	CHECK(&chained == &menu);
+	CHECK(menu.parentId == "p");
+}

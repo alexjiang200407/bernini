@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <utility>
 namespace bgpu
 {
 	enum class RasterFillMode : uint8_t
@@ -36,246 +37,280 @@ namespace bgpu
 		char    samplePositionsX[16]{};
 		char    samplePositionsY[16]{};
 
-		constexpr RasterState&
-		SetFillMode(RasterFillMode value)
+		template <typename Self>
+		constexpr Self&&
+		SetFillMode(this Self&& self, RasterFillMode value)
 		{
-			fillMode = value;
-			return *this;
+			self.fillMode = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		SetFillSolid()
+		template <typename Self>
+		constexpr Self&&
+		SetFillSolid(this Self&& self)
 		{
-			fillMode = RasterFillMode::kSolid;
-			return *this;
+			self.fillMode = RasterFillMode::kSolid;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		SetFillWireframe()
+		template <typename Self>
+		constexpr Self&&
+		SetFillWireframe(this Self&& self)
 		{
-			fillMode = RasterFillMode::kWireframe;
-			return *this;
+			self.fillMode = RasterFillMode::kWireframe;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		SetCullMode(RasterCullMode value)
+		template <typename Self>
+		constexpr Self&&
+		SetCullMode(this Self&& self, RasterCullMode value)
 		{
-			cullMode = value;
-			return *this;
+			self.cullMode = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		SetCullBack()
+		template <typename Self>
+		constexpr Self&&
+		SetCullBack(this Self&& self)
 		{
-			cullMode = RasterCullMode::kBack;
-			return *this;
+			self.cullMode = RasterCullMode::kBack;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		SetCullFront()
+		template <typename Self>
+		constexpr Self&&
+		SetCullFront(this Self&& self)
 		{
-			cullMode = RasterCullMode::kFront;
-			return *this;
+			self.cullMode = RasterCullMode::kFront;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		SetCullNone()
+		template <typename Self>
+		constexpr Self&&
+		SetCullNone(this Self&& self)
 		{
-			cullMode = RasterCullMode::kNone;
-			return *this;
+			self.cullMode = RasterCullMode::kNone;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		SetFrontCounterClockwise(bool value)
+		template <typename Self>
+		constexpr Self&&
+		SetFrontCounterClockwise(this Self&& self, bool value)
 		{
-			frontCounterClockwise = value;
-			return *this;
+			self.frontCounterClockwise = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		SetDepthClipEnable(bool value)
+		template <typename Self>
+		constexpr Self&&
+		SetDepthClipEnable(this Self&& self, bool value)
 		{
-			depthClipEnable = value;
-			return *this;
+			self.depthClipEnable = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		EnableDepthClip()
+		template <typename Self>
+		constexpr Self&&
+		EnableDepthClip(this Self&& self)
 		{
-			depthClipEnable = true;
-			return *this;
+			self.depthClipEnable = true;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		DisableDepthClip()
+		template <typename Self>
+		constexpr Self&&
+		DisableDepthClip(this Self&& self)
 		{
-			depthClipEnable = false;
-			return *this;
+			self.depthClipEnable = false;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		SetScissorEnable(bool value)
+		template <typename Self>
+		constexpr Self&&
+		SetScissorEnable(this Self&& self, bool value)
 		{
-			scissorEnable = value;
-			return *this;
+			self.scissorEnable = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		EnableScissor()
+		template <typename Self>
+		constexpr Self&&
+		EnableScissor(this Self&& self)
 		{
-			scissorEnable = true;
-			return *this;
+			self.scissorEnable = true;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		DisableScissor()
+		template <typename Self>
+		constexpr Self&&
+		DisableScissor(this Self&& self)
 		{
-			scissorEnable = false;
-			return *this;
+			self.scissorEnable = false;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		SetMultisampleEnable(bool value)
+		template <typename Self>
+		constexpr Self&&
+		SetMultisampleEnable(this Self&& self, bool value)
 		{
-			multisampleEnable = value;
-			return *this;
+			self.multisampleEnable = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		EnableMultisample()
+		template <typename Self>
+		constexpr Self&&
+		EnableMultisample(this Self&& self)
 		{
-			multisampleEnable = true;
-			return *this;
+			self.multisampleEnable = true;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		DisableMultisample()
+		template <typename Self>
+		constexpr Self&&
+		DisableMultisample(this Self&& self)
 		{
-			multisampleEnable = false;
-			return *this;
+			self.multisampleEnable = false;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		SetAntialiasedLineEnable(bool value)
+		template <typename Self>
+		constexpr Self&&
+		SetAntialiasedLineEnable(this Self&& self, bool value)
 		{
-			antialiasedLineEnable = value;
-			return *this;
+			self.antialiasedLineEnable = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		EnableAntialiasedLine()
+		template <typename Self>
+		constexpr Self&&
+		EnableAntialiasedLine(this Self&& self)
 		{
-			antialiasedLineEnable = true;
-			return *this;
+			self.antialiasedLineEnable = true;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		DisableAntialiasedLine()
+		template <typename Self>
+		constexpr Self&&
+		DisableAntialiasedLine(this Self&& self)
 		{
-			antialiasedLineEnable = false;
-			return *this;
+			self.antialiasedLineEnable = false;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		SetDepthBias(int value)
+		template <typename Self>
+		constexpr Self&&
+		SetDepthBias(this Self&& self, int value)
 		{
-			depthBias = value;
-			return *this;
+			self.depthBias = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		SetDepthBiasClamp(float value)
+		template <typename Self>
+		constexpr Self&&
+		SetDepthBiasClamp(this Self&& self, float value)
 		{
-			depthBiasClamp = value;
-			return *this;
+			self.depthBiasClamp = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		SetSlopeScaleDepthBias(float value)
+		template <typename Self>
+		constexpr Self&&
+		SetSlopeScaleDepthBias(this Self&& self, float value)
 		{
-			slopeScaledDepthBias = value;
-			return *this;
+			self.slopeScaledDepthBias = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		SetForcedSampleCount(uint8_t value)
+		template <typename Self>
+		constexpr Self&&
+		SetForcedSampleCount(this Self&& self, uint8_t value)
 		{
-			forcedSampleCount = value;
-			return *this;
+			self.forcedSampleCount = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		SetProgrammableSamplePositionsEnable(bool value)
+		template <typename Self>
+		constexpr Self&&
+		SetProgrammableSamplePositionsEnable(this Self&& self, bool value)
 		{
-			programmableSamplePositionsEnable = value;
-			return *this;
+			self.programmableSamplePositionsEnable = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		EnableProgrammableSamplePositions()
+		template <typename Self>
+		constexpr Self&&
+		EnableProgrammableSamplePositions(this Self&& self)
 		{
-			programmableSamplePositionsEnable = true;
-			return *this;
+			self.programmableSamplePositionsEnable = true;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		DisableProgrammableSamplePositions()
+		template <typename Self>
+		constexpr Self&&
+		DisableProgrammableSamplePositions(this Self&& self)
 		{
-			programmableSamplePositionsEnable = false;
-			return *this;
+			self.programmableSamplePositionsEnable = false;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		SetConservativeRasterEnable(bool value)
+		template <typename Self>
+		constexpr Self&&
+		SetConservativeRasterEnable(this Self&& self, bool value)
 		{
-			conservativeRasterEnable = value;
-			return *this;
+			self.conservativeRasterEnable = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		EnableConservativeRaster()
+		template <typename Self>
+		constexpr Self&&
+		EnableConservativeRaster(this Self&& self)
 		{
-			conservativeRasterEnable = true;
-			return *this;
+			self.conservativeRasterEnable = true;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		DisableConservativeRaster()
+		template <typename Self>
+		constexpr Self&&
+		DisableConservativeRaster(this Self&& self)
 		{
-			conservativeRasterEnable = false;
-			return *this;
+			self.conservativeRasterEnable = false;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		SetQuadFillEnable(bool value)
+		template <typename Self>
+		constexpr Self&&
+		SetQuadFillEnable(this Self&& self, bool value)
 		{
-			quadFillEnable = value;
-			return *this;
+			self.quadFillEnable = value;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		EnableQuadFill()
+		template <typename Self>
+		constexpr Self&&
+		EnableQuadFill(this Self&& self)
 		{
-			quadFillEnable = true;
-			return *this;
+			self.quadFillEnable = true;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		DisableQuadFill()
+		template <typename Self>
+		constexpr Self&&
+		DisableQuadFill(this Self&& self)
 		{
-			quadFillEnable = false;
-			return *this;
+			self.quadFillEnable = false;
+			return std::forward<Self>(self);
 		}
 
-		constexpr RasterState&
-		SetSamplePositions(const char* x, const char* y, int count)
+		template <typename Self>
+		constexpr Self&&
+		SetSamplePositions(this Self&& self, const char* x, const char* y, int count)
 		{
 			for (int i = 0; i < count; i++)
 			{
-				samplePositionsX[i] = x[i];
-				samplePositionsY[i] = y[i];
+				self.samplePositionsX[i] = x[i];
+				self.samplePositionsY[i] = y[i];
 			}
-			return *this;
+			return std::forward<Self>(self);
 		}
 	};
 }

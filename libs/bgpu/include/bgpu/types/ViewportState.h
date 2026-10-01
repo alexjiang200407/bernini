@@ -4,6 +4,7 @@
 #include <core/containers/static_vector.h>
 #include <core/err/util.h>
 #include <cstdint>
+#include <utility>
 
 namespace bgpu
 {
@@ -13,16 +14,17 @@ namespace bgpu
 		core::static_vector<Viewport, c_MaxViewports> viewports;
 		core::static_vector<Rect, c_MaxViewports>     scissorRects;
 
-		ViewportState&
-		AddViewportAndScissorRect(const Viewport& viewport)
+		template <typename Self>
+		Self&&
+		AddViewportAndScissorRect(this Self&& self, const Viewport& viewport)
 		{
 			core::ensure(
-				viewports.size() < c_MaxViewports,
+				self.viewports.size() < c_MaxViewports,
 				"Viewports cannot exceeded {}",
 				c_MaxViewports);
-			viewports.push_back(viewport);
-			scissorRects.push_back(Rect(viewport));
-			return *this;
+			self.viewports.push_back(viewport);
+			self.scissorRects.push_back(Rect(viewport));
+			return std::forward<Self>(self);
 		}
 	};
 }

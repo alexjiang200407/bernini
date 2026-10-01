@@ -24,6 +24,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <map>
+#include <ranges>
 #include <span>
 #include <string>
 #include <vector>
@@ -423,9 +424,8 @@ TEST_CASE("A rebuild names every container it produces, exactly once", "[reimpor
 	}
 	std::ranges::sort(announced);
 
-	auto wrote = std::vector<std::string>();
-	for (const ReimportedSource& entry : report.sources)
-		wrote.insert(wrote.end(), entry.written.begin(), entry.written.end());
+	auto wrote = report.sources | std::views::transform(&ReimportedSource::written) |
+	             std::views::join | std::ranges::to<std::vector>();
 	std::ranges::sort(wrote);
 
 	CHECK(announced == wrote);

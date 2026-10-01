@@ -12,18 +12,20 @@ namespace bgpu
 		core::static_vector<RtvHandle, c_MaxRenderTargets> colorAttachments;
 		DsvHandle                                          depthAttachment;
 
-		FrameBuffer&
-		AddColorAttachment(RtvHandle handle)
+		template <typename Self>
+		Self&&
+		AddColorAttachment(this Self&& self, RtvHandle handle)
 		{
-			colorAttachments.push_back(std::move(handle));
-			return *this;
+			self.colorAttachments.push_back(std::move(handle));
+			return std::forward<Self>(self);
 		}
 
-		FrameBuffer&
-		SetDepthAttachment(DsvHandle handle)
+		template <typename Self>
+		Self&&
+		SetDepthAttachment(this Self&& self, DsvHandle handle)
 		{
-			depthAttachment = handle;
-			return *this;
+			self.depthAttachment = handle;
+			return std::forward<Self>(self);
 		}
 	};
 }

@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <format>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -205,10 +206,11 @@ namespace
 		[[nodiscard]] std::vector<AvatarLegChain>
 		Chains() const
 		{
-			auto out = std::vector<AvatarLegChain>();
-			for (uint32_t leg = 0; leg < m_Legs; ++leg)
-				out.push_back({ 1 + 4 * leg, 2 + 4 * leg, 3 + 4 * leg, 4 + 4 * leg });
-			return out;
+			return std::views::iota(uint32_t{ 0 }, m_Legs) |
+			       std::views::transform([](uint32_t leg) {
+					   return AvatarLegChain{ 1 + 4 * leg, 2 + 4 * leg, 3 + 4 * leg, 4 + 4 * leg };
+				   }) |
+			       std::ranges::to<std::vector>();
 		}
 
 		/** The chains as the avatar the plant measures with; `weights` scale clips by name. */

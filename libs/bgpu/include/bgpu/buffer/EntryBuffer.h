@@ -28,25 +28,28 @@ namespace bgpu
 		uint32_t    blockSize    = 65536;
 		std::string debugName;
 
-		EntryBufferDesc&
-		SetInitialCount(uint32_t value) noexcept
+		template <typename Self>
+		Self&&
+		SetInitialCount(this Self&& self, uint32_t value) noexcept
 		{
-			initialCount = value;
-			return *this;
+			self.initialCount = value;
+			return std::forward<Self>(self);
 		}
 
-		EntryBufferDesc&
-		SetBlockSize(uint32_t value) noexcept
+		template <typename Self>
+		Self&&
+		SetBlockSize(this Self&& self, uint32_t value) noexcept
 		{
-			blockSize = value;
-			return *this;
+			self.blockSize = value;
+			return std::forward<Self>(self);
 		}
 
-		EntryBufferDesc&
-		SetDebugName(std::string value) noexcept
+		template <typename Self>
+		Self&&
+		SetDebugName(this Self&& self, std::string value) noexcept
 		{
-			debugName = std::move(value);
-			return *this;
+			self.debugName = std::move(value);
+			return std::forward<Self>(self);
 		}
 	};
 

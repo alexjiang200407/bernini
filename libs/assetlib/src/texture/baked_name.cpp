@@ -72,9 +72,7 @@ namespace assetlib
 	std::string
 	bakedMapContentName(std::string_view group, std::string_view key)
 	{
-		core::ensure(
-			group.find('_') == std::string_view::npos,
-			"group.find('_') == std::string_view::npos");
+		core::ensure(!group.contains('_'), "!group.contains('_')");
 
 		return std::format("{}_{:016x}", group, core::hash_string(key, core::hash_seed()));
 	}

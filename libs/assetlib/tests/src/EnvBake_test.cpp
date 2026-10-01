@@ -169,8 +169,8 @@ TEST_CASE("an environment map's file carries the encoding it was written in", "[
 	StoreAt(root.path).BakeSky(ldr);
 
 	CHECK(hdr.sky.baked.ends_with(".ktx2"));
-	CHECK(hdr.sky.baked.find(".rgb9e5-") != std::string::npos);
-	CHECK(ldr.sky.baked.find(".bc7srgb-") != std::string::npos);
+	CHECK(hdr.sky.baked.contains(".rgb9e5-"));
+	CHECK(ldr.sky.baked.contains(".bc7srgb-"));
 
 	CHECK(isBakedEnvMapName(std::filesystem::path(hdr.sky.baked).filename().string()));
 	CHECK(isBakedEnvMapName(std::filesystem::path(ldr.sky.baked).filename().string()));
@@ -198,7 +198,7 @@ TEST_CASE("a map named without an encoding re-cooks under one", "[envbake]")
 	StoreAt(root.path).BakeSky(sky);
 
 	CHECK(sky.sky.baked != legacy);
-	CHECK(sky.sky.baked.find(".rgb9e5-") != std::string::npos);
+	CHECK(sky.sky.baked.contains(".rgb9e5-"));
 	CHECK_FALSE(isSkyBakeStale(sky, MountAt(root.path)));
 }
 

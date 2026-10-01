@@ -23,46 +23,28 @@ namespace editor
 		std::string   id;
 		std::string   parentId;
 		LocalizedText title;
-		MenuDesc&
-		SetId(std::string value) &
+		template <typename Self>
+		Self&&
+		SetId(this Self&& self, std::string value)
 		{
-			id = std::move(value);
-			return *this;
+			self.id = std::move(value);
+			return std::forward<Self>(self);
 		}
 
-		MenuDesc&&
-		SetId(std::string value) &&
+		template <typename Self>
+		Self&&
+		SetParentId(this Self&& self, std::string value)
 		{
-			SetId(std::move(value));
-			return std::move(*this);
+			self.parentId = std::move(value);
+			return std::forward<Self>(self);
 		}
 
-		MenuDesc&
-		SetParentId(std::string value) &
+		template <typename Self>
+		Self&&
+		SetTitle(this Self&& self, LocalizedText value)
 		{
-			parentId = std::move(value);
-			return *this;
-		}
-
-		MenuDesc&&
-		SetParentId(std::string value) &&
-		{
-			SetParentId(std::move(value));
-			return std::move(*this);
-		}
-
-		MenuDesc&
-		SetTitle(LocalizedText value) &
-		{
-			title = std::move(value);
-			return *this;
-		}
-
-		MenuDesc&&
-		SetTitle(LocalizedText value) &&
-		{
-			SetTitle(std::move(value));
-			return std::move(*this);
+			self.title = std::move(value);
+			return std::forward<Self>(self);
 		}
 	};
 
@@ -71,50 +53,29 @@ namespace editor
 		std::string           id;
 		LocalizedText         title;
 		EditorPanelFactoryPtr factory;
-		PanelDesc&
-		SetId(std::string value) &
+		template <typename Self>
+		Self&&
+		SetId(this Self&& self, std::string value)
 		{
-			id = std::move(value);
-			return *this;
+			self.id = std::move(value);
+			return std::forward<Self>(self);
 		}
 
-		PanelDesc&&
-		SetId(std::string value) &&
+		template <typename Self>
+		Self&&
+		SetTitle(this Self&& self, LocalizedText value)
 		{
-			SetId(std::move(value));
-			return std::move(*this);
+			self.title = std::move(value);
+			return std::forward<Self>(self);
 		}
 
-		PanelDesc&
-		SetTitle(LocalizedText value) &
-		{
-			title = std::move(value);
-			return *this;
-		}
-
-		PanelDesc&&
-		SetTitle(LocalizedText value) &&
-		{
-			SetTitle(std::move(value));
-			return std::move(*this);
-		}
-
-		template <typename T, typename... Args>
+		template <typename T, typename Self, typename... Args>
 			requires EditorPanelFactoryFor<T, Args...>
-		PanelDesc&
-		AddFactory(Args&&... args) &
+		Self&&
+		AddFactory(this Self&& self, Args&&... args)
 		{
-			factory = std::make_unique<T>(std::forward<Args>(args)...);
-			return *this;
-		}
-
-		template <typename T, typename... Args>
-			requires EditorPanelFactoryFor<T, Args...>
-		PanelDesc&&
-		AddFactory(Args&&... args) &&
-		{
-			AddFactory<T>(std::forward<Args>(args)...);
-			return std::move(*this);
+			self.factory = std::make_unique<T>(std::forward<Args>(args)...);
+			return std::forward<Self>(self);
 		}
 	};
 
@@ -124,64 +85,37 @@ namespace editor
 		LocalizedText            title;
 		std::vector<std::string> extensions;
 		AssetEditorFactoryPtr    factory;
-		AssetEditorDesc&
-		SetId(std::string value) &
+		template <typename Self>
+		Self&&
+		SetId(this Self&& self, std::string value)
 		{
-			id = std::move(value);
-			return *this;
+			self.id = std::move(value);
+			return std::forward<Self>(self);
 		}
 
-		AssetEditorDesc&&
-		SetId(std::string value) &&
+		template <typename Self>
+		Self&&
+		SetTitle(this Self&& self, LocalizedText value)
 		{
-			SetId(std::move(value));
-			return std::move(*this);
+			self.title = std::move(value);
+			return std::forward<Self>(self);
 		}
 
-		AssetEditorDesc&
-		SetTitle(LocalizedText value) &
+		template <typename Self>
+		Self&&
+		AddExtension(this Self&& self, std::string extension)
 		{
-			title = std::move(value);
-			return *this;
+			self.extensions.push_back(std::move(extension));
+			return std::forward<Self>(self);
 		}
 
-		AssetEditorDesc&&
-		SetTitle(LocalizedText value) &&
-		{
-			SetTitle(std::move(value));
-			return std::move(*this);
-		}
-
-		AssetEditorDesc&
-		AddExtension(std::string extension) &
-		{
-			extensions.push_back(std::move(extension));
-			return *this;
-		}
-
-		AssetEditorDesc&&
-		AddExtension(std::string extension) &&
-		{
-			AddExtension(std::move(extension));
-			return std::move(*this);
-		}
-
-		template <typename T, typename... Args>
+		template <typename T, typename Self, typename... Args>
 			requires AssetEditorFactoryFor<T, Args...>
-		AssetEditorDesc&
-		AddFactory(Args&&... args) &
+		Self&&
+		AddFactory(this Self&& self, Args&&... args)
 		{
-			factory = std::make_unique<T>(std::forward<Args>(args)...);
-			return *this;
-		}
-
-		template <typename T, typename... Args>
-			requires AssetEditorFactoryFor<T, Args...>
-		AssetEditorDesc&&
-		AddFactory(Args&&... args) &&
-		{
-			AddFactory<T>(std::forward<Args>(args)...);
-			return std::move(*this);
+			self.factory = std::make_unique<T>(std::forward<Args>(args)...);
+			return std::forward<Self>(self);
 		}
 	};
 
@@ -192,78 +126,45 @@ namespace editor
 		std::string              menuId;
 		std::vector<std::string> extensions;
 		EditorActionPtr          action;
-		ActionDesc&
-		SetId(std::string value) &
+		template <typename Self>
+		Self&&
+		SetId(this Self&& self, std::string value)
 		{
-			id = std::move(value);
-			return *this;
+			self.id = std::move(value);
+			return std::forward<Self>(self);
 		}
 
-		ActionDesc&&
-		SetId(std::string value) &&
+		template <typename Self>
+		Self&&
+		SetTitle(this Self&& self, LocalizedText value)
 		{
-			SetId(std::move(value));
-			return std::move(*this);
+			self.title = std::move(value);
+			return std::forward<Self>(self);
 		}
 
-		ActionDesc&
-		SetTitle(LocalizedText value) &
+		template <typename Self>
+		Self&&
+		SetMenuId(this Self&& self, std::string value)
 		{
-			title = std::move(value);
-			return *this;
+			self.menuId = std::move(value);
+			return std::forward<Self>(self);
 		}
 
-		ActionDesc&&
-		SetTitle(LocalizedText value) &&
+		template <typename Self>
+		Self&&
+		AddExtension(this Self&& self, std::string extension)
 		{
-			SetTitle(std::move(value));
-			return std::move(*this);
+			self.extensions.push_back(std::move(extension));
+			return std::forward<Self>(self);
 		}
 
-		ActionDesc&
-		SetMenuId(std::string value) &
-		{
-			menuId = std::move(value);
-			return *this;
-		}
-
-		ActionDesc&&
-		SetMenuId(std::string value) &&
-		{
-			SetMenuId(std::move(value));
-			return std::move(*this);
-		}
-
-		ActionDesc&
-		AddExtension(std::string extension) &
-		{
-			extensions.push_back(std::move(extension));
-			return *this;
-		}
-
-		ActionDesc&&
-		AddExtension(std::string extension) &&
-		{
-			AddExtension(std::move(extension));
-			return std::move(*this);
-		}
-
-		template <typename T, typename... Args>
+		template <typename T, typename Self, typename... Args>
 			requires EditorActionFor<T, Args...>
-		ActionDesc&
-		AddAction(Args&&... args) &
+		Self&&
+		AddAction(this Self&& self, Args&&... args)
 		{
-			action = std::make_unique<T>(std::forward<Args>(args)...);
-			return *this;
-		}
-
-		template <typename T, typename... Args>
-			requires EditorActionFor<T, Args...>
-		ActionDesc&&
-		AddAction(Args&&... args) &&
-		{
-			AddAction<T>(std::forward<Args>(args)...);
-			return std::move(*this);
+			self.action = std::make_unique<T>(std::forward<Args>(args)...);
+			return std::forward<Self>(self);
 		}
 	};
 
@@ -272,50 +173,29 @@ namespace editor
 		std::string              id;
 		std::vector<std::string> extensions;
 		EditorImporterPtr        importer;
-		ImporterDesc&
-		SetId(std::string value) &
+		template <typename Self>
+		Self&&
+		SetId(this Self&& self, std::string value)
 		{
-			id = std::move(value);
-			return *this;
+			self.id = std::move(value);
+			return std::forward<Self>(self);
 		}
 
-		ImporterDesc&&
-		SetId(std::string value) &&
+		template <typename Self>
+		Self&&
+		AddExtension(this Self&& self, std::string extension)
 		{
-			SetId(std::move(value));
-			return std::move(*this);
+			self.extensions.push_back(std::move(extension));
+			return std::forward<Self>(self);
 		}
 
-		ImporterDesc&
-		AddExtension(std::string extension) &
-		{
-			extensions.push_back(std::move(extension));
-			return *this;
-		}
-
-		ImporterDesc&&
-		AddExtension(std::string extension) &&
-		{
-			AddExtension(std::move(extension));
-			return std::move(*this);
-		}
-
-		template <typename T, typename... Args>
+		template <typename T, typename Self, typename... Args>
 			requires EditorImporterFor<T, Args...>
-		ImporterDesc&
-		AddImporter(Args&&... args) &
+		Self&&
+		AddImporter(this Self&& self, Args&&... args)
 		{
-			importer = std::make_unique<T>(std::forward<Args>(args)...);
-			return *this;
-		}
-
-		template <typename T, typename... Args>
-			requires EditorImporterFor<T, Args...>
-		ImporterDesc&&
-		AddImporter(Args&&... args) &&
-		{
-			AddImporter<T>(std::forward<Args>(args)...);
-			return std::move(*this);
+			self.importer = std::make_unique<T>(std::forward<Args>(args)...);
+			return std::forward<Self>(self);
 		}
 	};
 
@@ -324,50 +204,29 @@ namespace editor
 		std::string              id;
 		std::vector<std::string> extensions;
 		ThumbnailProviderPtr     provider;
-		ThumbnailProviderDesc&
-		SetId(std::string value) &
+		template <typename Self>
+		Self&&
+		SetId(this Self&& self, std::string value)
 		{
-			id = std::move(value);
-			return *this;
+			self.id = std::move(value);
+			return std::forward<Self>(self);
 		}
 
-		ThumbnailProviderDesc&&
-		SetId(std::string value) &&
+		template <typename Self>
+		Self&&
+		AddExtension(this Self&& self, std::string extension)
 		{
-			SetId(std::move(value));
-			return std::move(*this);
+			self.extensions.push_back(std::move(extension));
+			return std::forward<Self>(self);
 		}
 
-		ThumbnailProviderDesc&
-		AddExtension(std::string extension) &
-		{
-			extensions.push_back(std::move(extension));
-			return *this;
-		}
-
-		ThumbnailProviderDesc&&
-		AddExtension(std::string extension) &&
-		{
-			AddExtension(std::move(extension));
-			return std::move(*this);
-		}
-
-		template <typename T, typename... Args>
+		template <typename T, typename Self, typename... Args>
 			requires ThumbnailProviderFor<T, Args...>
-		ThumbnailProviderDesc&
-		AddProvider(Args&&... args) &
+		Self&&
+		AddProvider(this Self&& self, Args&&... args)
 		{
-			provider = std::make_unique<T>(std::forward<Args>(args)...);
-			return *this;
-		}
-
-		template <typename T, typename... Args>
-			requires ThumbnailProviderFor<T, Args...>
-		ThumbnailProviderDesc&&
-		AddProvider(Args&&... args) &&
-		{
-			AddProvider<T>(std::forward<Args>(args)...);
-			return std::move(*this);
+			self.provider = std::make_unique<T>(std::forward<Args>(args)...);
+			return std::forward<Self>(self);
 		}
 	};
 

@@ -18,18 +18,20 @@ namespace bgpu
 		core::SharedRef<IShader> shader = nullptr;
 		std::string              debugName;
 
-		ComputePipelineDesc&
-		SetShader(core::SharedRef<IShader> _shader)
+		template <typename Self>
+		Self&&
+		SetShader(this Self&& self, core::SharedRef<IShader> value)
 		{
-			shader = std::move(_shader);
-			return *this;
+			self.shader = std::move(value);
+			return std::forward<Self>(self);
 		}
 
-		ComputePipelineDesc&
-		SetDebugName(std::string _debugName)
+		template <typename Self>
+		Self&&
+		SetDebugName(this Self&& self, std::string value)
 		{
-			debugName = std::move(_debugName);
-			return *this;
+			self.debugName = std::move(value);
+			return std::forward<Self>(self);
 		}
 	};
 

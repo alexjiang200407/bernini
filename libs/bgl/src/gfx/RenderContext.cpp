@@ -54,6 +54,7 @@
 #include <format>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <spdlog/spdlog.h>
 #include <string>
@@ -416,12 +417,9 @@ namespace bgl
 		{
 			spdlog::error("{}", msg);
 
-			std::vector<uint32_t> errcodes;
-			errcodes.reserve(report->records.size());
-			for (const bgpu::idl::DebugRecord& rec : report->records)
-			{
-				errcodes.push_back(rec.errcode);
-			}
+			auto errcodes = report->records |
+			                std::views::transform(&bgpu::idl::DebugRecord::errcode) |
+			                std::ranges::to<std::vector>();
 
 			GpuAssertionReport pub;
 			pub.raisedCount = report->count;
@@ -695,11 +693,11 @@ namespace bgl
 		if (kind == MaterialType::kPBR || kind == MaterialType::kLoosePbr)
 			return true;
 
-		const auto start = static_cast<uint32_t>(MaterialType::kGameStart);
-		if (static_cast<uint32_t>(kind) < start)
+		const auto start = std::to_underlying(MaterialType::kGameStart);
+		if (std::to_underlying(kind) < start)
 			return false;
 
-		const uint32_t slot = static_cast<uint32_t>(kind) - start;
+		const uint32_t slot = std::to_underlying(kind) - start;
 		return slot < m_GameSurfaceShading.size() &&
 		       m_GameSurfaceShading[slot] == SurfaceShading::kPbrSurface;
 	}

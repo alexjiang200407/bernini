@@ -26,25 +26,28 @@ namespace bgpu
 		// match the declaration, or the read is undefined.
 		bool unorderedAccessView = false;
 
-		UploadBufferDesc&
-		SetInitialCount(uint32_t value) noexcept
+		template <typename Self>
+		Self&&
+		SetInitialCount(this Self&& self, uint32_t value) noexcept
 		{
-			initialCount = value;
-			return *this;
+			self.initialCount = value;
+			return std::forward<Self>(self);
 		}
 
-		UploadBufferDesc&
-		SetDebugName(std::string value) noexcept
+		template <typename Self>
+		Self&&
+		SetDebugName(this Self&& self, std::string value) noexcept
 		{
-			debugName = std::move(value);
-			return *this;
+			self.debugName = std::move(value);
+			return std::forward<Self>(self);
 		}
 
-		UploadBufferDesc&
-		SetUnorderedAccessView(bool value) noexcept
+		template <typename Self>
+		Self&&
+		SetUnorderedAccessView(this Self&& self, bool value) noexcept
 		{
-			unorderedAccessView = value;
-			return *this;
+			self.unorderedAccessView = value;
+			return std::forward<Self>(self);
 		}
 	};
 

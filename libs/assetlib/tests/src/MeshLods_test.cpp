@@ -24,6 +24,8 @@
 #include <cstdint>
 #include <filesystem>
 #include <nlohmann/json.hpp>
+#include <ranges>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -106,10 +108,8 @@ namespace
 	std::vector<float>
 	TableOf(const std::vector<MeshLod>& lods, const Mesh& entry)
 	{
-		auto table = std::vector<float>();
-		for (uint32_t level = 0; level < entry.lodCount; ++level)
-			table.push_back(lods[entry.firstLod + level].minPixels);
-		return table;
+		return std::span(lods).subspan(entry.firstLod, entry.lodCount) |
+		       std::views::transform(&MeshLod::minPixels) | std::ranges::to<std::vector>();
 	}
 
 	/** Triangles in submesh `s` of level `level`: which source primitive landed in that entry. */

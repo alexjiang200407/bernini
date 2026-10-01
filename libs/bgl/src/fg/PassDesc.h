@@ -123,42 +123,48 @@ namespace bgl
 
 		std::function<void(const PassContext&)> exec = nullptr;
 
-		PassDesc&
-		SetQueue(std::string queueName)
+		template <typename Self>
+		Self&&
+		SetQueue(this Self&& self, std::string queueName)
 		{
-			queue = std::move(queueName);
-			return *this;
+			self.queue = std::move(queueName);
+			return std::forward<Self>(self);
 		}
 
-		PassDesc&
-		AddColorAttachment(bgpu::RtvHandle view)
+		template <typename Self>
+		Self&&
+		AddColorAttachment(this Self&& self, bgpu::RtvHandle view)
 		{
-			colorAttachments.push_back(view);
-			return *this;
+			self.colorAttachments.push_back(view);
+			return std::forward<Self>(self);
 		}
 
-		PassDesc&
-		SetDepthAttachment(bgpu::DsvHandle view) noexcept
+		template <typename Self>
+		Self&&
+		SetDepthAttachment(this Self&& self, bgpu::DsvHandle view) noexcept
 		{
-			depthAttachment = view;
-			return *this;
+			self.depthAttachment = view;
+			return std::forward<Self>(self);
 		}
 
-		PassDesc&
-		AddBufferArg(BufferArg buffer)
+		template <typename Self>
+		Self&&
+		AddBufferArg(this Self&& self, BufferArg buffer)
 		{
-			buffers.push_back(std::move(buffer));
-			return *this;
+			self.buffers.push_back(std::move(buffer));
+			return std::forward<Self>(self);
 		}
 
-		PassDesc&
+		template <typename Self>
+		Self&&
 		AddBufferArg(
+			this Self&&         self,
 			std::string_view    bufferName,
 			bgpu::BarrierSync   bufferSync,
 			bgpu::BarrierAccess bufferAccess)
 		{
-			buffers.push_back(BufferArg(std::string(bufferName), bufferSync, bufferAccess));
-			return *this;
+			self.buffers.push_back(BufferArg(std::string(bufferName), bufferSync, bufferAccess));
+			return std::forward<Self>(self);
 		}
 
 		/**
@@ -169,34 +175,41 @@ namespace bgl
 		 *
 		 * Only valid for an unordered-access arg, which is why the access is not a parameter.
 		 */
-		PassDesc&
-		AddPoisonedBufferArg(std::string_view bufferName, bgpu::BarrierSync bufferSync)
+		template <typename Self>
+		Self&&
+		AddPoisonedBufferArg(
+			this Self&&       self,
+			std::string_view  bufferName,
+			bgpu::BarrierSync bufferSync)
 		{
-			buffers.push_back(BufferArg(
+			self.buffers.push_back(BufferArg(
 				std::string(bufferName),
 				bufferSync,
 				bgpu::BarrierAccessFlag::kUnorderedAccess,
 				true));
-			return *this;
+			return std::forward<Self>(self);
 		}
 
-		PassDesc&
-		AddTextureArg(TextureArg tex)
+		template <typename Self>
+		Self&&
+		AddTextureArg(this Self&& self, TextureArg tex)
 		{
-			textures.push_back(std::move(tex));
-			return *this;
+			self.textures.push_back(std::move(tex));
+			return std::forward<Self>(self);
 		}
 
-		PassDesc&
+		template <typename Self>
+		Self&&
 		AddTextureArg(
+			this Self&&         self,
 			std::string_view    textureName,
 			bgpu::BarrierSync   textureSync,
 			bgpu::BarrierAccess textureAccess,
 			bgpu::BarrierLayout textureLayout)
 		{
-			textures.push_back(
+			self.textures.push_back(
 				TextureArg(std::string(textureName), textureSync, textureAccess, textureLayout));
-			return *this;
+			return std::forward<Self>(self);
 		}
 
 		// The accesses the passes make, each owning its barrier flags so a pass names only the
@@ -204,10 +217,11 @@ namespace bgl
 		// pipeline sync as kVertexShader. AddBufferArg and AddTextureArg are for any other access.
 
 		/** A texture this pass draws into as a colour target, by its graph name. */
-		PassDesc&
-		AddRenderTarget(std::string_view textureName)
+		template <typename Self>
+		Self&&
+		AddRenderTarget(this Self&& self, std::string_view textureName)
 		{
-			return AddTextureArg(
+			return std::forward<Self>(self).AddTextureArg(
 				textureName,
 				bgpu::BarrierSyncFlag::kRenderTarget,
 				bgpu::BarrierAccessFlag::kRenderTarget,
@@ -215,10 +229,11 @@ namespace bgl
 		}
 
 		/** A depth-stencil texture this pass depth-tests against and writes. */
-		PassDesc&
-		AddDepthWrite(std::string_view textureName)
+		template <typename Self>
+		Self&&
+		AddDepthWrite(this Self&& self, std::string_view textureName)
 		{
-			return AddTextureArg(
+			return std::forward<Self>(self).AddTextureArg(
 				textureName,
 				bgpu::BarrierSyncFlag::kDepthStencil,
 				bgpu::BarrierAccessFlag::kDepthWrite,
@@ -226,10 +241,11 @@ namespace bgl
 		}
 
 		/** A texture `stages` sample or load. */
-		PassDesc&
-		AddTextureRead(std::string_view textureName, bgpu::BarrierSync stages)
+		template <typename Self>
+		Self&&
+		AddTextureRead(this Self&& self, std::string_view textureName, bgpu::BarrierSync stages)
 		{
-			return AddTextureArg(
+			return std::forward<Self>(self).AddTextureArg(
 				textureName,
 				stages,
 				bgpu::BarrierAccessFlag::kShaderResource,
@@ -237,89 +253,104 @@ namespace bgl
 		}
 
 		/** A buffer `stages` only read. */
-		PassDesc&
-		AddBufferRead(std::string_view bufferName, bgpu::BarrierSync stages)
+		template <typename Self>
+		Self&&
+		AddBufferRead(this Self&& self, std::string_view bufferName, bgpu::BarrierSync stages)
 		{
-			return AddBufferArg(bufferName, stages, bgpu::BarrierAccessFlag::kShaderResource);
+			return std::forward<Self>(self).AddBufferArg(
+				bufferName,
+				stages,
+				bgpu::BarrierAccessFlag::kShaderResource);
 		}
 
 		/** A buffer `stages` bind for unordered access -- read, written, or both. */
-		PassDesc&
-		AddBufferReadWrite(std::string_view bufferName, bgpu::BarrierSync stages)
+		template <typename Self>
+		Self&&
+		AddBufferReadWrite(this Self&& self, std::string_view bufferName, bgpu::BarrierSync stages)
 		{
-			return AddBufferArg(bufferName, stages, bgpu::BarrierAccessFlag::kUnorderedAccess);
+			return std::forward<Self>(self).AddBufferArg(
+				bufferName,
+				stages,
+				bgpu::BarrierAccessFlag::kUnorderedAccess);
 		}
 
 		/** A buffer an indirect dispatch or draw reads its arguments or count from. */
-		PassDesc&
-		AddIndirectArgs(std::string_view bufferName)
+		template <typename Self>
+		Self&&
+		AddIndirectArgs(this Self&& self, std::string_view bufferName)
 		{
-			return AddBufferArg(
+			return std::forward<Self>(self).AddBufferArg(
 				bufferName,
 				bgpu::BarrierSyncFlag::kIndirectArgument,
 				bgpu::BarrierAccessFlag::kIndirectArgument);
 		}
 
 		/** A buffer this pass copies out of. */
-		PassDesc&
-		AddCopySource(std::string_view bufferName)
+		template <typename Self>
+		Self&&
+		AddCopySource(this Self&& self, std::string_view bufferName)
 		{
-			return AddBufferArg(
+			return std::forward<Self>(self).AddBufferArg(
 				bufferName,
 				bgpu::BarrierSyncFlag::kCopy,
 				bgpu::BarrierAccessFlag::kCopySource);
 		}
 
 		/** A buffer this pass copies into. */
-		PassDesc&
-		AddCopyDest(std::string_view bufferName)
+		template <typename Self>
+		Self&&
+		AddCopyDest(this Self&& self, std::string_view bufferName)
 		{
-			return AddBufferArg(
+			return std::forward<Self>(self).AddBufferArg(
 				bufferName,
 				bgpu::BarrierSyncFlag::kCopy,
 				bgpu::BarrierAccessFlag::kCopyDest);
 		}
 
 		/** Formats the name, so a pass keyed on its draw and frustum need not spell out std::format. */
-		template <typename... Args>
-		PassDesc&
-		SetName(std::format_string<Args...> fmt, Args&&... args)
+		template <typename Self, typename... Args>
+			requires(sizeof...(Args) > 0)
+		Self&&
+		SetName(this Self&& self, std::format_string<Args...> fmt, Args&&... args)
 		{
-			return SetName(std::format(fmt, std::forward<Args>(args)...));
+			return std::forward<Self>(self).SetName(std::format(fmt, std::forward<Args>(args)...));
 		}
 
-		PassDesc&
-		SetName(std::string passName) noexcept
+		template <typename Self>
+		Self&&
+		SetName(this Self&& self, std::string passName) noexcept
 		{
 			core::ensure(!passName.empty(), "PassDesc name cannot be empty");
 			core::ensure(
 				passName != "$",
 				"PassDesc name cannot be '$', which is reserved for the root pass");
 
-			name = std::move(passName);
-			return *this;
+			self.name = std::move(passName);
+			return std::forward<Self>(self);
 		}
 
-		PassDesc&
-		SetSideEffect(bool value = true) noexcept
+		template <typename Self>
+		Self&&
+		SetSideEffect(this Self&& self, bool value = true) noexcept
 		{
-			sideEffect = value;
-			return *this;
+			self.sideEffect = value;
+			return std::forward<Self>(self);
 		}
 
-		PassDesc&
-		SetExec(std::function<void(const PassContext&)> execFunc) noexcept
+		template <typename Self>
+		Self&&
+		SetExec(this Self&& self, std::function<void(const PassContext&)> execFunc) noexcept
 		{
-			exec = std::move(execFunc);
-			return *this;
+			self.exec = std::move(execFunc);
+			return std::forward<Self>(self);
 		}
 
-		template <typename Func>
-		PassDesc&
-		SetExec(Func&& execFunc) noexcept
+		template <typename Func, typename Self>
+		Self&&
+		SetExec(this Self&& self, Func&& execFunc) noexcept
 		{
-			exec = std::function(execFunc);
-			return *this;
+			self.exec = std::function(execFunc);
+			return std::forward<Self>(self);
 		}
 	};
 }

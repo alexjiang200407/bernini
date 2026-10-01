@@ -7,6 +7,7 @@
 #include <core/containers/slot_handle.h>
 #include <cstdint>
 #include <string>
+#include <utility>
 
 namespace bgpu
 {
@@ -30,46 +31,52 @@ namespace bgpu
 		uint32_t planeCount     = 1;
 		uint32_t firstPlane     = 0;
 
-		TextureBarrierDesc&
-		AddSyncBefore(BarrierSyncFlag sync)
+		template <typename Self>
+		Self&&
+		AddSyncBefore(this Self&& self, BarrierSyncFlag sync)
 		{
-			syncBefore |= sync;
-			return *this;
+			self.syncBefore |= sync;
+			return std::forward<Self>(self);
 		}
 
-		TextureBarrierDesc&
-		AddSyncAfter(BarrierSyncFlag sync)
+		template <typename Self>
+		Self&&
+		AddSyncAfter(this Self&& self, BarrierSyncFlag sync)
 		{
-			syncAfter |= sync;
-			return *this;
+			self.syncAfter |= sync;
+			return std::forward<Self>(self);
 		}
 
-		TextureBarrierDesc&
-		AddAccessBefore(BarrierAccessFlag access)
+		template <typename Self>
+		Self&&
+		AddAccessBefore(this Self&& self, BarrierAccessFlag access)
 		{
-			accessBefore |= access;
-			return *this;
+			self.accessBefore |= access;
+			return std::forward<Self>(self);
 		}
 
-		TextureBarrierDesc&
-		AddAccessAfter(BarrierAccessFlag access)
+		template <typename Self>
+		Self&&
+		AddAccessAfter(this Self&& self, BarrierAccessFlag access)
 		{
-			accessAfter |= access;
-			return *this;
+			self.accessAfter |= access;
+			return std::forward<Self>(self);
 		}
 
-		TextureBarrierDesc&
-		SetLayoutBefore(BarrierLayout layout)
+		template <typename Self>
+		Self&&
+		SetLayoutBefore(this Self&& self, BarrierLayout layout)
 		{
-			layoutBefore = layout;
-			return *this;
+			self.layoutBefore = layout;
+			return std::forward<Self>(self);
 		}
 
-		TextureBarrierDesc&
-		SetLayoutAfter(BarrierLayout layout)
+		template <typename Self>
+		Self&&
+		SetLayoutAfter(this Self&& self, BarrierLayout layout)
 		{
-			layoutAfter = layout;
-			return *this;
+			self.layoutAfter = layout;
+			return std::forward<Self>(self);
 		}
 	};
 

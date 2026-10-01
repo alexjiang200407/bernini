@@ -26,6 +26,7 @@
 #include <fstream>
 #include <functional>
 #include <ios>
+#include <ranges>
 #include <stdexcept>
 #include <stop_token>
 #include <string>
@@ -745,9 +746,10 @@ TEST_CASE("Reimport puts an absent environment back, byte for byte", "[envimport
 	const Sandbox sandbox("bernini_envreimport_full");
 	static_cast<void>(ImportGradient(sandbox));
 
-	auto before = std::vector<std::vector<std::byte>>();
-	for (const std::string& output : FamilyOutputs(sandbox))
-		before.push_back(sandbox.Bytes(output));
+	auto before =
+		FamilyOutputs(sandbox) |
+		std::views::transform([&](const std::string& output) { return sandbox.Bytes(output); }) |
+		std::ranges::to<std::vector>();
 	const std::vector<std::byte> document    = sandbox.Bytes("Authored/EnvSources/forest.bimport");
 	const std::vector<std::byte> environment = sandbox.Bytes("Authored/Environments/forest.benv");
 
@@ -1152,7 +1154,7 @@ TEST_CASE("A document claiming the old float cubes reads without them", "[envimp
 
 	const std::vector<std::byte> bytes = sandbox.Bytes("Authored/EnvSources/forest.bimport");
 	const auto text = std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-	CHECK(text.find("_sky.ktx2") == std::string::npos);
+	CHECK(!text.contains("_sky.ktx2"));
 }
 
 namespace

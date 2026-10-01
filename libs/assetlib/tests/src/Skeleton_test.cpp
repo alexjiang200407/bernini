@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <ranges>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -112,12 +113,12 @@ TEST_CASE("A skeleton survives a container round-trip", "[skeleton][io]")
 	REQUIRE(restored.bones.size() == skeleton.bones.size());
 	CHECK(restored.stringPool == skeleton.stringPool);
 
-	for (size_t i = 0; i < skeleton.bones.size(); ++i)
+	for (const auto& [got, want] : std::views::zip(restored.bones, skeleton.bones))
 	{
-		CHECK(restored.bones[i].parent == skeleton.bones[i].parent);
-		CHECK(restored.bones[i].nameOffset == skeleton.bones[i].nameOffset);
-		CHECK(restored.bones[i].inverseBind == skeleton.bones[i].inverseBind);
-		CHECK(restored.bones[i].bindPose.translation == skeleton.bones[i].bindPose.translation);
+		CHECK(got.parent == want.parent);
+		CHECK(got.nameOffset == want.nameOffset);
+		CHECK(got.inverseBind == want.inverseBind);
+		CHECK(got.bindPose.translation == want.bindPose.translation);
 	}
 
 	CHECK(skeletonSignature(restored) == skeletonSignature(skeleton));
@@ -181,8 +182,8 @@ TEST_CASE("skeletonBoneNames answers in bone order", "[skeleton]")
 	const auto names    = skeletonBoneNames(skeleton);
 
 	REQUIRE(names.size() == skeleton.bones.size());
-	for (size_t i = 0; i < names.size(); ++i)
-		CHECK(names[i] == skeleton.stringPool.at(skeleton.bones[i].nameOffset));
+	for (const auto& [name, bone] : std::views::zip(names, skeleton.bones))
+		CHECK(name == skeleton.stringPool.at(bone.nameOffset));
 }
 
 namespace
@@ -370,9 +371,11 @@ TEST_CASE("remapAnimations poses a grown rig exactly as the cooked one posed", "
 	REQUIRE_FALSE(animationsMatchSkeleton(clips, grown));
 
 	// What the cooked pairing produced, before anything is touched.
-	auto before = std::vector<std::vector<glm::mat4>>();
-	for (uint32_t frame = 0; frame < clips.clips[0].frameCount; ++frame)
-		before.push_back(poseModelTransforms(cooked, clips, 0, frame));
+	auto before = std::views::iota(uint32_t{ 0 }, clips.clips[0].frameCount) |
+	              std::views::transform([&](uint32_t frame) {
+					  return poseModelTransforms(cooked, clips, 0, frame);
+				  }) |
+	              std::ranges::to<std::vector>();
 
 	REQUIRE(remapAnimations(clips, grown));
 	CHECK(animationsMatchSkeleton(clips, grown));
@@ -419,9 +422,11 @@ TEST_CASE("remapAnimations keeps the frame each clip starts on", "[skeleton][rem
 	const uint32_t secondStart = clips.clips[1].firstSample / clips.boneCount;
 	REQUIRE(secondStart == 4);
 
-	auto before = std::vector<std::vector<glm::mat4>>();
-	for (uint32_t frame = 0; frame < clips.clips[1].frameCount; ++frame)
-		before.push_back(poseModelTransforms(cooked, clips, 1, frame));
+	auto before = std::views::iota(uint32_t{ 0 }, clips.clips[1].frameCount) |
+	              std::views::transform([&](uint32_t frame) {
+					  return poseModelTransforms(cooked, clips, 1, frame);
+				  }) |
+	              std::ranges::to<std::vector>();
 
 	const auto grown =
 		MakeRig({ { "hips", c_InvalidIndex }, { "spine", 0 }, { "grip", 1 }, { "head", 1 } });
@@ -475,11 +480,11 @@ TEST_CASE("remapAnimations leaves a clip set it cannot resolve alone", "[skeleto
 	// caller a container that matches neither rig.
 	CHECK(clips.boneCount == original.boneCount);
 	REQUIRE(clips.samples.size() == original.samples.size());
-	for (size_t i = 0; i < clips.samples.size(); ++i)
+	for (const auto& [got, want] : std::views::zip(clips.samples, original.samples))
 	{
-		CHECK(clips.samples[i].translation == original.samples[i].translation);
-		CHECK(clips.samples[i].rotation == original.samples[i].rotation);
-		CHECK(clips.samples[i].scale == original.samples[i].scale);
+		CHECK(got.translation == want.translation);
+		CHECK(got.rotation == want.rotation);
+		CHECK(got.scale == want.scale);
 	}
 	CHECK(clips.skeletonSignature == original.skeletonSignature);
 	CHECK(clips.clips[0].firstSample == original.clips[0].firstSample);

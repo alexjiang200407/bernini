@@ -28,6 +28,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
 #include <cstdint>
+#include <ranges>
 #include <string>
 #include <vector>
 
@@ -216,13 +217,8 @@ namespace
 	[[nodiscard]] std::vector<std::string>
 	Names(const std::vector<bgl::PassTiming>& rows)
 	{
-		std::vector<std::string> names;
-		names.reserve(rows.size());
-		for (const bgl::PassTiming& row : rows)
-		{
-			names.push_back(row.name);
-		}
-		return names;
+		return rows | std::views::transform(&bgl::PassTiming::name) |
+		       std::ranges::to<std::vector>();
 	}
 }
 

@@ -16,6 +16,7 @@
 #include <fstream>
 #include <ios>
 #include <map>
+#include <ranges>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -69,23 +70,23 @@ namespace
 			                                   "CSRawLoad",
 			                                   "CSRawStore",
 			                                   "CSTypedViewRead" };
-		for (size_t i = 0; i < compute.size(); ++i)
+		for (auto&& [kernel, moduleName] : std::views::zip(compute, computeModules))
 		{
 			batch.Add(
-				compute[i],
+				kernel,
 				bgpu::ComputePipelineDesc()
-					.SetShader(device->CreateShader(computeModules[i]))
-					.SetDebugName(computeModules[i]));
+					.SetShader(device->CreateShader(moduleName))
+					.SetDebugName(moduleName));
 		}
 
 		const char* const meshletModules[] = { "MeshUniformTest", "MeshTwoCbufferTest" };
-		for (size_t i = 0; i < meshlet.size(); ++i)
+		for (auto&& [kernel, moduleName] : std::views::zip(meshlet, meshletModules))
 		{
 			batch.Add(
-				meshlet[i],
+				kernel,
 				bgpu::MeshletPipelineDesc()
-					.SetMeshShader(device->CreateShader(meshletModules[i], "MSMain"))
-					.SetPixelShader(device->CreateShader(meshletModules[i], "PSMain"))
+					.SetMeshShader(device->CreateShader(moduleName, "MSMain"))
+					.SetPixelShader(device->CreateShader(moduleName, "PSMain"))
 					.AddRtvFormat(bgpu::Format::RGBA32_FLOAT));
 		}
 

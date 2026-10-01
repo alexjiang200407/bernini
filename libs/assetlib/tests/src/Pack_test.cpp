@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <ranges>
 #include <vector>
 
 #include "CacheTamper.h"
@@ -158,8 +159,7 @@ TEST_CASE("pack carries what the runtime reads and nothing that produces it", "[
 		CHECK_FALSE(Contains(entries, ".overlay.json"));
 
 		// No entry anywhere under the authoring directory, however deep.
-		for (const std::string& entry : entries)
-			CHECK(entry.find("Derived/SourceTextures/") == std::string::npos);
+		for (const std::string& entry : entries) CHECK(!entry.contains("Derived/SourceTextures/"));
 	}
 
 	SECTION("sidecars ship while the imported sources stay out")
@@ -408,8 +408,8 @@ TEST_CASE("pack bakes down a grown rig's re-addressing", "[pak][remap]")
 		skeleton.bones.push_back(grip);
 
 		const auto binds = bindPoseModelTransforms(skeleton);
-		for (size_t i = 0; i < skeleton.bones.size(); ++i)
-			skeleton.bones[i].inverseBind = glm::inverse(binds[i]);
+		for (auto&& [bone, bindModel] : std::views::zip(skeleton.bones, binds))
+			bone.inverseBind = glm::inverse(bindModel);
 
 		store.Save(skeleton, "Derived/Skeletons/unit.glb-0000000000000001.bskel");
 	}

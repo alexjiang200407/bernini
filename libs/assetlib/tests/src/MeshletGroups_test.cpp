@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <ranges>
 
 // The static tier dispatches a whole group of meshlets when the group's cooked sphere meets the
 // frustum, and nothing else asks about the meshlets under it. So a vertex outside that sphere is a
@@ -93,15 +94,13 @@ TEST_CASE("Group bounds survive a .bmesh round-trip", "[bmesh][meshletgroups][io
 	const BMesh restored = AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(written));
 
 	REQUIRE(restored.meshletGroups.size() == mesh.meshletGroups.size());
-	for (size_t g = 0; g < restored.meshletGroups.size(); ++g)
+	for (const auto& [got, want] : std::views::zip(restored.meshletGroups, mesh.meshletGroups))
 	{
-		CHECK(restored.meshletGroups[g].boundingCenter == mesh.meshletGroups[g].boundingCenter);
-		CHECK(restored.meshletGroups[g].boundingRadius == mesh.meshletGroups[g].boundingRadius);
+		CHECK(got.boundingCenter == want.boundingCenter);
+		CHECK(got.boundingRadius == want.boundingRadius);
 	}
 
 	REQUIRE(restored.submeshes.size() == mesh.submeshes.size());
-	for (size_t s = 0; s < restored.submeshes.size(); ++s)
-	{
-		CHECK(restored.submeshes[s].firstMeshletGroup == mesh.submeshes[s].firstMeshletGroup);
-	}
+	for (const auto& [got, want] : std::views::zip(restored.submeshes, mesh.submeshes))
+		CHECK(got.firstMeshletGroup == want.firstMeshletGroup);
 }

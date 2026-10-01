@@ -14,6 +14,7 @@
 #include <bgpu/types/QueueType.h>
 #include <cstddef>
 #include <cstdint>
+#include <ranges>
 #include <vector>
 
 namespace bgl::test
@@ -120,23 +121,19 @@ namespace bgl::test
 	inline std::vector<glm::vec2>
 	ReadMotionVectors(IGraphics* gfx, IRenderTarget* target, uint32_t width, uint32_t height)
 	{
-		auto motion = std::vector<glm::vec2>();
-		for (const glm::vec4& texel : ReadVelocityTexels(gfx, target, width, height))
-		{
-			motion.emplace_back(texel.x, texel.y);
-		}
-		return motion;
+		return ReadVelocityTexels(gfx, target, width, height) |
+		       std::views::transform(
+				   [](const glm::vec4& texel) { return glm::vec2(texel.x, texel.y); }) |
+		       std::ranges::to<std::vector>();
 	}
 
 	/** The other half: the part of each pixel's velocity its surface moved by on its own. */
 	inline std::vector<glm::vec2>
 	ReadOwnMotion(IGraphics* gfx, IRenderTarget* target, uint32_t width, uint32_t height)
 	{
-		auto motion = std::vector<glm::vec2>();
-		for (const glm::vec4& texel : ReadVelocityTexels(gfx, target, width, height))
-		{
-			motion.emplace_back(texel.z, texel.w);
-		}
-		return motion;
+		return ReadVelocityTexels(gfx, target, width, height) |
+		       std::views::transform(
+				   [](const glm::vec4& texel) { return glm::vec2(texel.z, texel.w); }) |
+		       std::ranges::to<std::vector>();
 	}
 }

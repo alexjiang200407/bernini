@@ -26,6 +26,7 @@
 #include <bgl/IGraphics.h>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <memory>
+#include <ranges>
 #include <stdexcept>
 
 namespace
@@ -94,8 +95,8 @@ namespace
 		skeleton.bones.push_back(grip);
 
 		const auto binds = assetlib::bindPoseModelTransforms(skeleton);
-		for (size_t i = 0; i < skeleton.bones.size(); ++i)
-			skeleton.bones[i].inverseBind = glm::inverse(binds[i]);
+		for (auto&& [bone, bindModel] : std::views::zip(skeleton.bones, binds))
+			bone.inverseBind = glm::inverse(bindModel);
 
 		store.Save(skeleton, "Derived/Skeletons/rig.glb-0000000000000001.bskel");
 	}

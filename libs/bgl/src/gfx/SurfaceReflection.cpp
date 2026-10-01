@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <ranges>
 #include <slang-com-ptr.h>
 #include <slang.h>
 #include <string>
@@ -66,11 +67,11 @@ namespace bgl
 			// module to.
 			std::array<slang::TypeReflection*, c_Contracts.size()> ifaces{};
 			std::vector<const char*>                               imported;
-			for (size_t i = 0; i < c_Contracts.size(); ++i)
+			for (auto&& [iface, contract] : std::views::zip(ifaces, c_Contracts))
 			{
-				ifaces[i] = layout->findTypeByName(c_Contracts[i].interfaceName);
-				if (ifaces[i] != nullptr)
-					imported.emplace_back(c_Contracts[i].interfaceName);
+				iface = layout->findTypeByName(contract.interfaceName);
+				if (iface != nullptr)
+					imported.emplace_back(contract.interfaceName);
 			}
 			if (imported.empty())
 				return std::nullopt;
@@ -84,10 +85,10 @@ namespace bgl
 				slang::TypeReflection* type = decl->getType();
 
 				std::vector<const Contract*> conforms;
-				for (size_t i = 0; i < c_Contracts.size(); ++i)
+				for (const auto& [iface, contract] : std::views::zip(ifaces, c_Contracts))
 				{
-					if (ifaces[i] != nullptr && layout->isSubType(type, ifaces[i]))
-						conforms.emplace_back(&c_Contracts[i]);
+					if (iface != nullptr && layout->isSubType(type, iface))
+						conforms.emplace_back(&contract);
 				}
 				if (conforms.empty())
 					continue;

@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <iterator>
 #include <memory>
+#include <ranges>
 #include <slang-com-ptr.h>
 #include <slang.h>
 #include <string>
@@ -79,8 +80,8 @@ namespace bgpu
 
 			SlangUInt threadGroup[3] = { 1, 1, 1 };
 			layout->getEntryPointByIndex(0)->getComputeThreadGroupSize(3, threadGroup);
-			for (size_t i = 0; i < stage.threadsPerThreadgroup.size(); ++i)
-				stage.threadsPerThreadgroup[i] = static_cast<uint32_t>(threadGroup[i]);
+			for (auto&& [threads, size] : std::views::zip(stage.threadsPerThreadgroup, threadGroup))
+				threads = static_cast<uint32_t>(size);
 
 			CachedProgram cached;
 			cached.stages.push_back(std::move(stage));

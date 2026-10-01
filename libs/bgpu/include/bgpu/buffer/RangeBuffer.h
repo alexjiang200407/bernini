@@ -42,39 +42,44 @@ namespace bgpu
 
 		std::string debugName;
 
-		RangeBufferDesc&
-		SetInitialCount(uint32_t value) noexcept
+		template <typename Self>
+		Self&&
+		SetInitialCount(this Self&& self, uint32_t value) noexcept
 		{
-			initialCount = value;
-			return *this;
+			self.initialCount = value;
+			return std::forward<Self>(self);
 		}
 
-		RangeBufferDesc&
-		SetBlockSize(uint32_t value) noexcept
+		template <typename Self>
+		Self&&
+		SetBlockSize(this Self&& self, uint32_t value) noexcept
 		{
-			blockSize = value;
-			return *this;
+			self.blockSize = value;
+			return std::forward<Self>(self);
 		}
 
-		RangeBufferDesc&
-		SetMaxBytes(uint64_t value) noexcept
+		template <typename Self>
+		Self&&
+		SetMaxBytes(this Self&& self, uint64_t value) noexcept
 		{
-			maxBytes = value;
-			return *this;
+			self.maxBytes = value;
+			return std::forward<Self>(self);
 		}
 
-		RangeBufferDesc&
-		SetRaw(bool value) noexcept
+		template <typename Self>
+		Self&&
+		SetRaw(this Self&& self, bool value) noexcept
 		{
-			isRaw = value;
-			return *this;
+			self.isRaw = value;
+			return std::forward<Self>(self);
 		}
 
-		RangeBufferDesc&
-		SetDebugName(std::string value) noexcept
+		template <typename Self>
+		Self&&
+		SetDebugName(this Self&& self, std::string value) noexcept
 		{
-			debugName = std::move(value);
-			return *this;
+			self.debugName = std::move(value);
+			return std::forward<Self>(self);
 		}
 	};
 

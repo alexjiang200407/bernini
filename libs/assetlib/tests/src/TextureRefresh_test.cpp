@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstring>
 #include <filesystem>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -58,9 +59,11 @@ namespace
 		[[nodiscard]] std::vector<std::string>
 		Textures() const
 		{
-			auto names = std::vector<std::string>();
-			for (const auto& entry : fs::directory_iterator(root / Document().textureDir))
-				names.push_back(entry.path().filename().string());
+			auto names = fs::directory_iterator(root / Document().textureDir) |
+			             std::views::transform([](const fs::directory_entry& entry) {
+							 return entry.path().filename().string();
+						 }) |
+			             std::ranges::to<std::vector>();
 			std::ranges::sort(names);
 			return names;
 		}

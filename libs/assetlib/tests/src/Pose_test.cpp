@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
 #include <cstdint>
+#include <ranges>
 #include <stdexcept>
 #include <vector>
 
@@ -50,8 +51,8 @@ namespace
 		// The inverse bind is the inverse of the bone's *model-space* bind transform, which is what
 		// makes a rest pose skin to identity.
 		const auto bind = bindPoseModelTransforms(skeleton);
-		for (size_t i = 0; i < skeleton.bones.size(); ++i)
-			skeleton.bones[i].inverseBind = glm::inverse(bind[i]);
+		for (auto&& [bone, bindModel] : std::views::zip(skeleton.bones, bind))
+			bone.inverseBind = glm::inverse(bindModel);
 
 		return skeleton;
 	}

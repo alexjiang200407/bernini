@@ -229,9 +229,9 @@ TEST_CASE("A report names every tag that has held bytes", "[memory]")
 	const std::string    report   = format_memory_report(snapshot);
 
 	INFO(report);
-	CHECK(report.find(MemoryTagName(c_Tag)) != std::string::npos);
-	CHECK(report.find("3.0 MiB") != std::string::npos);
-	CHECK(report.find("tagged") != std::string::npos);
+	CHECK(report.contains(MemoryTagName(c_Tag)));
+	CHECK(report.contains("3.0 MiB"));
+	CHECK(report.contains("tagged"));
 }
 
 TEST_CASE("A tag that never held bytes stays out of the report", "[memory]")
@@ -240,7 +240,7 @@ TEST_CASE("A tag that never held bytes stays out of the report", "[memory]")
 	const std::string report = format_memory_report(memory_snapshot());
 
 	INFO(report);
-	CHECK(report.find(MemoryTagName(TestTag::kUnused)) == std::string::npos);
+	CHECK(!report.contains(MemoryTagName(TestTag::kUnused)));
 }
 
 TEST_CASE("The untagged residual is the footprint the tags do not claim", "[memory]")
@@ -277,10 +277,10 @@ TEST_CASE("The written report is JSON a tool can read back", "[memory]")
 	in.close();
 	std::filesystem::remove(path);
 
-	CHECK(text.find("\"footprintBytes\"") != std::string::npos);
-	CHECK(text.find("\"untaggedBytes\"") != std::string::npos);
-	CHECK(text.find("\"peakBytes\"") != std::string::npos);
-	CHECK(text.find(std::string(MemoryTagName(c_Tag))) != std::string::npos);
+	CHECK(text.contains("\"footprintBytes\""));
+	CHECK(text.contains("\"untaggedBytes\""));
+	CHECK(text.contains("\"peakBytes\""));
+	CHECK(text.contains(std::string(MemoryTagName(c_Tag))));
 }
 
 TEST_CASE("An unwritable report path is reported, not thrown", "[memory]")

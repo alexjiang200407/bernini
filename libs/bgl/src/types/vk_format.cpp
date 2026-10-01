@@ -3,6 +3,7 @@
 #include <bgpu/types/Format.h>
 #include <core/err/util.h>
 #include <cstdint>
+#include <utility>
 
 namespace bgl
 {
@@ -75,7 +76,7 @@ namespace bgl
 
 		case VkFormat::UNDEFINED:
 		default:
-			core::fatal("FromVkFormat unsupported format: {}", static_cast<uint32_t>(vkFormat));
+			core::fatal("FromVkFormat unsupported format: {}", std::to_underlying(vkFormat));
 		}
 	}
 }

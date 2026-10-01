@@ -61,7 +61,7 @@ namespace
 		{
 			const std::vector<std::string> lines = Lines();
 			return static_cast<size_t>(std::ranges::count_if(lines, [needle](const std::string& l) {
-				return l.find(needle) != std::string::npos;
+				return l.contains(needle);
 			}));
 		}
 
@@ -139,5 +139,5 @@ TEST_CASE("Concurrent writers never lose or tear a line", "[log]")
 	REQUIRE(lines.size() == c_Threads * c_MessagesPerThread);
 
 	// Every line whole: one level tag and one message, never two messages spliced together.
-	for (const std::string& line : lines) CHECK(line.find("][") == std::string::npos);
+	for (const std::string& line : lines) CHECK(!line.contains("]["));
 }

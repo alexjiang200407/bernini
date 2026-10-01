@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <utility>
 
 namespace bgl
 {
@@ -28,8 +29,8 @@ namespace bgl
 	std::optional<uint32_t>
 	GameSlot(MaterialType material) noexcept
 	{
-		const auto kind  = static_cast<uint32_t>(material);
-		const auto start = static_cast<uint32_t>(MaterialType::kGameStart);
+		const auto kind  = std::to_underlying(material);
+		const auto start = std::to_underlying(MaterialType::kGameStart);
 		if (material == MaterialType::kInvalid || kind < start)
 			return std::nullopt;
 		return kind - start;
@@ -38,7 +39,7 @@ namespace bgl
 	MaterialType
 	GameSlotKind(uint32_t slot) noexcept
 	{
-		return static_cast<MaterialType>(static_cast<uint32_t>(MaterialType::kGameStart) + slot);
+		return static_cast<MaterialType>(std::to_underlying(MaterialType::kGameStart) + slot);
 	}
 
 	std::optional<uint32_t>
@@ -71,7 +72,7 @@ namespace bgl
 	bool
 	HasMeshInstanceFlag(const idl::MeshInstance& instance, const MeshInstanceFlag flag) noexcept
 	{
-		return (instance.flags & static_cast<uint32_t>(flag)) != 0u;
+		return (instance.flags & std::to_underlying(flag)) != 0u;
 	}
 
 	void

@@ -150,7 +150,7 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 		ctxDesc.enablePixDebug = gfxSettings["enablePixDebug"].GetOrDefault(false);
 		ctxDesc.strictError    = gfxSettings["strictError"].GetOrDefault(false);
 		ctxDesc.logLevel       = static_cast<bgpu::LogLevel>(
-			gfxSettings["logLevel"].GetOrDefault(static_cast<int>(ctxDesc.logLevel)));
+			gfxSettings["logLevel"].GetOrDefault(std::to_underlying(ctxDesc.logLevel)));
 
 		// This project's alone. Surfaces are registered inside CreateGraphics and their programs are
 		// generated from what was there then, so a project with other shaders is opened by

@@ -188,7 +188,7 @@ namespace bgl
 					"    case {}u:\n        return "
 					"materialData.{}<Slot{}Surface>(input, "
 					"isFrontFace);\n",
-					static_cast<uint32_t>(types[slot].kind),
+					std::to_underlying(types[slot].kind),
 					DrawsLitPrograms(types[slot].shading) ? "ShadeGameLitBlended" :
 															"ShadeGameBlended",
 					slot);

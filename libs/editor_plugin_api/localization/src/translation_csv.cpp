@@ -25,7 +25,7 @@ namespace
 		const auto encoded = decoded.toUtf8();
 		if (std::string_view(encoded.constData(), static_cast<std::size_t>(encoded.size())) !=
 		        csv ||
-		    csv.find('\0') != std::string_view::npos)
+		    csv.contains('\0'))
 			core::throw_runtime_error("Translation CSV must be valid UTF-8 without NUL bytes");
 
 		std::vector<std::vector<std::string>> rows;

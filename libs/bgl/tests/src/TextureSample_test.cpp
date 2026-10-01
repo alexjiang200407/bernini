@@ -27,6 +27,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <utility>
 #include <vector>
 
 #if defined(BERNINI_GPU_DEBUG)
@@ -164,7 +165,7 @@ TEST_CASE(
 	CHECK(report->count == 1);
 	CHECK_FALSE(report->overflow);
 	REQUIRE(report->records.size() == 1);
-	CHECK(report->records[0].errcode == static_cast<uint32_t>(bgpu::idl::ErrorCode::kUnknown));
+	CHECK(report->records[0].errcode == std::to_underlying(bgpu::idl::ErrorCode::kUnknown));
 
 	resourceManager->UnmapReadback(rb);
 

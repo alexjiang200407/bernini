@@ -36,130 +36,76 @@ namespace editor
 		bgl::BloomSettings      bloom;
 		bool                    colorGradeEnabled = false;
 		bgl::ColorGradeSettings colorGrade;
-		ViewportDesc&
-		SetInitialInstances(uint32_t value) & noexcept
+		template <typename Self>
+		Self&&
+		SetInitialInstances(this Self&& self, uint32_t value) noexcept
 		{
-			initialInstances = value;
-			return *this;
+			self.initialInstances = value;
+			return std::forward<Self>(self);
 		}
 
-		ViewportDesc&&
-		SetInitialInstances(uint32_t value) && noexcept
+		template <typename Self>
+		Self&&
+		SetTaaEnabled(this Self&& self, bool value) noexcept
 		{
-			SetInitialInstances(value);
-			return std::move(*this);
+			self.taaEnabled = value;
+			return std::forward<Self>(self);
 		}
 
-		ViewportDesc&
-		SetTaaEnabled(bool value) & noexcept
+		template <typename Self>
+		Self&&
+		SetRenderScale(this Self&& self, float value) noexcept
 		{
-			taaEnabled = value;
-			return *this;
+			self.renderScale = value;
+			return std::forward<Self>(self);
 		}
 
-		ViewportDesc&&
-		SetTaaEnabled(bool value) && noexcept
+		template <typename Self>
+		Self&&
+		SetTaaReconstructionWidth(this Self&& self, float value) noexcept
 		{
-			SetTaaEnabled(value);
-			return std::move(*this);
+			self.taaReconstructionWidth = value;
+			return std::forward<Self>(self);
 		}
 
-		ViewportDesc&
-		SetRenderScale(float value) & noexcept
+		template <typename Self>
+		Self&&
+		SetTaaSharpness(this Self&& self, float value) noexcept
 		{
-			renderScale = value;
-			return *this;
+			self.taaSharpness = value;
+			return std::forward<Self>(self);
 		}
 
-		ViewportDesc&&
-		SetRenderScale(float value) && noexcept
+		template <typename Self>
+		Self&&
+		SetBloomEnabled(this Self&& self, bool value) noexcept
 		{
-			SetRenderScale(value);
-			return std::move(*this);
+			self.bloomEnabled = value;
+			return std::forward<Self>(self);
 		}
 
-		ViewportDesc&
-		SetTaaReconstructionWidth(float value) & noexcept
+		template <typename Self>
+		Self&&
+		SetBloom(this Self&& self, bgl::BloomSettings value) noexcept
 		{
-			taaReconstructionWidth = value;
-			return *this;
+			self.bloom = value;
+			return std::forward<Self>(self);
 		}
 
-		ViewportDesc&&
-		SetTaaReconstructionWidth(float value) && noexcept
+		template <typename Self>
+		Self&&
+		SetColorGradeEnabled(this Self&& self, bool value) noexcept
 		{
-			SetTaaReconstructionWidth(value);
-			return std::move(*this);
+			self.colorGradeEnabled = value;
+			return std::forward<Self>(self);
 		}
 
-		ViewportDesc&
-		SetTaaSharpness(float value) & noexcept
+		template <typename Self>
+		Self&&
+		SetColorGrade(this Self&& self, bgl::ColorGradeSettings value) noexcept
 		{
-			taaSharpness = value;
-			return *this;
-		}
-
-		ViewportDesc&&
-		SetTaaSharpness(float value) && noexcept
-		{
-			SetTaaSharpness(value);
-			return std::move(*this);
-		}
-
-		ViewportDesc&
-		SetBloomEnabled(bool value) & noexcept
-		{
-			bloomEnabled = value;
-			return *this;
-		}
-
-		ViewportDesc&&
-		SetBloomEnabled(bool value) && noexcept
-		{
-			SetBloomEnabled(value);
-			return std::move(*this);
-		}
-
-		ViewportDesc&
-		SetBloom(bgl::BloomSettings value) & noexcept
-		{
-			bloom = value;
-			return *this;
-		}
-
-		ViewportDesc&&
-		SetBloom(bgl::BloomSettings value) && noexcept
-		{
-			SetBloom(value);
-			return std::move(*this);
-		}
-
-		ViewportDesc&
-		SetColorGradeEnabled(bool value) & noexcept
-		{
-			colorGradeEnabled = value;
-			return *this;
-		}
-
-		ViewportDesc&&
-		SetColorGradeEnabled(bool value) && noexcept
-		{
-			SetColorGradeEnabled(value);
-			return std::move(*this);
-		}
-
-		ViewportDesc&
-		SetColorGrade(bgl::ColorGradeSettings value) & noexcept
-		{
-			colorGrade = value;
-			return *this;
-		}
-
-		ViewportDesc&&
-		SetColorGrade(bgl::ColorGradeSettings value) && noexcept
-		{
-			SetColorGrade(value);
-			return std::move(*this);
+			self.colorGrade = value;
+			return std::forward<Self>(self);
 		}
 	};
 

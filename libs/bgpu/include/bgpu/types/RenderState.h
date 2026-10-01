@@ -2,6 +2,7 @@
 #include <bgpu/types/BlendState.h>
 #include <bgpu/types/DepthStencilState.h>
 #include <bgpu/types/RasterState.h>
+#include <utility>
 
 namespace bgpu
 {
@@ -11,25 +12,28 @@ namespace bgpu
 		BlendState        blendState;
 		DepthStencilState depthStencilState;
 
-		RenderState&
-		SetRasterState(const RasterState& state)
+		template <typename Self>
+		Self&&
+		SetRasterState(this Self&& self, const RasterState& state)
 		{
-			rasterState = state;
-			return *this;
+			self.rasterState = state;
+			return std::forward<Self>(self);
 		}
 
-		RenderState&
-		SetBlendState(const BlendState& state)
+		template <typename Self>
+		Self&&
+		SetBlendState(this Self&& self, const BlendState& state)
 		{
-			blendState = state;
-			return *this;
+			self.blendState = state;
+			return std::forward<Self>(self);
 		}
 
-		RenderState&
-		SetDepthStencilState(const DepthStencilState& state)
+		template <typename Self>
+		Self&&
+		SetDepthStencilState(this Self&& self, const DepthStencilState& state)
 		{
-			depthStencilState = state;
-			return *this;
+			self.depthStencilState = state;
+			return std::forward<Self>(self);
 		}
 	};
 }

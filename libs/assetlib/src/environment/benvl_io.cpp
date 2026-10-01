@@ -92,7 +92,7 @@ namespace assetlib
 			lighting.exposure = exposure.front();
 
 		const SourceRef& source = reader.GetSource();
-		if (source.key.find(c_KeySeparator) != std::string::npos)
+		if (source.key.contains(c_KeySeparator))
 		{
 			const auto [prefilter, irradiance] = core::str::split_once(source.key, "\n");
 			lighting.prefilter.source          = prefilter;

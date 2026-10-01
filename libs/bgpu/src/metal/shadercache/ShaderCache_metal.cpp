@@ -72,7 +72,7 @@ namespace bgpu
 			writer.WritePod<uint32_t>(static_cast<uint32_t>(program.stages.size()));
 			for (const CachedStage& stage : program.stages)
 			{
-				writer.WritePod<uint32_t>(static_cast<uint32_t>(stage.stage));
+				writer.WritePod<uint32_t>(std::to_underlying(stage.stage));
 				writer.WriteString(stage.entryPoint);
 				writer.WriteString(stage.msl);
 

@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <span>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace
@@ -134,7 +135,7 @@ TEST_CASE("A raw arena allocates records and ranges", "[raw][scene]")
 		CHECK(arena.IsOffsetValid(range.byteStart));
 
 		// No header: the first four bytes are the caller's, not a tag. GetTagAt reads exactly those.
-		CHECK(static_cast<uint32_t>(arena.GetTagAt(range.byteStart)) == payload.a);
+		CHECK(std::to_underlying(arena.GetTagAt(range.byteStart)) == payload.a);
 	}
 
 	SECTION("an erased offset stops being valid")

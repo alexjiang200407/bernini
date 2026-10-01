@@ -350,7 +350,7 @@ TEST_CASE("A surface board's save writes the board, not the disk", "[mesheditor]
 	CHECK(saved.surface.values[0].value[0] == Catch::Approx(5.5f));
 
 	// A document key this build does not know still rides through.
-	CHECK(saved.extraJson.find("studio") != std::string::npos);
+	CHECK(saved.extraJson.contains("studio"));
 }
 
 // A toon document opened on its own board saves back as its own model: the model is the

@@ -22,6 +22,7 @@
 #include <fstream>
 #include <ios>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -162,10 +163,10 @@ namespace assetlib
 		core::io::ByteWriter  pool;
 		std::vector<uint32_t> pathOffsets(m_Entries.size());
 
-		for (size_t i = 0; i < m_Entries.size(); ++i)
+		for (auto&& [pathOffset, entry] : std::views::zip(pathOffsets, m_Entries))
 		{
-			pathOffsets[i] = static_cast<uint32_t>(pool.Size());
-			pool.WritePodArray(std::span<const char>(m_Entries[i].path));
+			pathOffset = static_cast<uint32_t>(pool.Size());
+			pool.WritePodArray(std::span<const char>(entry.path));
 			pool.WritePod<char>('\0');
 		}
 

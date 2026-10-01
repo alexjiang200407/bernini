@@ -12,6 +12,7 @@
 #include <limits>
 #include <map>
 #include <optional>
+#include <ranges>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -1770,12 +1771,10 @@ namespace assetlib
 
 		loadModel(loader, model, path);
 
-		auto probed = std::vector<GltfMaterial>();
-		probed.reserve(model.materials.size());
-		for (const auto& gltfMat : model.materials)
-			probed.push_back({ .name = gltfMat.name, .isPbr = isPbrMaterial(gltfMat) });
-
-		return probed;
+		return model.materials | std::views::transform([](const auto& gltfMat) {
+				   return GltfMaterial{ .name = gltfMat.name, .isPbr = isPbrMaterial(gltfMat) };
+			   }) |
+		       std::ranges::to<std::vector>();
 	}
 
 	BMeshImport

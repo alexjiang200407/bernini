@@ -102,7 +102,7 @@ TEST_CASE(
 
 	const SurfaceTextureBinding& orm = mat.surface.textures[1];
 	REQUIRE_FALSE(orm.bakedPath.empty());
-	CHECK(orm.bakedPath.find("slot_") != std::string::npos);
+	CHECK(orm.bakedPath.contains("slot_"));
 	CHECK(orm.bakeToken != 0);
 
 	// Linear data, block-compressed: the format ADR-7 fixes for a slot's map.
@@ -152,8 +152,8 @@ TEST_CASE(
 		// Nothing left of the object form: the document collapses back to the shorthand.
 		const auto        bytes = AssetCodec<BMaterial>::Serialize(rerouted);
 		const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-		CHECK(out.find("\"routes\"") == std::string::npos);
-		CHECK(out.find("slot_") == std::string::npos);
+		CHECK(!out.contains("\"routes\""));
+		CHECK(!out.contains("slot_"));
 	}
 }
 
@@ -203,8 +203,8 @@ TEST_CASE("a routed slot round-trips through the document", "[bmaterial][surface
 
 	// The whole binding keeps the shorthand every pre-ADR-7 document used; only the routed slot
 	// grows the object form.
-	CHECK(out.find("\"baseColor\": \"albedo.ktx2\"") != std::string::npos);
-	CHECK(out.find("\"routes\"") != std::string::npos);
+	CHECK(out.contains("\"baseColor\": \"albedo.ktx2\""));
+	CHECK(out.contains("\"routes\""));
 
 	const BMaterial back = AssetCodec<BMaterial>::Deserialize(bytes);
 	REQUIRE(back.surface.textures.size() == 2);
@@ -250,9 +250,9 @@ TEST_CASE("unknown keys inside a routed slot survive the round-trip", "[bmateria
 
 	const auto        resaved = AssetCodec<BMaterial>::Serialize(material);
 	const std::string out(reinterpret_cast<const char*>(resaved.data()), resaved.size());
-	CHECK(out.find("\"futureSlotKey\"") != std::string::npos);
-	CHECK(out.find("\"futureRouteKey\"") != std::string::npos);
-	CHECK(out.find("\"baseColor\": \"albedo.ktx2\"") != std::string::npos);
+	CHECK(out.contains("\"futureSlotKey\""));
+	CHECK(out.contains("\"futureRouteKey\""));
+	CHECK(out.contains("\"baseColor\": \"albedo.ktx2\""));
 
 	// And the round of the round-trip: the second read still holds everything together.
 	const BMaterial again = AssetCodec<BMaterial>::Deserialize(resaved);
