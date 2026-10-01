@@ -229,7 +229,17 @@ public uint CullMeshlets(uint gid, uint lane)
     }
 #endif
 
-    return survivors * cMeshletsPerGroup;
+    if (survivors == 0u)
+    {
+        return 0u;
+    }
+
+    // Only the last group can be short, and it is the last survivor when it survives, so its
+    // missing meshlets are the dispatch's trailing groups: not launching them changes no index.
+    let lastGroup = groupCount - 1u;
+    let shortBy = (cMeshletsPerGroup - meshletCount % cMeshletsPerGroup) % cMeshletsPerGroup;
+    let lastSurvives = (gSurvivorMask[lastGroup / 32u] & (1u << (lastGroup % 32u))) != 0u;
+    return survivors * cMeshletsPerGroup - (lastSurvives ? shortBy : 0u);
 }
 
 // @pre submeshEntry is the level's place in the geom's range, as ResolveLod gave it.
