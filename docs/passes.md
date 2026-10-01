@@ -32,7 +32,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 
 `RenderContext` ([gfx/RenderContext.cpp](libs/bgl/src/gfx/RenderContext.cpp)) drives the frame and
 owns the long-lived pass objects (`m_BrdfLut`, `m_Forward`, `m_BlobShadows`, `m_Skybox`, `m_TransparentSort`,
-`m_CompactInstances`, `m_RigFrames`, `m_SkinnedPose`, `m_OutlineMask`, `m_TaaResolve`,
+`m_CompactInstances`, `m_PlaceBlocks`, `m_RigFrames`, `m_SkinnedPose`, `m_OutlineMask`, `m_TaaResolve`,
 `m_BloomPass`, `m_PostProcess`, `m_OverlayPass`, `m_PreparePresentPass`); `Graphics` owns one context and
 forwards the frame methods to it. A frame is built between `BeginFrame` and `EndFrame`, with one `Draw` per
 view in between; the passes are added in this order and, because the graph never reorders, execute
@@ -44,7 +44,8 @@ flowchart TD
     CLR --> D["per Draw(view)"]
     subgraph D["per Draw(view) — resources imported under the view's namespace"]
         IMP["Scene / SceneView import their buffers"] --> SKY["Skybox (only if the view has one)"]
-        SKY --> RIG["Pose Rig Frames (only when a rig wants its bone anim table)"]
+        SKY --> PB["Place Blocks (only when an instance block has a writer; one dispatch per block)"]
+        PB --> RIG["Pose Rig Frames (only when a rig wants its bone anim table)"]
         RIG --> POSE["Pose Skinned (one workgroup per skinned instance)"]
         POSE --> TS["Transparent Sort (3 sub-passes)"]
         TS --> CI["Compact Instances (3 sub-passes)"]
@@ -567,6 +568,22 @@ reprojects through a pose nothing drew, which is the caller's to avoid.
 * **Skipped** when the view places no skinned instance — and an instance drawing from its rig's bone
   anim table is not one of them. The dense list is built from instances that own a palette, which is
   what this pass writes into; a table instance owns none and is posed by `Pose Rig Frames` once.
+
+### Place Blocks — [passes/PlaceBlocksPass.{h,cpp}](libs/bgl/src/passes/PlaceBlocksPass.cpp)
+
+* **What it is:** the writer of every instance block (`ISceneView::CreateMeshInstanceBlock`). One
+  dispatch per block that has a writer, `MeshInstanceWriter::DispatchGroups(capacity)` groups of
+  64, each thread calling the writer's `Write` for one slot. A block holds its own `ComputeKernel`
+  -- the writer's pipeline with a constant buffer of its own -- and the pass fills its `block`
+  (the mesh buffer's writable view, the first slot, the capacity) beside the caller's `params`.
+* **In / out:** `scene.meshInstanceBuffer`, read-write, through the writable view
+  (`EntryBuffer::GetWritableView`), re-read every frame since a growth replaces it. A buffer a
+  writer imported (`IGraphics::ImportBuffer`) is bound through its parameters and is no graph
+  resource: the frame's `WaitBeforeNextFrame` is what orders it.
+* **First in the view's frame**, ahead of `Pose Rig Frames`, `Pose Skinned` and the cull, all of
+  which read a placement. Absent from the graph when no block has a writer.
+* **Writes only its own run.** The run starts and ends on an upload block, so no CPU placement's
+  upload rewrites what a writer wrote, and the CPU writes the run once, at creation.
 
 ### Pose Rig Frames
 

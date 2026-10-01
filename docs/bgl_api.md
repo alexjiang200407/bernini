@@ -399,9 +399,11 @@ flowchart TD
   static geom with no handles of their own: a GPU kernel places them every frame and the CPU never
   writes them. Creation and deletion move the temporal epoch once each, however many slots; what the
   writer does moves nothing, since every slot it places writes its own previous transform. Like a
-  placement, a block names its geom and does not own it. **No pass draws a block yet**: the calls,
-  their refusals and the parameters are in place, and the block pass that records the writer
-  and culls its slots is not.
+  placement, a block names its geom and does not own it. Its slots are a block-aligned run of the
+  view's instance buffer, each culled, drawn and re-resolved on a material change like any
+  placement, and every one is hidden until its writer places it; a capacity of N costs N slots in
+  the cull whether the writer shows them or not. The geom's grass is not grown on them. Each frame
+  the `Place Blocks` pass runs every block's writer first (docs/passes.md).
 * **`SetBlockWriter(block, writer)` / `GetBlockParams(block)`** — binds a writer compiled by
   the same `IGraphics` and gives the block its own copy of the writer's `Params`, written by name
   like any constant buffer and kept across frames. Rebinding starts from zeros; null unbinds, and
