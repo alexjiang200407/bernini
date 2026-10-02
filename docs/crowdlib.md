@@ -144,7 +144,8 @@ each refuses; what follows is why it is shaped as it is.
   `CSStep` writes each agent's record as it writes the agent, at the agent's index, so `source` is
   the `AgentRange`'s source index: the layout already says where each agent came from, and the
   records cost no pass of their own. `tests/src/CrowdRenderRing_test.cpp` reads them back through
-  an import of its own, as a renderer would.
+  an import of its own, as a renderer would. The reader that draws them is `crowd_render`
+  ([crowd_render.md](crowd_render.md)).
 * **Tick timing.** Every tick that dispatches is timed on the crowd's queue, and
   `GetTickGpuMilliseconds(t)` reads it back while `t` is one of the last `maxTicksInFlight + 1`.
 

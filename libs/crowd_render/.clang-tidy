@@ -1,0 +1,5 @@
+InheritParentConfig: true
+
+# Include hygiene, on for this subsystem. See docs/naming.md.
+Checks: >
+  misc-include-cleaner
