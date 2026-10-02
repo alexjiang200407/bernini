@@ -15,6 +15,15 @@ namespace bgl
 		 * instance is what asks for the table; the first frame after fills it.
 		 */
 		kBoneAnimTable,
+
+		/**
+		 * Per instance while the placement is large on screen and its view's budget allows, the
+		 * rig's table otherwise -- chosen by the cull every frame, and dissolved between. Holds what
+		 * kPerInstance holds (weighted slots, foot IK) and reserves the table as kBoneAnimTable
+		 * does; from the table it draws the slot weighted heaviest, unplanted. See
+		 * LodSelectionDesc for the threshold and the budget.
+		 */
+		kAuto,
 	};
 
 	/**

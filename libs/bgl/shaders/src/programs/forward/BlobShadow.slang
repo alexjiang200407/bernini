@@ -1,9 +1,12 @@
 import idl.BlobShadow;
 import idl.Constants;
 import idl.MeshInstance;
+import idl.Rig;
+import idl.SkinnedState;
 import lib.math.box_bounds;
 import lib.types.ComputeBuffer;
 import lib.types.EntryBuffer;
+import lib.types.RawBuffer;
 import lib.types.UploadBuffer;
 
 // One workgroup draws one blob-shadow decal: a screen-space quad over the caster's footprint whose
@@ -25,6 +28,10 @@ struct Uniforms
     // The palette arena, GPU-written: read only for the soles PoseSkinned wrote at the end of a
     // hero's slice this frame.
     ComputeBuffer<float4> palettes;
+
+    // A foot's placement's playback record and its rig: where its sole sits in the arena.
+    RawBuffer playbackBuffer;
+    EntryBuffer<Rig> rigs;
 
     // The scene depth after Forward's world phase, under this frame's viewProj: every receiver,
     // and nothing that is not one.
@@ -123,6 +130,17 @@ void FootVolumeCorners(BlobShadow blob, MeshInstance mesh, float3 heelPos, float
     }
 }
 
+// The palette slot of `leg`'s heel: a hero palette ends with one sole per leg of its rig, after the
+// poses at `time` and `prevTime`.
+//
+// @pre mesh's record is a SkinnedState and its rig authored `leg`.
+uint SoleSlot(MeshInstance mesh, uint leg)
+{
+    let state = gBlobShadowData.playbackBuffer.LoadRecordAs<SkinnedState>(mesh.playback);
+    let rig = gBlobShadowData.rigs.Get(state.rig);
+    return state.palette.GetStart() + cFloat4sPerBone * rig.boneCount * 2u + cFloat4sPerSole * leg;
+}
+
 [shader("mesh")]
 [numthreads(4, 1, 1)]
 [outputtopology("triangle")]
@@ -131,14 +149,15 @@ void MSMain(uint gid: SV_GroupID, uint gtid: SV_GroupThreadID, OutputVertices<VS
     let blob = gBlobShadowData.blobBuffer[gid];
     let mesh = gBlobShadowData.meshBuffer[blob.mesh];
 
-    // A branch, not a select: a body disc's `soleSlot` is no index, and a select loads both sides.
+    // A branch, not a select: a body disc's `leg` is no index, and a select loads both sides.
     var heelPos = float3(0.0, 0.0, 0.0);
     var ballPos = float3(0.0, 0.0, 0.0);
     float3 corners[cBoxCorners];
-    if (blob.soleSlot != cBodyDisc)
+    if (blob.leg != cBodyDisc)
     {
-        heelPos = gBlobShadowData.palettes[blob.soleSlot].xyz;
-        ballPos = gBlobShadowData.palettes[blob.soleSlot + 1].xyz;
+        let soleSlot = SoleSlot(mesh, blob.leg);
+        heelPos = gBlobShadowData.palettes[soleSlot].xyz;
+        ballPos = gBlobShadowData.palettes[soleSlot + 1].xyz;
         FootVolumeCorners(blob, mesh, heelPos, ballPos, corners);
     }
     else
@@ -220,7 +239,7 @@ float4 PSMain(VSOut input) : SV_Target
     float3 delta;
     float height;
     float fade;
-    if (blob.soleSlot == cBodyDisc)
+    if (blob.leg == cBodyDisc)
     {
         let caster = float3(mesh.transform[0].w, mesh.transform[1].w, mesh.transform[2].w) + n * blob.lift;
         delta = caster - world;

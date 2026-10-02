@@ -115,14 +115,17 @@ namespace bgl
 			return state;
 		}
 
-		state.level = static_cast<LodLevel>((word.packed & idl::cInstanceLodLevelMask) - 1u);
-		if (const uint32_t outgoing =
-		        (word.packed >> idl::cInstanceLodOutgoingShift) & idl::cInstanceLodLevelMask;
-		    outgoing != 0u)
+		state.level     = static_cast<LodLevel>((word.packed & idl::cInstanceLodLevelMask) - 1u);
+		state.fromTable = (word.packed & idl::cInstanceLodTableBit) != 0u;
+		state.granted   = (word.packed & idl::cInstanceLodGrantBit) != 0u;
+
+		const uint32_t outgoingByte = word.packed >> idl::cInstanceLodOutgoingShift;
+		if (const uint32_t outgoing = outgoingByte & idl::cInstanceLodLevelMask; outgoing != 0u)
 		{
-			state.outgoing = static_cast<LodLevel>(outgoing - 1u);
-			state.fade     = static_cast<float>(word.packed >> idl::cInstanceLodFadeShift) /
-			                 idl::cInstanceLodFadeScale;
+			state.outgoing          = static_cast<LodLevel>(outgoing - 1u);
+			state.outgoingFromTable = (outgoingByte & idl::cInstanceLodTableBit) != 0u;
+			state.fade = static_cast<float>(word.packed >> idl::cInstanceLodFadeShift) /
+			             idl::cInstanceLodFadeScale;
 		}
 		return state;
 	}
@@ -143,5 +146,11 @@ namespace bgl
 		cullView.lodFadeStep               = selection.fadeSeconds > 0.0f && frameSeconds > 0.0f ?
 		                                         frameSeconds / selection.fadeSeconds :
 		                                         1.0f;
+		cullView.posePixels                = selection.posePixels;
+		cullView.poseBudget                = selection.poseBudget;
+		cullView.poseForced = !selection.forcePoseSource.has_value() ? idl::cPoseForceNone :
+		                      *selection.forcePoseSource == PoseSource::kBoneAnimTable ?
+		                                                               idl::cPoseForceTable :
+		                                                               idl::cPoseForcePerInstance;
 	}
 }

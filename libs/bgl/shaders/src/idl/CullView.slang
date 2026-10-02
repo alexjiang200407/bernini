@@ -22,4 +22,12 @@ public struct CullView
     public float lodPixelScale;
     public uint lodForcedLevel;
     public float lodFadeStep;
+
+    // The automatic pose source, resolved the same way: posePixels is the threshold on a geom with
+    // one level (a geom with levels swaps where it leaves level 0), scaled by lodPixelScale;
+    // poseBudget the placements drawn per instance at once; poseForced, unless cPoseForceNone, the
+    // source every automatic placement takes, skipping the size test (cPoseForce*).
+    public float posePixels;
+    public uint poseBudget;
+    public uint poseForced;
 };

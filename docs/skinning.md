@@ -131,6 +131,12 @@ not obvious from a signature. The headers linked below are the source of truth.
   from different sources in the same frame, and a unit changes tier by respawning rather than by
   being re-uploaded.
 
+  A third value, `kAuto`, is declared with what it will draw from — a `SkinnedAutoState` record,
+  the `InstanceLod` word's source and grant bits, a per-view `PosePool` and a placement's
+  `InstancePose` slice, the rig's `tableSoles` — and both spawns refuse it until the passes that
+  read them exist. A whole playback record cannot be spawned on `kBoneAnimTable`: the
+  `SkinnedMeshInstanceDesc` spawn refuses it.
+
   **The source is the kind of playback record the placement holds**, and nowhere else. A hero
   instance gets an `idl::SkinnedState` — the rig, its weighted slots and a palette — and a crowd one
   an `idl::SkinnedTableState`: the one `{rig, clip, phase, rate}` a hero record's slot 0 spells, and
