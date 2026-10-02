@@ -44,7 +44,8 @@
 // Run until closed, the crowd steps its fixed tick at the wall clock's pace and every group marches
 // back and forth between its two ends. With --frames it steps one tick a frame and marches once,
 // so the run is the same every time and its end can be checked. --units multiplies the crowd, and
-// the log splits each frame's time into the crowd, posing a box per agent, and the renderer.
+// the log splits each frame's time into the crowd, posing a box per agent, and the renderer, and
+// gives the crowd's mean GPU time a tick.
 
 namespace
 {
@@ -295,6 +296,21 @@ namespace
 			}
 		};
 
+		// Each completed tick's GPU time, read while the crowd still holds it.
+		double     tickGpuTime  = 0.0;
+		uint32_t   tickGpuCount = 0;
+		uint64_t   timedTick    = 0;
+		const auto collectTicks = [&] {
+			for (const uint64_t completed = crowd->GetCompletedTick(); timedTick < completed;)
+			{
+				if (const auto ms = crowd->GetTickGpuMilliseconds(++timedTick))
+				{
+					tickGpuTime += *ms;
+					++tickGpuCount;
+				}
+			}
+		};
+
 		uint64_t drawnTick = 0;
 		uint32_t frame     = 0;
 		for (; live || frame < opts.frames; ++frame)
@@ -355,6 +371,7 @@ namespace
 
 			const auto readback = crowd->ReadDebugAgents();
 			crowdTime += since(crowdStart);
+			collectTicks();
 			const auto poseStart = Clock::now();
 			if (readback && readback->tick != drawnTick)
 			{
@@ -427,6 +444,7 @@ namespace
 
 		crowd->Wait();
 		graphics->WaitIdle();
+		collectTicks();
 		if (opts.passTimings)
 		{
 			collectTimings();
@@ -446,7 +464,7 @@ namespace
 			std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
 		std::cout << std::format(
 			"{} agents, {} frames, {} ticks in {:.2f} s: {:.2f} ms a frame -- crowd {:.2f}, posing "
-			"{:.2f}, drawing {:.2f}\n",
+			"{:.2f}, drawing {:.2f}; crowd GPU {:.3f} ms a tick\n",
 			c_BaseAgents * units,
 			frame,
 			crowd->GetCompletedTick(),
@@ -454,7 +472,8 @@ namespace
 			frame > 0 ? 1000.0 * seconds / frame : 0.0,
 			frame > 0 ? 1000.0 * crowdTime / frame : 0.0,
 			frame > 0 ? 1000.0 * poseTime / frame : 0.0,
-			frame > 0 ? 1000.0 * drawTime / frame : 0.0);
+			frame > 0 ? 1000.0 * drawTime / frame : 0.0,
+			tickGpuCount > 0 ? tickGpuTime / tickGpuCount : 0.0);
 		if (opts.frames == 0)
 			return 0;
 
