@@ -72,6 +72,8 @@ set(IDL_CPP_SOURCES
     SkinnedAutoState.slang
     InstancePose.slang
     PosePool.slang
+    AutoPosedInstance.slang
+    DominantFrames.slang
     PlaybackType.slang
 )
 

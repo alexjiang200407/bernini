@@ -10,6 +10,10 @@ public struct InstancedPayload
     // (DissolveVSOut.lodDissolve).
     public uint submeshEntry;
     public float lodDissolve;
+
+    // Nonzero when this entry of an automatic placement draws from its rig's table rather than from
+    // the pose-pool slice the cull cut for it. Zero, and unread, on every other placement.
+    public uint poseFromTable;
 }
 
 // Survivor groups one CulledPayload::survivorMask word holds, a bit each.

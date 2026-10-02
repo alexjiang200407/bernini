@@ -172,7 +172,7 @@ span between two samples is what a weight divides by.
   have no defined weighting between them and the span between them is a divisor. Refused at both
   doors: the document's own validation, and `AddRig`.
 * **A sample loops with the space, and needs two frames.** The space's phase wraps, and each sample
-  plays at that fraction of its own cycle (`PoseSkinned.slang`), so a clip cooked as a one-shot
+  plays at that fraction of its own cycle (`lib/anim/resolve_slots.slang`), so a clip cooked as a one-shot
   cycles here like any other: a pack's walk whose last pose misses its first by a little shows a
   hitch at the wrap, not a frozen foot. A single frame has no cycle, and the weighted cycle is a
   divisor, so that is refused. Single-clip playback still reads the flag -- a one-shot played alone

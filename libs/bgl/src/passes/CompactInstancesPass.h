@@ -46,12 +46,23 @@ namespace bgl
 		ExecuteCull(const PassContext& ctx, const DrawData& draw);
 
 		void
+		ExecuteChoosePoses(const PassContext& ctx, const DrawData& draw);
+
+		void
+		AttachClear(FrameGraph& fg, const DrawData& draw);
+
+		void
+		AttachCull(FrameGraph& fg, const DrawData& draw);
+
+		void
 		ExecuteHistogramAndPrefixSum(const PassContext& ctx, const DrawData& draw);
 
 		void
 		ExecuteGenerateInstanceDispatchArgs(const PassContext& ctx, const DrawData& draw);
 
 	private:
+		bgpu::ComputeKernel m_ChoosePoses;
+		bgpu::ComputeKernel m_GrantPoses;
 		bgpu::ComputeKernel m_CullInstances;
 		bgpu::ComputeKernel m_Histogram;
 		bgpu::ComputeKernel m_PrefixSum;

@@ -3,14 +3,16 @@ import idl.Clip;
 import idl.Constants;
 import idl.Rig;
 import idl.SkinnedBone;
+import idl.SkinnedLegChain;
 import lib.anim.pose_walk;
+import lib.anim.soles;
 import lib.types.ComputeBuffer;
 import lib.types.EntryBuffer;
 import lib.types.PoseTables;
 import lib.types.RangeBuffer;
 
-// Fills one rig's bone anim table: one workgroup per frame of its clip set, each running the same
-// walk PoseSkinned runs per instance. Every instance of the rig then reads a pose instead of
+// Fills one rig's bone anim table, and on a rig with legs its table soles: one workgroup per frame of
+// its clip set, each running the same walk PoseSkinned runs per instance. Every instance of the rig then reads a pose instead of
 // computing one, which is what makes the crowd tier cost nothing per unit.
 //
 // Dispatched per rig rather than over a list of them, because the group count is the rig's own frame
@@ -24,6 +26,7 @@ struct Uniforms
     RangeBuffer<SkinnedBone> boneBuffer;
     RangeBuffer<Clip> clipBuffer;
     RangeBuffer<BoneSample> sampleBuffer;
+    RangeBuffer<SkinnedLegChain> legBuffer;
 
     ComputeBuffer<float4> boneAnimTables;
 
@@ -82,5 +85,17 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
     let base = rig.boneAnimTable.GetStart() + groupIdx * rig.boneCount * cFloat4sPerBone;
 
     // An integer frame, so the walk's blend weight is zero and it reads one sample per bone.
-    PoseInto(tables, rig, SingleClipPose(clip, float(frameInClip)), base, localIdx);
+    PoseModelSpace(tables, rig, SingleClipPose(clip, float(frameInClip)), base, localIdx);
+
+    // Each leg's sole at this frame, model space and unplanted: a placement on the table places
+    // them by its own transform. Frame-major, legs.count a frame.
+    if (!rig.tableSoles.Null())
+    {
+        let identity =
+            float4x4(float4(1.0, 0.0, 0.0, 0.0), float4(0.0, 1.0, 0.0, 0.0), float4(0.0, 0.0, 1.0, 0.0), float4(0.0, 0.0, 0.0, 1.0));
+        let firstSoleSlot = rig.tableSoles.GetStart() + groupIdx * rig.legs.count * cFloat4sPerSole;
+        WriteSoles(tables, gUniforms.legBuffer, rig, identity, base, firstSoleSlot, localIdx);
+    }
+
+    FoldInverseBind(tables, rig, base, localIdx);
 }

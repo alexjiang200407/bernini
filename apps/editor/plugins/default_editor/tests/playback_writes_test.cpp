@@ -21,11 +21,15 @@ namespace
 	constexpr float c_Now = 10.0f;
 }
 
-TEST_CASE("Only the per-instance source takes a playback rewrite", "[animation]")
+TEST_CASE(
+	"The sources that hold slots take a playback rewrite, and the crowd one does not",
+	"[animation]")
 {
 	// The crowd source reads the rig's shared table: one clip, no slots, and no instance may write
-	// it. SetSkinnedPlayback throws there, so the panel must respawn instead.
+	// it. SetSkinnedPlayback throws there, so the panel must respawn instead. The automatic source
+	// holds the hero's slots whichever source it draws from this frame.
 	CHECK(RewritesPlayback(bgl::PoseSource::kPerInstance));
+	CHECK(RewritesPlayback(bgl::PoseSource::kAuto));
 	CHECK_FALSE(RewritesPlayback(bgl::PoseSource::kBoneAnimTable));
 }
 

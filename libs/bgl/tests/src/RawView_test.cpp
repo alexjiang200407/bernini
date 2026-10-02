@@ -4,9 +4,11 @@
 #include "util/TestOptions.h"
 #include <array>
 #include <bgl/IGraphics.h>
+#include <bgl/idl/AutoPosedInstance.h>
 #include <bgl/idl/BlobShadow.h>
 #include <bgl/idl/Constants.h>
 #include <bgl/idl/CullView.h>
+#include <bgl/idl/DominantFrames.h>
 #include <bgl/idl/InstancePose.h>
 #include <bgl/idl/Rig.h>
 #include <bgl/idl/SkinnedAutoState.h>
@@ -41,9 +43,11 @@ namespace
 	constexpr uint32_t c_RigOffset    = c_AutoOffset + 256;
 	constexpr uint32_t c_BlobOffset   = c_RigOffset + 128;
 	constexpr uint32_t c_PoseOffset   = c_BlobOffset + 32;
-	constexpr uint32_t c_BufferBytes  = c_PoseOffset + 16;
+	constexpr uint32_t c_PosedOffset  = c_PoseOffset + 16;
+	constexpr uint32_t c_FramesOffset = c_PosedOffset + 16;
+	constexpr uint32_t c_BufferBytes  = c_FramesOffset + 32;
 
-	constexpr uint32_t c_OutValues = 10;
+	constexpr uint32_t c_OutValues = 12;
 }
 
 /**
@@ -134,6 +138,20 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	auto pose                = bgl::idl::InstancePose();
 	pose.palette.offsetStart = 23;
 
+	auto posed                = bgl::idl::AutoPosedInstance();
+	posed.mesh                = 31;
+	posed.footIK.offsetStart  = 32;
+	posed.palette.offsetStart = 33;
+	posed.ikScale             = 0.25f;
+
+	auto dominant       = bgl::idl::DominantFrames();
+	dominant.lower      = 41;
+	dominant.upper      = 42;
+	dominant.weight     = 0.5f;
+	dominant.prevLower  = 43;
+	dominant.prevUpper  = 44;
+	dominant.prevWeight = 0.25f;
+
 	const auto vertexVec4 = glm::vec4(11.0f, 12.0f, 13.0f, 14.0f);
 	const auto vertexVec3 = glm::vec3(21.0f, 22.0f, 23.0f);
 
@@ -144,7 +162,9 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	static_assert(c_AutoOffset + sizeof(bgl::idl::SkinnedAutoState) <= c_RigOffset);
 	static_assert(c_RigOffset + sizeof(bgl::idl::Rig) <= c_BlobOffset);
 	static_assert(c_BlobOffset + sizeof(bgl::idl::BlobShadow) <= c_PoseOffset);
-	static_assert(c_PoseOffset + sizeof(bgl::idl::InstancePose) <= c_BufferBytes);
+	static_assert(c_PoseOffset + sizeof(bgl::idl::InstancePose) <= c_PosedOffset);
+	static_assert(c_PosedOffset + sizeof(bgl::idl::AutoPosedInstance) <= c_FramesOffset);
+	static_assert(c_FramesOffset + sizeof(bgl::idl::DominantFrames) <= c_BufferBytes);
 
 	std::array<std::byte, c_BufferBytes> bytes{};
 	std::memcpy(bytes.data() + c_StateOffset, &state, sizeof(state));
@@ -155,6 +175,8 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	std::memcpy(bytes.data() + c_RigOffset, &rig, sizeof(rig));
 	std::memcpy(bytes.data() + c_BlobOffset, &blob, sizeof(blob));
 	std::memcpy(bytes.data() + c_PoseOffset, &pose, sizeof(pose));
+	std::memcpy(bytes.data() + c_PosedOffset, &posed, sizeof(posed));
+	std::memcpy(bytes.data() + c_FramesOffset, &dominant, sizeof(dominant));
 
 	const bgpu::BufferHandle records = resourceManager->CreateRawBuffer(
 		bgpu::RawViewDesc().SetByteSize(c_BufferBytes).SetDebugName("Raw Record Arena"));
@@ -192,6 +214,8 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	kernel["gUniforms"]["rigOffset"]    = c_RigOffset;
 	kernel["gUniforms"]["blobOffset"]   = c_BlobOffset;
 	kernel["gUniforms"]["poseOffset"]   = c_PoseOffset;
+	kernel["gUniforms"]["posedOffset"]  = c_PosedOffset;
+	kernel["gUniforms"]["framesOffset"] = c_FramesOffset;
 
 	cmdList->Open(cmdQueue, cmdAllocator);
 
@@ -270,6 +294,16 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	CHECK(got[9].y == Catch::Approx(static_cast<float>(rig.tableSoles.offsetStart)));
 	CHECK(got[9].z == Catch::Approx(static_cast<float>(blob.leg)));
 	CHECK(got[9].w == Catch::Approx(static_cast<float>(pose.palette.offsetStart)));
+
+	CHECK(got[10].x == Catch::Approx(static_cast<float>(posed.mesh)));
+	CHECK(got[10].y == Catch::Approx(static_cast<float>(posed.footIK.offsetStart)));
+	CHECK(got[10].z == Catch::Approx(static_cast<float>(posed.palette.offsetStart)));
+	CHECK(got[10].w == Catch::Approx(posed.ikScale));
+
+	CHECK(got[11].x == Catch::Approx(static_cast<float>(dominant.lower)));
+	CHECK(got[11].y == Catch::Approx(dominant.weight));
+	CHECK(got[11].z == Catch::Approx(static_cast<float>(dominant.prevUpper)));
+	CHECK(got[11].w == Catch::Approx(dominant.prevWeight));
 
 	CHECK(got[5].x == Catch::Approx(vertexVec4.x).margin(c_Margin));
 	CHECK(got[5].y == Catch::Approx(vertexVec4.y).margin(c_Margin));

@@ -63,6 +63,16 @@ namespace bgl
 	constexpr std::string_view c_PosedInstancesName = "scene.posedInstances"sv;
 	constexpr std::string_view c_BonePaletteName    = "scene.bonePalettes"sv;
 
+	// The automatic source's, per view (AutoPoseState): the placements on it, each one's pose slice
+	// this frame, the pool's counters, the pose list the camera's cull writes and the requests it
+	// collects for the budget's grants.
+	constexpr std::string_view c_AutoPlacementsName = "scene.autoPlacements"sv;
+	constexpr std::string_view c_InstancePoseName   = "scene.instancePose"sv;
+	constexpr std::string_view c_PosePoolName       = "scene.posePool"sv;
+	constexpr std::string_view c_AutoPosedName      = "scene.autoPosed"sv;
+	constexpr std::string_view c_PoseRequestsName   = "scene.poseRequests"sv;
+	constexpr std::string_view c_DominantFramesName = "scene.dominantFrames"sv;
+
 	constexpr std::string_view c_InstanceVisibilityName = "scene.instanceVisibility"sv;
 	constexpr std::string_view c_CompactedInstancesName = "scene.compactedInstances"sv;
 

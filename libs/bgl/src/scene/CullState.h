@@ -142,6 +142,21 @@ namespace bgl
 			return std::exchange(m_LodNeedsClear, false);
 		}
 
+		/**
+		 * Marks a placement slot just written: its words still hold whatever the slot's previous
+		 * occupant left, which would hand the new placement that one's level, dissolve and pose-source
+		 * right. ClearFresh zeroes them before the next cull reads them.
+		 */
+		void
+		MarkFresh(uint32_t placement)
+		{
+			m_FreshPlacements.push_back(placement);
+		}
+
+		/** Zeroes both words of every slot MarkFresh named since the last call. */
+		void
+		ClearFresh(bgpu::ICommandList* cmdList);
+
 	private:
 		// Written by the compaction, bounded by the dispatch args that same compaction wrote, so it
 		// is never cleared between frames -- a reader only touches slots this frame's scatter filled.
@@ -165,5 +180,6 @@ namespace bgl
 		std::array<bgpu::ComputeBuffer, 2> m_InstanceLod;
 		uint32_t                           m_LodCurrent    = 0;
 		bool                               m_LodNeedsClear = true;
+		std::vector<uint32_t>              m_FreshPlacements;
 	};
 }

@@ -53,11 +53,11 @@ namespace editor
 	PreviewBlobShadow(
 		const bool                 disc,
 		const bool                 feet,
-		const bool                 hasFootIK,
+		const bool                 hasLegs,
 		const bgl::BlobShadowDesc& discDesc,
 		const bgl::FootShadowDesc& footDesc) noexcept
 	{
-		const bool wearsFeet = feet && hasFootIK;
+		const bool wearsFeet = feet && hasLegs;
 		if (!disc && !wearsFeet)
 			return std::nullopt;
 

@@ -15,9 +15,13 @@ import idl.Constants;
 import idl.IBonePalette;
 import idl.PlaybackType;
 import idl.Rig;
+import idl.DominantFrames;
+import idl.InstancePose;
+import idl.SkinnedAutoState;
 import idl.SkinnedState;
 import idl.SkinnedTableState;
 import lib.anim.clip_playback;
+import lib.anim.pose_walk;
 import lib.anim.skinning;
 import lib.debug.dbg;
 import lib.forward.common;
@@ -57,6 +61,25 @@ public struct SkinnedPose : IBonePalette
     uint boneCount;
 };
 
+// A pose the pose pass wrote into the palette arena from `base`. It wrote the previous frame's into
+// the second half of the slice, so the reprojection is one more blend rather than a history buffer.
+SkinnedPose PalettePose(Rig rig, uint base)
+{
+    SkinnedPose pose;
+    pose.source = skinnedData.bonePaletteBuffer;
+    pose.blends = false;
+    pose.boneCount = rig.boneCount;
+
+    pose.base = base;
+    pose.prevBase = base + rig.boneCount * cFloat4sPerBone;
+
+    pose.upperBase = pose.base;
+    pose.prevUpperBase = pose.prevBase;
+    pose.weight = 0.0;
+    pose.prevWeight = 0.0;
+    return pose;
+}
+
 /**
  * Resolves the pose one group draws from. Every load here is group-uniform, which is why it happens
  * once instead of per vertex.
@@ -64,13 +87,45 @@ public struct SkinnedPose : IBonePalette
  * @pre ctx.mesh.playback is non-null -- a static placement owns no record, and the entry point that
  *      draws mixed tiers branches on that before reaching here.
  */
-public SkinnedPose ResolveSkinnedPose(MeshletContext ctx)
+public SkinnedPose ResolveSkinnedPose(MeshletContext ctx, InstancedPayload payload)
 {
     SkinnedPose pose;
 
     // The record's kind is the pose source. Read from the arena header rather than from a field,
-    // because the two kinds are different records and not one record with a hole in it.
-    if (forwardData.GetPlaybackKind(ctx.mesh.playback) == PlaybackType.kSkinnedTable)
+    // because the kinds are different records and not one record with a hole in it.
+    let kind = forwardData.GetPlaybackKind(ctx.mesh.playback);
+    if (kind == PlaybackType.kSkinnedAuto)
+    {
+        let state = forwardData.playbackBuffer.LoadRecordAs<SkinnedAutoState>(ctx.mesh.playback);
+        let rig = skinnedData.rigBuffer.Get(state.rig);
+
+        // Drawn per instance this frame: the slice the cull cut and the pose pass filled, laid out as
+        // a hero's palette.
+        if (payload.poseFromTable == 0u)
+        {
+            let slice = skinnedData.instancePose[payload.instance.meshInstance.GetOffset()].palette;
+            return PalettePose(rig, slice.GetStart());
+        }
+
+        pose.source = skinnedData.boneAnimTables;
+        pose.blends = true;
+        pose.boneCount = rig.boneCount;
+
+        // The frames the cull resolved the record's dominant entry to, at both clocks.
+        let dominant = skinnedData.dominantFrames[payload.instance.meshInstance.GetOffset()];
+        let start = rig.boneAnimTable.GetStart();
+        let stride = rig.boneCount * cFloat4sPerBone;
+        pose.base = start + dominant.lower * stride;
+        pose.upperBase = start + dominant.upper * stride;
+        pose.weight = dominant.weight;
+        pose.prevBase = start + dominant.prevLower * stride;
+        pose.prevUpperBase = start + dominant.prevUpper * stride;
+        pose.prevWeight = dominant.prevWeight;
+
+        return pose;
+    }
+
+    if (kind == PlaybackType.kSkinnedTable)
     {
         let state = forwardData.playbackBuffer.LoadRecordAs<SkinnedTableState>(ctx.mesh.playback);
         let rig = skinnedData.rigBuffer.Get(state.playback.rig);
@@ -87,23 +142,7 @@ public SkinnedPose ResolveSkinnedPose(MeshletContext ctx)
     }
 
     let state = forwardData.playbackBuffer.LoadRecordAs<SkinnedState>(ctx.mesh.playback);
-    let rig = skinnedData.rigBuffer.Get(state.rig);
-
-    pose.source = skinnedData.bonePaletteBuffer;
-    pose.blends = false;
-    pose.boneCount = rig.boneCount;
-
-    // The pose pass wrote the previous frame's into the second half of this instance's slice, so the
-    // reprojection is one more blend rather than a history buffer.
-    pose.base = state.palette.GetStart();
-    pose.prevBase = pose.base + rig.boneCount * cFloat4sPerBone;
-
-    pose.upperBase = pose.base;
-    pose.prevUpperBase = pose.prevBase;
-    pose.weight = 0.0;
-    pose.prevWeight = 0.0;
-
-    return pose;
+    return PalettePose(skinnedData.rigBuffer.Get(state.rig), state.palette.GetStart());
 }
 
 // Gated, not just dbg_assert'd: only dbg_raise's *body* is compiled out, so the reduction would

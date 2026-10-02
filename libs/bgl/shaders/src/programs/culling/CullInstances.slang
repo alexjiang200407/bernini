@@ -6,6 +6,7 @@ import idl.MeshInstanceFlag;
 import idl.InstanceLod;
 import idl.InstanceVisibility;
 import idl.MeshInstance;
+import idl.PlaybackType;
 import idl.Submesh;
 import lib.culling.lod_select;
 import lib.debug.dbg;
@@ -13,6 +14,7 @@ import lib.types.ComputeBuffer;
 import lib.types.EntryBuffer;
 import lib.types.PackedBuffer;
 import lib.types.RangeBuffer;
+import lib.types.RawBuffer;
 import lib.data.SubmeshInstance;
 import lib.types.UploadBuffer;
 import lib.math.frustum;
@@ -36,6 +38,10 @@ struct Uniforms
     // and this cull's, written by the placement's submesh 0 alone.
     ComputeBuffer<InstanceLod> lodPrevious;
     ComputeBuffer<InstanceLod> lodCurrent;
+
+    // Read for the record's kind alone: an automatic placement's word was chosen by ChoosePoses,
+    // which also chose its sources, and is read here rather than chosen again.
+    RawBuffer playbackBuffer;
 
     // Profiling counters for the C5 overlay and the cull tests; the per-instance atomics are the only
     // real cost, so they are gated to BERNINI_GPU_DEBUG below.
@@ -67,6 +73,8 @@ void main(uint globalIdx: SV_DispatchThreadID)
     // two-frame-old one would be read back next frame.
     if (HasMeshInstanceFlag(mesh, MeshInstanceFlag.kHidden))
     {
+        // An automatic placement's word was carried by ChoosePoses already; carrying it again is
+        // the same write.
         if (writesLod)
         {
             gUniforms.lodCurrent[placement] = previous;
@@ -93,12 +101,22 @@ void main(uint globalIdx: SV_DispatchThreadID)
     let view = gUniforms.cullView[0];
     let visible = SphereInFrustum(view.frustumPlanes, sphere.xyz, sphere.w);
 
+    let automatic = !mesh.playback.Null() && PlaybackType(gUniforms.playbackBuffer.LoadTag(mesh.playback)) == PlaybackType.kSkinnedAuto;
+
     // A placement no one sees snaps to its level rather than dissolving toward it off screen.
-    let chosen = ChooseLevel(geom, view, ProjectedDiameter(mesh, geom, view), previous);
-    let word = AdvanceLod(previous, chosen, view.lodFadeStep, !visible || view.lodForcedLevel != cLodForceNone);
-    if (writesLod)
+    InstanceLod word;
+    if (automatic)
     {
-        gUniforms.lodCurrent[placement] = word;
+        word = gUniforms.lodCurrent[placement];
+    }
+    else
+    {
+        let chosen = ChooseLevel(geom, view, ProjectedDiameter(mesh, geom, view), previous);
+        word = AdvanceLod(previous, chosen, view.lodFadeStep, !visible || view.lodForcedLevel != cLodForceNone);
+        if (writesLod)
+        {
+            gUniforms.lodCurrent[placement] = word;
+        }
     }
 
     uint bits = 0u;

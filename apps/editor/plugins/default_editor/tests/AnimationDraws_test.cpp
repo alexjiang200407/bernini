@@ -157,22 +157,24 @@ TEST_CASE("Only a material a bake would change is offered for baking", "[animati
 			.empty());
 }
 
-TEST_CASE("The tier selector's entries are the two pose sources", "[animation][source]")
+TEST_CASE("The tier selector's entries are the three pose sources", "[animation][source]")
 {
 	// Pinned because nothing on screen can catch it: both sources draw the same picture at a whole
 	// frame (that is what the crowd tier is *for*), so a selector wired to the wrong one, or to
 	// nothing at all, looks exactly like a correct one. The panel's own Eyes check can only tell
 	// that the entry draws, not that it drew through the tier it names.
-	SECTION("the first entry is the per-instance pose, the second the rig's shared table")
+	SECTION("the per-instance pose, the rig's shared table, then the automatic source")
 	{
 		CHECK(AnimationEditorWindow::TierSourceAt(0) == bgl::PoseSource::kPerInstance);
 		CHECK(AnimationEditorWindow::TierSourceAt(1) == bgl::PoseSource::kBoneAnimTable);
+		CHECK(AnimationEditorWindow::TierSourceAt(2) == bgl::PoseSource::kAuto);
 	}
 
 	SECTION("a source maps back to the entry that selects it")
 	{
-		for (const bgl::PoseSource source :
-		     { bgl::PoseSource::kPerInstance, bgl::PoseSource::kBoneAnimTable })
+		for (const bgl::PoseSource source : { bgl::PoseSource::kPerInstance,
+		                                      bgl::PoseSource::kBoneAnimTable,
+		                                      bgl::PoseSource::kAuto })
 		{
 			CHECK(
 				AnimationEditorWindow::TierSourceAt(AnimationEditorWindow::TierIndexFor(source)) ==

@@ -1,6 +1,7 @@
 #pragma once
 // idl::SkinnedState arrived through the idl.h umbrella this sweep removed.
 #include "gfx/GraphicsBase.h"
+#include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include <bgl/idl/Constants.h>
 #include <bgl/idl/MeshInstance.h>
@@ -124,5 +125,67 @@ namespace bgl::test
 		CHECK(actual.x == Catch::Approx(expected.x).margin(1e-4));
 		CHECK(actual.y == Catch::Approx(expected.y).margin(1e-4));
 		CHECK(actual.z == Catch::Approx(expected.z).margin(1e-4));
+	}
+
+	/**
+	 * The first `count` elements of a GPU-written buffer, as `T`. Waits for the device first: the
+	 * copy rides its own queue, which nothing orders against the frame that wrote the buffer.
+	 */
+	template <typename T>
+	std::vector<T>
+	ReadBuffer(bgl::GraphicsBase* gfxBase, bgpu::BufferHandle buffer, uint32_t count)
+	{
+		auto resourceManager = gfxBase->GetResourceManagerCpy();
+		auto device          = gfxBase->GetDevice();
+
+		gfxBase->WaitIdle();
+
+		auto cmdListDesc = bgpu::CommandListDesc();
+		cmdListDesc.type = bgpu::QueueType::kGraphics;
+
+		auto cmdAllocator = device->CreateCommandAllocator();
+		auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
+		auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
+
+		cmdAllocator->ResetAllocator();
+
+		auto rbDesc      = bgpu::ReadbackBufferDesc();
+		rbDesc.byteSize  = uint64_t(count) * sizeof(T);
+		rbDesc.debugName = "Test Readback";
+		auto rb          = resourceManager->CreateReadbackBuffer(rbDesc);
+
+		cmdList->Open(cmdQueue, cmdAllocator);
+
+		auto barrier = bgpu::BufferBarrierDesc();
+		barrier.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource);
+		cmdList->Barrier(buffer, barrier);
+
+		cmdList->CopyBufferToReadback(rb, buffer);
+		cmdList->Close();
+
+		auto fence = cmdQueue->ExecuteCommandList(cmdList);
+		cmdQueue->WaitForFenceCPUBlocking(fence);
+
+		const auto* mapped = static_cast<const T*>(resourceManager->MapReadback(rb));
+		REQUIRE(mapped != nullptr);
+
+		auto rows = std::vector<T>(mapped, mapped + count);
+
+		resourceManager->UnmapReadback(rb);
+		resourceManager->DestroyReadbackBuffer(rb, false);
+		return rows;
+	}
+
+	/** The scene's whole bone anim table arena, table soles included, as float4 rows. */
+	inline std::vector<glm::vec4>
+	ReadBoneAnimTables(bgl::GraphicsBase* gfxBase, bgl::Scene* scene)
+	{
+		return ReadBuffer<glm::vec4>(
+			gfxBase,
+			scene->GetBoneAnimTables().GetBufferHandle(),
+			scene->GetBoneAnimTables().Capacity());
 	}
 }

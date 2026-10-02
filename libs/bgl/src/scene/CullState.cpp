@@ -7,6 +7,7 @@
 #include <bgl/idl/DrawBucket.h>
 #include <bgl/idl/InstanceLod.h>
 #include <bgl/idl/InstanceVisibility.h>
+#include <bgpu/cmd/CommandList.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <cstdint>
 #include <format>
@@ -84,6 +85,27 @@ namespace bgl
 			for (bgpu::ComputeBuffer& words : m_InstanceLod) words.Resize(placements);
 			m_LodNeedsClear = true;
 		}
+	}
+
+	void
+	CullState::ClearFresh(bgpu::ICommandList* cmdList)
+	{
+		const auto zero = idl::InstanceLod();
+		for (const uint32_t placement : m_FreshPlacements)
+		{
+			for (bgpu::ComputeBuffer& words : m_InstanceLod)
+			{
+				if (placement < words.GetDesc().initialCount)
+				{
+					cmdList->WriteBuffer(
+						words.GetBufferHandle(),
+						&zero,
+						size_t(placement) * sizeof(zero),
+						sizeof(zero));
+				}
+			}
+		}
+		m_FreshPlacements.clear();
 	}
 
 	void

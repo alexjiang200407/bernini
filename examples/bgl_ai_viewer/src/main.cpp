@@ -22,6 +22,7 @@
 #include <bgl/types/DirectionalLightDesc.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/InstanceDesc.h>
+#include <bgl/types/LodSelectionDesc.h>
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/PassTiming.h>
 #include <bgl/types/PbrMaterialDesc.h>
@@ -30,6 +31,7 @@
 #include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/Viewport.h>
 #include <bgl/types/WindDesc.h>
+#include <cmath>
 #include <core/err/util.h>
 #include <cstddef>
 #include <cstdint>
@@ -46,6 +48,7 @@
 #include <headless/framing.h>
 #include <headless/headless_render.h>
 #include <iostream>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -98,7 +101,95 @@ namespace
 		float       patchSpacing = 0.25f;
 		float       distance     = 10.0f;
 		float       wind         = 0.0f;
+
+		// Copies of the model laid out in rows receding from the camera, `crowdColumns` a row, each a
+		// fraction of a cycle out of step with the one before. 0 places the model once.
+		uint32_t crowd        = 0;
+		uint32_t crowdColumns = 6;
+
+		// The pose source a skinned mesh is spawned on: per-instance, table or auto. Empty is
+		// per-instance for a single model and auto for a crowd.
+		std::string source;
+
+		// The view's selection of the automatic source, LodSelectionDesc's defaults unless asked.
+		std::optional<uint32_t> poseBudget;
+		std::optional<float>    posePixels;
 	};
+
+	/** @throws std::runtime_error naming the three spellings when `name` is none of them. */
+	[[nodiscard]] bgl::PoseSource
+	ParseSource(const std::string_view name, const bool crowd)
+	{
+		static const auto c_Sources = std::map<std::string_view, bgl::PoseSource>{
+			{ "per-instance", bgl::PoseSource::kPerInstance },
+			{ "table", bgl::PoseSource::kBoneAnimTable },
+			{ "auto", bgl::PoseSource::kAuto },
+		};
+		if (name.empty())
+			return crowd ? bgl::PoseSource::kAuto : bgl::PoseSource::kPerInstance;
+
+		if (const auto it = c_Sources.find(name); it != c_Sources.end())
+			return it->second;
+		core::throw_runtime_error("--source {} is none of per-instance, table and auto", name);
+	}
+
+	[[nodiscard]] std::string_view
+	SourceName(const bgl::PoseSource source) noexcept
+	{
+		switch (source)
+		{
+		case bgl::PoseSource::kBoneAnimTable:
+			return "table";
+		case bgl::PoseSource::kAuto:
+			return "auto";
+		case bgl::PoseSource::kPerInstance:
+			break;
+		}
+		return "per-instance";
+	}
+
+	/**
+	 * Where crowd unit `unit` stands: rows of `columns` across X, receding along -Z, `spacing` apart.
+	 * Row 0 is nearest the camera CrowdCamera places.
+	 */
+	[[nodiscard]] glm::mat4
+	CrowdOffset(const uint32_t unit, const uint32_t columns, const float spacing)
+	{
+		const auto column = static_cast<float>(unit % columns);
+		const auto row    = static_cast<float>(unit / columns);
+		const auto across = (column - 0.5f * static_cast<float>(columns - 1)) * spacing;
+		return glm::translate(glm::mat4(1.0f), glm::vec3(across, 0.0f, -row * spacing));
+	}
+
+	/**
+	 * A camera at the crowd's near end, a unit's height up and two and a half spacings back, looking
+	 * down the rows:
+	 * the front units fill much of the frame and the back ones a few pixels, which is the range the
+	 * automatic source chooses across.
+	 */
+	[[nodiscard]] bgl::Camera
+	CrowdCamera(
+		const Options&          opts,
+		const assetlib::Bounds& unit,
+		const float             spacing,
+		const uint32_t          rows)
+	{
+		const float height = std::max(unit.max.y - unit.min.y, 0.01f);
+		const float depth  = static_cast<float>(rows) * spacing;
+
+		auto camera = bgl::Camera();
+		camera
+			.LookAt(
+				glm::vec3(0.0f, unit.min.y + 1.2f * height, 2.5f * spacing),
+				glm::vec3(0.0f, unit.min.y + 0.4f * height, -0.5f * depth),
+				glm::vec3(0.0f, 1.0f, 0.0f))
+			.Perspective(
+				glm::radians(60.0f),
+				static_cast<float>(opts.width) / static_cast<float>(opts.height),
+				0.05f * spacing,
+				2.0f * (depth + spacing));
+		return camera;
+	}
 
 	// Where a patch's camera stands above its ground.
 	constexpr float c_EyeHeight = 1.6f;
@@ -310,9 +401,13 @@ namespace
 
 		const uint32_t clip = rigged && !skinned.empty() ? FindClip(clips, opts.clip) : 0;
 
+		const bool            crowd  = opts.crowd > 0;
+		const bgl::PoseSource source = ParseSource(opts.source, crowd);
+
 		// The culling box stays the whole clip set's; only the camera narrows to the one clip, measured
-		// the same way over a set holding that clip alone.
-		if (opts.frameClip && !skinned.empty())
+		// the same way over a set holding that clip alone. A crowd is spaced by it too: a clip set
+		// whose clips travel would otherwise space units by the distance they walk.
+		if ((opts.frameClip || crowd) && !skinned.empty())
 		{
 			assetlib::AnimationSet playing = *animations;
 			playing.clips                  = { animations->clips.at(clip) };
@@ -334,24 +429,83 @@ namespace
 					placement.world,
 					assetlib::posedBounds(model, placement.meshIndex, *skeleton, playing));
 		}
-		for (const SkinnedPlacement& placement : skinned)
+		const float spacing =
+			1.5f * std::max({ bounds.max.x - bounds.min.x, bounds.max.z - bounds.min.z, 0.01f });
+		const uint32_t rows = crowd ? (opts.crowd + opts.crowdColumns - 1) / opts.crowdColumns : 0;
+
+		if (!crowd)
 		{
-			assets.CreateSkinnedInstance(
-				view,
-				bgl::SkinnedMeshInstanceDesc()
-					.SetGeom(placement.geom)
-					.SetTransform(placement.world)
-					.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(clip)));
+			for (const SkinnedPlacement& placement : skinned)
+			{
+				assets.CreateSkinnedInstance(
+					view,
+					bgl::SkinnedMeshInstanceDesc()
+						.SetGeom(placement.geom)
+						.SetTransform(placement.world)
+						.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(clip))
+						.SetSource(source));
+			}
+		}
+		else
+		{
+			// The first copy is the one already placed above; the static parts follow every other.
+			const float frames = rigged && !skinned.empty() ?
+			                         static_cast<float>(animations->clips.at(clip).frameCount) :
+			                         1.0f;
+
+			for (uint32_t unit = 0; unit < opts.crowd; ++unit)
+			{
+				const glm::mat4 offset = CrowdOffset(unit, opts.crowdColumns, spacing);
+				if (unit > 0)
+				{
+					for (uint32_t n = 0; n < model.nodes.size(); ++n)
+					{
+						const uint32_t meshIndex = model.nodes[n].mesh;
+						if (meshIndex != assetlib::c_InvalidIndex &&
+						    (!rigged || !assetlib::isSkinned(model, meshIndex)))
+							assets.CreateInstance(
+								view,
+								bgl::StaticMeshInstanceDesc()
+									.SetGeom(assets.AcquireMesh(document.source, meshIndex))
+									.SetTransform(offset * headless::InstanceTransform(model, n)));
+					}
+				}
+
+				// The golden ratio's fraction of a cycle per unit, so no two neighbours step together
+				// and the whole crowd never falls back into phase.
+				const float phase = std::fmod(static_cast<float>(unit) * 0.618034f, 1.0f) * frames;
+				for (const SkinnedPlacement& placement : skinned)
+				{
+					assets.CreateSkinnedInstance(
+						view,
+						bgl::SkinnedMeshInstanceDesc()
+							.SetGeom(placement.geom)
+							.SetTransform(offset * placement.world)
+							.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(clip, phase))
+							.SetSource(source));
+				}
+			}
+
+			std::cout << std::format(
+				"crowd  {} units, {} a row over {} rows, {:.2f} apart\n",
+				opts.crowd,
+				opts.crowdColumns,
+				rows,
+				spacing);
 		}
 
 		std::cout << std::format(
 			"{}\nmesh   {} ({})\n",
 			documentKey,
 			meshKey,
-			skinned.empty() ? "static" : std::format("skinned, {}", animationsKey));
+			skinned.empty() ?
+				"static" :
+				std::format("skinned, {}, posed {}", animationsKey, SourceName(source)));
 		if (!skinned.empty())
 			PrintClips(clips, clip);
 
+		if (crowd)
+			return CrowdCamera(opts, bounds, spacing, rows);
 		return headless::FrameBounds(bounds, opts.width, opts.height);
 	}
 
@@ -515,6 +669,29 @@ try
 			   opts.wind,
 			   "The patch's wind: steady strength and gust strength both, in [0, 1]; 0 is calm")
 			->check(CLI::Range(0.0f, 1.0f));
+		app.add_option(
+			   "--crowd",
+			   opts.crowd,
+			   "Copies of the model in rows receding from the camera, phases staggered; 0 is one")
+			->check(CLI::NonNegativeNumber);
+		app.add_option("--crowd-columns", opts.crowdColumns, "Crowd units a row")
+			->check(CLI::PositiveNumber);
+		app.add_option(
+			"--source",
+			opts.source,
+			"The pose source a skinned mesh is spawned on: per-instance, table or auto; "
+			"per-instance for one model and auto for a crowd");
+		app.add_option(
+			   "--pose-budget",
+			   opts.poseBudget,
+			   "Automatic units the view poses per instance at once (LodSelectionDesc::poseBudget)")
+			->check(CLI::NonNegativeNumber);
+		app.add_option(
+			   "--pose-pixels",
+			   opts.posePixels,
+			   "Size on screen below which an automatic unit on a one-level mesh draws from its "
+			   "table (LodSelectionDesc::posePixels)")
+			->check(CLI::PositiveNumber);
 
 		CLI11_PARSE(app, argc, argv);
 	}
@@ -543,7 +720,7 @@ try
 	target->SetBloomEnabled(opts.bloom);
 
 	auto scene     = headless::CreateHeadlessScene(graphics);
-	auto view      = graphics->CreateSceneView(scene, 128);
+	auto view      = graphics->CreateSceneView(scene, std::max(128u, 64u * opts.crowd));
 	auto assets    = game::AssetManager(scene, dataRoot);
 	auto envAssets = game::AssetManager(
 		scene,
@@ -564,6 +741,16 @@ try
 	}
 
 	const bool lit = envLit || opts.sunIntensity > 0.0f;
+
+	if (opts.poseBudget || opts.posePixels)
+	{
+		auto selection = view->GetLodSelection();
+		if (opts.poseBudget)
+			selection.poseBudget = *opts.poseBudget;
+		if (opts.posePixels)
+			selection.posePixels = *opts.posePixels;
+		view->SetLodSelection(selection);
+	}
 
 	const bgl::Camera camera = opts.grass.empty() ?
 	                               PlaceImport(opts, store, dataRoot, assets, view) :

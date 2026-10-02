@@ -3,6 +3,7 @@
 #include "passes/DrawData.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include "scene/scene_buffer_names.h"
 #include <bgl/types/GroundPlaneDesc.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/pipeline/PipelineBatch.h>
@@ -43,6 +44,8 @@ namespace bgl
 				.AddBufferRead("scene.blendNodeBuffer", bgpu::BarrierSyncFlag::kComputeShader)
 				.AddBufferRead("scene.blendSampleBuffer", bgpu::BarrierSyncFlag::kComputeShader)
 				.AddBufferRead("scene.footIKBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+				.AddBufferRead(c_AutoPosedName, bgpu::BarrierSyncFlag::kComputeShader)
+				.AddBufferRead(c_PosePoolName, bgpu::BarrierSyncFlag::kComputeShader)
 				.AddBufferReadWrite("scene.bonePalettes", bgpu::BarrierSyncFlag::kComputeShader)
 				.SetExec([draw, this](const PassContext& ctx) { Execute(ctx, draw); }));
 	}
@@ -53,8 +56,9 @@ namespace bgl
 		const auto* view = draw.view->As<SceneView>();
 		core::ensure(view != nullptr, "SkinnedPosePass requires a bgl::SceneView");
 
-		const uint32_t posed = view->GetPosedInstanceCount();
-		if (posed == 0)
+		const uint32_t posed     = view->GetPosedInstanceCount();
+		const uint32_t automatic = view->GetAutoPose().GetBudget();
+		if (posed == 0 && automatic == 0)
 		{
 			return;
 		}
@@ -76,6 +80,9 @@ namespace bgl
 		uniforms["time"]              = draw.clock.time;
 		uniforms["prevTime"]          = draw.clock.prevTime;
 		uniforms["posedCount"]        = posed;
+		uniforms["autoPosed"]         = ctx.GetBuffer(c_AutoPosedName);
+		uniforms["pool"]              = ctx.GetBuffer(c_PosePoolName);
+		uniforms["budget"]            = automatic;
 
 		const Scene*           scene  = view->GetScene()->As<Scene>();
 		const GroundPlaneDesc& ground = scene->GetGround();
@@ -91,6 +98,19 @@ namespace bgl
 
 		// One group per instance, not per bone: the hierarchy walk barriers within a group, so a rig
 		// cannot be split across two.
-		cmdList->Dispatch(posed, 1, 1);
+		if (posed > 0)
+		{
+			uniforms["automatic"] = 0u;
+			cmdList->Dispatch(posed, 1, 1);
+		}
+
+		// The automatic placements the camera's cull drew per instance: as many as the budget, the
+		// ones past the count the cull reached returning at once. Their slices and the CPU-built
+		// list's never overlap, so neither dispatch waits on the other.
+		if (automatic > 0)
+		{
+			uniforms["automatic"] = 1u;
+			cmdList->Dispatch(automatic, 1, 1);
+		}
 	}
 }

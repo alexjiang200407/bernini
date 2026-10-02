@@ -243,15 +243,16 @@ AnimationEditorWindow::BuildPropertiesColumn()
 			"Skinned"));
 	m_TierSelector->addItem(
 		editor::Localize(m_Host.GetLanguageResolver(), "bernini.animation.tier_crowd", "Crowd"));
+	m_TierSelector->addItem(
+		editor::Localize(m_Host.GetLanguageResolver(), "bernini.animation.tier_auto", "Automatic"));
 	m_TierSelector->setToolTip(
 		editor::Localize(
 			m_Host.GetLanguageResolver(),
 			"bernini.animation.tier_selector_tooltip",
 			"Skinned poses the rig every frame, per instance; Crowd reads a pose the rig posed "
-			"once "
-			"and shares. The two draw the same picture -- this is how the crowd path gets "
-			"exercised, "
-			"not something to look for on screen."));
+			"once and shares. The two draw the same picture -- this is how the crowd path gets "
+			"exercised, not something to look for on screen. Automatic is per instance near the "
+			"camera and the shared table far from it, chosen by its size on screen."));
 	connect(m_TierSelector, &QComboBox::activated, this, [this](int index) {
 		if (m_SyncingUi || index < 0)
 			return;
@@ -604,16 +605,34 @@ AnimationEditorWindow::GetHeldOpenPaths() const
 int
 AnimationEditorWindow::TierIndexFor(const bgl::PoseSource source) noexcept
 {
-	return source == bgl::PoseSource::kPerInstance ? 0 : 1;
+	switch (source)
+	{
+	case bgl::PoseSource::kBoneAnimTable:
+		return 1;
+	case bgl::PoseSource::kAuto:
+		return 2;
+	case bgl::PoseSource::kPerInstance:
+		break;
+	}
+	return 0;
 }
 
 bgl::PoseSource
 AnimationEditorWindow::TierSourceAt(const int index) noexcept
 {
-	// Only entry 1 names the table; anything else is the hero tier, which is also what an instance
-	// gets when nothing sets a source. The combo cannot deliver an out-of-range index, but a
-	// mapping whose fallback is the crowd tier would switch tiers on one if it ever did.
-	return index == 1 ? bgl::PoseSource::kBoneAnimTable : bgl::PoseSource::kPerInstance;
+	// Entry 1 names the table and entry 2 the automatic source; anything else is the hero tier,
+	// which is also what an instance gets when nothing sets a source. The combo cannot deliver an
+	// out-of-range index, but a mapping whose fallback is the crowd tier would switch tiers on one
+	// if it ever did.
+	switch (index)
+	{
+	case 1:
+		return bgl::PoseSource::kBoneAnimTable;
+	case 2:
+		return bgl::PoseSource::kAuto;
+	default:
+		return bgl::PoseSource::kPerInstance;
+	}
 }
 
 void

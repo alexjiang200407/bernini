@@ -426,8 +426,8 @@ namespace game
 		 * returned, spawned on `desc.playback` and posed from `desc.source`. The same references are
 		 * taken and the same DestroyInstance releases them.
 		 *
-		 * `PoseSource::kBoneAnimTable` reserves the rig's table on the first such instance -- see
-		 * ISceneView::CreateSkinnedMeshInstance for what that costs.
+		 * `PoseSource::kBoneAnimTable` and `PoseSource::kAuto` reserve the rig's table on the first
+		 * such instance -- see ISceneView::CreateSkinnedMeshInstance for what that costs.
 		 *
 		 * @throws bgl::SceneError if `view` is null, the geom is not this manager's or has expired, or
 		 *         for anything ISceneView::CreateSkinnedMeshInstance refuses.
