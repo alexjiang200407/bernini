@@ -2,6 +2,7 @@
 #include <bgl/idl/AutoPosedInstance.h>
 #include <bgpu/buffer/ComputeBuffer.h>
 #include <bgpu/buffer/UploadBuffer.h>
+#include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <cstdint>
 #include <span>
@@ -33,6 +34,15 @@ namespace bgl
 		 * @throws std::runtime_error if the device cannot allocate.
 		 */
 		AutoPoseState(const bgpu::ResourceManagerRef& resourceManager, uint32_t placements);
+
+		AutoPoseState(const AutoPoseState&)     = delete;
+		AutoPoseState(AutoPoseState&&) noexcept = default;
+
+		AutoPoseState&
+		operator=(const AutoPoseState&) = delete;
+
+		AutoPoseState&
+		operator=(AutoPoseState&&) noexcept = default;
 
 		/** Grows the per-placement slices to cover `placements`. A no-op when they already do. */
 		void
