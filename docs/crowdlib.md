@@ -130,12 +130,14 @@ each refuses; what follows is why it is shaped as it is.
   `CrowdPlan`'s, so the suite checks two implementations, not one twice.
 * **A render ring for a reader on another queue.** With `CrowdDesc::renderRingTicks`, every tick
   also has a slot of `maxAgents` `RenderAgent` records (`<crowdlib/RenderAgent.h>`): position,
-  facing, the agent's index in the tick before (`source`, or `c_RenderSpawned`) and its type. The
+  facing, the agent's record in the tick before (`source`, or `c_RenderSpawned`) and its type. The
   ring is one buffer for the crowd's life (`GetRenderRing`), which a renderer imports once;
   `GetRenderTick(t)` says where tick `t`'s records are and the queue point that wrote them, from its
-  `Step` until the ring is stepped past it. The ring is at least `maxTicksInFlight + 3` ticks: those
-  in flight, the two a reader interpolates between and the one before them its motion follows
-  `source` back to. A reader hands ticks back with `ReleaseRenderReads(through, readerDone)`; the
+  `Step` until the ring is stepped past it. A tick's records are grouped by agent type, in
+  `agentTypes` order, and `RenderTick::types` gives each type's run: a reader drawing one type
+  reads one run, so the work it does per type is that type's agents, not the crowd's. The ring is
+  at least `maxTicksInFlight + 3` ticks: those in flight, the two a reader interpolates between and
+  the one before them its motion follows `source` back to. A reader hands ticks back with `ReleaseRenderReads(through, readerDone)`; the
   `Step` that overwrites one waits for `readerDone` on the crowd's queue, and one that would
   overwrite a tick not yet released cannot run (`CanStep`). Nothing waits on the CPU either way: a
   slow reader stalls the crowd's stepping, by as many ticks as the ring holds past its minimum.

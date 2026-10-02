@@ -242,3 +242,49 @@ TEST_CASE(
 
 	gfx->WaitIdle();
 }
+
+TEMPLATE_LIST_TEST_CASE(
+	"A tick's records run by agent type, in the crowd's type order",
+	"[crowd][render_ring]",
+	CrowdFactories)
+{
+	auto desc = MakeDesc(5);
+	desc.agentTypes.push_back(
+		crowd::AgentType{ .radius         = 0.8f,
+	                      .preferredSpeed = 4.0f,
+	                      .maxSpeed       = 6.0f,
+	                      .mass           = 500.0f });
+	desc.maxGroups = 4;
+	auto crowd     = TestType::Create(desc);
+
+	auto orders      = crowd::GroupOrders();
+	orders.facing    = glm::vec2(1.0f, 0.0f);
+	orders.formation = { .frontage = 4, .spacing = 1.0f };
+
+	// Created out of type order, with a type-0 group on each side of the type-1 one.
+	const auto horse = crowd->CreateGroup({ .agentType = 1, .agentCount = 6, .orders = orders });
+	crowd->CreateGroup({ .agentType = 0, .agentCount = 9, .orders = orders });
+	crowd->CreateGroup({ .agentType = 1, .agentCount = 4, .orders = orders });
+	crowd->Step();
+	crowd->Wait();
+
+	const std::optional<crowd::RenderTick> first = crowd->GetRenderTick(1);
+	REQUIRE(first.has_value());
+	REQUIRE(first->types.size() == 2);
+	CHECK(first->types[0].first == first->firstRecord);
+	CHECK(first->types[0].count == 9);
+	CHECK(first->types[1].first == first->firstRecord + 9);
+	CHECK(first->types[1].count == 10);
+
+	// Destroying a type-1 group shortens that type's run; the runs stay back to back.
+	crowd->DestroyGroup(horse);
+	crowd->Step();
+	crowd->Wait();
+	const std::optional<crowd::RenderTick> second = crowd->GetRenderTick(2);
+	REQUIRE(second.has_value());
+	REQUIRE(second->types.size() == 2);
+	CHECK(second->types[0].count == 9);
+	CHECK(second->types[1].first == second->firstRecord + 9);
+	CHECK(second->types[1].count == 4);
+	CHECK(second->agentCount == 13);
+}

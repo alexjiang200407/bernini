@@ -271,7 +271,8 @@ namespace crowd
 	TickUploads
 	CrowdPlan::PlanTick()
 	{
-		auto     plan       = TickUploads();
+		auto plan = TickUploads();
+		plan.typeCounts.assign(m_Desc.agentTypes.size(), 0);
 		uint32_t firstAgent = 0;
 		for (uint32_t index = 0; index < m_Groups.capacity(); ++index)
 		{
@@ -280,6 +281,7 @@ namespace crowd
 			auto&          group = m_Groups[index];
 			const auto&    type  = m_Desc.agentTypes[group.agentType];
 			const uint32_t row   = static_cast<uint32_t>(plan.groups.size());
+			plan.typeCounts[group.agentType] += group.agentCount;
 
 			uint32_t firstSlot = 0;
 			for (const auto& piece : group.pieces)

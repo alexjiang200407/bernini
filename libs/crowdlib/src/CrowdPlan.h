@@ -27,6 +27,10 @@ namespace crowd
 		// Not uploaded: groupHandles[row] is the group behind groups[row], which a report row and a
 		// debug readback's range are matched to.
 		std::vector<GroupHandle> groupHandles;
+
+		// Not uploaded: the tick's agents of each type, in CrowdDesc::agentTypes order -- the
+		// lengths of the runs its render records are grouped into.
+		std::vector<uint32_t> typeCounts;
 	};
 
 	/** A run of a group's agents in slot order: spawned, or read from the previous tick's buffer. */
