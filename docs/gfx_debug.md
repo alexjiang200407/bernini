@@ -372,7 +372,7 @@ no display, looks at a rendering change.
 
 ```bash
 just run bgl_ai_viewer -- --project "$PWD/test-project/Data" --env-root "$PWD/assets/Data" \
-	--import Authored/Meshes/cha800_00.reduced.bimport --frames 60 --screenshot 0,30 \
+	--import "<a character's .bimport>" --frames 60 --screenshot 0,30 \
 	--out-dir "<an absolute directory of your own>"
 ```
 

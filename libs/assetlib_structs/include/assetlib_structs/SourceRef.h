@@ -16,7 +16,7 @@ namespace assetlib
 	 */
 	struct SourceRef
 	{
-		std::string key;  // data-root-relative, "Authored/Meshes/kirk.glb"
+		std::string key;  // data-root-relative, "Authored/Meshes/toad.glb"
 		SourceStamp stamp;
 		uint64_t    parametersHash = 0;
 

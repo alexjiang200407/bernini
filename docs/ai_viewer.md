@@ -16,7 +16,7 @@ just build bgl_ai_viewer
 
 # Every path absolute: `just run` puts the cwd at the binary's output directory.
 just run bgl_ai_viewer -- --project "$PWD/test-project/Data" --env-root "$PWD/assets/Data" \
-	--import Authored/Meshes/cha800_00.reduced.bimport --clip cha8_general_0120_to_general \
+	--import "<a skinned character's .bimport>" --clip "<one of its clips>" \
 	--frames 90 --screenshot 0,45,89 --out-dir "<an absolute directory of your own>"
 ```
 

@@ -308,8 +308,8 @@ TEST_CASE("The scaffolded categories are not the user's to delete", "[project]")
 
 	SECTION("but a folder made inside one is")
 	{
-		CHECK_FALSE(Project::IsRequiredDirectory("Derived/SourceTextures/kirk"));
-		CHECK_FALSE(Project::IsRequiredDirectory("Authored/Materials/kirk"));
+		CHECK_FALSE(Project::IsRequiredDirectory("Derived/SourceTextures/toad"));
+		CHECK_FALSE(Project::IsRequiredDirectory("Authored/Materials/toad"));
 
 		// Only the categories themselves, at the top. A folder that merely shares the name is the user's.
 		CHECK_FALSE(Project::IsRequiredDirectory("Derived/Meshes/Meshes"));

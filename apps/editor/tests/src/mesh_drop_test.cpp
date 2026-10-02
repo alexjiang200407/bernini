@@ -64,23 +64,23 @@ TEST_CASE("A mesh viewport takes a container or a source", "[drop]")
 {
 	auto mime = QMimeData();
 
-	SetLocalFiles(mime, { "/tmp/kirk.bmesh" });
+	SetLocalFiles(mime, { "/tmp/toad.bmesh" });
 	CHECK(editor::IsMeshDrag(&mime));
 
-	SetLocalFiles(mime, { "/tmp/kirk.glb" });
+	SetLocalFiles(mime, { "/tmp/toad.glb" });
 	CHECK(editor::IsMeshDrag(&mime));
 
 	// Case-insensitive, like every other suffix rule the drag filters share.
-	SetLocalFiles(mime, { "/tmp/kirk.GLB" });
+	SetLocalFiles(mime, { "/tmp/toad.GLB" });
 	CHECK(editor::IsMeshDrag(&mime));
 
 	SECTION("and nothing else")
 	{
-		SetLocalFiles(mime, { "/tmp/skin.bmaterial", "/tmp/day.benv", "/tmp/kirk.bimport" });
+		SetLocalFiles(mime, { "/tmp/skin.bmaterial", "/tmp/day.benv", "/tmp/toad.bimport" });
 		CHECK_FALSE(editor::IsMeshDrag(&mime));
 
 		// A source's own extension, not glTF in general: only `.glb` is imported.
-		SetLocalFiles(mime, { "/tmp/kirk.gltf" });
+		SetLocalFiles(mime, { "/tmp/toad.gltf" });
 		CHECK_FALSE(editor::IsMeshDrag(&mime));
 
 		auto empty = QMimeData();
@@ -90,7 +90,7 @@ TEST_CASE("A mesh viewport takes a container or a source", "[drop]")
 
 	SECTION("a remote URL is not a file")
 	{
-		mime.setUrls({ QUrl("https://example.com/kirk.glb") });
+		mime.setUrls({ QUrl("https://example.com/toad.glb") });
 		CHECK_FALSE(editor::IsMeshDrag(&mime));
 	}
 }
@@ -102,14 +102,14 @@ TEST_CASE("A dropped source resolves to the mesh it produced", "[drop]")
 	const QString root = temp.path();
 
 	const QString source =
-		WriteSource(root, "kirk", { "Derived/Animations/kirk.banim", "Derived/Meshes/kirk.bmesh" });
+		WriteSource(root, "toad", { "Derived/Animations/toad.banim", "Derived/Meshes/toad.bmesh" });
 
 	auto mime = QMimeData();
 	SetLocalFiles(mime, { source });
 
 	CHECK(
 		editor::GetMeshDroppedOn(&mime, root).mesh ==
-		QDir(root).filePath("Derived/Meshes/kirk.bmesh"));
+		QDir(root).filePath("Derived/Meshes/toad.bmesh"));
 
 	SECTION("and needs the project to do it")
 	{
@@ -159,15 +159,15 @@ TEST_CASE("A dropped container is taken as itself", "[drop]")
 	const QString root = temp.path();
 
 	auto mime = QMimeData();
-	SetLocalFiles(mime, { "/tmp/loose/kirk.bmesh" });
+	SetLocalFiles(mime, { "/tmp/loose/toad.bmesh" });
 
 	// Never resolved through a project: a container names the file to read.
-	CHECK(editor::GetMeshDroppedOn(&mime, root).mesh == QString("/tmp/loose/kirk.bmesh"));
-	CHECK(editor::GetMeshDroppedOn(&mime, {}).mesh == QString("/tmp/loose/kirk.bmesh"));
+	CHECK(editor::GetMeshDroppedOn(&mime, root).mesh == QString("/tmp/loose/toad.bmesh"));
+	CHECK(editor::GetMeshDroppedOn(&mime, {}).mesh == QString("/tmp/loose/toad.bmesh"));
 
 	SECTION("and wins over a source dragged with it")
 	{
-		const QString source = WriteSource(root, "kirk", { "Derived/Meshes/kirk.bmesh" });
+		const QString source = WriteSource(root, "toad", { "Derived/Meshes/toad.bmesh" });
 
 		SetLocalFiles(mime, { source, "/tmp/loose/other.bmesh" });
 		CHECK(editor::GetMeshDroppedOn(&mime, root).mesh == QString("/tmp/loose/other.bmesh"));
@@ -189,13 +189,13 @@ TEST_CASE("The mesh a source names need not exist yet", "[drop]")
 
 	// Nothing under Derived/ is written: a `.bmesh` is cache, and a fresh checkout has none until
 	// a bake runs. The drop still names it, so the load is what reports it missing.
-	const QString source = WriteSource(root, "kirk", { "Derived/Meshes/kirk.bmesh" });
+	const QString source = WriteSource(root, "toad", { "Derived/Meshes/toad.bmesh" });
 
 	auto mime = QMimeData();
 	SetLocalFiles(mime, { source });
 
 	const QString resolved = editor::GetMeshDroppedOn(&mime, root).mesh;
-	CHECK(resolved == QDir(root).filePath("Derived/Meshes/kirk.bmesh"));
+	CHECK(resolved == QDir(root).filePath("Derived/Meshes/toad.bmesh"));
 	CHECK_FALSE(QFileInfo::exists(resolved));
 }
 
@@ -223,10 +223,10 @@ TEST_CASE("A source that resolves to nothing is still named", "[drop]")
 
 	SECTION("where a container names no source, having needed none")
 	{
-		SetLocalFiles(mime, { "/tmp/loose/kirk.bmesh" });
+		SetLocalFiles(mime, { "/tmp/loose/toad.bmesh" });
 
 		const editor::MeshDrop container = editor::GetMeshDroppedOn(&mime, root);
-		CHECK(container.mesh == QString("/tmp/loose/kirk.bmesh"));
+		CHECK(container.mesh == QString("/tmp/loose/toad.bmesh"));
 		CHECK(container.source.isEmpty());
 	}
 

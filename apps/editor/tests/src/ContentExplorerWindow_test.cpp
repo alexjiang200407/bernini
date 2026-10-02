@@ -274,17 +274,17 @@ TEST_CASE("The explorer resolves against the data root it is not rooted at", "[c
 	// and every reference stored in the project is written against that. This is the one thing
 	// rooting the views one level in could have broken silently.
 	const Sandbox sandbox;
-	Touch(sandbox, "Authored/Materials/kirk/Body.bmaterial");
+	Touch(sandbox, "Authored/Materials/toad/Body.bmaterial");
 
 	QFileSystemModel model;
 	model.setRootPath(sandbox.DataRootPath());
 
 	const QModelIndex index =
-		IndexFor(model, sandbox.DataRootPath() + "/Authored/Materials/kirk/Body.bmaterial");
+		IndexFor(model, sandbox.DataRootPath() + "/Authored/Materials/toad/Body.bmaterial");
 
 	CHECK(
 		editor::AssetAt(model, index, sandbox.DataRootPath()) ==
-		QString("Authored/Materials/kirk/Body.bmaterial"));
+		QString("Authored/Materials/toad/Body.bmaterial"));
 }
 
 TEST_CASE("Files are dragged out of the explorer rather than moved", "[contentexplorer]")
@@ -377,10 +377,10 @@ TEST_CASE("A right-clicked asset resolves to its path under the data root", "[co
 
 	const auto sample = GENERATE(
 		Case{ "Derived/Meshes/tree.bmesh", "Derived/Meshes/tree.bmesh" },
-		Case{ "Authored/Materials/kirk/Body.bmaterial", "Authored/Materials/kirk/Body.bmaterial" },
+		Case{ "Authored/Materials/toad/Body.bmaterial", "Authored/Materials/toad/Body.bmaterial" },
 		Case{ "Textures/basecolor_700a22db7b7ef785.ktx2",
 	          "Textures/basecolor_700a22db7b7ef785.ktx2" },
-		Case{ "Derived/SourceTextures/kirk/tex0.ktx2", "Derived/SourceTextures/kirk/tex0.ktx2" },
+		Case{ "Derived/SourceTextures/toad/tex0.ktx2", "Derived/SourceTextures/toad/tex0.ktx2" },
 
 		// The source row: not an asset kind, but the one a person renames, and its group moves
 		// with it. Only where sources live -- see the derived spelling below.
@@ -418,7 +418,7 @@ TEST_CASE("Only a material is offered a Bake action", "[contentexplorer]")
 
 	CHECK_FALSE(editor::IsMaterialAsset("Derived/Meshes/tree.bmesh"));
 	CHECK_FALSE(editor::IsMaterialAsset("Textures/base.ktx2"));
-	CHECK_FALSE(editor::IsMaterialAsset("Derived/SourceTextures/kirk"));  // a directory
+	CHECK_FALSE(editor::IsMaterialAsset("Derived/SourceTextures/toad"));  // a directory
 	CHECK_FALSE(editor::IsMaterialAsset(""));
 }
 
@@ -529,18 +529,18 @@ TEST_CASE("A folder the user made is theirs to delete", "[contentexplorer]")
 	const Sandbox sandbox;
 
 	// The folder an import extracts a mesh's textures into, which is where a project's sources live.
-	Touch(sandbox, "Derived/SourceTextures/kirk/tex0.ktx2");
+	Touch(sandbox, "Derived/SourceTextures/toad/tex0.ktx2");
 
 	QFileSystemModel model;
 	model.setRootPath(sandbox.DataRootPath());
 
 	const QModelIndex index =
-		IndexFor(model, sandbox.DataRootPath() + "/Derived/SourceTextures/kirk");
+		IndexFor(model, sandbox.DataRootPath() + "/Derived/SourceTextures/toad");
 
 	REQUIRE(model.isDir(index));
 	CHECK(
 		editor::AssetAt(model, index, sandbox.DataRootPath()) ==
-		QString("Derived/SourceTextures/kirk"));
+		QString("Derived/SourceTextures/toad"));
 
 	SECTION("but a click that landed on no row at all is not")
 	{
@@ -579,7 +579,7 @@ TEST_CASE("Back has nowhere to go until the explorer has been somewhere", "[cont
 TEST_CASE("Back returns the grid to the folder shown before", "[contentexplorer]")
 {
 	const Sandbox sandbox;
-	Touch(sandbox, "Authored/Materials/kirk/Body.bmaterial");
+	Touch(sandbox, "Authored/Materials/toad/Body.bmaterial");
 
 	ContentExplorerWindow window(nullptr, NothingOpen());
 	window.SetRootPath(sandbox.DataRootPath());
@@ -588,7 +588,7 @@ TEST_CASE("Back returns the grid to the folder shown before", "[contentexplorer]
 	auto* model = qobject_cast<QFileSystemModel*>(tree->model());
 	REQUIRE(model != nullptr);
 
-	const QString folder = sandbox.DataRootPath() + "/Authored/Materials/kirk";
+	const QString folder = sandbox.DataRootPath() + "/Authored/Materials/toad";
 	tree->setCurrentIndex(IndexFor(*model, folder));
 
 	REQUIRE(QDir(Shown(window)) == QDir(folder));
@@ -605,7 +605,7 @@ TEST_CASE("Back returns the grid to the folder shown before", "[contentexplorer]
 TEST_CASE("Back skips a folder that has been deleted since it was shown", "[contentexplorer]")
 {
 	const Sandbox sandbox;
-	Touch(sandbox, "Authored/Materials/kirk/Body.bmaterial");
+	Touch(sandbox, "Authored/Materials/toad/Body.bmaterial");
 	Touch(sandbox, "Authored/Materials/spock/Body.bmaterial");
 
 	ContentExplorerWindow window(nullptr, NothingOpen());
@@ -615,13 +615,13 @@ TEST_CASE("Back skips a folder that has been deleted since it was shown", "[cont
 	auto* model = qobject_cast<QFileSystemModel*>(tree->model());
 	REQUIRE(model != nullptr);
 
-	tree->setCurrentIndex(IndexFor(*model, sandbox.DataRootPath() + "/Authored/Materials/kirk"));
+	tree->setCurrentIndex(IndexFor(*model, sandbox.DataRootPath() + "/Authored/Materials/toad"));
 	tree->setCurrentIndex(IndexFor(*model, sandbox.DataRootPath() + "/Authored/Materials/spock"));
 
 	// Removed from underneath the editor, as deleting it in Finder would. Nothing pumps the event
 	// loop between here and the click, so the model has not been told either -- which is the case
 	// this pins: the history is checked against the disk, not against what the model still lists.
-	fs::remove_all(sandbox.DataRoot() / "Authored/Materials" / "kirk");
+	fs::remove_all(sandbox.DataRoot() / "Authored/Materials" / "toad");
 
 	Back(window)->click();
 
@@ -631,7 +631,7 @@ TEST_CASE("Back skips a folder that has been deleted since it was shown", "[cont
 TEST_CASE("Back moves the tree's selection with the grid", "[contentexplorer]")
 {
 	const Sandbox sandbox;
-	Touch(sandbox, "Authored/Materials/kirk/Body.bmaterial");
+	Touch(sandbox, "Authored/Materials/toad/Body.bmaterial");
 
 	ContentExplorerWindow window(nullptr, NothingOpen());
 	window.SetRootPath(sandbox.DataRootPath());
@@ -642,7 +642,7 @@ TEST_CASE("Back moves the tree's selection with the grid", "[contentexplorer]")
 
 	const QString parent = sandbox.DataRootPath() + "/Authored/Materials";
 	tree->setCurrentIndex(IndexFor(*model, parent));
-	tree->setCurrentIndex(IndexFor(*model, parent + "/kirk"));
+	tree->setCurrentIndex(IndexFor(*model, parent + "/toad"));
 
 	Back(window)->click();
 
@@ -657,8 +657,8 @@ TEST_CASE("The explorer lists a source but not the document beside it", "[conten
 	// person recognises, so the sidecar is not listed -- Unity hides a `.meta` and Godot a
 	// `.import` for the same reason.
 	const Sandbox sandbox;
-	Touch(sandbox, "Authored/Meshes/kirk.glb");
-	Touch(sandbox, "Authored/Meshes/kirk.bimport");
+	Touch(sandbox, "Authored/Meshes/toad.glb");
+	Touch(sandbox, "Authored/Meshes/toad.bimport");
 	Touch(sandbox, "Authored/Meshes/SPOCK.BIMPORT");
 
 	ContentExplorerWindow window(nullptr, NothingOpen());
@@ -678,8 +678,8 @@ TEST_CASE("The explorer lists a source but not the document beside it", "[conten
 	tree->setCurrentIndex(IndexFor(*hierarchy, meshes));
 	REQUIRE(WaitFor([&] { return Shown(window) == meshes; }));
 
-	const QModelIndex source   = IndexFor(*grid, meshes + "/kirk.glb");
-	const QModelIndex document = IndexFor(*grid, meshes + "/kirk.bimport");
+	const QModelIndex source   = IndexFor(*grid, meshes + "/toad.glb");
+	const QModelIndex document = IndexFor(*grid, meshes + "/toad.bimport");
 	const QModelIndex upper    = IndexFor(*grid, meshes + "/SPOCK.BIMPORT");
 
 	// Rows arrive asynchronously; the hider runs off rowsInserted, so wait for its verdicts.
@@ -689,9 +689,9 @@ TEST_CASE("The explorer lists a source but not the document beside it", "[conten
 
 	// The tree hides them too, under the expanded folder.
 	tree->expand(IndexFor(*hierarchy, meshes));
-	const QModelIndex treeDocument = IndexFor(*hierarchy, meshes + "/kirk.bimport");
+	const QModelIndex treeDocument = IndexFor(*hierarchy, meshes + "/toad.bimport");
 	CHECK(WaitFor([&] { return tree->isRowHidden(treeDocument.row(), treeDocument.parent()); }));
-	const QModelIndex treeSource = IndexFor(*hierarchy, meshes + "/kirk.glb");
+	const QModelIndex treeSource = IndexFor(*hierarchy, meshes + "/toad.glb");
 	CHECK_FALSE(tree->isRowHidden(treeSource.row(), treeSource.parent()));
 }
 
@@ -702,16 +702,16 @@ TEST_CASE("A derived file is not a person's to rename or delete", "[contentexplo
 	// rooted. Losing an authored file loses work; a derived one is a bake's to write back.
 	CHECK_FALSE(editor::IsActionableAsset("Derived/Meshes/unit.bmesh"));
 	CHECK_FALSE(editor::IsActionableAsset("Derived/Skeletons/rig.bskel"));
-	CHECK_FALSE(editor::IsActionableAsset("Derived/SourceTextures/kirk/tex0.ktx2"));
+	CHECK_FALSE(editor::IsActionableAsset("Derived/SourceTextures/toad/tex0.ktx2"));
 	CHECK_FALSE(editor::IsActionableAsset("Derived/Sky/studio.bsky"));
 
 	// A directory under it is refused the same way: what is in it is what it would take.
-	CHECK_FALSE(editor::IsActionableAsset("Derived/SourceTextures/kirk"));
+	CHECK_FALSE(editor::IsActionableAsset("Derived/SourceTextures/toad"));
 
 	CHECK(editor::IsActionableAsset("Authored/Materials/skin.bmaterial"));
-	CHECK(editor::IsActionableAsset("Authored/Meshes/kirk.glb"));
+	CHECK(editor::IsActionableAsset("Authored/Meshes/toad.glb"));
 	CHECK(editor::IsActionableAsset("Authored/Environments/studio.benv"));
-	CHECK(editor::IsActionableAsset("Authored/Materials/kirk"));
+	CHECK(editor::IsActionableAsset("Authored/Materials/toad"));
 
 	// Normalized first, so a key cannot dodge the rule by spelling its way out and back in.
 	CHECK_FALSE(editor::IsActionableAsset("Authored/../Derived/Meshes/unit.bmesh"));
@@ -726,8 +726,8 @@ TEST_CASE("The derived half is not somewhere the views can be sent", "[contentex
 	// and a programmatic selection would re-root the grid onto one. That is the shape a later
 	// "reveal in explorer", a search box or a drop handler would arrive in.
 	const Sandbox sandbox;
-	Touch(sandbox, "Derived/SourceTextures/kirk/tex0.ktx2");
-	Touch(sandbox, "Authored/Materials/kirk/Body.bmaterial");
+	Touch(sandbox, "Derived/SourceTextures/toad/tex0.ktx2");
+	Touch(sandbox, "Authored/Materials/toad/Body.bmaterial");
 
 	ContentExplorerWindow window(nullptr, NothingOpen());
 	window.SetRootPath(sandbox.DataRootPath());
@@ -741,7 +741,7 @@ TEST_CASE("The derived half is not somewhere the views can be sent", "[contentex
 
 	SECTION("a derived folder selected in the tree moves nothing")
 	{
-		const QString derived = sandbox.DataRootPath() + "/Derived/SourceTextures/kirk";
+		const QString derived = sandbox.DataRootPath() + "/Derived/SourceTextures/toad";
 		tree->setCurrentIndex(IndexFor(*model, derived));
 
 		CHECK(QDir(Shown(window)) == QDir(authored));
@@ -758,7 +758,7 @@ TEST_CASE("The derived half is not somewhere the views can be sent", "[contentex
 
 	SECTION("and an authored folder still moves the grid")
 	{
-		const QString materials = sandbox.DataRootPath() + "/Authored/Materials/kirk";
+		const QString materials = sandbox.DataRootPath() + "/Authored/Materials/toad";
 		tree->setCurrentIndex(IndexFor(*model, materials));
 
 		CHECK(WaitFor([&] { return QDir(Shown(window)) == QDir(materials); }));
@@ -847,7 +847,7 @@ TEST_CASE("A mode is a browse root and nothing else", "[assetrules][textures]")
 TEST_CASE("The texture viewer roots at what the imports extracted", "[contentexplorer][textures]")
 {
 	const Sandbox sandbox;
-	Touch(sandbox, "Derived/SourceTextures/kirk/body_bc.ktx2");
+	Touch(sandbox, "Derived/SourceTextures/toad/body_bc.ktx2");
 	Touch(sandbox, "Authored/Materials/Body.bmaterial");
 
 	ContentExplorerWindow window(nullptr, NothingOpen());
@@ -888,7 +888,7 @@ TEST_CASE("The texture viewer roots at what the imports extracted", "[contentexp
 TEST_CASE("The texture viewer is read-only", "[contentexplorer][textures]")
 {
 	const Sandbox sandbox;
-	Touch(sandbox, "Derived/SourceTextures/kirk/body_bc.ktx2");
+	Touch(sandbox, "Derived/SourceTextures/toad/body_bc.ktx2");
 
 	ContentExplorerWindow window(nullptr, NothingOpen());
 	window.SetRootPath(sandbox.DataRootPath());
@@ -940,7 +940,7 @@ TEST_CASE("Only a user's pick re-roots the views", "[contentexplorer][textures]"
 	// `activated` fires for a pick and not for a programmatic change. Assigning the combo -- a
 	// restore, a reset, anything that is not a person -- must not move the views.
 	const Sandbox sandbox;
-	Touch(sandbox, "Derived/SourceTextures/kirk/body_bc.ktx2");
+	Touch(sandbox, "Derived/SourceTextures/toad/body_bc.ktx2");
 
 	ContentExplorerWindow window(nullptr, NothingOpen());
 	window.SetRootPath(sandbox.DataRootPath());
@@ -955,9 +955,9 @@ TEST_CASE("Only a user's pick re-roots the views", "[contentexplorer][textures]"
 TEST_CASE("A source row is what a rename is asked of", "[contentexplorer][sourcerow]")
 {
 	const Sandbox sandbox;
-	const QString source = Touch(sandbox, "Authored/Meshes/kirk.glb");
-	Touch(sandbox, "Authored/Meshes/kirk.bimport");
-	Touch(sandbox, "Derived/Meshes/kirk.bmesh");
+	const QString source = Touch(sandbox, "Authored/Meshes/toad.glb");
+	Touch(sandbox, "Authored/Meshes/toad.bimport");
+	Touch(sandbox, "Derived/Meshes/toad.bmesh");
 
 	ContentExplorerWindow window(nullptr, NothingOpen());
 	window.SetRootPath(sandbox.DataRootPath());
@@ -972,7 +972,7 @@ TEST_CASE("A source row is what a rename is asked of", "[contentexplorer][source
 	// this it answered empty and the row carried no menu at all.
 	CHECK(
 		editor::AssetAt(*model, IndexFor(*model, source), dataRoot) ==
-		QString("Authored/Meshes/kirk.glb"));
+		QString("Authored/Meshes/toad.glb"));
 
 	// Data-root-relative, not browse-root-relative: the views sit at Authored/ and the key does not.
 	CHECK(editor::AssetAt(*model, IndexFor(*model, source), dataRoot).startsWith("Authored/"));
@@ -983,11 +983,11 @@ TEST_CASE("A source renames but does not delete", "[assetrules][sourcerow]")
 	// Both halves of ADR-8 in one place: `planDeletion` throws for a `.glb` -- it is not an asset
 	// kind -- and grouped deletion is the non-goal, so the row that gained a Rename must not gain a
 	// Delete beside it.
-	CHECK(editor::IsActionableAsset("Authored/Meshes/kirk.glb"));
-	CHECK_FALSE(editor::IsRemovableAsset("Authored/Meshes/kirk.glb"));
+	CHECK(editor::IsActionableAsset("Authored/Meshes/toad.glb"));
+	CHECK_FALSE(editor::IsRemovableAsset("Authored/Meshes/toad.glb"));
 
 	// Case is not what tells them apart.
-	CHECK_FALSE(editor::IsRemovableAsset("Authored/Meshes/kirk.GLB"));
+	CHECK_FALSE(editor::IsRemovableAsset("Authored/Meshes/toad.GLB"));
 
 	SECTION("where everything else authored is both")
 	{
@@ -998,8 +998,8 @@ TEST_CASE("A source renames but does not delete", "[assetrules][sourcerow]")
 
 	SECTION("and everything derived is neither")
 	{
-		CHECK_FALSE(editor::IsActionableAsset("Derived/Meshes/kirk.bmesh"));
-		CHECK_FALSE(editor::IsRemovableAsset("Derived/Meshes/kirk.bmesh"));
-		CHECK_FALSE(editor::IsRemovableAsset("Derived/SourceTextures/kirk/body_bc.ktx2"));
+		CHECK_FALSE(editor::IsActionableAsset("Derived/Meshes/toad.bmesh"));
+		CHECK_FALSE(editor::IsRemovableAsset("Derived/Meshes/toad.bmesh"));
+		CHECK_FALSE(editor::IsRemovableAsset("Derived/SourceTextures/toad/body_bc.ktx2"));
 	}
 }

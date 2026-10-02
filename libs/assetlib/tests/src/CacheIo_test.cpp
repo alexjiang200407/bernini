@@ -44,7 +44,7 @@ namespace
 	SampleSource()
 	{
 		SourceRef source;
-		source.key            = "Authored/Meshes/kirk.glb";
+		source.key            = "Authored/Meshes/toad.glb";
 		source.stamp          = { 128, 0xFEED };
 		source.parametersHash = 7;
 		return source;

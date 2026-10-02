@@ -141,24 +141,24 @@ TEST_CASE("extensionOf answers what a path would, without becoming one", "[refse
 TEST_CASE("GetFilesUnder names a directory's contents and nothing beside it", "[refseam]")
 {
 	const DataRoot root("refseam_filesunder");
-	WriteSource(root.path / "Derived/SourceTextures/kirk/a.ktx2", { { 1, 2, 3, 255 } });
-	WriteSource(root.path / "Derived/SourceTextures/kirk2/b.ktx2", { { 4, 5, 6, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures/toad/a.ktx2", { { 1, 2, 3, 255 } });
+	WriteSource(root.path / "Derived/SourceTextures/toad2/b.ktx2", { { 4, 5, 6, 255 } });
 
 	const AssetRefGraph graph = AssetRefGraph::Scan(AssetStore(root.path));
 
-	const std::vector<std::string> kirk = { "Derived/SourceTextures/kirk/a.ktx2" };
+	const std::vector<std::string> toad = { "Derived/SourceTextures/toad/a.ktx2" };
 
-	CHECK(graph.GetFilesUnder("Derived/SourceTextures/kirk") == kirk);
+	CHECK(graph.GetFilesUnder("Derived/SourceTextures/toad") == toad);
 
 	// A sibling whose name this one is a prefix of must not be swept in with it.
 	CHECK(
-		graph.GetFilesUnder("Derived/SourceTextures/kirk2") ==
-		std::vector<std::string>{ "Derived/SourceTextures/kirk2/b.ktx2" });
+		graph.GetFilesUnder("Derived/SourceTextures/toad2") ==
+		std::vector<std::string>{ "Derived/SourceTextures/toad2/b.ktx2" });
 
 	// Normalized like every other query on the graph, so a trailing separator is not a different
 	// directory -- it would otherwise build a `//` prefix and match nothing.
-	CHECK(graph.GetFilesUnder("Derived/SourceTextures/kirk/") == kirk);
-	CHECK(graph.GetFilesUnder("./Derived/SourceTextures/kirk") == kirk);
+	CHECK(graph.GetFilesUnder("Derived/SourceTextures/toad/") == toad);
+	CHECK(graph.GetFilesUnder("./Derived/SourceTextures/toad") == toad);
 
 	CHECK(graph.GetFilesUnder("Derived/SourceTextures/nothing").empty());
 }
@@ -195,19 +195,19 @@ TEST_CASE("deleting a directory the archive alone holds is refused", "[refseam]"
 	// Under Materials/, which packing carries -- Derived/SourceTextures is excluded by the
 	// exclusion rule, so
 	// a directory there would be absent from the archive too and prove nothing.
-	fs::create_directories(root.path / "Authored/Materials/kirk");
-	BakeAndSave(root, "kirk/Body.bmaterial", "Derived/SourceTextures/skin.ktx2");
+	fs::create_directories(root.path / "Authored/Materials/toad");
+	BakeAndSave(root, "toad/Body.bmaterial", "Derived/SourceTextures/skin.ktx2");
 	Pack(root);
 
-	fs::remove_all(root.path / "Authored/Materials/kirk");
+	fs::remove_all(root.path / "Authored/Materials/toad");
 
 	const AssetStore store = Overlaid(root);
 
 	const AssetRefGraph graph = AssetRefGraph::Scan(store);
-	const DeletionPlan  plan  = planDeletion(graph, "Authored/Materials/kirk");
+	const DeletionPlan  plan  = planDeletion(graph, "Authored/Materials/toad");
 
 	REQUIRE(plan.IsDirectory());
-	REQUIRE(plan.contents == std::vector<std::string>{ "Authored/Materials/kirk/Body.bmaterial" });
+	REQUIRE(plan.contents == std::vector<std::string>{ "Authored/Materials/toad/Body.bmaterial" });
 
 	CHECK(store.DeleteAsset(plan).status == DeletionStatus::kFailed);
 }

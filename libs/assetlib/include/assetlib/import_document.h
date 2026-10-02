@@ -41,8 +41,8 @@ namespace assetlib
 
 	/**
 	 * The authored half of one imported source: what a person chose at import and after it. Text,
-	 * beside the source it describes (`Authored/Meshes/kirk.glb` ->
-	 * `Authored/Meshes/kirk.bimport`), so two
+	 * beside the source it describes (`Authored/Meshes/toad.glb` ->
+	 * `Authored/Meshes/toad.bimport`), so two
 	 * branches merge it like code.
 	 *
 	 * Two halves with different duties: the `parameters` object changes what the importer computes,
@@ -59,7 +59,7 @@ namespace assetlib
 		/**
 		 * The copied source this document describes, as a mount key. Recorded rather than derived
 		 * from the document's own name: a source kind may have more than one extension, and the
-		 * swap that reaches `kirk.glb` from `kirk.bimport` has no answer for one that does.
+		 * swap that reaches `toad.glb` from `toad.bimport` has no answer for one that does.
 		 *
 		 * Empty in a document written before the field, where the swap was the only answer there
 		 * was; `importedSourceKeyFor` is what knows that, and `AssetStore::Migrate` backfills it as
@@ -138,13 +138,13 @@ namespace assetlib
 		operator==(const ImportDocument&) const = default;
 	};
 
-	/** `Authored/Meshes/kirk.glb` -> `Authored/Meshes/kirk.bimport`. */
+	/** `Authored/Meshes/toad.glb` -> `Authored/Meshes/toad.bimport`. */
 	[[nodiscard]] std::string
 	importDocumentKeyFor(std::string_view sourceKey);
 
 	/**
 	 * The source `document` describes -- its `source`, or, for a document written before that field
-	 * existed, `Authored/Meshes/kirk.bimport` -> `Authored/Meshes/kirk.glb`, which was the only
+	 * existed, `Authored/Meshes/toad.bimport` -> `Authored/Meshes/toad.glb`, which was the only
 	 * answer there was while a `.glb` was the only source kind.
 	 *
 	 * @param documentKey Read only to answer the second case.
