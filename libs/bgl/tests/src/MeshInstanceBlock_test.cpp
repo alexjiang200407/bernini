@@ -309,7 +309,7 @@ TEST_CASE("A writer places a block through the contract alone", "[instance_block
 	auto listDesc = bgpu::CommandListDesc();
 	listDesc.type = bgpu::QueueType::kCompute;
 
-	auto allocator = device->CreateCommandAllocator();
+	auto allocator = device->CreateCommandAllocator(bgpu::QueueType::kCompute);
 	auto list      = device->CreateCommandList(listDesc, allocator, rm);
 	auto queue     = device->CreateCommandQueue(bgpu::QueueType::kCompute);
 
@@ -390,7 +390,7 @@ TEST_CASE("Frame waits and the last frame's point are between frames only", "[in
 		auto* device    = base->GetDevice();
 		auto  rm        = base->GetResourceManagerCpy();
 		auto  producer  = device->CreateCommandQueue(bgpu::QueueType::kCompute);
-		auto  allocator = device->CreateCommandAllocator();
+		auto  allocator = device->CreateCommandAllocator(bgpu::QueueType::kCompute);
 		auto  listDesc  = bgpu::CommandListDesc();
 		listDesc.type   = bgpu::QueueType::kCompute;
 		auto list       = device->CreateCommandList(listDesc, allocator, rm);
