@@ -20,6 +20,7 @@
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/SkinnedMeshGeomDesc.h>
+#include <bgl/types/SkinnedMeshInstanceDesc.h>
 #include <bgl/types/StaticMeshGeomDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
@@ -1421,11 +1422,11 @@ namespace game
 
 	bgl::MeshInstanceHandle
 	AssetManager::CreateSkinnedInstance(
-		bgl::SceneViewRef               view,
-		bgl::GeomHandle                 geom,
-		const glm::mat4&                transform,
-		const bgl::SkinnedInstanceDesc& desc)
+		bgl::SceneViewRef                   view,
+		const bgl::SkinnedMeshInstanceDesc& desc)
 	{
+		const bgl::GeomHandle geom = desc.geom;
+
 		if (!view)
 			throw bgl::SceneError("CreateSkinnedInstance requires a valid SceneView");
 
@@ -1437,8 +1438,7 @@ namespace game
 				"has expired");
 		}
 
-		const bgl::MeshInstanceHandle instance =
-			view->CreateSkinnedMeshInstance(geom, transform, desc);
+		const bgl::MeshInstanceHandle instance = view->CreateSkinnedMeshInstance(desc);
 
 		RegisterInstance(std::move(view), geom.handle.index, instance);
 

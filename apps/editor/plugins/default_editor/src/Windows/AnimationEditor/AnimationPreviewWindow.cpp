@@ -52,6 +52,7 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <bgl/types/FootIKDesc.h>
+#include <bgl/types/SkinnedMeshInstanceDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
 #include <core/err/util.h>
 #include <core/glm.h>
@@ -1045,9 +1046,11 @@ AnimationPreviewWindow::SpawnAnimated(
 	// tiers differ by at spawn -- one geom, one upload, two places to read a pose from.
 	const bgl::MeshInstanceHandle instance = context.assets.CreateSkinnedInstance(
 		view,
-		geom,
-		world,
-		bgl::SkinnedInstanceDesc{ clip, 0.0f, 1.0f, m_Source });
+		bgl::SkinnedMeshInstanceDesc()
+			.SetGeom(geom)
+			.SetTransform(world)
+			.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(clip))
+			.SetSource(m_Source));
 	ApplyFootIK(view, instance);
 	ApplyBlobShadow(view, instance, castsShadow);
 	return instance;
@@ -1186,9 +1189,9 @@ AnimationPreviewWindow::ShowSpace(
 	const game::BlendSpaceInfo& space = m_Spaces[spaceIndex];
 	const uint32_t              node  = static_cast<uint32_t>(m_Clips.size()) + spaceIndex;
 
-	// The spawn names a *clip* and the record names the space. `SkinnedInstanceDesc::clip` is
-	// checked against the clip table and a space is past the end of it, while a playback slot is
-	// checked against the node count -- so a space is reached by writing the record, which is what
+	// The spawn names a *clip* and the record names the space: a table spawn is checked against
+	// the clip table and a space is past the end of it, while a per-instance record is checked
+	// against the node count -- so a space is reached by writing the record, which is what
 	// SetSkinnedPlayback is for. The clip chosen is the one the parameter sits on, so the spawn pose
 	// is already near what the record shows rather than a jump away from it.
 	const uint32_t seed = space.samples[space.StraddleAt(parameter).lower].clipIndex;

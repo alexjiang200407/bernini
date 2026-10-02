@@ -470,7 +470,7 @@ namespace
 	AddAnimatedQuadOverBackdrop(
 		const bgl::SceneRef&            scene,
 		const bgl::SceneViewRef&        view,
-		const bgl::SkinnedInstanceDesc& desc,
+		const bgl::SkinnedPlaybackDesc& playback,
 		const glm::mat4&                transform)
 	{
 		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
@@ -486,7 +486,9 @@ namespace
 		const auto quad = bgl::test::skinned_synth::AddSlidingQuadGeom(
 			*scene,
 			scene->CreatePbrMaterial(Grey(c_AnimQuadGrey)));
-		view->CreateSkinnedMeshInstance(quad, transform, desc);
+		view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(quad).SetTransform(transform).SetPlayback(
+				playback));
 	}
 
 	void
@@ -495,7 +497,7 @@ namespace
 		AddAnimatedQuadOverBackdrop(
 			scene,
 			view,
-			{ bgl::test::skinned_synth::c_LoopClip, 0.0f, 1.0f },
+			bgl::SkinnedPlaybackDesc::FromClip(bgl::test::skinned_synth::c_LoopClip),
 			AnimatedQuadTransform());
 	}
 
@@ -509,7 +511,10 @@ namespace
 		AddAnimatedQuadOverBackdrop(
 			scene,
 			view,
-			{ bgl::test::skinned_synth::c_LoopClip, c_ArrivedPhase, 0.0f },
+			bgl::SkinnedPlaybackDesc::FromClip(
+				bgl::test::skinned_synth::c_LoopClip,
+				c_ArrivedPhase,
+				0.0f),
 			AnimatedQuadTransform());
 	}
 
@@ -571,7 +576,7 @@ namespace
 		AddAnimatedQuadOverBackdrop(
 			scene,
 			view,
-			{ bgl::test::skinned_synth::c_ClampClip, 0.0f, 1.0f },
+			bgl::SkinnedPlaybackDesc::FromClip(bgl::test::skinned_synth::c_ClampClip),
 			LeapQuadTransform());
 	}
 
@@ -583,7 +588,7 @@ namespace
 		AddAnimatedQuadOverBackdrop(
 			scene,
 			view,
-			{ bgl::test::skinned_synth::c_ClampClip, 1.0f, 0.0f },
+			bgl::SkinnedPlaybackDesc::FromClip(bgl::test::skinned_synth::c_ClampClip, 1.0f, 0.0f),
 			LeapQuadTransform());
 	}
 

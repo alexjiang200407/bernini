@@ -21,12 +21,13 @@ not obvious from a signature. The headers linked below are the source of truth.
 
 * **`RenderJob::time` is the only per-frame input.** An instance is spawned with a playback record
   and nothing writes it per frame, whichever source it draws from. A crowd record is one
-  `{clip, phase, rate}`. A per-instance one is `cBlendSlots` weighted slots, each naming a *node* of
+  `{clip, phase, rate}`, so a `kBoneAnimTable` spawn takes a record with one weighted clip slot and
+  refuses any other. A per-instance one is `cBlendSlots` weighted slots, each naming a *node* of
   the rig — a clip, or a blend space — with a phase and rate measured from its own `tRef`, a weight
   ramp, and a parameter ramp a space reads. So a crossfade is two slots whose ramps cross, evaluated
   on the GPU from the clock, and the CPU touches the record only when something happens to the
-  instance (`ISceneView::SetSkinnedPlayback`). `rate = 0` holds a pose under any clock. The
-  `SkinnedInstanceDesc` spawn is the one-slot spelling of the same record. See
+  instance (`ISceneView::SetSkinnedPlayback`). `rate = 0` holds a pose under any clock.
+  `SkinnedPlaybackDesc::FromClip` is the one-slot spelling of the same record. See
   [Animation Blending](docs/anim_blend.md).
 
 * **A posed instance is addressed by its placement, not by its playback record.** A foot planted on
@@ -124,7 +125,7 @@ not obvious from a signature. The headers linked below are the source of truth.
   integer frame, or the weighted blend of fractional frames of several, which is the reference a
   blend on the GPU is diffed against.
 
-* **The pose source is a property of the instance, not of the geom.** `SkinnedInstanceDesc::source`
+* **The pose source is a property of the instance, not of the geom.** `SkinnedMeshInstanceDesc::source`
   chooses: `kPerInstance` gets a palette slice `SkinnedPosePass` fills every frame — the hero tier,
   and the only source a per-unit blend, mask or IK can ever vary — while `kBoneAnimTable` reads the
   rig's table and allocates nothing. One geom serves both, so two instances of one mesh may draw
@@ -293,7 +294,7 @@ to keep in agreement beyond the one below.
   at a whole frame — that is the crowd tier working — so a selector wired to the wrong source, or to
   nothing, looks exactly like a correct one. `AnimationEditorWindow::TierSourceAt` /
   `TierIndexFor` are what `editor_tests` drives. An index the combo cannot deliver answers with the
-  hero tier, which is what an unset `SkinnedInstanceDesc::source` gives.
+  hero tier, which is what an unset `SkinnedMeshInstanceDesc::source` gives.
 
 * **A level of detail is previewed where the animation plays.** The Animation panel and the Blend
   Space Editor carry the Mesh Editor's *Level of Detail* selector (`editor::LodSelector`, one

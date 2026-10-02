@@ -26,6 +26,7 @@
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/SkinnedMeshInstanceDesc.h>
 #include <bgl/types/SkyboxDesc.h>  // IWYU pragma: keep
 #include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/Viewport.h>
@@ -445,12 +446,10 @@ main(int argc, char** argv)
 				casterParts.emplace_back(
 					casterAssets->CreateSkinnedInstance(
 						view,
-						placement.geom,
-						placement.local,
-						bgl::SkinnedInstanceDesc{ clip,
-				                                  0.0f,
-				                                  1.0f,
-				                                  bgl::PoseSource::kPerInstance }),
+						bgl::SkinnedMeshInstanceDesc()
+							.SetGeom(placement.geom)
+							.SetTransform(placement.local)
+							.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(clip))),
 					placement.local);
 			}
 			if (casterParts.empty())

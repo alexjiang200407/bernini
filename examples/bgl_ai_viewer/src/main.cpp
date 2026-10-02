@@ -26,6 +26,7 @@
 #include <bgl/types/PassTiming.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/RenderJob.h>
+#include <bgl/types/SkinnedMeshInstanceDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/Viewport.h>
 #include <bgl/types/WindDesc.h>
@@ -337,9 +338,10 @@ namespace
 		{
 			assets.CreateSkinnedInstance(
 				view,
-				placement.geom,
-				placement.world,
-				bgl::SkinnedInstanceDesc{ clip, 0.0f, 1.0f, bgl::PoseSource::kPerInstance });
+				bgl::SkinnedMeshInstanceDesc()
+					.SetGeom(placement.geom)
+					.SetTransform(placement.world)
+					.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(clip)));
 		}
 
 		std::cout << std::format(

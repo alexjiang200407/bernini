@@ -650,7 +650,9 @@ TEST_CASE("A surface material draws on skinned geometry", "[surface][render][ski
 
 	// rate 0 holds frame 0, which slides by nothing, so the vertex the skinned geometry stage emits
 	// is the one the static stage emits -- and the surface behind both is the one record.
-	const auto posed = view->CreateSkinnedMeshInstance(skinned, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+	const auto posed = view->CreateSkinnedMeshInstance(
+		bgl::SkinnedMeshInstanceDesc().SetGeom(skinned).SetPlayback(
+			bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 	gfx->DrawFrame(target, job);
 	gfx->ScreenshotPng(target, skinnedPng);
 
@@ -682,7 +684,10 @@ TEST_CASE("A surface material draws on skinned geometry", "[surface][render][ski
 	const auto blendedGeom = AddSlidingQuadGeom(*scene, blend);
 	REQUIRE(blendedGeom.IsValid());
 
-	view->CreateSkinnedMeshInstance(blendedGeom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+	view->CreateSkinnedMeshInstance(
+		bgl::SkinnedMeshInstanceDesc()
+			.SetGeom(blendedGeom)
+			.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 	gfx->DrawFrame(target, job);
 	gfx->ScreenshotPng(target, blendPng);
 

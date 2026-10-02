@@ -151,18 +151,6 @@ namespace bgl
 		CreateStaticMeshInstance(const StaticMeshInstanceDesc& desc) override;
 
 		MeshInstanceHandle
-		CreateSkinnedMeshInstance(
-			GeomHandle                 geom,
-			glm::mat4                  transform,
-			const SkinnedInstanceDesc& desc) override;
-
-		MeshInstanceHandle
-		CreateSkinnedMeshInstance(
-			GeomHandle                 geom,
-			glm::mat4                  transform,
-			const SkinnedPlaybackDesc& desc) override;
-
-		MeshInstanceHandle
 		CreateSkinnedMeshInstance(const SkinnedMeshInstanceDesc& desc) override;
 
 		void

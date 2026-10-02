@@ -216,9 +216,10 @@ TEST_CASE(
 			.SetPosedBounds(assetlib::Bounds{ glm::vec3(-1.0f), glm::vec3(1.0f) }));
 	REQUIRE(unitGeom.IsValid());
 	view->CreateSkinnedMeshInstance(
-		unitGeom,
-		glm::translate(glm::mat4(1.0f), glm::vec3(c_UnitX, c_UnitHeight, 0.0f)),
-		bgl::SkinnedInstanceDesc{ 0, 0.0f, 0.0f });
+		bgl::SkinnedMeshInstanceDesc()
+			.SetGeom(unitGeom)
+			.SetTransform(glm::translate(glm::mat4(1.0f), glm::vec3(c_UnitX, c_UnitHeight, 0.0f)))
+			.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 
 	auto camera = bgl::Camera();
 	camera

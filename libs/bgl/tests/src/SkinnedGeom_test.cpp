@@ -435,14 +435,12 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 			.SetPosedBounds(c_AnyPose));
 	REQUIRE(geom.IsValid());
 
-	auto desc  = bgl::SkinnedInstanceDesc();
-	desc.clip  = 1;
-	desc.phase = 4.5f;
-	desc.rate  = 2.0f;
-
 	const auto placed = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 2.0f, 3.0f));
 
-	const auto instance = view->CreateSkinnedMeshInstance(geom, placed, desc);
+	const auto desc = bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetTransform(placed).SetPlayback(
+		bgl::SkinnedPlaybackDesc::FromClip(1, 4.5f, 2.0f));
+
+	const auto instance = view->CreateSkinnedMeshInstance(desc);
 	REQUIRE(instance.IsValid());
 
 	auto& meshBuffer = view->GetMeshBuffer();
@@ -473,10 +471,8 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 
 	SECTION("a crowd instance is a record of its own kind, owning no palette")
 	{
-		auto crowd   = desc;
-		crowd.source = bgl::PoseSource::kBoneAnimTable;
-
-		const auto other = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), crowd);
+		const auto other = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc(desc).SetSource(bgl::PoseSource::kBoneAnimTable));
 		REQUIRE(other.IsValid());
 
 		const bgl::idl::MeshInstance& crowdMesh = meshBuffer.AtIndex(other.handle.index);
@@ -507,10 +503,10 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 
 	SECTION("a clip past the geom's table is refused")
 	{
-		auto tooFar = desc;
-		tooFar.clip = 2;
 		CHECK_THROWS_AS(
-			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), tooFar),
+			view->CreateSkinnedMeshInstance(
+				bgl::SkinnedMeshInstanceDesc(desc).SetPlayback(
+					bgl::SkinnedPlaybackDesc::FromClip(2))),
 			bgl::SceneError);
 	}
 
@@ -518,7 +514,7 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	{
 		const auto cube = scene->AddCubeGeom(bgl::MaterialHandle());
 		CHECK_THROWS_AS(
-			view->CreateSkinnedMeshInstance(cube, glm::mat4(1.0f), desc),
+			view->CreateSkinnedMeshInstance(bgl::SkinnedMeshInstanceDesc(desc).SetGeom(cube)),
 			bgl::SceneError);
 	}
 
@@ -701,9 +697,8 @@ TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
 	SECTION("a spawn on one clip reads back as that clip in slot 0")
 	{
 		const auto instance = view->CreateSkinnedMeshInstance(
-			geom,
-			glm::mat4(1.0f),
-			bgl::SkinnedInstanceDesc{ 1, 4.5f, 2.0f });
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(1, 4.5f, 2.0f)));
 
 		const auto got  = view->GetSkinnedPlayback(instance);
 		const auto want = bgl::SkinnedPlaybackDesc::FromClip(1, 4.5f, 2.0f);
@@ -713,9 +708,8 @@ TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
 	SECTION("a rewrite keeps the record's offset, kind and palette, and moves only its slots")
 	{
 		const auto instance = view->CreateSkinnedMeshInstance(
-			geom,
-			glm::mat4(1.0f),
-			bgl::SkinnedInstanceDesc{ 0, 0.0f, 1.0f });
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0)));
 
 		auto& meshBuffer = view->GetMeshBuffer();
 		auto& playback   = view->GetPlaybackArena();
@@ -738,21 +732,22 @@ TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
 
 	SECTION("a spawn on a whole record is the same record")
 	{
-		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), crossfade);
-		const auto got      = view->GetSkinnedPlayback(instance);
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(crossfade));
+		const auto got = view->GetSkinnedPlayback(instance);
 		for (uint32_t s = 0; s < bgl::c_BlendSlots; ++s) same(got.slot[s], crossfade.slot[s]);
 	}
 
 	SECTION("a record the rig cannot play is refused, at spawn and at rewrite")
 	{
 		const auto instance = view->CreateSkinnedMeshInstance(
-			geom,
-			glm::mat4(1.0f),
-			bgl::SkinnedInstanceDesc{ 0, 0.0f, 1.0f });
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0)));
 
 		const auto refused = [&](const bgl::SkinnedPlaybackDesc& bad) {
 			CHECK_THROWS_AS(
-				view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), bad),
+				view->CreateSkinnedMeshInstance(
+					bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(bad)),
 				bgl::SceneError);
 			CHECK_THROWS_AS(view->SetSkinnedPlayback(instance, bad), bgl::SceneError);
 		};
@@ -789,9 +784,11 @@ TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
 
 	SECTION("a placement with no slots to rewrite is refused")
 	{
-		auto crowd       = bgl::SkinnedInstanceDesc{ 0, 0.0f, 1.0f };
-		crowd.source     = bgl::PoseSource::kBoneAnimTable;
-		const auto table = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), crowd);
+		const auto table = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(geom)
+				.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0))
+				.SetSource(bgl::PoseSource::kBoneAnimTable));
 		CHECK_THROWS_AS(view->SetSkinnedPlayback(table, crossfade), bgl::SceneError);
 		CHECK_THROWS_AS(view->GetSkinnedPlayback(table), bgl::SceneError);
 
@@ -1621,12 +1618,13 @@ TEST_CASE("SetRigBlendParameters moves a run without moving the table", "[skinne
 	}
 }
 
-// The two doors onto a rig's node table are not the same door, and a caller that mixes them up
-// destroys an instance and never gets it back. A spawn desc names a *clip* and is checked against
-// the clip count; a playback slot names a *node* and is checked against the node count. So a blend
-// space -- which lives past the clips -- is reached by writing the record, never by spawning onto
-// it. Pinned here because the editor got this wrong and the symptom was a mesh that vanished.
-TEST_CASE("A blend space is reached through the record, not through the spawn", "[skinned][blend]")
+// A playback slot names a *node* of the rig's table -- its clips, then its blend spaces -- and is
+// checked against the node count, at spawn and at rewrite alike. The shared table holds clips only,
+// so a table spawn is checked against the clip count instead. Pinned because the editor once
+// confused the two counts and the symptom was a mesh that vanished.
+TEST_CASE(
+	"A blend space is reached through the record, and never from the table",
+	"[skinned][blend]")
 {
 	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
@@ -1657,22 +1655,24 @@ TEST_CASE("A blend space is reached through the record, not through the spawn", 
 	constexpr uint32_t c_ClipCount = 2;
 	constexpr uint32_t c_SpaceNode = c_ClipCount;
 
-	SECTION("spawning onto the space node is refused, since a spawn desc names a clip")
-	{
-		auto onSpace = bgl::SkinnedInstanceDesc();
-		onSpace.clip = c_SpaceNode;
+	const auto onClip = bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+		bgl::SkinnedPlaybackDesc::FromClip(0));
 
-		CHECK_THROWS_AS(
-			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), onSpace),
-			bgl::SceneError);
+	SECTION("a per-instance spawn onto the space node plays the space")
+	{
+		auto playing           = bgl::SkinnedPlaybackDesc::FromClip(c_SpaceNode);
+		playing.slot[0].param0 = 0.5f;
+		playing.slot[0].param1 = 0.5f;
+
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc(onClip).SetPlayback(playing));
+		REQUIRE(instance.IsValid());
+		CHECK(view->GetSkinnedPlayback(instance).slot[0].nodeIndex == c_SpaceNode);
 	}
 
 	SECTION("a record naming the space is accepted on an instance spawned onto a clip")
 	{
-		auto onClip = bgl::SkinnedInstanceDesc();
-		onClip.clip = 0;
-
-		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), onClip);
+		const auto instance = view->CreateSkinnedMeshInstance(onClip);
 		REQUIRE(instance.IsValid());
 
 		auto playing           = bgl::SkinnedPlaybackDesc::FromClip(c_SpaceNode);
@@ -1699,12 +1699,15 @@ TEST_CASE("A blend space is reached through the record, not through the spawn", 
 			bgl::SceneError);
 	}
 
-	SECTION("a record past the node table is still refused")
+	SECTION("a record past the node table is still refused, at spawn and at rewrite")
 	{
-		auto onClip = bgl::SkinnedInstanceDesc();
-		onClip.clip = 0;
+		CHECK_THROWS_AS(
+			view->CreateSkinnedMeshInstance(
+				bgl::SkinnedMeshInstanceDesc(onClip).SetPlayback(
+					bgl::SkinnedPlaybackDesc::FromClip(c_SpaceNode + 1))),
+			bgl::SceneError);
 
-		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), onClip);
+		const auto instance = view->CreateSkinnedMeshInstance(onClip);
 		REQUIRE(instance.IsValid());
 
 		CHECK_THROWS_AS(

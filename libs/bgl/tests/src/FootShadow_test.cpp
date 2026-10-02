@@ -318,9 +318,10 @@ TEST_CASE(
 	{
 		const FootScene feet     = MakeFootScene(c_Lift, false);
 		const auto      instance = feet.view->CreateSkinnedMeshInstance(
-			feet.geom,
-			glm::translate(glm::mat4(1.0f), where),
-			bgl::SkinnedInstanceDesc{ 0, 0.0f, 0.0f });
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(feet.geom)
+				.SetTransform(glm::translate(glm::mat4(1.0f), where))
+				.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 
 		auto target = feet.gfx->CreateRenderTarget(targetDesc);
 		job.view    = feet.view;
@@ -339,9 +340,8 @@ TEST_CASE(
 	{
 		const FootScene feet     = MakeFootScene(c_Lift, true);
 		const auto      instance = feet.view->CreateSkinnedMeshInstance(
-			feet.geom,
-			glm::mat4(1.0f),
-			bgl::SkinnedInstanceDesc{ 0, 0.0f, 0.0f });
+			bgl::SkinnedMeshInstanceDesc().SetGeom(feet.geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 
 		auto target = feet.gfx->CreateRenderTarget(targetDesc);
 		job.view    = feet.view;
@@ -371,9 +371,8 @@ TEST_CASE(
 
 	const FootScene feet     = MakeFootScene(c_Lift, false);
 	const auto      instance = feet.view->CreateSkinnedMeshInstance(
-		feet.geom,
-		glm::mat4(1.0f),
-		bgl::SkinnedInstanceDesc{ 0, 0.0f, 0.0f });
+		bgl::SkinnedMeshInstanceDesc().SetGeom(feet.geom).SetPlayback(
+			bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 
 	auto targetDesc     = bgl::RenderTargetDesc();
 	targetDesc.width    = static_cast<int>(c_Width);
@@ -487,9 +486,8 @@ TEST_CASE("only a hero whose rig authored legs may cast foot shadows", "[blobsha
 	desc.feet = bgl::FootShadowDesc();
 
 	const auto hero = feet.view->CreateSkinnedMeshInstance(
-		feet.geom,
-		glm::mat4(1.0f),
-		bgl::SkinnedInstanceDesc{ 0, 0.0f, 0.0f });
+		bgl::SkinnedMeshInstanceDesc().SetGeom(feet.geom).SetPlayback(
+			bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 
 	SECTION("a hero with legs takes the record, and gets it back")
 	{
@@ -507,9 +505,10 @@ TEST_CASE("only a hero whose rig authored legs may cast foot shadows", "[blobsha
 	SECTION("a crowd instance, a static placement and a rig without legs are refused")
 	{
 		const auto crowd = feet.view->CreateSkinnedMeshInstance(
-			feet.geom,
-			glm::mat4(1.0f),
-			bgl::SkinnedInstanceDesc{ 0, 0.0f, 1.0f, bgl::PoseSource::kBoneAnimTable });
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(feet.geom)
+				.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0))
+				.SetSource(bgl::PoseSource::kBoneAnimTable));
 		CHECK_THROWS_AS(feet.view->SetBlobShadow(crowd, desc), bgl::SceneError);
 		CHECK_THROWS_AS(feet.view->SetBlobShadow(feet.ground, desc), bgl::SceneError);
 
@@ -525,9 +524,8 @@ TEST_CASE("only a hero whose rig authored legs may cast foot shadows", "[blobsha
 				.SetRig(legless)
 				.SetPosedBounds(assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) }));
 		const auto leglessHero = feet.view->CreateSkinnedMeshInstance(
-			geom,
-			glm::mat4(1.0f),
-			bgl::SkinnedInstanceDesc{ 0, 0.0f, 0.0f });
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 		CHECK_THROWS_AS(feet.view->SetBlobShadow(leglessHero, desc), bgl::SceneError);
 
 		// The body disc alone is still anyone's.

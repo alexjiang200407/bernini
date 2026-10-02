@@ -19,6 +19,7 @@
 #include <bgl/types/MeshInstanceHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/RigHandle.h>
+#include <bgl/types/SkinnedMeshInstanceDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <bgl/types/TextureAssetHandle.h>
@@ -421,22 +422,18 @@ namespace game
 		SetBlendParameters(bgl::GeomHandle geom, std::span<const BlendSpaceInfo> spaces);
 
 		/**
-		 * The skinned counterpart of CreateInstance: places a geom AcquireSkinnedMesh returned, spawned
-		 * on `desc`'s clip, phase and rate and posed from its `source`. The same references are taken
-		 * and the same DestroyInstance releases them.
+		 * The skinned counterpart of CreateInstance: places `desc.geom`, which AcquireSkinnedMesh
+		 * returned, spawned on `desc.playback` and posed from `desc.source`. The same references are
+		 * taken and the same DestroyInstance releases them.
 		 *
 		 * `PoseSource::kBoneAnimTable` reserves the rig's table on the first such instance -- see
 		 * ISceneView::CreateSkinnedMeshInstance for what that costs.
 		 *
 		 * @throws bgl::SceneError if `view` is null, the geom is not this manager's or has expired, or
-		 *         `desc.clip` is out of the geom's clip table.
+		 *         for anything ISceneView::CreateSkinnedMeshInstance refuses.
 		 */
 		bgl::MeshInstanceHandle
-		CreateSkinnedInstance(
-			bgl::SceneViewRef               view,
-			bgl::GeomHandle                 geom,
-			const glm::mat4&                transform,
-			const bgl::SkinnedInstanceDesc& desc);
+		CreateSkinnedInstance(bgl::SceneViewRef view, const bgl::SkinnedMeshInstanceDesc& desc);
 
 		/**
 		 * Destroys `instance` in `view` and drops its reference on its geometry. `view` is the one it was

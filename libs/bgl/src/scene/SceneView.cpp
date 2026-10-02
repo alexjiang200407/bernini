@@ -648,49 +648,6 @@ namespace bgl
 	}
 
 	MeshInstanceHandle
-	SceneView::CreateSkinnedMeshInstance(
-		GeomHandle                 geom,
-		glm::mat4                  transform,
-		const SkinnedInstanceDesc& desc)
-	{
-		const Scene::AnimGeomInfo rig =
-			RequireSkinnedGeom(*m_SceneRaw, geom, "CreateSkinnedMeshInstance");
-		if (desc.clip >= rig.clipCount)
-		{
-			throw SceneError(
-				"SkinnedInstanceDesc::clip passed to CreateSkinnedMeshInstance is out of "
-				"range for the geom's clip table");
-		}
-
-		RefuseUndrawnSource(desc.source, "CreateSkinnedMeshInstance");
-
-		// The pose source is which record this placement gets, and nothing else records it: a hero
-		// instance owns a palette the pose pass writes, a crowd one owns no storage at all.
-		if (desc.source == PoseSource::kPerInstance)
-		{
-			const auto record = SkinnedPlaybackDesc::FromClip(desc.clip, desc.phase, desc.rate);
-			ValidatePlayback(record, rig.nodeCount, "CreateSkinnedMeshInstance");
-			return PlacePosed(
-				geom,
-				transform,
-				rig.record,
-				rig.boneCount,
-				rig.nodeCount,
-				rig.legCount,
-				record);
-		}
-
-		return PlaceTable(
-			geom,
-			transform,
-			rig.record,
-			rig.nodeCount,
-			desc.clip,
-			desc.phase,
-			desc.rate);
-	}
-
-	MeshInstanceHandle
 	SceneView::PlaceTable(
 		GeomHandle        geom,
 		glm::mat4         transform,
@@ -721,28 +678,6 @@ namespace bgl
 			core::multi_slot_handle(),
 			core::multi_slot_handle(),
 			nodeCount);
-	}
-
-	MeshInstanceHandle
-	SceneView::CreateSkinnedMeshInstance(
-		GeomHandle                 geom,
-		glm::mat4                  transform,
-		const SkinnedPlaybackDesc& desc)
-	{
-		const Scene::AnimGeomInfo rig =
-			RequireSkinnedGeom(*m_SceneRaw, geom, "CreateSkinnedMeshInstance");
-
-		// A slot names a node of the rig table: its clips first, then its authored spaces.
-		ValidatePlayback(desc, rig.nodeCount, "CreateSkinnedMeshInstance");
-
-		return PlacePosed(
-			geom,
-			transform,
-			rig.record,
-			rig.boneCount,
-			rig.nodeCount,
-			rig.legCount,
-			desc);
 	}
 
 	MeshInstanceHandle

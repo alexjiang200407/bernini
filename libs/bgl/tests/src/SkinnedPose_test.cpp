@@ -489,7 +489,8 @@ TEST_CASE("the pose pass blends a record's slots as the reference does", "[skinn
 
 	SECTION("two clips mid-crossfade")
 	{
-		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), crossfade);
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(crossfade));
 
 		// Halfway along the ramp the weights are equal; a quarter of the way they are 3:1. Both are
 		// checked, because equal weights hide a slot read in the wrong order.
@@ -504,7 +505,8 @@ TEST_CASE("the pose pass blends a record's slots as the reference does", "[skinn
 
 	SECTION("a weight ramp read before and after its window is one clip alone")
 	{
-		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), crossfade);
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(crossfade));
 
 		const std::array<assetlib::BlendSample, 1> from = { { { 0, 1.0f, 1.0f } } };
 		CheckAgainstReference(paletteAt(instance, 0.25f), skeleton, animations, from);
@@ -517,9 +519,8 @@ TEST_CASE("the pose pass blends a record's slots as the reference does", "[skinn
 	{
 		// Clip 0 at rate 1 from the clock's zero: at t1 it has reached frame 1 and holds there.
 		const auto instance = view->CreateSkinnedMeshInstance(
-			geom,
-			glm::mat4(1.0f),
-			bgl::SkinnedInstanceDesc{ 0, 0.0f, 1.0f });
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0)));
 
 		const float t1 = 1.0f / c_SampleRate;
 		paletteAt(instance, 0.0f);
@@ -631,8 +632,9 @@ TEST_CASE("a rig far past the old ceiling poses every bone", "[skinned][pose][re
 
 	SECTION("at bind pose every one of the 300 is identity")
 	{
-		const auto instance =
-			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 		gfx->DrawFrame(target, job);
 
 		const bgl::test::Palette palette = bgl::test::ReadPalette(
@@ -649,8 +651,9 @@ TEST_CASE("a rig far past the old ceiling poses every bone", "[skinned][pose][re
 
 	SECTION("swung, the root's rotation still reaches the 299th bone")
 	{
-		const auto instance =
-			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 1.0f, 0.0f });
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0, 1.0f, 0.0f)));
 		gfx->DrawFrame(target, job);
 
 		const bgl::test::Palette palette = bgl::test::ReadPalette(
@@ -753,8 +756,9 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 		// rate 0 holds frame 0, which is the bind pose: pose * inverseBind is then exactly identity
 		// for every bone. A wrong inverse bind, a missed hierarchy level and a mis-strided sample
 		// fetch all break this, which is why it is the first thing asserted.
-		const auto instance =
-			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 		gfx->DrawFrame(target, job);
 
 		const bgl::test::Palette palette = bgl::test::ReadPalette(
@@ -777,8 +781,9 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 	SECTION("a parent's rotation reaches its grandchild")
 	{
 		// Frame 1 swings bone 1 by 90 degrees about +Z, about its own bind position (0,1,0).
-		const auto instance =
-			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 1.0f, 0.0f });
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0, 1.0f, 0.0f)));
 		gfx->DrawFrame(target, job);
 
 		const bgl::test::Palette palette = bgl::test::ReadPalette(
@@ -821,13 +826,15 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 		// They stand in different places, which must not reach the palette at all: a bone matrix is
 		// model space, and where the instance stands is applied downstream in the mesh shader.
 		const auto held = view->CreateSkinnedMeshInstance(
-			geom,
-			glm::translate(glm::mat4(1.0f), glm::vec3(-3.0f, 0.0f, 0.0f)),
-			{ 0, 0.0f, 0.0f });
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(geom)
+				.SetTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-3.0f, 0.0f, 0.0f)))
+				.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 		const auto swung = view->CreateSkinnedMeshInstance(
-			geom,
-			glm::translate(glm::mat4(1.0f), glm::vec3(3.0f, 0.0f, 0.0f)),
-			{ 0, 1.0f, 0.0f });
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(geom)
+				.SetTransform(glm::translate(glm::mat4(1.0f), glm::vec3(3.0f, 0.0f, 0.0f)))
+				.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0, 1.0f, 0.0f)));
 
 		gfx->DrawFrame(target, job);
 
@@ -858,8 +865,9 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 	{
 		// Half of a 90-degree swing is 45, and nlerp of the two endpoint quaternions is exactly the
 		// half-angle rotation here (a single axis, so the shortest arc is unambiguous).
-		const auto instance =
-			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.5f, 0.0f });
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0, 0.5f, 0.0f)));
 		gfx->DrawFrame(target, job);
 
 		const bgl::test::Palette palette = bgl::test::ReadPalette(
@@ -888,8 +896,9 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 		auto handles = std::vector<bgl::MeshInstanceHandle>();
 		for (uint32_t i = 0; i < c_Instances; ++i)
 		{
-			handles.push_back(
-				view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 1.0f, 0.0f }));
+			handles.push_back(view->CreateSkinnedMeshInstance(
+				bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+					bgl::SkinnedPlaybackDesc::FromClip(0, 1.0f, 0.0f))));
 			REQUIRE(handles.back().IsValid());
 		}
 
@@ -930,8 +939,9 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 				.SetPosedBounds(assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) }));
 		REQUIRE(looping.IsValid());
 
-		const auto instance =
-			view->CreateSkinnedMeshInstance(looping, glm::mat4(1.0f), { 0, 2.5f, 0.0f });
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(looping).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0, 2.5f, 0.0f)));
 		gfx->DrawFrame(target, job);
 
 		const bgl::test::Palette palette = bgl::test::ReadPalette(
@@ -960,8 +970,9 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 				.SetPosedBounds(assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) }));
 		REQUIRE(looping.IsValid());
 
-		const auto instance =
-			view->CreateSkinnedMeshInstance(looping, glm::mat4(1.0f), { 0, 2.0f, 0.0f });
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(looping).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0, 2.0f, 0.0f)));
 		gfx->DrawFrame(target, job);
 
 		const bgl::test::Palette palette = bgl::test::ReadPalette(
@@ -983,8 +994,9 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 		// rate 1 from phase 0: at time = one frame the current pose is frame 1 and the previous, one
 		// frame of clock earlier, is frame 0 -- the bind pose. That pair is what a motion vector is
 		// derived from, so the two halves must not be the same bytes.
-		const auto instance =
-			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 1.0f });
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0)));
 
 		// Two frames, because prevTime equals time on the first one by construction (see ViewData) --
 		// a single draw would compare a pose against itself and pass on a palette that never wrote
@@ -1115,7 +1127,8 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 		auto desc    = bgl::SkinnedPlaybackDesc();
 		desc.slot[0] = SpaceSlot(c_SpaceNode, 0.0f, 0.0f, 0.0f);
 
-		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), desc);
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(desc));
 
 		const std::array<assetlib::BlendSample, 1> alone = { { { 0, 0.0f, 1.0f } } };
 		CheckAgainstReference(paletteAt(instance, 0.0f), skeleton, animations, alone);
@@ -1126,7 +1139,8 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 		auto desc    = bgl::SkinnedPlaybackDesc();
 		desc.slot[0] = SpaceSlot(c_SpaceNode, 0.25f, 0.0f, 0.5f);
 
-		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), desc);
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(desc));
 
 		// Rate zero, so the phase is exactly what the record holds and the clips are frozen at the
 		// same fraction of their different cycles -- the whole point of a normalized phase.
@@ -1167,7 +1181,8 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 		auto desc    = bgl::SkinnedPlaybackDesc();
 		desc.slot[0] = SpaceSlot(c_SpaceNode, 0.0f, c_Rate, c_Parameter);
 
-		const auto instance = view->CreateSkinnedMeshInstance(heldGeom, glm::mat4(1.0f), desc);
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(heldGeom).SetPlayback(desc));
 
 		CheckAgainstReference(
 			paletteAt(instance, time),
@@ -1195,7 +1210,8 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 		auto desc    = bgl::SkinnedPlaybackDesc();
 		desc.slot[0] = slot;
 
-		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), desc);
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(desc));
 
 		const float cycle0 = CycleSeconds(animations.clips[0]);
 		const float cycle1 = CycleSeconds(animations.clips[1]);
@@ -1248,7 +1264,8 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 		auto desc    = bgl::SkinnedPlaybackDesc();
 		desc.slot[0] = slot;
 
-		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), desc);
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(desc));
 
 		const std::array<float, 4> cycles = { { CycleSeconds(animations.clips[0]),
 			                                    CycleSeconds(animations.clips[1]),
@@ -1309,7 +1326,8 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 		auto desc    = bgl::SkinnedPlaybackDesc();
 		desc.slot[0] = SpaceSlot(c_SpaceNode, 0.0f, c_Rate, c_Parameter);
 
-		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), desc);
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(desc));
 
 		CheckAgainstReference(
 			paletteAt(instance, c_Time),
@@ -1331,7 +1349,8 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 		auto desc    = bgl::SkinnedPlaybackDesc();
 		desc.slot[0] = SpaceSlot(c_SpaceNode, 0.25f, 0.0f, 1.0f);
 
-		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), desc);
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(desc));
 
 		// `expected` takes the fraction between the two samples, which the move has halved.
 		CheckAgainstReference(

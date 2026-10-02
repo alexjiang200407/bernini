@@ -353,8 +353,16 @@ namespace
 		// palettes -- the solve is then the only thing that differs from the bind pose.
 		const auto instance =
 			options.playback ?
-				view->CreateSkinnedMeshInstance(legScene.geom, options.world, *options.playback) :
-				view->CreateSkinnedMeshInstance(legScene.geom, options.world, { 0, 0.0f, 0.0f });
+				view->CreateSkinnedMeshInstance(
+					bgl::SkinnedMeshInstanceDesc()
+						.SetGeom(legScene.geom)
+						.SetTransform(options.world)
+						.SetPlayback(*options.playback)) :
+				view->CreateSkinnedMeshInstance(
+					bgl::SkinnedMeshInstanceDesc()
+						.SetGeom(legScene.geom)
+						.SetTransform(options.world)
+						.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 		if (options.footIK)
 		{
 			view->SetFootIK(instance, *options.footIK);
@@ -843,7 +851,9 @@ TEST_CASE(
 	const auto peakVelocity = [&](float rate) {
 		auto localView = gfx->CreateSceneView(scene, 4);
 		bgl::test::ApplyEnvironment(scene.Get(), localView.Get());
-		localView->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, rate });
+		localView->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, rate)));
 
 		auto job     = bgl::RenderJob();
 		job.view     = localView;
@@ -931,7 +941,9 @@ TEST_CASE("a planted foot on a slope draws", "[skinned][pose][plant][render]")
 			.SetPosedBounds(assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) }));
 	REQUIRE(geom.IsValid());
 
-	view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+	view->CreateSkinnedMeshInstance(
+		bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+			bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 
 	auto camera = bgl::Camera();
 	camera.LookAt(glm::vec3(0.0f, 0.3f, 3.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))
@@ -1126,8 +1138,9 @@ namespace
 		auto* viewRaw = view->As<bgl::SceneView>();
 		REQUIRE(viewRaw != nullptr);
 
-		const auto instance =
-			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 
 		auto job     = bgl::RenderJob();
 		job.view     = view;
@@ -1251,8 +1264,10 @@ TEST_CASE("a hero instance's foot-IK record starts at weight one", "[skinned][pl
 	const LegScene legScene = MakeLegScene(c_Flat, 255);
 	auto&          view     = legScene.view;
 
-	const auto instance =
-		view->CreateSkinnedMeshInstance(legScene.geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+	const auto instance = view->CreateSkinnedMeshInstance(
+		bgl::SkinnedMeshInstanceDesc()
+			.SetGeom(legScene.geom)
+			.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 
 	const bgl::FootIKDesc read = view->GetFootIK(instance);
 	for (const bgl::FootIKLegDesc& leg : read.leg)
@@ -1323,9 +1338,11 @@ TEST_CASE("a hero instance's foot-IK record starts at weight one", "[skinned][pl
 
 	SECTION("a placement without a record is refused")
 	{
-		auto crowd       = bgl::SkinnedInstanceDesc();
-		crowd.source     = bgl::PoseSource::kBoneAnimTable;
-		const auto table = view->CreateSkinnedMeshInstance(legScene.geom, glm::mat4(1.0f), crowd);
+		const auto table = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(legScene.geom)
+				.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0))
+				.SetSource(bgl::PoseSource::kBoneAnimTable));
 		CHECK_THROWS_AS(view->GetFootIK(table), bgl::SceneError);
 		CHECK_THROWS_AS(view->SetFootIK(table, bgl::FootIKDesc()), bgl::SceneError);
 
@@ -1357,8 +1374,10 @@ TEST_CASE("a hero instance's foot-IK record starts at weight one", "[skinned][pl
 		view->DeleteMeshInstance(instance);
 		CHECK_FALSE(viewRaw->GetFootIKArena().IsValid(handle));
 
-		const auto next =
-			view->CreateSkinnedMeshInstance(legScene.geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+		const auto next = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(legScene.geom)
+				.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 		const bgl::FootIKDesc fresh = view->GetFootIK(next);
 		CheckRamp(fresh.leg[0].position, bgl::WeightRamp());
 		CheckRamp(fresh.leg[0].rotation, bgl::WeightRamp());
@@ -1395,7 +1414,9 @@ TEST_CASE("a rig without legs owns no foot-IK record", "[skinned][plant][footik]
 			.SetPosedBounds(assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) }));
 	REQUIRE(geom.IsValid());
 
-	const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+	const auto instance = view->CreateSkinnedMeshInstance(
+		bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+			bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 
 	auto* viewRaw = view->As<bgl::SceneView>();
 	REQUIRE(viewRaw != nullptr);
@@ -1408,7 +1429,7 @@ TEST_CASE("a rig without legs owns no foot-IK record", "[skinned][plant][footik]
 }
 
 // The spawn a SkinnedMeshInstanceDesc describes, by source. kAuto is declared ahead of the passes
-// that draw it, and refused on both spawns until they exist.
+// that draw it, and refused until they exist.
 TEST_CASE("a playback spawn names its source", "[skinned][footik][contract]")
 {
 	const LegScene legScene = MakeLegScene(c_Flat, 255);
@@ -1460,12 +1481,6 @@ TEST_CASE("a playback spawn names its source", "[skinned][footik][contract]")
 					.SetGeom(legScene.geom)
 					.SetPlayback(playback)
 					.SetSource(bgl::PoseSource::kAuto)),
-			bgl::SceneError);
-
-		auto desc   = bgl::SkinnedInstanceDesc();
-		desc.source = bgl::PoseSource::kAuto;
-		CHECK_THROWS_AS(
-			view->CreateSkinnedMeshInstance(legScene.geom, glm::mat4(1.0f), desc),
 			bgl::SceneError);
 	}
 }
@@ -1640,8 +1655,10 @@ TEST_CASE(
 	targetDesc.headless = true;
 	auto target         = gfx->CreateRenderTarget(targetDesc);
 
-	const auto instance =
-		view->CreateSkinnedMeshInstance(legScene.geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+	const auto instance = view->CreateSkinnedMeshInstance(
+		bgl::SkinnedMeshInstanceDesc()
+			.SetGeom(legScene.geom)
+			.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 
 	const size_t stride = size_t(bgl::idl::cFloat4sPerBone) * c_Bones;
 	const auto   readAt = [&](float time) {
@@ -1717,8 +1734,11 @@ TEST_CASE(
 		return glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, 0.0f));
 	};
 
-	const auto instance =
-		view->CreateSkinnedMeshInstance(legScene.geom, at(c_From), { 0, 0.0f, 0.0f });
+	const auto instance = view->CreateSkinnedMeshInstance(
+		bgl::SkinnedMeshInstanceDesc()
+			.SetGeom(legScene.geom)
+			.SetTransform(at(c_From))
+			.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 
 	const auto draw = [&]() {
 		auto job     = bgl::RenderJob();

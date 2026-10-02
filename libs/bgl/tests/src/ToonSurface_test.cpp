@@ -340,7 +340,9 @@ TEST_CASE("A toon surface draws its base colour flat", "[surface][render][toon]"
 			staticPng);
 		shoot(
 			[&](ISceneView& view) {
-				view.CreateSkinnedMeshInstance(skinned, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+				view.CreateSkinnedMeshInstance(
+					bgl::SkinnedMeshInstanceDesc().SetGeom(skinned).SetPlayback(
+						bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 			},
 			QuadCamera(),
 			skinnedPng);

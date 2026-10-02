@@ -171,9 +171,14 @@ namespace
 				scene->CreatePbrMaterial(bgl::PbrMaterialDesc()));
 
 			return view->CreateSkinnedMeshInstance(
-				geom,
-				glm::translate(glm::mat4(1.0f), { 0, 0, c_PlaneZ }),
-				bgl::SkinnedInstanceDesc{ bgl::test::skinned_synth::c_LoopClip, 0.0f, rate });
+				bgl::SkinnedMeshInstanceDesc()
+					.SetGeom(geom)
+					.SetTransform(glm::translate(glm::mat4(1.0f), { 0, 0, c_PlaneZ }))
+					.SetPlayback(
+						bgl::SkinnedPlaybackDesc::FromClip(
+							bgl::test::skinned_synth::c_LoopClip,
+							0.0f,
+							rate)));
 		}
 
 		void
