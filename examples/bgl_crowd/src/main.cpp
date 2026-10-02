@@ -17,6 +17,7 @@
 #include <chrono>
 #include <cmath>
 #include <core/err/util.h>
+#include <crowd_render/CrowdInstanceBlocks.h>
 #include <crowdlib/AgentType.h>
 #include <crowdlib/CrowdDesc.h>
 #include <crowdlib/GroupDesc.h>
@@ -29,6 +30,7 @@
 #include <format>
 #include <iostream>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -36,7 +38,8 @@
 // Groups of infantry and cavalry marching across a field, simulated by crowdlib on its compute queue
 // and drawn by the renderer as one box per agent from the crowd's debug readback -- the only
 // per-agent read the crowd has, and the one a game would never drive itself with. The frame draws
-// whatever tick last completed. Partway through, a group splits off its rear and a cavalry group
+// whatever tick last completed. With --handoff the crowd is drawn GPU to GPU instead
+// (crowd_render::CrowdInstanceBlocks): no readback and no posing, interpolated between ticks. Partway through, a group splits off its rear and a cavalry group
 // merges into another; the log prints each moving group's report as it goes. Agents do not yet keep
 // out of each other's way -- the crowd only plans velocities so far -- so boxes overlap wherever
 // groups cross.
@@ -66,6 +69,9 @@ namespace
 		// Times every pass on the GPU and prints each one's mean. Off by default: a timed frame
 		// costs more on Metal, so the frame split is read from a run without it.
 		bool passTimings = false;
+
+		// Draws the crowd from its render ring rather than its debug readback.
+		bool handoff = false;
 	};
 
 	constexpr float c_Tick = 1.0f / 30.0f;
@@ -75,6 +81,9 @@ namespace
 
 	// The four groups' agents at --units 1.
 	constexpr uint32_t c_BaseAgents = 60 + 40 + 20 + 16;
+
+	// The ring a handoff needs, with two ticks of slack before a slow frame holds the crowd back.
+	constexpr uint32_t c_RenderRingSlack = 2;
 
 	constexpr auto c_Infantry =
 		crowd::AgentType{ .radius = 0.3f, .preferredSpeed = 1.2f, .maxSpeed = 1.5f, .mass = 80.0f };
@@ -140,13 +149,17 @@ namespace
 		// A march is longer by the field's growth, so its time is too.
 		const auto marchTicks = static_cast<uint64_t>(static_cast<float>(c_MarchTicks) * scale);
 
-		auto crowdDesc               = crowd::CrowdDesc();
-		crowdDesc.agentTypes         = { c_Infantry, c_Cavalry };
-		crowdDesc.maxAgents          = 256 * opts.units;
+		auto crowdDesc       = crowd::CrowdDesc();
+		crowdDesc.agentTypes = { c_Infantry, c_Cavalry };
+		// Exactly the agents the example makes: a handoff's blocks draw and cull every one of
+		// maxAgents slots per type, live or not.
+		crowdDesc.maxAgents          = c_BaseAgents * opts.units;
 		crowdDesc.maxGroups          = 8;
 		crowdDesc.tickSeconds        = c_Tick;
-		crowdDesc.debugAgentReadback = true;
-		auto crowd                   = crowd::CreateCrowd(context, crowdDesc);
+		crowdDesc.debugAgentReadback = !opts.handoff;
+		crowdDesc.renderRingTicks =
+			opts.handoff ? crowdDesc.maxTicksInFlight + 3 + c_RenderRingSlack : 0;
+		auto crowd = crowd::CreateCrowd(context, crowdDesc);
 
 		// Each group spawns at its start in its march's formation, and gets its orders after the
 		// first tick: orders given before then would be the ones it spawns in.
@@ -199,7 +212,7 @@ namespace
 		target->SetGpuTimingEnabled(opts.passTimings);
 
 		auto scene = graphics->CreateScene(bgl::SceneDesc());
-		auto view  = graphics->CreateSceneView(scene, crowdDesc.maxAgents + 1);
+		auto view  = graphics->CreateSceneView(scene, 2 * crowdDesc.maxAgents + 1);
 
 		// The only light: with no environment map, a scene without a sun renders black.
 		view->SetDirectionalLight(
@@ -224,17 +237,34 @@ namespace
 		const glm::vec3 sizes[] = { glm::vec3(0.5f, 1.7f, 0.4f), glm::vec3(0.8f, 1.6f, 1.5f) };
 		std::vector<bgl::MeshInstanceHandle> pools[2];
 		uint32_t                             counts[2] = { 100 * units, 36 * units };
+		auto                                 handoffDesc =
+			crowd_render::CrowdInstanceBlocksDesc().SetCrowd(crowd).SetGraphics(graphics).SetView(
+				view);
 		for (uint32_t type = 0; type < 2; ++type)
 		{
+			const auto geom = scene->AddCubeGeom(scene->CreatePbrMaterial(
+				{ .baseColorFactor = colors[type], .roughnessFactor = 0.6f }));
+			if (opts.handoff)
+			{
+				handoffDesc.AddType(
+					crowd_render::AgentTypeMeshDesc().SetGeom(geom).SetModel(
+						glm::translate(
+							glm::mat4(1.0f),
+							glm::vec3(0.0f, sizes[type].y * 0.5f, 0.0f)) *
+						glm::scale(glm::mat4(1.0f), sizes[type] * 0.5f)));
+				continue;
+			}
+
 			// Below the ground until an agent takes it: a degenerate matrix has no inverse for the
 			// renderer to take.
 			const auto parked = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -10.0f, 0.0f));
-			const auto geom   = scene->AddCubeGeom(scene->CreatePbrMaterial(
-				{ .baseColorFactor = colors[type], .roughnessFactor = 0.6f }));
 			for (uint32_t i = 0; i < counts[type]; ++i)
 				pools[type].push_back(view->CreateStaticMeshInstance(
 					bgl::StaticMeshInstanceDesc().SetGeom(geom).SetTransform(parked)));
 		}
+		std::optional<crowd_render::CrowdInstanceBlocks> handoff;
+		if (opts.handoff)
+			handoff.emplace(std::move(handoffDesc));
 
 		auto camera = bgl::Camera();
 		camera
@@ -369,15 +399,24 @@ namespace
 				crowd->Step();
 			}
 
-			const auto readback = crowd->ReadDebugAgents();
+			const auto readback = opts.handoff ? std::nullopt : crowd->ReadDebugAgents();
 			crowdTime += since(crowdStart);
 			collectTicks();
 			const auto poseStart = Clock::now();
-			if (readback && readback->tick != drawnTick)
+			if (handoff)
 			{
-				drawnTick        = readback->tick;
+				// Live, the frame is the owed fraction of a tick past the tick before the latest;
+				// a tick a frame, it is the latest.
+				handoff->PrepareFrame(live ? std::clamp(owed / c_Tick, 0.0f, 1.0f) : 1.0f);
+			}
+			const uint64_t completed =
+				opts.handoff ? crowd->GetCompletedTick() : (readback ? readback->tick : drawnTick);
+			if (completed != drawnTick)
+			{
+				drawnTick        = completed;
 				uint32_t used[2] = { 0, 0 };
-				for (const auto& range : readback->groups)
+				for (const auto& range :
+				     readback ? readback->groups : std::span<const crowd::debug::GroupAgents>())
 				{
 					const auto type = Find(groups, range.group).type;
 					for (uint32_t i = 0; i < range.count && used[type] < counts[type]; ++i)
@@ -423,6 +462,8 @@ namespace
 			poseTime += since(poseStart);
 			const auto drawStart = Clock::now();
 			graphics->DrawFrame(target, renderJob);
+			if (handoff)
+				handoff->FinishFrame();
 			drawTime += since(drawStart);
 			if (opts.passTimings)
 				collectTimings();
@@ -523,6 +564,10 @@ main(int argc, char** argv)
 		"--pass-timings",
 		opts.passTimings,
 		"Time every pass on the GPU and print each one's mean per frame");
+	app.add_flag(
+		"--handoff",
+		opts.handoff,
+		"Draw the crowd GPU to GPU from its render ring, with no readback or posing");
 	app.add_option("--units", opts.units, "Multiply every group's agents by this; 1 is 136 agents")
 		->check(CLI::PositiveNumber);
 
