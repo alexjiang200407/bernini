@@ -1,6 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <bgpu/buffer/GrowableGpuBuffer.h>
+#include <bgpu/buffer/dirty_blocks.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/ResourceManager.h>
@@ -225,39 +226,20 @@ namespace bgpu
 			if (!m_HasAnyDirtyBlocks)
 				return;
 
-			const uint32_t totalBytes = static_cast<uint32_t>(m_Entries.size() * sizeof(T));
-
-			bool     inRange    = false;
-			uint32_t startBlock = 0;
-
-			for (size_t i = 0; i < m_DirtyBlocks.size(); ++i)
-			{
-				if (m_DirtyBlocks[i])
-				{
-					if (!inRange)
-					{
-						startBlock = static_cast<uint32_t>(i);
-						inRange    = true;
-					}
-				}
-				else
-				{
-					if (inRange)
-					{
-						IssueCopy(cmdList, startBlock, static_cast<uint32_t>(i), totalBytes);
-						inRange = false;
-					}
-				}
-			}
-
-			if (inRange)
-			{
-				IssueCopy(
-					cmdList,
-					startBlock,
-					static_cast<uint32_t>(m_DirtyBlocks.size()),
-					totalBytes);
-			}
+			// A dirty block can outlive the data it covered once packed_vector shrinks on erase, and
+			// such a run is skipped.
+			ForEachDirtySlice(
+				m_DirtyBlocks,
+				m_Desc.blockSize,
+				m_Entries.size(),
+				sizeof(T),
+				[&](const CopySlice& slice) noexcept {
+					cmdList->WriteBufferSlice(
+						m_Storage.GetHandle(),
+						m_Entries.data(),
+						slice.offset,
+						slice.size);
+				});
 
 			std::fill(m_DirtyBlocks.begin(), m_DirtyBlocks.end(), false);
 			m_HasAnyDirtyBlocks = false;
@@ -307,7 +289,7 @@ namespace bgpu
 		Grow()
 		{
 			const uint32_t grown = core::round_up(
-				NextGpuBufferCapacity(Capacity(), Capacity() + 1, sizeof(T)),
+				GrowCapacityFor(Capacity(), 1, sizeof(T), 0),
 				m_Desc.capacityAlignment);
 
 			// GPU side first: it is the one that can fail, and it leaves nothing behind when it
@@ -342,10 +324,8 @@ namespace bgpu
 		void
 		MarkDirty(uint32_t index)
 		{
-			const uint32_t elementOffsetBytes = index * sizeof(T);
-
-			const uint32_t startBlock = elementOffsetBytes / m_Desc.blockSize;
-			const uint32_t endBlock   = (elementOffsetBytes + sizeof(T) - 1) / m_Desc.blockSize;
+			const auto [startBlock, endBlock] =
+				FindDirtyBlocks(index, 1, sizeof(T), m_Desc.blockSize);
 
 			core::ensure(
 				endBlock < m_DirtyBlocks.size(),
@@ -356,29 +336,6 @@ namespace bgpu
 				m_DirtyBlocks[block] = true;
 			}
 			m_HasAnyDirtyBlocks = true;
-		}
-
-		void
-		IssueCopy(ICommandList* cmdList, uint32_t startBlk, uint32_t endBlk, uint32_t totalBytes)
-		{
-			const uint32_t offset = startBlk * m_Desc.blockSize;
-			uint32_t       size   = (endBlk - startBlk) * m_Desc.blockSize;
-
-			// A dirty block can outlive the data it covered once packed_vector shrinks on erase.
-			if (offset >= totalBytes)
-			{
-				return;
-			}
-
-			if (offset + size > totalBytes)
-			{
-				size = totalBytes - offset;
-			}
-
-			if (size > 0)
-			{
-				cmdList->WriteBufferSlice(m_Storage.GetHandle(), m_Entries.data(), offset, size);
-			}
 		}
 
 	private:

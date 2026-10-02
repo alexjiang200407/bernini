@@ -213,6 +213,7 @@ holds it in a `std::optional`.
 | `PackedBuffer<T>` | [PackedBuffer.h](libs/bgpu/include/bgpu/buffer/PackedBuffer.h) | Densely-packed buffer with stable handles (handle→dense indirection); erase swaps the tail in and re-uploads it. |
 | `RawBuffer<Tag>` | [RawBuffer.h](libs/bgpu/include/bgpu/buffer/RawBuffer.h) | A byte arena over `RangeBuffer<RawBlock>`, read through a `RawBuffer` in Slang. `AddRecord(tag, payload)` returns a `RawEntry` and writes a `RecordHeader` ahead of the payload; `AddBytes` returns a `RawRange` and writes no header. Capped at what a raw view addresses. Declaring a `handleStride` gives it the typed view above, which it re-issues inside its own growth. |
 | `GrowableGpuBuffer` | [GrowableGpuBuffer.h](libs/bgpu/include/bgpu/buffer/GrowableGpuBuffer.h) | The GPU storage the three share: allocates the replacement resource, records the forward copy in `FlushGrowth`, and retires the old one on the manager's fence. |
+| dirty-block arithmetic | [dirty_blocks.h](libs/bgpu/include/bgpu/buffer/dirty_blocks.h) | The marking, upload slicing and growth the three share, in 64 bits: a mirror reaches 2^32 bytes, where a 32-bit product wraps to 0 and skips the upload. Tested without allocating one. |
 
 ---
 
