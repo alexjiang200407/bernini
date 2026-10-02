@@ -1424,13 +1424,30 @@ TEST_CASE("a playback spawn names its source", "[skinned][footik][contract]")
 		CHECK(view->GetSkinnedPlayback(instance).slot[0].nodeIndex == 0u);
 	}
 
-	SECTION("a whole record cannot draw from the shared table")
+	SECTION("one clip draws from the shared table, with no record of its own to plant")
 	{
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(legScene.geom)
+				.SetPlayback(playback)
+				.SetSource(bgl::PoseSource::kBoneAnimTable));
+		CHECK_FALSE(view->HasFootIK(instance));
+		CHECK(view->HasLegs(instance));
+		CHECK_THROWS_AS(view->GetSkinnedPlayback(instance), bgl::SceneError);
+	}
+
+	SECTION("a blended record cannot draw from the shared table")
+	{
+		auto blended              = playback;
+		blended.slot[1].nodeIndex = 0;
+		blended.slot[1].phase     = 0.5f;
+		blended.slot[1].weight0   = 1.0f;
+		blended.slot[1].weight1   = 1.0f;
 		CHECK_THROWS_AS(
 			view->CreateSkinnedMeshInstance(
 				bgl::SkinnedMeshInstanceDesc()
 					.SetGeom(legScene.geom)
-					.SetPlayback(playback)
+					.SetPlayback(blended)
 					.SetSource(bgl::PoseSource::kBoneAnimTable)),
 			bgl::SceneError);
 	}

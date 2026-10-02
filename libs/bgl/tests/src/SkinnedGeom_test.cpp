@@ -532,6 +532,105 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	}
 }
 
+TEST_CASE("A table spawn plays the one clip its record weights", "[skinned]")
+{
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	auto  viewHandle = gfx->CreateSceneView(sceneHandle, 8);
+	auto* view       = viewHandle->As<bgl::SceneView>();
+	REQUIRE(view != nullptr);
+
+	const std::array<bgl::MaterialHandle, 1> materials   = { { OpaquePbr(scene) } };
+	const auto                               skinnedMesh = MakeSkinnedMesh();
+	const auto                               geom        = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(MakeRig(), MakeClips()))
+			.SetPosedBounds(c_AnyPose));
+	REQUIRE(geom.IsValid());
+
+	const auto onTable = [&](const bgl::SkinnedPlaybackDesc& playback) {
+		return bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(playback).SetSource(
+			bgl::PoseSource::kBoneAnimTable);
+	};
+
+	const auto tableRecordOf = [&](bgl::MeshInstanceHandle instance) {
+		auto&          playback = view->GetPlaybackArena();
+		const uint32_t offset =
+			view->GetMeshBuffer().AtIndex(instance.handle.index).playback.byteOffset;
+		REQUIRE(playback.GetTagAt(offset) == bgl::idl::PlaybackType::kSkinnedTable);
+		return playback.GetPayloadAt<bgl::idl::SkinnedTableState>(offset);
+	};
+
+	SECTION("a one-clip record becomes the table's clip, phase and rate")
+	{
+		const auto instance = view->CreateSkinnedMeshInstance(
+			onTable(bgl::SkinnedPlaybackDesc::FromClip(1, 4.5f, 2.0f)));
+		REQUIRE(instance.IsValid());
+
+		const auto table = tableRecordOf(instance);
+		CHECK(table.playback.clip == 1);
+		CHECK(table.playback.phase == Catch::Approx(4.5f));
+		CHECK(table.playback.rate == Catch::Approx(2.0f));
+		CHECK(
+			table.playback.rig.offset == scene->GetGeomSkinnedInfo(geom.handle.index).record.index);
+
+		// Still a placement with no slots of its own to read back or rewrite.
+		CHECK_THROWS_AS(view->GetSkinnedPlayback(instance), bgl::SceneError);
+	}
+
+	SECTION("the weighted slot need not be slot 0, nor weigh one")
+	{
+		auto record              = bgl::SkinnedPlaybackDesc();
+		record.slot[2].nodeIndex = 1;
+		record.slot[2].phase     = 3.0f;
+		record.slot[2].rate      = 0.5f;
+		record.slot[2].weight0   = 0.25f;
+		record.slot[2].weight1   = 0.25f;
+
+		const auto table = tableRecordOf(view->CreateSkinnedMeshInstance(onTable(record)));
+		CHECK(table.playback.clip == 1);
+		CHECK(table.playback.phase == Catch::Approx(3.0f));
+		CHECK(table.playback.rate == Catch::Approx(0.5f));
+	}
+
+	SECTION("a record the table cannot hold is refused, never cut down to one clip")
+	{
+		const uint32_t before = view->GetInstanceCount();
+
+		auto twoClips              = bgl::SkinnedPlaybackDesc::FromClip(0);
+		twoClips.slot[1].nodeIndex = 1;
+		twoClips.slot[1].weight0   = 1.0f;
+		twoClips.slot[1].weight1   = 1.0f;
+		CHECK_THROWS_AS(view->CreateSkinnedMeshInstance(onTable(twoClips)), bgl::SceneError);
+
+		auto fadingIn              = bgl::SkinnedPlaybackDesc::FromClip(0);
+		fadingIn.slot[0].weight0   = 0.0f;
+		fadingIn.slot[0].rampStart = 1.0f;
+		fadingIn.slot[0].rampEnd   = 2.0f;
+		CHECK_THROWS_AS(view->CreateSkinnedMeshInstance(onTable(fadingIn)), bgl::SceneError);
+
+		auto rebased         = bgl::SkinnedPlaybackDesc::FromClip(0);
+		rebased.slot[0].tRef = 2.0f;
+		CHECK_THROWS_AS(view->CreateSkinnedMeshInstance(onTable(rebased)), bgl::SceneError);
+
+		CHECK_THROWS_AS(
+			view->CreateSkinnedMeshInstance(onTable(bgl::SkinnedPlaybackDesc::FromClip(2))),
+			bgl::SceneError);
+		CHECK_THROWS_AS(
+			view->CreateSkinnedMeshInstance(onTable(bgl::SkinnedPlaybackDesc())),
+			bgl::SceneError);
+
+		CHECK(view->GetInstanceCount() == before);
+	}
+}
+
 TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
 {
 	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
@@ -1587,6 +1686,17 @@ TEST_CASE("A blend space is reached through the record, not through the spawn", 
 		CHECK(got.slot[0].nodeIndex == c_SpaceNode);
 		CHECK(got.slot[0].param0 == 0.5f);
 		CHECK(got.slot[0].param1 == 0.5f);
+	}
+
+	SECTION("the table plays clips only, so a table spawn naming the space is refused")
+	{
+		CHECK_THROWS_AS(
+			view->CreateSkinnedMeshInstance(
+				bgl::SkinnedMeshInstanceDesc()
+					.SetGeom(geom)
+					.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(c_SpaceNode))
+					.SetSource(bgl::PoseSource::kBoneAnimTable)),
+			bgl::SceneError);
 	}
 
 	SECTION("a record past the node table is still refused")

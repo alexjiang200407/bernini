@@ -96,8 +96,9 @@ namespace bgl
 		 * SkinnedMeshInstanceDesc.
 		 *
 		 * @throws SceneError if `desc.geom` is not a live kSkinnedMesh geom, the record fails the
-		 *         checks the overload above makes, `desc.source` is kBoneAnimTable, or it is kAuto
-		 *         and the rig's table cannot be reserved.
+		 *         checks the overload above makes, or -- with `desc.source` kBoneAnimTable -- the
+		 *         record is not one clip (see SkinnedMeshInstanceDesc), or, with kBoneAnimTable or
+		 *         kAuto, the rig's table cannot be reserved.
 		 */
 		virtual MeshInstanceHandle
 		CreateSkinnedMeshInstance(const SkinnedMeshInstanceDesc& desc) = 0;

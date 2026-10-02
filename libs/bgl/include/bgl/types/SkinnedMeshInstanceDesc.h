@@ -10,9 +10,10 @@ namespace bgl
 	 * A skinned placement spawned on a whole playback record, posed from `source` -- see
 	 * ISceneView::CreateSkinnedMeshInstance. One clip is SkinnedPlaybackDesc::FromClip.
 	 *
-	 * kBoneAnimTable is refused: a record of weighted slots has nowhere to live on a pose the rig
-	 * shares. kAuto blends the record while the placement draws per instance and plays its heaviest
-	 * slot from the table otherwise.
+	 * kBoneAnimTable plays one clip from the table the rig shares, so its record must be one:
+	 * a single weighted slot naming a clip, at a constant weight, with `tRef` zero -- what FromClip
+	 * builds. Anything else is refused rather than cut down to it. kAuto blends the record while the
+	 * placement draws per instance and plays its heaviest slot from the table otherwise.
 	 */
 	struct SkinnedMeshInstanceDesc
 	{

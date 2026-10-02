@@ -596,6 +596,55 @@ namespace bgl
 
 			return scene.GetGeomSkinnedInfo(geom.handle.index);
 		}
+
+		/**
+		 * The one clip a kBoneAnimTable placement plays: the record's only weighted slot. The table's
+		 * record holds a clip, a phase and a rate and nothing else, so the slot must name a clip
+		 * rather than a blend space, hold its weight, and run from the clock's zero. `desc` has
+		 * passed ValidatePlayback, so some slot is weighted.
+		 */
+		const PlaybackSlot&
+		TableClipOf(const SkinnedPlaybackDesc& desc, uint32_t clipCount)
+		{
+			const PlaybackSlot* clip = nullptr;
+			for (const PlaybackSlot& slot : desc.slot)
+			{
+				if (slot.weight0 == 0.0f && slot.weight1 == 0.0f)
+					continue;
+
+				if (clip != nullptr)
+				{
+					throw SceneError(
+						"CreateSkinnedMeshInstance: PoseSource::kBoneAnimTable plays one clip, and "
+						"the record weights more than one slot");
+				}
+				clip = &slot;
+			}
+			core::ensure(clip != nullptr, "a validated record carries weight in some slot");
+
+			if (clip->nodeIndex >= clipCount)
+			{
+				throw SceneError(
+					"CreateSkinnedMeshInstance: PoseSource::kBoneAnimTable plays a clip, and the "
+					"record's weighted slot names a blend space");
+			}
+
+			if (clip->weight0 != clip->weight1)
+			{
+				throw SceneError(
+					"CreateSkinnedMeshInstance: PoseSource::kBoneAnimTable plays one clip at a "
+					"constant weight, and the record ramps it");
+			}
+
+			if (clip->tRef != 0.0f)
+			{
+				throw SceneError(
+					"CreateSkinnedMeshInstance: PoseSource::kBoneAnimTable plays from the clock's "
+					"zero, and the record's weighted slot is rebased to another time");
+			}
+
+			return *clip;
+		}
 	}
 
 	MeshInstanceHandle
@@ -631,15 +680,35 @@ namespace bgl
 				record);
 		}
 
+		return PlaceTable(
+			geom,
+			transform,
+			rig.record,
+			rig.nodeCount,
+			desc.clip,
+			desc.phase,
+			desc.rate);
+	}
+
+	MeshInstanceHandle
+	SceneView::PlaceTable(
+		GeomHandle        geom,
+		glm::mat4         transform,
+		core::slot_handle rig,
+		uint32_t          nodeCount,
+		uint32_t          clip,
+		float             phase,
+		float             rate)
+	{
 		// Asked for here rather than at AddRig, so a rig no crowd instance is spawned on never
 		// pays for a table. RigFramesPass fills it before anything reads it this frame.
-		m_SceneRaw->RequestBoneAnimTable(RigHandle{ rig.record });
+		m_SceneRaw->RequestBoneAnimTable(RigHandle{ rig });
 
 		auto state           = idl::SkinnedTableState();
-		state.playback.rig   = rig.record;
-		state.playback.clip  = desc.clip;
-		state.playback.phase = desc.phase;
-		state.playback.rate  = desc.rate;
+		state.playback.rig   = rig;
+		state.playback.clip  = clip;
+		state.playback.phase = phase;
+		state.playback.rate  = rate;
 
 		const bgpu::idl::RawEntry record = m_Playback.AddRecord(
 			idl::PlaybackType::kSkinnedTable,
@@ -651,7 +720,7 @@ namespace bgl
 			record,
 			core::multi_slot_handle(),
 			core::multi_slot_handle(),
-			rig.nodeCount);
+			nodeCount);
 	}
 
 	MeshInstanceHandle
@@ -679,15 +748,32 @@ namespace bgl
 	MeshInstanceHandle
 	SceneView::CreateSkinnedMeshInstance(const SkinnedMeshInstanceDesc& desc)
 	{
+		const Scene::AnimGeomInfo rig =
+			RequireSkinnedGeom(*m_SceneRaw, desc.geom, "CreateSkinnedMeshInstance");
+		RefuseUndrawnSource(desc.source, "CreateSkinnedMeshInstance");
+		ValidatePlayback(desc.playback, rig.nodeCount, "CreateSkinnedMeshInstance");
+
 		if (desc.source == PoseSource::kBoneAnimTable)
 		{
-			throw SceneError(
-				"CreateSkinnedMeshInstance: a whole playback record cannot draw from the rig's "
-				"shared table; spawn kBoneAnimTable with a SkinnedInstanceDesc");
+			const PlaybackSlot& clip = TableClipOf(desc.playback, rig.clipCount);
+			return PlaceTable(
+				desc.geom,
+				desc.transform,
+				rig.record,
+				rig.nodeCount,
+				clip.nodeIndex,
+				clip.phase,
+				clip.rate);
 		}
-		RefuseUndrawnSource(desc.source, "CreateSkinnedMeshInstance");
 
-		return CreateSkinnedMeshInstance(desc.geom, desc.transform, desc.playback);
+		return PlacePosed(
+			desc.geom,
+			desc.transform,
+			rig.record,
+			rig.boneCount,
+			rig.nodeCount,
+			rig.legCount,
+			desc.playback);
 	}
 
 	MeshInstanceHandle
