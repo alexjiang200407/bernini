@@ -21,14 +21,14 @@ namespace crowd_render
 			const std::optional<crowd::RenderTick> held = crowd.GetRenderTick(tick);
 			if (!held)
 				return {};
-			return { .first = held->firstRecord, .count = held->agentCount };
+			return { .firstRecordIndex = held->firstRecordIndex, .count = held->agentCount };
 		}
 
 		void
 		WriteRecords(bgpu::UniformsBase::Accessor records, const idl::TickRecords& tick)
 		{
-			records["first"] = tick.first;
-			records["count"] = tick.count;
+			records["firstRecordIndex"] = tick.firstRecordIndex;
+			records["count"]            = tick.count;
 		}
 	}
 
@@ -45,6 +45,14 @@ namespace crowd_render
 		frame.previous = tick > 1 ? RecordsOf(crowd, tick - 1) : idl::TickRecords();
 		frame.older    = tick > 2 ? RecordsOf(crowd, tick - 2) : idl::TickRecords();
 		frame.alpha    = alpha;
+		if (const std::optional<crowd::RenderTick> held =
+		        tick != 0 ? crowd.GetRenderTick(tick) : std::nullopt)
+		{
+			for (const auto& run : held->types)
+				frame.types.push_back(
+					{ .firstRecordIndex = run.firstRecordIndex - held->firstRecordIndex,
+				      .count            = run.count });
+		}
 		if (lastTick != 0 && lastTick == tick)
 		{
 			frame.lastFrame = idl::c_LastFrameSameTick;
@@ -73,7 +81,9 @@ namespace crowd_render
 		params["alpha"]     = frame.alpha;
 		params["lastAlpha"] = frame.lastAlpha;
 		params["lastFrame"] = frame.lastFrame;
-		params["type"]      = type;
-		params["model"]     = model;
+		const auto run      = type < frame.types.size() ? frame.types[type] : idl::TickRecords();
+		params["run"]["firstRecordIndex"] = run.firstRecordIndex;
+		params["run"]["count"]            = run.count;
+		params["model"]                   = model;
 	}
 }

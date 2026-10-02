@@ -52,6 +52,9 @@ namespace
 		uint64_t                        tick = 0;
 		std::vector<crowd::RenderAgent> records;
 
+		// Each type's run of `records`: slot i of a type's block is record runs[type].firstRecordIndex + i.
+		std::vector<crowd::RenderTypeRecords> runs;
+
 		// One per type, each c_MaxAgents slots.
 		std::vector<std::vector<Placed>> types;
 	};
@@ -171,9 +174,13 @@ namespace
 
 			const auto* ring =
 				static_cast<const crowd::RenderAgent*>(m_Rm->MapReadback(m_RingReadback));
+			for (const auto& run : written->types)
+				result.runs.push_back(
+					{ .firstRecordIndex = run.firstRecordIndex - written->firstRecordIndex,
+				      .count            = run.count });
 			result.records.assign(
-				ring + written->firstRecord,
-				ring + written->firstRecord + written->agentCount);
+				ring + written->firstRecordIndex,
+				ring + written->firstRecordIndex + written->agentCount);
 			m_Rm->UnmapReadback(m_RingReadback);
 			return result;
 		}
@@ -275,7 +282,8 @@ TEST_CASE(
 			{
 				INFO("tick " << tick << ", type " << type << ", slot " << slot);
 				const Placed& placed = now.types[type][slot];
-				const bool    shown  = slot < now.records.size() && now.records[slot].type == type;
+				const auto&   run    = now.runs[type];
+				const bool    shown  = slot < run.count;
 				REQUIRE((placed.position.w == 1.0f) == shown);
 				if (!shown)
 					continue;
@@ -283,12 +291,20 @@ TEST_CASE(
 
 				// Where last frame placed the same agent: the same slot on the same tick, its
 				// source a tick later, nowhere further back.
-				const auto&   record = now.records[slot];
+				const auto& record = now.records[run.firstRecordIndex + slot];
+				CHECK(record.type == type);
 				const Placed* before = nullptr;
 				if (last && last->tick == tick)
+				{
 					before = &last->types[type][slot];
+				}
 				else if (last && last->tick + 1 == tick && record.source != crowd::c_RenderSpawned)
-					before = &last->types[type][record.source];
+				{
+					const auto& lastRun = last->runs[type];
+					REQUIRE(record.source >= lastRun.firstRecordIndex);
+					REQUIRE(record.source < lastRun.firstRecordIndex + lastRun.count);
+					before = &last->types[type][record.source - lastRun.firstRecordIndex];
+				}
 
 				if (before != nullptr)
 				{
@@ -316,7 +332,7 @@ TEST_CASE(
 		step();
 	}
 
-	// A split moves agents to the end, a destroy moves the rest down, a merge and a spawn after.
+	// A split, a destroy, a merge that reorders a type's records, and a spawn.
 	const auto split = crowd->SplitGroup(foot, 4);
 	step();
 	draw(0.5f);
@@ -324,7 +340,9 @@ TEST_CASE(
 	step();
 	draw(0.0f);
 	draw(1.0f);
-	crowd->MergeGroup(split, foot);
+	// The front group merged into the split one goes behind it in its type's run: every record of
+	// the type moves.
+	crowd->MergeGroup(foot, split);
 	step();
 	draw(0.3f);
 	orders.goal = glm::vec2(-5.0f, 5.0f);

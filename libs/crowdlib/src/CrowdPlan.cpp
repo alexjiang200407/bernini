@@ -1,6 +1,7 @@
 #include "CrowdPlan.h"
 #include "idl/AgentRange.h"
 #include "idl/Constants.h"
+#include <algorithm>
 #include <cmath>
 #include <core/err/util.h>
 #include <core/glm.h>
@@ -11,7 +12,9 @@
 #include <crowdlib/GroupOrders.h>
 #include <crowdlib/ObstacleSegment.h>
 #include <crowdlib/SolverDesc.h>
+#include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <limits>
 #include <span>
 #include <utility>
@@ -95,14 +98,21 @@ namespace crowd
 			return { rear.rbegin(), rear.rend() };
 		}
 
-		/** Whether `piece` can extend `range`: both spawned, or read from adjacent runs. */
+		/**
+		 * Whether `piece`, whose source record is `sourceRecord`, can extend `range`: both spawned,
+		 * or read from runs adjacent both as agents and as records.
+		 */
 		bool
-		Continues(const idl::AgentRange& range, const PlannedPiece& piece) noexcept
+		Continues(
+			const idl::AgentRange& range,
+			const PlannedPiece&    piece,
+			uint32_t               sourceRecord) noexcept
 		{
 			if (range.sourceFirstAgent == idl::c_SpawnSource ||
 			    piece.sourceFirstAgent == idl::c_SpawnSource)
 				return range.sourceFirstAgent == piece.sourceFirstAgent;
-			return range.sourceFirstAgent + range.agentCount == piece.sourceFirstAgent;
+			return range.sourceFirstAgent + range.agentCount == piece.sourceFirstAgent &&
+			       range.sourceFirstRecord + range.agentCount == sourceRecord;
 		}
 	}
 
@@ -272,58 +282,97 @@ namespace crowd
 	CrowdPlan::PlanTick()
 	{
 		auto plan = TickUploads();
+
+		// Each type's run of render records, in type order, so the record runs are laid out first.
 		plan.typeCounts.assign(m_Desc.agentTypes.size(), 0);
+		for (uint32_t index = 0; index < m_Groups.capacity(); ++index)
+		{
+			if (m_Groups.allocated(index))
+				plan.typeCounts[m_Groups[index].agentType] += m_Groups[index].agentCount;
+		}
+		auto nextRecord = std::vector<uint32_t>(plan.typeCounts.size(), 0);
+		for (size_t type = 1; type < nextRecord.size(); ++type)
+			nextRecord[type] = nextRecord[type - 1] + plan.typeCounts[type - 1];
+
+		auto     layout     = std::vector<LaidOutGroup>();
 		uint32_t firstAgent = 0;
 		for (uint32_t index = 0; index < m_Groups.capacity(); ++index)
 		{
 			if (!m_Groups.allocated(index))
 				continue;
-			auto&          group = m_Groups[index];
-			const auto&    type  = m_Desc.agentTypes[group.agentType];
-			const uint32_t row   = static_cast<uint32_t>(plan.groups.size());
-			plan.typeCounts[group.agentType] += group.agentCount;
+			auto&          group       = m_Groups[index];
+			const auto&    type        = m_Desc.agentTypes[group.agentType];
+			const uint32_t row         = static_cast<uint32_t>(plan.groups.size());
+			const uint32_t firstRecord = nextRecord[group.agentType];
+			nextRecord[group.agentType] += group.agentCount;
 
 			uint32_t firstSlot = 0;
 			for (const auto& piece : group.pieces)
 			{
-				if (firstSlot > 0 && Continues(plan.ranges.back(), piece))
+				const uint32_t sourceRecord = piece.sourceFirstAgent == idl::c_SpawnSource ?
+				                                  idl::c_SpawnSource :
+				                                  LastRecordOf(piece.sourceFirstAgent);
+				if (firstSlot > 0 && Continues(plan.ranges.back(), piece, sourceRecord))
 				{
 					plan.ranges.back().agentCount += piece.agentCount;
 					firstSlot += piece.agentCount;
 					continue;
 				}
 				plan.ranges.push_back(
-					{ .firstAgent       = firstAgent + firstSlot,
-				      .sourceFirstAgent = piece.sourceFirstAgent,
-				      .agentCount       = piece.agentCount,
-				      .group            = row,
-				      .firstSlot        = firstSlot });
+					{ .firstAgent        = firstAgent + firstSlot,
+				      .sourceFirstAgent  = piece.sourceFirstAgent,
+				      .agentCount        = piece.agentCount,
+				      .group             = row,
+				      .firstSlot         = firstSlot,
+				      .sourceFirstRecord = sourceRecord });
 				firstSlot += piece.agentCount;
 			}
 
 			plan.groups.push_back(
-				{ .goal       = group.orders.goal,
-			      .front      = glm::normalize(group.orders.facing),
-			      .firstAgent = firstAgent,
-			      .agentCount = group.agentCount,
-			      .frontage   = group.orders.formation.frontage,
-			      .spacing    = group.orders.formation.spacing,
-			      .speed      = type.preferredSpeed * group.orders.pace,
-			      .maxSpeed   = type.maxSpeed,
-			      .agentType  = group.agentType });
+				{ .goal        = group.orders.goal,
+			      .front       = glm::normalize(group.orders.facing),
+			      .firstAgent  = firstAgent,
+			      .agentCount  = group.agentCount,
+			      .frontage    = group.orders.formation.frontage,
+			      .spacing     = group.orders.formation.spacing,
+			      .speed       = type.preferredSpeed * group.orders.pace,
+			      .maxSpeed    = type.maxSpeed,
+			      .agentType   = group.agentType,
+			      .firstRecord = firstRecord });
+			layout.push_back(
+				{ .firstAgent  = firstAgent,
+			      .agentCount  = group.agentCount,
+			      .firstRecord = firstRecord });
 			plan.groupHandles.push_back({ .handle = { index, m_Groups.generation(index) } });
 
 			group.pieces = { { .sourceFirstAgent = firstAgent, .agentCount = group.agentCount } };
 			firstAgent += group.agentCount;
 		}
 
-		plan.params = { .tickSeconds       = m_Desc.tickSeconds,
-			            .velocityInertia   = m_Desc.solver.velocityInertia,
-			            .agentCount        = firstAgent,
-			            .groupCount        = static_cast<uint32_t>(plan.groups.size()),
-			            .agentRangeCount   = static_cast<uint32_t>(plan.ranges.size()),
-			            .renderFirstRecord = idl::c_NoRenderRing };
+		plan.params  = { .tickSeconds       = m_Desc.tickSeconds,
+			             .velocityInertia   = m_Desc.solver.velocityInertia,
+			             .agentCount        = firstAgent,
+			             .groupCount        = static_cast<uint32_t>(plan.groups.size()),
+			             .agentRangeCount   = static_cast<uint32_t>(plan.ranges.size()),
+			             .renderFirstRecord = idl::c_NoRenderRing };
+		m_LastLayout = std::move(layout);
 		return plan;
+	}
+
+	uint32_t
+	CrowdPlan::LastRecordOf(uint32_t agent) const
+	{
+		// In agent order, so the group holding `agent` is the last that starts at or before it.
+		const auto after =
+			std::ranges::upper_bound(m_LastLayout, agent, {}, [](const LaidOutGroup& group) {
+				return group.firstAgent;
+			});
+		core::ensure(
+			after != m_LastLayout.begin(),
+			"a piece reads an agent the last plan laid out");
+		const auto& group = *std::prev(after);
+		core::ensure(agent < group.firstAgent + group.agentCount, "a piece reads past its group");
+		return group.firstRecord + (agent - group.firstAgent);
 	}
 
 	const PlannedGroup&

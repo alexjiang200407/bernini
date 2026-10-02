@@ -134,18 +134,20 @@ each refuses; what follows is why it is shaped as it is.
   ring is one buffer for the crowd's life (`GetRenderRing`), which a renderer imports once;
   `GetRenderTick(t)` says where tick `t`'s records are and the queue point that wrote them, from its
   `Step` until the ring is stepped past it. A tick's records are grouped by agent type, in
-  `agentTypes` order, and `RenderTick::types` gives each type's run: a reader drawing one type
-  reads one run, so the work it does per type is that type's agents, not the crowd's. The ring is
-  at least `maxTicksInFlight + 3` ticks: those in flight, the two a reader interpolates between and
-  the one before them its motion follows `source` back to. A reader hands ticks back with `ReleaseRenderReads(through, readerDone)`; the
-  `Step` that overwrites one waits for `readerDone` on the crowd's queue, and one that would
-  overwrite a tick not yet released cannot run (`CanStep`). Nothing waits on the CPU either way: a
-  slow reader stalls the crowd's stepping, by as many ticks as the ring holds past its minimum.
-  `CSStep` writes each agent's record as it writes the agent, at the agent's index, so `source` is
-  the `AgentRange`'s source index: the layout already says where each agent came from, and the
-  records cost no pass of their own. `tests/src/CrowdRenderRing_test.cpp` reads them back through
-  an import of its own, as a renderer would. The reader that draws them is `crowd_render`
-  ([crowd_render.md](crowd_render.md)).
+  `agentTypes` order, and `RenderTick::types` gives each type's run: a reader drawing one type reads
+  one run, so the work it does per type is that type's agents, not the crowd's. The ring is at least
+  `maxTicksInFlight + 3` ticks: those in flight, the two a reader interpolates between and the one
+  before them its motion follows `source` back to. A reader hands ticks back with
+  `ReleaseRenderReads(through, readerDone)`; the `Step` that overwrites one waits for `readerDone`
+  on the crowd's queue, and one that would overwrite a tick not yet released cannot run (`CanStep`).
+  Nothing waits on the CPU either way: a slow reader stalls the crowd's stepping, by as many ticks
+  as the ring holds past its minimum. The agent buffers stay in group order; only the records are
+  grouped by type. `CrowdPlan` lays the record runs out on the CPU, O(groups): each `Group` gets its
+  `firstRecord`, and each `AgentRange` the record its source agent had last tick
+  (`sourceFirstRecord`). `CSStep` writes each agent's record as it writes the agent, at its group's
+  `firstRecord` plus its slot, so the records cost no pass of their own.
+  `tests/src/CrowdRenderRing_test.cpp` reads them back through an import of its own, as a renderer
+  would. The reader that draws them is `crowd_render` ([crowd_render.md](crowd_render.md)).
 * **Tick timing.** Every tick that dispatches is timed on the crowd's queue, and
   `GetTickGpuMilliseconds(t)` reads it back while `t` is one of the last `maxTicksInFlight + 1`.
 

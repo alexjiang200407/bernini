@@ -12,4 +12,7 @@ public struct AgentRange
     public uint agentCount;
     public uint group;
     public uint firstSlot;
+
+    // The render record of the agent at sourceFirstAgent in the previous tick, or c_SpawnSource.
+    public uint sourceFirstRecord;
 };

@@ -1,7 +1,10 @@
-/** Where one tick's records sit in the render ring; a count of 0 for a tick the ring does not hold. */
+/**
+ * Where one tick's records sit in the render ring: elements [firstRecordIndex, firstRecordIndex +
+ * count) of its buffer; a count of 0 for a tick the ring does not hold.
+ */
 public struct TickRecords
 {
-    public uint first;
+    public uint firstRecordIndex;
     public uint count;
 };
 

@@ -3,9 +3,9 @@ import crowd.idl.RenderAgent;
 import crowd_render.idl.WriterFrame;
 
 /**
- * Places one agent type's agents of a crowd's render ring, interpolated: slot i is agent i of the
- * current tick, drawn `alpha` of the way from the previous tick, and hidden when it is another
- * type's or past the tick's agents. Its motion is last frame's pose of the same agent, found by
+ * Places one agent type's agents of a crowd's render ring, interpolated: slot i is the i-th record
+ * of the type's run in the current tick, drawn `alpha` of the way from the previous tick, and
+ * hidden past the run. Its motion is last frame's pose of the same agent, found by
  * following `source` back, so it holds across a split, a merge or a destroy that moved the agent.
  */
 public struct CrowdInstanceWriter : IMeshInstanceWriter
@@ -19,7 +19,9 @@ public struct CrowdInstanceWriter : IMeshInstanceWriter
         public float alpha;
         public float lastAlpha;
         public uint lastFrame;
-        public uint type;
+
+        // The type's run in the current tick, its firstRecordIndex counted from the tick's first record.
+        public TickRecords run;
 
         // The type's mesh in the agent's frame: +z its facing, y up, the origin on the ground.
         public float4x4 model;
@@ -35,14 +37,14 @@ public struct CrowdInstanceWriter : IMeshInstanceWriter
     // agent `before` did not hold.
     static Pose At(Params params, TickRecords tick, TickRecords before, uint index, float t)
     {
-        let now = params.ring[tick.first + index];
+        let now = params.ring[tick.firstRecordIndex + index];
         var pose : Pose;
         pose.position = now.position;
         pose.facing = now.facing;
         if (now.source == c_RenderSpawned || now.source >= before.count)
             return pose;
 
-        let then = params.ring[before.first + now.source];
+        let then = params.ring[before.firstRecordIndex + now.source];
         pose.position = lerp(then.position, now.position, t);
         let facing = lerp(then.facing, now.facing, t);
         let size = length(facing);
@@ -61,22 +63,22 @@ public struct CrowdInstanceWriter : IMeshInstanceWriter
 
     public static void Write<B : IMeshInstanceBlock>(B block, Params params, uint slot)
     {
-        let shown = slot < params.current.count;
-        if (!shown || params.ring[params.current.first + slot].type != params.type)
+        if (slot >= params.run.count)
         {
             block.Hide(slot);
             return;
         }
 
-        let pose = At(params, params.current, params.previous, slot, params.alpha);
+        let index = params.run.firstRecordIndex + slot;
+        let pose = At(params, params.current, params.previous, index, params.alpha);
         var last = pose;
         if (params.lastFrame == c_LastFrameSameTick)
         {
-            last = At(params, params.current, params.previous, slot, params.lastAlpha);
+            last = At(params, params.current, params.previous, index, params.lastAlpha);
         }
         else if (params.lastFrame == c_LastFrameTickBefore)
         {
-            let source = params.ring[params.current.first + slot].source;
+            let source = params.ring[params.current.firstRecordIndex + index].source;
             if (source != c_RenderSpawned && source < params.previous.count)
                 last = At(params, params.previous, params.older, source, params.lastAlpha);
         }

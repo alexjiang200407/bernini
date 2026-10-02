@@ -58,7 +58,9 @@ namespace crowd_render
 				const auto block = view.CreateMeshInstanceBlock(
 					bgl::MeshInstanceBlockDesc()
 						.SetGeom(m_Desc.types[type].geom)
-						.SetCapacity(m_Desc.crowd->GetDesc().maxAgents));
+						.SetCapacity(
+							m_Desc.types[type].capacity != 0 ? m_Desc.types[type].capacity :
+															   m_Desc.crowd->GetDesc().maxAgents));
 				m_Blocks.push_back(block);
 				view.SetBlockWriter(block, m_Writer);
 				WriteWriterParams(

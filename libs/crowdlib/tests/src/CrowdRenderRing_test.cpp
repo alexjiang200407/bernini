@@ -6,6 +6,7 @@
 // holds, and that a Step waits for its reader before overwriting one.
 #include "FakeCrowd.h"
 #include <algorithm>
+#include <array>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/glm.h>
@@ -380,8 +381,8 @@ namespace
 	}
 }
 
-// What the step writes: each agent's position and facing as its debug readback has them, its
-// type, and its source, which keeps finding the same agent while groups split, are destroyed,
+// What the step writes: each agent's position and facing as its debug readback has them, grouped
+// by type, and its source, which keeps finding the same agent while groups split, are destroyed,
 // merge and spawn, each of which moves agents to other indices.
 TEST_CASE(
 	"Each render record holds its agent, and its source is that agent a tick before",
@@ -420,15 +421,38 @@ TEST_CASE(
 		auto                   records = reader.Records(*written, copied);
 		crowd->ReleaseRenderReads(tick, copied);
 
+		// Grouped by type: each type's run holds that type's agents and no other.
+		REQUIRE(written->types.size() == 2);
+		uint32_t next = written->firstRecordIndex;
+		for (uint32_t type = 0; type < written->types.size(); ++type)
+		{
+			const crowd::RenderTypeRecords& run = written->types[type];
+			CHECK(run.firstRecordIndex == next);
+			next += run.count;
+			for (uint32_t index = 0; index < run.count; ++index)
+				CHECK(
+					records[run.firstRecordIndex - written->firstRecordIndex + index].type == type);
+		}
+		CHECK(next == written->firstRecordIndex + written->agentCount);
+
+		// The same agents the debug readback has, in another order.
 		const std::optional<crowd::debug::CrowdReadback> agents = crowd->ReadDebugAgents();
 		REQUIRE(agents.has_value());
 		REQUIRE(agents->tick == tick);
 		REQUIRE(records.size() == agents->agents.size());
+		auto key = [](glm::vec2 position, glm::vec2 facing) {
+			return std::array{ position.x, position.y, facing.x, facing.y };
+		};
+		auto fromRecords = std::vector<std::array<float, 4>>();
+		auto fromAgents  = std::vector<std::array<float, 4>>();
 		for (uint32_t index = 0; index < records.size(); ++index)
 		{
-			CHECK(records[index].position == agents->agents[index].position);
-			CHECK(records[index].facing == agents->agents[index].facing);
+			fromRecords.push_back(key(records[index].position, records[index].facing));
+			fromAgents.push_back(key(agents->agents[index].position, agents->agents[index].facing));
 		}
+		std::ranges::sort(fromRecords);
+		std::ranges::sort(fromAgents);
+		CHECK(fromRecords == fromAgents);
 		return records;
 	};
 	auto count = [](const std::vector<crowd::RenderAgent>& records, auto&& matches) {
@@ -458,23 +482,25 @@ TEST_CASE(
 		previous = std::move(current);
 	}
 
-	// The split's agents go to the end; destroying the group between moves them down.
+	// The split's agents move to the end of the agents, past the other type's group, but their
+	// records stay at the end of their type's run; destroying the other type's group moves none.
 	const auto split = crowd->SplitGroup(first, 4);
 	auto       after = step();
-	CHECK(CheckSources(previous, after, maxStep) > 0);
+	CHECK(CheckSources(previous, after, maxStep) == 0);
 	previous = std::move(after);
 
 	crowd->DestroyGroup(other);
 	after = step();
 	CHECK(after.size() == 12);
 	CHECK(count(after, ofType(0)) == 12);
-	CHECK(CheckSources(previous, after, maxStep) > 0);
+	CHECK(CheckSources(previous, after, maxStep) == 0);
 	previous = std::move(after);
 
-	crowd->MergeGroup(split, first);
+	// The front group merged into the split one goes behind it: every record moves.
+	crowd->MergeGroup(first, split);
 	after = step();
 	CHECK(count(after, spawned) == 0);
-	CheckSources(previous, after, maxStep);
+	CHECK(CheckSources(previous, after, maxStep) > 0);
 	previous = std::move(after);
 
 	orders.goal = glm::vec2(0.0f, -20.0f);

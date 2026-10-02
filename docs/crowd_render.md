@@ -21,8 +21,8 @@ auto blocks = crowd_render::CrowdInstanceBlocks(
         .SetCrowd(crowd)          // created with CrowdDesc::renderRingTicks
         .SetGraphics(graphics)    // on the crowd's GPU context
         .SetView(view)
-        .AddType(crowd_render::AgentTypeMeshDesc().SetGeom(infantry).SetModel(lift))
-        .AddType(crowd_render::AgentTypeMeshDesc().SetGeom(cavalry).SetModel(lift)));
+        .AddType(crowd_render::AgentTypeMeshDesc().SetGeom(infantry).SetCapacity(4000).SetModel(lift))
+        .AddType(crowd_render::AgentTypeMeshDesc().SetGeom(cavalry).SetCapacity(500).SetModel(lift)));
 
 // every frame
 blocks.PrepareFrame(accumulator / tickSeconds);
@@ -30,10 +30,11 @@ graphics->DrawFrame(target, job);
 blocks.FinishFrame();
 ```
 
-- **One block per agent type**, each `maxAgents` placements of the type's geom. Slot `i` of every
-  block is agent `i` of the drawn tick. A block hides the slots whose agent is another type's, and
-  the slots past the tick's agents. The cull therefore runs over types × `maxAgents` placements,
-  whatever the live count. That is the price of never compacting by type on the CPU.
+- **One block per agent type**, of the type's geom. Slot `i` of a type's block is record `i` of the
+  type's run in the drawn tick (the crowd groups each tick's records by type), and the slots past
+  the run are hidden. A block draws and culls every one of its `capacity` placements each frame,
+  live or not, so `AgentTypeMeshDesc::capacity` is the most agents of that type the game holds at
+  once: the crowd's `maxAgents` when it is left 0, and agents past it go undrawn.
 - **The frame draws between the last two completed ticks.** `PrepareFrame(alpha)` points every
   block at the latest completed tick `c`, `alpha` of the way from `c − 1` ("Fix Your Timestep"),
   so the crowd is drawn about a tick late (≈33 ms at the default tick). It also inserts a wait on

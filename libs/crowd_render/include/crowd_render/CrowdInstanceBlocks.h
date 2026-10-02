@@ -22,6 +22,10 @@ namespace crowd_render
 		// where the agent stands.
 		glm::mat4 model = glm::mat4(1.0f);
 
+		// The most agents of this type the crowd holds at once, which is what its block draws and
+		// culls every frame; 0 is the crowd's maxAgents. Agents past it are not drawn.
+		uint32_t capacity = 0;
+
 		template <typename Self>
 		Self&&
 		SetGeom(this Self&& self, bgl::GeomHandle geom) noexcept
@@ -35,6 +39,14 @@ namespace crowd_render
 		SetModel(this Self&& self, const glm::mat4& model) noexcept
 		{
 			self.model = model;
+			return std::forward<Self>(self);
+		}
+
+		template <typename Self>
+		Self&&
+		SetCapacity(this Self&& self, uint32_t capacity) noexcept
+		{
+			self.capacity = capacity;
 			return std::forward<Self>(self);
 		}
 	};
@@ -85,8 +97,8 @@ namespace crowd_render
 
 	/**
 	 * A crowd's agents drawn GPU to GPU: one instance block per agent type in the view, placed
-	 * every frame from the crowd's render ring by a writer kernel, with no per-agent work on the
-	 * CPU. A frame draws the crowd between its last two completed ticks, `alpha` of the way, and
+	 * every frame from the type's run of the crowd's render ring by a writer kernel, with no
+	 * per-agent work on the CPU. A frame draws the crowd between its last two completed ticks, `alpha` of the way, and
 	 * each agent's motion vector is its pose last frame.
 	 *
 	 * Every frame is bracketed: PrepareFrame before the renderer's frame begins, FinishFrame after
@@ -100,8 +112,7 @@ namespace crowd_render
 	{
 	public:
 		/**
-		 * Imports the crowd's ring, compiles the writer once and creates a block of
-		 * CrowdDesc::maxAgents placements per agent type.
+		 * Imports the crowd's ring, compiles the writer once and creates a block per agent type.
 		 *
 		 * @throws std::runtime_error if a ref is null, the crowd has no render ring, or there is
 		 *         not one mesh per agent type; the renderer's errors as CreateMeshInstanceBlock and

@@ -434,3 +434,35 @@ TEST_CASE("Any sequence of commands reads every agent from where it last was", "
 		buffer = std::move(next);
 	}
 }
+
+TEST_CASE("A plan's render records run by type, and its sources are records", "[crowd][plan]")
+{
+	auto       plan = crowd::CrowdPlan(Desc());
+	const auto foot = plan.CreateGroup(Group(3, 0));
+	plan.CreateGroup(Group(2, 1));
+	plan.CreateGroup(Group(4, 0));
+
+	// Agents: foot 0-2, horse 3-4, rear 5-8. Records: foot 0-2, rear 3-6, horse 7-8.
+	const auto first = plan.PlanTick();
+	CheckLayout(first);
+	CHECK(first.typeCounts == std::vector<uint32_t>{ 7, 2 });
+	CHECK(first.groups[0].firstRecord == 0);
+	CHECK(first.groups[1].firstRecord == 7);
+	CHECK(first.groups[2].firstRecord == 3);
+	for (const auto& range : first.ranges)
+		CHECK(range.sourceFirstRecord == crowd::idl::c_SpawnSource);
+
+	// Without foot: agents horse 0-1, rear 2-5; records rear 0-3, horse 4-5. Each range reads the
+	// record its first agent had, not that agent's index.
+	plan.DestroyGroup(foot);
+	const auto second = plan.PlanTick();
+	CheckLayout(second);
+	CHECK(second.typeCounts == std::vector<uint32_t>{ 4, 2 });
+	REQUIRE(second.ranges.size() == 2);
+	CHECK(second.ranges[0].sourceFirstAgent == 3);
+	CHECK(second.ranges[0].sourceFirstRecord == 7);
+	CHECK(second.groups[0].firstRecord == 4);
+	CHECK(second.ranges[1].sourceFirstAgent == 5);
+	CHECK(second.ranges[1].sourceFirstRecord == 3);
+	CHECK(second.groups[1].firstRecord == 0);
+}

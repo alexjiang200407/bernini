@@ -5,6 +5,7 @@
 #include <bgpu/uniforms/UniformsBase.h>
 #include <crowdlib/ICrowd.h>
 #include <cstdint>
+#include <vector>
 
 namespace crowd_render
 {
@@ -20,6 +21,9 @@ namespace crowd_render
 		float            alpha     = 0.0f;
 		float            lastAlpha = 0.0f;
 		uint32_t         lastFrame = idl::c_LastFrameNone;
+
+		// Each agent type's run in `current`, its firstRecordIndex counted from current's.
+		std::vector<idl::TickRecords> types;
 	};
 
 	/**
@@ -35,7 +39,7 @@ namespace crowd_render
 		uint64_t             lastTick,
 		float                lastAlpha);
 
-	/** Writes CrowdInstanceWriter's Params for agent type `type`, posed by `model`. */
+	/** Writes CrowdInstanceWriter's Params for agent type `type`, posed by `model`; no type the frame holds draws nothing. */
 	void
 	WriteWriterParams(
 		bgpu::UniformsBase::Accessor params,

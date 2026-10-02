@@ -100,15 +100,15 @@ void main(uint3 id: SV_DispatchThreadID)
     let renderFirst = gUniforms.params.renderFirstRecord;
     if (renderFirst != c_NoRenderRing)
     {
-        // An agent's index in the previous tick is its record's index there too: both ticks wrote
-        // their records in agent order.
+        // Records are grouped by type, so an agent's record is its group's run plus its slot, and
+        // its source is the previous tick's record, not its agent index.
         var record : RenderAgent;
         record.position = agent.position;
         record.facing = agent.facing;
         let offset = index - range.firstAgent;
         let spawned = range.sourceFirstAgent == c_SpawnSource;
-        record.source = spawned ? c_RenderSpawned : range.sourceFirstAgent + offset;
+        record.source = spawned ? c_RenderSpawned : range.sourceFirstRecord + offset;
         record.type = group.agentType;
-        gUniforms.renderRing[renderFirst + index] = record;
+        gUniforms.renderRing[renderFirst + group.firstRecord + agent.slot] = record;
     }
 }

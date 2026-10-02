@@ -247,11 +247,14 @@ namespace
 			if (opts.handoff)
 			{
 				handoffDesc.AddType(
-					crowd_render::AgentTypeMeshDesc().SetGeom(geom).SetModel(
-						glm::translate(
-							glm::mat4(1.0f),
-							glm::vec3(0.0f, sizes[type].y * 0.5f, 0.0f)) *
-						glm::scale(glm::mat4(1.0f), sizes[type] * 0.5f)));
+					crowd_render::AgentTypeMeshDesc()
+						.SetGeom(geom)
+						.SetCapacity(counts[type])
+						.SetModel(
+							glm::translate(
+								glm::mat4(1.0f),
+								glm::vec3(0.0f, sizes[type].y * 0.5f, 0.0f)) *
+							glm::scale(glm::mat4(1.0f), sizes[type] * 0.5f)));
 				continue;
 			}
 
