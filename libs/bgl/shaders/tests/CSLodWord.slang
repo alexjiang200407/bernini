@@ -4,8 +4,8 @@ import idl.LodLevel;
 import lib.types.ComputeBuffer;
 
 // Packs a few levels of detail the way the cull will, and one geom's submesh entry lookup, for a
-// CPU comparison: whether InstanceLod::Make and bgl::UnpackInstanceLod agree on the bits, and
-// whether LodSubmeshRange::Entry lands where the upload put a level's submesh.
+// CPU comparison: whether InstanceLod::Make and MakeWithSources and bgl::UnpackInstanceLod agree on
+// the bits, and whether LodSubmeshRange::Entry lands where the upload put a level's submesh.
 struct Uniforms
 {
     ComputeBuffer<InstanceLod> words;
@@ -23,6 +23,9 @@ void main()
     gUniforms.words[2] = InstanceLod.Make(LodLevel::kLod1, true, LodLevel::kLod0, 0.5);
     gUniforms.words[3] = InstanceLod.Make(LodLevel::kLod3, true, LodLevel::kLod1, 0.0);
     gUniforms.words[4] = InstanceLod.Make(LodLevel::kLod7, true, LodLevel::kLod6, 1.0);
+    gUniforms.words[5] = InstanceLod.MakeWithSources(LodLevel::kLod2, true, false, LodLevel::kLod0, false, 1.0);
+    gUniforms.words[6] = InstanceLod.MakeWithSources(LodLevel::kLod1, true, true, LodLevel::kLod0, false, 0.25);
+    gUniforms.words[7] = InstanceLod.MakeWithSources(LodLevel::kLod0, false, true, LodLevel::kLod0, true, 0.75).WithGrant();
 
     LodSubmeshRange submeshes;
     submeshes.submeshCount = 3u;

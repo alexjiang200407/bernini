@@ -12,7 +12,8 @@ public struct BlobShadow
     // two meet the same problem differently, see programs.forward.BlobShadow.
     public float lift;
 
-    // The palette-arena slot of the foot's heel, world space, with its ball in the next slot; the
-    // pose pass writes both. cBodyDisc on the placement's own disc.
-    public uint soleSlot;
+    // Which leg of the placement's rig the foot is, or cBodyDisc on the placement's own disc. The
+    // pass reads that leg's sole from whichever source the placement drew this frame: its palette,
+    // its pose-pool slice, or its rig's table soles.
+    public uint leg;
 };

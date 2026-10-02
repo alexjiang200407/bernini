@@ -82,18 +82,6 @@ namespace bgl
 			c_MaxLegsPerRig == idl::cMaxLegsPerRig,
 			"FootIKDesc has a slot per leg the IDL lets a rig carry");
 
-		/**
-		 * The palette-arena slot of leg `leg`'s sole: a hero palette ends with one per leg of
-		 * its rig, which PoseSkinned writes after the two poses and the blob-shadow pass reads.
-		 */
-		uint32_t
-		SoleSlotOf(const MeshMeta& meta, uint32_t leg) noexcept
-		{
-			const uint32_t firstSoleSlot =
-				meta.palette.index + meta.palette.count - idl::cFloat4sPerSole * meta.footIK.count;
-			return firstSoleSlot + idl::cFloat4sPerSole * leg;
-		}
-
 		idl::Ramp
 		ToRecord(const WeightRamp& ramp) noexcept
 		{
@@ -578,6 +566,17 @@ namespace bgl
 			return slot;
 		}
 
+		/** Refuses PoseSource::kAuto, which is declared and not yet drawn by any pass. */
+		void
+		RefuseUndrawnSource(PoseSource source, const char* what)
+		{
+			if (source == PoseSource::kAuto)
+			{
+				throw SceneError(
+					std::format("{}: PoseSource::kAuto is declared and not yet drawn", what));
+			}
+		}
+
 		/** The live kSkinnedMesh geom `geom` names in `scene`, or a SceneError naming `what`. */
 		Scene::AnimGeomInfo
 		RequireSkinnedGeom(const Scene& scene, GeomHandle geom, const char* what)
@@ -612,6 +611,8 @@ namespace bgl
 				"SkinnedInstanceDesc::clip passed to CreateSkinnedMeshInstance is out of "
 				"range for the geom's clip table");
 		}
+
+		RefuseUndrawnSource(desc.source, "CreateSkinnedMeshInstance");
 
 		// The pose source is which record this placement gets, and nothing else records it: a hero
 		// instance owns a palette the pose pass writes, a crowd one owns no storage at all.
@@ -675,6 +676,20 @@ namespace bgl
 	}
 
 	MeshInstanceHandle
+	SceneView::CreateSkinnedMeshInstance(const SkinnedMeshInstanceDesc& desc)
+	{
+		if (desc.source == PoseSource::kBoneAnimTable)
+		{
+			throw SceneError(
+				"CreateSkinnedMeshInstance: a whole playback record cannot draw from the rig's "
+				"shared table; spawn kBoneAnimTable with a SkinnedInstanceDesc");
+		}
+		RefuseUndrawnSource(desc.source, "CreateSkinnedMeshInstance");
+
+		return CreateSkinnedMeshInstance(desc.geom, desc.transform, desc.playback);
+	}
+
+	MeshInstanceHandle
 	SceneView::PlacePosed(
 		GeomHandle                 geom,
 		glm::mat4                  transform,
@@ -686,7 +701,7 @@ namespace bgl
 	{
 		// Two palettes, back to back: the pose at `time` and the pose at `prevTime`, which is what
 		// lets the mesh shader write a motion vector without a history buffer. Then each leg's sole
-		// as the pose at `time` stands it -- see SoleSlotOf.
+		// as the pose at `time` stands it, which the blob-shadow pass reads.
 		const auto palette = m_Palettes.Allocate(
 			idl::cFloat4sPerBone * boneCount * 2 + idl::cFloat4sPerSole * legCount);
 
@@ -853,6 +868,18 @@ namespace bgl
 		{
 			m_FootIK.Set(meta.footIK, leg, ToRecord(desc.leg[leg]));
 		}
+	}
+
+	bool
+	SceneView::HasLegs(MeshInstanceHandle instance) const noexcept
+	{
+		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
+		{
+			return false;
+		}
+		const MeshMeta& meta = m_MeshBuffer.MetaAt(instance.handle.index);
+		return meta.geomType == GeomType::kSkinnedMesh && m_SceneRaw->IsGeomAlive(meta.geom) &&
+		       m_SceneRaw->GetGeomSkinnedInfo(meta.geom.handle.index).legCount > 0;
 	}
 
 	bool
@@ -1273,7 +1300,7 @@ namespace bgl
 				entry.intensity  = desc.intensity;
 				entry.fadeHeight = desc.fadeHeight;
 				entry.lift       = desc.casterLift;
-				entry.soleSlot   = idl::cBodyDisc;
+				entry.leg        = idl::cBodyDisc;
 			}
 
 			if (desc.feet.has_value() && desc.feet->intensity > 0.0f)
@@ -1286,7 +1313,7 @@ namespace bgl
 					entry.intensity  = desc.feet->intensity;
 					entry.fadeHeight = desc.feet->fadeHeight;
 					entry.lift       = desc.feet->maxReceiverRise;
-					entry.soleSlot   = SoleSlotOf(meta, leg);
+					entry.leg        = leg;
 				}
 			}
 		}
@@ -1489,6 +1516,14 @@ namespace bgl
 		if (!std::isfinite(desc.fadeSeconds) || desc.fadeSeconds < 0.0f)
 		{
 			throw SceneError("SetLodSelection: fadeSeconds must be finite and non-negative");
+		}
+		if (!std::isfinite(desc.posePixels) || desc.posePixels <= 0.0f)
+		{
+			throw SceneError("SetLodSelection: posePixels must be finite and positive");
+		}
+		if (desc.forcePoseSource == PoseSource::kAuto)
+		{
+			throw SceneError("SetLodSelection: forcePoseSource names a source, and kAuto is none");
 		}
 		if (desc.forceLevel.has_value() && *desc.forceLevel >= LodLevel::kCount)
 		{

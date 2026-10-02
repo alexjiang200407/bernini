@@ -9,6 +9,7 @@
 #include <bgl/idl/Constants.h>
 #include <bgl/idl/CullView.h>
 #include <bgl/types/Camera.h>
+#include <bgl/types/InstanceDesc.h>
 #include <bgl/types/LodSelectionDesc.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/Viewport.h>
@@ -44,6 +45,9 @@ TEST_CASE("a view starts drawing every mesh as authored", "[lod][contract]")
 	CHECK(selection.pixelScale == 1.0f);
 	CHECK_FALSE(selection.forceLevel.has_value());
 	CHECK(selection.fadeSeconds == bgl::LodSelectionDesc().fadeSeconds);
+	CHECK(selection.poseBudget == bgl::LodSelectionDesc().poseBudget);
+	CHECK(selection.posePixels == bgl::LodSelectionDesc().posePixels);
+	CHECK_FALSE(selection.forcePoseSource.has_value());
 }
 
 TEST_CASE("a view keeps the selection it was given", "[lod][contract]")
@@ -53,10 +57,13 @@ TEST_CASE("a view keeps the selection it was given", "[lod][contract]")
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
 	auto view  = gfx->CreateSceneView(scene, 4);
 
-	auto desc        = bgl::LodSelectionDesc();
-	desc.pixelScale  = 0.5f;
-	desc.forceLevel  = bgl::LodLevel::kLod2;
-	desc.fadeSeconds = 0.0f;
+	auto desc            = bgl::LodSelectionDesc();
+	desc.pixelScale      = 0.5f;
+	desc.forceLevel      = bgl::LodLevel::kLod2;
+	desc.fadeSeconds     = 0.0f;
+	desc.poseBudget      = 0;
+	desc.posePixels      = 40.0f;
+	desc.forcePoseSource = bgl::PoseSource::kBoneAnimTable;
 	CHECK_NOTHROW(view->SetLodSelection(desc));
 
 	const bgl::LodSelectionDesc read = view->GetLodSelection();
@@ -64,6 +71,9 @@ TEST_CASE("a view keeps the selection it was given", "[lod][contract]")
 	REQUIRE(read.forceLevel.has_value());
 	CHECK(*read.forceLevel == bgl::LodLevel::kLod2);
 	CHECK(read.fadeSeconds == 0.0f);
+	CHECK(read.poseBudget == 0u);
+	CHECK(read.posePixels == 40.0f);
+	CHECK(read.forcePoseSource == bgl::PoseSource::kBoneAnimTable);
 
 	SECTION("a later write replaces the whole record")
 	{
@@ -119,6 +129,24 @@ TEST_CASE("a selection no cull could act on is refused, and the old one kept", "
 		CHECK_THROWS_AS(view->SetLodSelection(desc), bgl::SceneError);
 	}
 
+	SECTION("a pose threshold that is zero, negative or not finite")
+	{
+		auto desc       = bgl::LodSelectionDesc();
+		desc.posePixels = 0.0f;
+		CHECK_THROWS_AS(view->SetLodSelection(desc), bgl::SceneError);
+		desc.posePixels = -1.0f;
+		CHECK_THROWS_AS(view->SetLodSelection(desc), bgl::SceneError);
+		desc.posePixels = std::nanf("");
+		CHECK_THROWS_AS(view->SetLodSelection(desc), bgl::SceneError);
+	}
+
+	SECTION("forcing the automatic source, which is a choice rather than a source")
+	{
+		auto desc            = bgl::LodSelectionDesc();
+		desc.forcePoseSource = bgl::PoseSource::kAuto;
+		CHECK_THROWS_AS(view->SetLodSelection(desc), bgl::SceneError);
+	}
+
 	CHECK(view->GetLodSelection().pixelScale == 2.0f);
 }
 
@@ -137,6 +165,23 @@ TEST_CASE("a draw resolves the view's selection into the cull view it uploads", 
 		CHECK(view.lodForcedLevel == bgl::idl::cLodForceNone);
 		CHECK(view.lodFadeStep == Catch::Approx(0.03f / 0.15f));
 		CHECK(view.viewProj == built.viewProj);
+		CHECK(view.posePixels == bgl::LodSelectionDesc().posePixels);
+		CHECK(view.poseBudget == bgl::LodSelectionDesc().poseBudget);
+		CHECK(view.poseForced == bgl::idl::cPoseForceNone);
+	}
+
+	SECTION("a forced pose source")
+	{
+		auto desc            = bgl::LodSelectionDesc();
+		desc.forcePoseSource = bgl::PoseSource::kBoneAnimTable;
+
+		auto view = built;
+		bgl::ResolveLodSelection(view, desc, eye, 540.0f, 0.03f);
+		CHECK(view.poseForced == bgl::idl::cPoseForceTable);
+
+		desc.forcePoseSource = bgl::PoseSource::kPerInstance;
+		bgl::ResolveLodSelection(view, desc, eye, 540.0f, 0.03f);
+		CHECK(view.poseForced == bgl::idl::cPoseForcePerInstance);
 	}
 
 	SECTION("scaled, forced and swapped")

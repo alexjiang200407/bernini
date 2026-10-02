@@ -48,4 +48,10 @@ public struct Rig
     // bone `b` of global frame `f` is at `GetStart() + (f * boneCount + b) * cFloat4sPerBone`. Null
     // until something asks for one, and PoseRigFrames is the only writer.
     public Range<float4> boneAnimTable;
+
+    // Each leg's sole in every frame the table holds: the heel, then the ball, model space and
+    // unplanted, so a placement drawing from the table carries foot shadows. Leg `l` of global frame
+    // `f` is at `GetStart() + (f * legs.count + l) * cFloat4sPerSole`, in the table's own arena.
+    // Null exactly when `boneAnimTable` is, or when `legs` is.
+    public Range<float4> tableSoles;
 };

@@ -1334,9 +1334,15 @@ TEST_CASE("a hero instance's foot-IK record starts at weight one", "[skinned][pl
 		CHECK_FALSE(view->HasFootIK(table));
 		CHECK_FALSE(view->HasFootIK(stat));
 
+		// HasLegs asks only whether a pose has feet to find, whichever source draws it.
+		CHECK(view->HasLegs(instance));
+		CHECK(view->HasLegs(table));
+		CHECK_FALSE(view->HasLegs(stat));
+
 		view->DeleteMeshInstance(instance);
 		CHECK_THROWS_AS(view->GetFootIK(instance), bgl::SceneError);
 		CHECK_FALSE(view->HasFootIK(instance));
+		CHECK_FALSE(view->HasLegs(instance));
 	}
 
 	SECTION("deleting the instance frees its record, and the next spawn starts clean")
@@ -1392,6 +1398,53 @@ TEST_CASE("a rig without legs owns no foot-IK record", "[skinned][plant][footik]
 	CHECK_THROWS_AS(view->GetFootIK(instance), bgl::SceneError);
 	CHECK_THROWS_AS(view->SetFootIK(instance, bgl::FootIKDesc()), bgl::SceneError);
 	CHECK_FALSE(view->HasFootIK(instance));
+	CHECK_FALSE(view->HasLegs(instance));
+}
+
+// The spawn a SkinnedMeshInstanceDesc describes, by source. kAuto is declared ahead of the passes
+// that draw it, and refused on both spawns until they exist.
+TEST_CASE("a playback spawn names its source", "[skinned][footik][contract]")
+{
+	const LegScene legScene = MakeLegScene(c_Flat, 255);
+	auto&          view     = legScene.view;
+
+	const auto playback = bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f);
+
+	SECTION("per instance is the default")
+	{
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(legScene.geom).SetPlayback(playback));
+		CHECK(view->HasFootIK(instance));
+		CHECK(view->GetSkinnedPlayback(instance).slot[0].nodeIndex == 0u);
+	}
+
+	SECTION("a whole record cannot draw from the shared table")
+	{
+		CHECK_THROWS_AS(
+			view->CreateSkinnedMeshInstance(
+				bgl::SkinnedMeshInstanceDesc()
+					.SetGeom(legScene.geom)
+					.SetPlayback(playback)
+					.SetSource(bgl::PoseSource::kBoneAnimTable)),
+			bgl::SceneError);
+	}
+
+	SECTION("the automatic source is refused until a pass draws it")
+	{
+		CHECK_THROWS_AS(
+			view->CreateSkinnedMeshInstance(
+				bgl::SkinnedMeshInstanceDesc()
+					.SetGeom(legScene.geom)
+					.SetPlayback(playback)
+					.SetSource(bgl::PoseSource::kAuto)),
+			bgl::SceneError);
+
+		auto desc   = bgl::SkinnedInstanceDesc();
+		desc.source = bgl::PoseSource::kAuto;
+		CHECK_THROWS_AS(
+			view->CreateSkinnedMeshInstance(legScene.geom, glm::mat4(1.0f), desc),
+			bgl::SceneError);
+	}
 }
 
 TEST_CASE("a weight ramp reads as the shader will", "[skinned][plant][footik]")

@@ -44,9 +44,9 @@ namespace bgl
 
 		// Every member Draw writes, kept beside the code that writes them so BindingNameCheck catches
 		// a shader rename at startup.
-		constexpr std::array<std::string_view, 8> c_Fields = {
-			"blobBuffer"sv, "meshBuffer"sv,  "palettes"sv,     "worldDepth"sv,
-			"viewProj"sv,   "invViewProj"sv, "groundNormal"sv, "viewportRect"sv,
+		constexpr std::array<std::string_view, 10> c_Fields = {
+			"blobBuffer"sv, "meshBuffer"sv, "palettes"sv,    "playbackBuffer"sv, "rigs"sv,
+			"worldDepth"sv, "viewProj"sv,   "invViewProj"sv, "groundNormal"sv,   "viewportRect"sv,
 		};
 	}
 
@@ -118,7 +118,9 @@ namespace bgl
 			.AddTextureRead(c_DepthName, bgpu::BarrierSyncFlag::kPixelShader)
 			.AddBufferRead(c_BlobShadowsName, bgpu::BarrierSyncFlag::kVertexShader)
 			.AddBufferRead(c_MeshInstanceBufferName, bgpu::BarrierSyncFlag::kVertexShader)
-			.AddBufferRead(c_BonePaletteName, bgpu::BarrierSyncFlag::kVertexShader);
+			.AddBufferRead(c_BonePaletteName, bgpu::BarrierSyncFlag::kVertexShader)
+			.AddBufferRead("scene.playbackBuffer", bgpu::BarrierSyncFlag::kVertexShader)
+			.AddBufferRead("scene.rigBuffer", bgpu::BarrierSyncFlag::kVertexShader);
 
 		desc.SetExec([this, draw](const PassContext& resources) { Execute(draw, resources); });
 
@@ -138,9 +140,11 @@ namespace bgl
 		{
 			auto& uniforms = *found;
 
-			uniforms["blobBuffer"] = resources.GetBuffer(c_BlobShadowsName);
-			uniforms["meshBuffer"] = resources.GetBuffer(c_MeshInstanceBufferName);
-			uniforms["palettes"]   = resources.GetBuffer(c_BonePaletteName);
+			uniforms["blobBuffer"]     = resources.GetBuffer(c_BlobShadowsName);
+			uniforms["meshBuffer"]     = resources.GetBuffer(c_MeshInstanceBufferName);
+			uniforms["palettes"]       = resources.GetBuffer(c_BonePaletteName);
+			uniforms["playbackBuffer"] = resources.GetBuffer("scene.playbackBuffer");
+			uniforms["rigs"]           = resources.GetBuffer("scene.rigBuffer");
 			uniforms["worldDepth"].SetIfValid(draw.targets.depthSrv);
 			uniforms["viewProj"]    = draw.viewState.viewProj;
 			uniforms["invViewProj"] = glm::inverse(draw.viewState.viewProj);

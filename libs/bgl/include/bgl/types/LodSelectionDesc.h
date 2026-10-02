@@ -1,5 +1,7 @@
 #pragma once
 #include <bgl/LodLevel.h>
+#include <bgl/types/InstanceDesc.h>
+#include <cstdint>
 #include <optional>
 
 namespace bgl
@@ -20,7 +22,21 @@ namespace bgl
 		std::optional<LodLevel> forceLevel;
 
 		// How long a change of level dissolves over, the two levels dithered against each other
-		// and resolved by temporal AA. 0 swaps in one frame.
+		// and resolved by temporal AA. 0 swaps in one frame. A PoseSource::kAuto placement changing
+		// source dissolves over the same time.
 		float fadeSeconds = 0.15f;
+
+		// PoseSource::kAuto placements this view draws per instance at once; past it, the rest draw
+		// from their rig's table however large they are. Zero draws every one from its table.
+		uint32_t poseBudget = 256;
+
+		// The size on screen, in pixels, below which a kAuto placement whose mesh has one level
+		// draws from its table. A mesh with levels swaps where it leaves level 0 instead. Scaled by
+		// pixelScale, as every threshold is.
+		float posePixels = 160.0f;
+
+		// Draws every kAuto placement from this source, skipping the size test -- per instance
+		// still within poseBudget. Empty selects by size. kAuto is not a source to force.
+		std::optional<PoseSource> forcePoseSource;
 	};
 }

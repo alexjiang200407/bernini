@@ -69,6 +69,9 @@ set(IDL_CPP_SOURCES
     BlendSlot.slang
     SkinnedState.slang
     SkinnedTableState.slang
+    SkinnedAutoState.slang
+    InstancePose.slang
+    PosePool.slang
     PlaybackType.slang
 )
 
