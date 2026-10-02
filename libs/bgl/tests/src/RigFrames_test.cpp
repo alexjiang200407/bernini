@@ -409,7 +409,7 @@ TEST_CASE("a growth of the arena leaves every filled table intact", "[skinned][r
 // `just run bgl_tests -- "[.rigtiming]"` -- and read the numbers off the log's stage lines.
 TEST_CASE("what a dense rig's table costs to stand up", "[.rigtiming]")
 {
-	// cha800_00's shape, which is the largest rig the project holds: 663 bones, 2,254 frames.
+	// The reference character's shape, the largest rig the project holds: 663 bones, 2,254 frames.
 	constexpr uint32_t c_Bones  = 663;
 	constexpr uint32_t c_Frames = 2254;
 

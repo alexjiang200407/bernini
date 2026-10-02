@@ -61,7 +61,7 @@ namespace assetlib
 		 * missing one straight back, so deleting one would not even stick.
 		 *
 		 * Only the categories themselves. A folder the user made inside one, like
-		 * `Authored/Materials/kirk`, is theirs.
+		 * `Authored/Materials/toad`, is theirs.
 		 */
 		[[nodiscard]] static bool
 		IsRequiredDirectory(const std::filesystem::path& relativeToData);

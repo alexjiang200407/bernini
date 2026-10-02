@@ -159,7 +159,7 @@ on a figure checks it there. The rows measure particular operations, not a per-e
 carry one row's cost onto a different operation that shares a dimension. Where no row measures the
 operation, give the shape without a number.
 
-`cha800_00.glb` is the reference character — a real AAA rig, and the largest thing the project cooks.
+The reference character is a production-scale rig in the test project, and the largest thing it cooks.
 
 | Asset | Dimensions | Measured cost | Measured in |
 |---|---|---|---|

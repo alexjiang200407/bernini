@@ -231,7 +231,7 @@ not obvious from a signature. The headers linked below are the source of truth.
   far — on a rig standing still, the feet.
 
   The second is not an optimisation of the first, it is what makes it hold. A box is 1.09–1.51×
-  loose, so on `cha800_00`'s 2254 frames — three of its five clips are a character standing still —
+  loose, so on the reference character's 2254 frames — three of its five clips are a character standing still —
   the frame prune leaves roughly a **quarter** of them, not a handful. Skinning all 170k vertices of
   each was 95% of a 79 s grounding pass in a debug build, and gating by bone brings that pass to
   14 s — the same floors, to the last digit. What remains is the pose walk, which grounding and the
@@ -831,7 +831,7 @@ frames of contact, gets a half-weight touchdown and nothing more — which is wh
 It runs **after** grounding: the clip's own floor counts only within `c_PlantFloorSlack` of the
 zero `groundClips` rests the clip on, so a clip measured before it is one whose floor is wherever
 the author left it, and plants nothing. It is a third walk of every frame on the cook's largest stage
-(`assetlib plant weights`). Measured on `cha800_00` (663 bones, 2254 frames, four legs' worth of
+(`assetlib plant weights`). Measured on the reference character (663 bones, 2254 frames, four legs' worth of
 rig): +2.7 s of a 48 s debug cook, and under the run-to-run noise in release.
 
 The key is a signature over the resolved chains and the geometry the soles were fitted on
@@ -980,7 +980,7 @@ disagree.
   gains slack the vertices do not, so the box is loose rather than tight. Measured against
   `exactPosedBounds` — which does skin every vertex at every frame, and exists only as that
   reference — the test project's rigs come out 1.09–1.51x by volume and 1.00–1.29x on any one axis.
-  It buys the cost: `cha800_00.glb` (663 bones, 27 mesh entries, 170k vertices, 2254 frames) bakes
+  It buys the cost: the reference character (663 bones, 27 mesh entries, 170k vertices, 2254 frames) bakes
   in 3.5 s where the exact walk needs about six minutes, both in a debug build. Bounding each bone
   by the *whole* bind-pose box would over-estimate ~3x and is what makes the per-bone approach look
   unusable; the difference is that a bone here is credited only with the vertices it moves. All

@@ -117,7 +117,7 @@ A `.bimport` names three things, two of which nothing else can derive
 ([import_document.h](libs/assetlib/include/assetlib/import_document.h)):
 
 * **`source`** -- the copied file this document describes. Recorded rather than read off the
-  document's own name: the swap that reaches `kirk.glb` from `kirk.bimport` answers only for a
+  document's own name: the swap that reaches `toad.glb` from `toad.bimport` answers only for a
   source kind with a single extension, so it is derivable for a mesh and for nothing that follows.
   A document written before the field has none, and `importedSourceKeyFor` falls back to that swap
   for one; `migrate` backfills it. Being stored, it is a reference a rename rewrites -- the one

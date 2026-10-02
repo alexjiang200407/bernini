@@ -24,8 +24,8 @@
 #include <vector>
 
 // What one full-screen surface of each material kind costs the forward pass at the render grid
-// the editor draws a 1146x998 viewport on at 2x -- the grid the cha800 face close-up was measured
-// on. Not a test of behaviour: it is run by hand -- `just run bgl_tests --
+// the editor draws a 1146x998 viewport on at 2x -- the grid the reference character's face
+// close-up was measured on. Not a test of behaviour: it is run by hand -- `just run bgl_tests --
 // "[.forwardcost]"` -- and the numbers are read off the warnings it prints. Layers are stacked in
 // depth so every one of them covers every pixel, which is a hair card's worst case rather than
 // its average.

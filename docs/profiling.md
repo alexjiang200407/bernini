@@ -302,7 +302,7 @@ the window exports, and prints what each pass cost.
 # there, so it is the one path that works bare.
 just run bgl_pass_timings -- --project "$PWD/test-project/Data" \
 	--env-root "$PWD/assets/Data" \
-	--mesh Derived/Meshes/AdaWong/cha800_00.reduced.bmesh --frames 60 --warmup 8
+	--mesh "<a character's .bmesh>" --frames 60 --warmup 8
 ```
 
 `--project` is the data root and every other key is relative to it, so the tool measures *your*
@@ -333,7 +333,7 @@ Two things are decisions rather than detail:
   frames.
 
 The model is framed on its own bounding sphere, so a cost read here is comparable across models and
-not across framings: `[.cha800cost]` in `gamelib_tests` measures the same character's *face* filling a
+not across framings: `[.referencecost]` in `gamelib_tests` measures the reference character's *face* filling a
 2292x1996 frame and reports a far larger Forward for it. That case is not superseded — it answers what
 one part costs under one camera, and this answers what a whole frame costs over a run.
 
