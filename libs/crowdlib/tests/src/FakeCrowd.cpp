@@ -1,5 +1,7 @@
 #include "FakeCrowd.h"
 #include "formation.h"
+#include <bgpu/cmd/QueuePoint.h>
+#include <bgpu/resource/NativeBufferDesc.h>
 #include <cmath>
 #include <core/err/util.h>
 #include <core/glm.h>
@@ -10,9 +12,12 @@
 #include <crowdlib/GroupOrders.h>
 #include <crowdlib/GroupReport.h>
 #include <crowdlib/ObstacleSegment.h>
+#include <crowdlib/RenderAgent.h>  // IWYU pragma: keep
+#include <crowdlib/RenderTick.h>
 #include <crowdlib/SolverDesc.h>
 #include <crowdlib/debug/CrowdReadback.h>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <span>
 #include <utility>
@@ -85,9 +90,15 @@ namespace crowd::test
 			core::throw_runtime_error("A crowd's capacities must be positive");
 		if (!IsPositive(m_Desc.tickSeconds))
 			core::throw_runtime_error("A crowd's tick must be positive");
+		if (m_Desc.renderRingTicks != 0 && m_Desc.renderRingTicks < m_Desc.maxTicksInFlight + 3)
+			core::throw_runtime_error("A render ring holds at least maxTicksInFlight + 3 ticks");
+		if (uint64_t{ m_Desc.renderRingTicks } * m_Desc.maxAgents >
+		    std::numeric_limits<uint32_t>::max())
+			core::throw_runtime_error("A render ring's records must be indexable by a uint");
 		ValidateSolver(m_Desc.solver);
 
 		m_Groups.reset(m_Desc.maxGroups);
+		m_RenderTicks.resize(m_Desc.renderRingTicks);
 	}
 
 	const CrowdDesc&
@@ -213,7 +224,13 @@ namespace crowd::test
 	FakeCrowd::Step()
 	{
 		if (!CanStep())
-			core::throw_runtime_error("{} ticks are already in flight", m_InFlight.size());
+		{
+			if (m_InFlight.size() >= m_Desc.maxTicksInFlight)
+				core::throw_runtime_error("{} ticks are already in flight", m_InFlight.size());
+			core::throw_runtime_error(
+				"The render ring's reader has not released tick {}",
+				m_SubmittedTick + 1 - m_Desc.renderRingTicks);
+		}
 
 		++m_SubmittedTick;
 		auto tick = FakeTick();
@@ -245,7 +262,64 @@ namespace crowd::test
 			}
 		}
 		m_InFlight.push_back(std::move(tick));
+
+		if (!m_RenderTicks.empty())
+		{
+			const auto ring                       = static_cast<uint32_t>(m_RenderTicks.size());
+			m_RenderTicks[m_SubmittedTick % ring] = RenderTick{
+				.tick        = m_SubmittedTick,
+				.firstRecord = static_cast<uint32_t>(m_SubmittedTick % ring) * m_Desc.maxAgents,
+				.agentCount  = m_AgentCount,
+			};
+		}
 		return m_SubmittedTick;
+	}
+
+	bgpu::NativeBufferDesc
+	FakeCrowd::GetRenderRing() const
+	{
+		if (m_RenderTicks.empty())
+			core::throw_runtime_error("The crowd was created without a render ring");
+		return bgpu::NativeBufferDesc().SetBuffer(
+			bgpu::StructBufferDesc().SetElement<RenderAgent>().SetElementCount(
+				m_Desc.renderRingTicks * m_Desc.maxAgents));
+	}
+
+	std::optional<RenderTick>
+	FakeCrowd::GetRenderTick(uint64_t tick) const
+	{
+		if (m_RenderTicks.empty())
+			core::throw_runtime_error("The crowd was created without a render ring");
+		const uint64_t ring = m_RenderTicks.size();
+		if (tick == 0 || tick > m_SubmittedTick || tick + ring <= m_SubmittedTick)
+			return std::nullopt;
+		return m_RenderTicks[tick % ring];
+	}
+
+	void
+	FakeCrowd::ReleaseRenderReads(uint64_t throughTick, const bgpu::QueuePoint& readerDone)
+	{
+		if (m_RenderTicks.empty())
+			core::throw_runtime_error("The crowd was created without a render ring");
+		if (readerDone.IsNull())
+			core::throw_runtime_error("ReleaseRenderReads needs the reader's queue point");
+		if (throughTick > m_SubmittedTick || throughTick < m_ReleasedRenderTick)
+			core::throw_runtime_error(
+				"ReleaseRenderReads through tick {} is out of order",
+				throughTick);
+		m_ReleasedRenderTick = throughTick;
+	}
+
+	uint64_t
+	FakeCrowd::GetReleasedRenderTick() const noexcept
+	{
+		return m_ReleasedRenderTick;
+	}
+
+	std::optional<float>
+	FakeCrowd::GetTickGpuMilliseconds(uint64_t) const
+	{
+		return std::nullopt;
 	}
 
 	uint64_t

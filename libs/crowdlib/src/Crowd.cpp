@@ -3,19 +3,24 @@
 #include "idl/Agent.h"
 #include "idl/Constants.h"
 #include "idl/GroupSum.h"
+#include <array>
 #include <bgpu/GpuContext.h>
 #include <bgpu/buffer/UploadBuffer.h>
 #include <bgpu/cmd/CommandAllocator.h>  // IWYU pragma: keep
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>  // IWYU pragma: keep
+#include <bgpu/cmd/QueuePoint.h>
+#include <bgpu/cmd/TimestampHeap.h>
 #include <bgpu/device/Device.h>
 #include <bgpu/pipeline/ComputeKernel.h>
 #include <bgpu/pipeline/ComputePipeline.h>
 #include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/NativeBufferDesc.h>
 #include <bgpu/resource/Readback.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/types/Barrier.h>
 #include <bgpu/types/ComputeState.h>
+#include <bgpu/types/NativeObject.h>
 #include <bgpu/types/QueueType.h>
 #include <core/err/util.h>
 #include <core/math.h>
@@ -27,6 +32,8 @@
 #include <crowdlib/GroupReport.h>
 #include <crowdlib/ICrowd.h>
 #include <crowdlib/ObstacleSegment.h>
+#include <crowdlib/RenderAgent.h>
+#include <crowdlib/RenderTick.h>
 #include <crowdlib/debug/AgentReadback.h>
 #include <crowdlib/debug/CrowdReadback.h>
 #include <cstdint>
@@ -220,9 +227,19 @@ namespace crowd
 				"Crowd debug agents");
 		}
 
+		if (crowdDesc.renderRingTicks != 0)
+		{
+			m_RenderRing = CreateComputeBuffer<RenderAgent>(
+				rm,
+				crowdDesc.renderRingTicks * crowdDesc.maxAgents,
+				"Crowd render ring");
+			m_RenderTicks.resize(crowdDesc.renderRingTicks);
+		}
+
 		// One more slot than ticks in flight: CanStep lets a Step start while the last completed
 		// tick's readbacks are still the ones a read returns, so that slot must not be the next.
 		m_Slots.resize(crowdDesc.maxTicksInFlight + 1);
+		m_TickTimer   = m_Device->CreateTimestampHeap(2 * static_cast<uint32_t>(m_Slots.size()));
 		auto listDesc = bgpu::CommandListDesc();
 		listDesc.type = bgpu::QueueType::kCompute;
 		for (auto& slot : m_Slots)
@@ -264,8 +281,11 @@ namespace crowd
 			if (!slot.agents.IsNull())
 				rm.DestroyReadbackBuffer(slot.agents, false);
 		}
-		for (const auto buffer :
-		     { m_AgentsPingPong[0], m_AgentsPingPong[1], m_GroupSums, m_AgentReadback })
+		for (const auto buffer : { m_AgentsPingPong[0],
+		                           m_AgentsPingPong[1],
+		                           m_GroupSums,
+		                           m_AgentReadback,
+		                           m_RenderRing })
 		{
 			if (!buffer.IsNull())
 				rm.DestroyBuffer(buffer, false);
@@ -332,16 +352,34 @@ namespace crowd
 	{
 		if (!CanStep())
 		{
+			if (m_SubmittedTick - GetCompletedTick() >= GetDesc().maxTicksInFlight)
+			{
+				core::throw_runtime_error(
+					"{} ticks are already in flight",
+					m_SubmittedTick - GetCompletedTick());
+			}
 			core::throw_runtime_error(
-				"{} ticks are already in flight",
-				m_SubmittedTick - GetCompletedTick());
+				"The render ring's reader has not released tick {}",
+				m_SubmittedTick + 1 - GetDesc().renderRingTicks);
 		}
 
 		const auto plan = m_Plan.PlanTick();
 		const auto tick = m_SubmittedTick + 1;
 		auto&      slot = SlotOf(tick);
 		Unmap(slot);
+		WaitForRenderReader(tick);
 		Record(slot, tick, plan);
+
+		if (!m_RenderTicks.empty())
+		{
+			const auto ring            = static_cast<uint32_t>(m_RenderTicks.size());
+			m_RenderTicks[tick % ring] = RenderTick{
+				.tick        = tick,
+				.firstRecord = static_cast<uint32_t>(tick % ring) * GetDesc().maxAgents,
+				.agentCount  = plan.params.agentCount,
+				.written     = bgpu::QueuePoint{ m_Queue, slot.fence },
+			};
+		}
 
 		slot.tick         = tick;
 		slot.agentCount   = plan.params.agentCount;
@@ -454,8 +492,11 @@ namespace crowd
 
 		const uint32_t agentCount = plan.params.agentCount;
 		const uint32_t groupCount = plan.params.groupCount;
+		const auto     timer      = static_cast<uint32_t>(2 * (tick % m_Slots.size()));
+		slot.timed                = false;
 		if (agentCount > 0)
 		{
+			list.BeginTiming(*m_TickTimer, timer, timer + 1);
 			SetTickParams(m_Step, plan);
 			m_Step["gUniforms"]["groups"]   = m_Groups.GetBufferHandle();
 			m_Step["gUniforms"]["ranges"]   = m_Ranges.GetBufferHandle();
@@ -468,6 +509,8 @@ namespace crowd
 			m_Reduce["gUniforms"]["agents"]    = agents;
 			m_Reduce["gUniforms"]["groupSums"] = m_GroupSums;
 			Dispatch(list, m_Reduce, groupCount);
+			slot.timed = list.EndTiming();
+			list.ResolveTimestamps(*m_TickTimer, timer, 2);
 			list.Barrier(m_GroupSums, c_WriteToCopy);
 			list.CopyBufferToReadback(slot.groupSums, m_GroupSums);
 
@@ -501,6 +544,115 @@ namespace crowd
 			m_ResourceManager->UnmapReadback(slot.agents);
 		slot.mappedGroupSums = nullptr;
 		slot.mappedAgents    = nullptr;
+	}
+
+	void
+	Crowd::RequireRenderRing() const
+	{
+		if (m_RenderRing.IsNull())
+			core::throw_runtime_error("The crowd was created without a render ring");
+	}
+
+	bgpu::NativeBufferDesc
+	Crowd::GetRenderRing() const
+	{
+		RequireRenderRing();
+
+		auto desc = bgpu::NativeBufferDesc().SetBuffer(
+			bgpu::StructBufferDesc()
+				.SetElement<RenderAgent>()
+				.SetElementCount(GetDesc().renderRingTicks * GetDesc().maxAgents)
+				.SetDebugName("Crowd render ring"));
+
+		// Whichever kind this backend exports; null on one that exports none.
+		for (const auto type :
+		     { bgpu::NativeObjectType::kMtlBuffer, bgpu::NativeObjectType::kD3D12Resource })
+		{
+			if (const auto object = m_ResourceManager->GetNativeBuffer(m_RenderRing, type))
+				return std::move(desc).SetObject(type, object);
+		}
+		return desc;
+	}
+
+	std::optional<RenderTick>
+	Crowd::GetRenderTick(uint64_t tick) const
+	{
+		RequireRenderRing();
+
+		const uint64_t ring = m_RenderTicks.size();
+		if (tick == 0 || tick > m_SubmittedTick || tick + ring <= m_SubmittedTick)
+			return std::nullopt;
+		return m_RenderTicks[tick % ring];
+	}
+
+	void
+	Crowd::ReleaseRenderReads(uint64_t throughTick, const bgpu::QueuePoint& readerDone)
+	{
+		RequireRenderRing();
+		if (readerDone.IsNull())
+			core::throw_runtime_error("ReleaseRenderReads needs the reader's queue point");
+		if (throughTick > m_SubmittedTick)
+		{
+			core::throw_runtime_error(
+				"ReleaseRenderReads through tick {}, past the last submitted, {}",
+				throughTick,
+				m_SubmittedTick);
+		}
+		if (throughTick < m_ReleasedRenderTick)
+		{
+			core::throw_runtime_error(
+				"ReleaseRenderReads through tick {}, before the {} already released",
+				throughTick,
+				m_ReleasedRenderTick);
+		}
+
+		// A repeat of the last release adds nothing: the earlier point already covers its ticks,
+		// and is the one a Step would wait on.
+		if (throughTick == m_ReleasedRenderTick && !m_RenderReleases.empty())
+			return;
+		m_RenderReleases.push_back(RenderRelease{ throughTick, readerDone });
+		m_ReleasedRenderTick = throughTick;
+	}
+
+	uint64_t
+	Crowd::GetReleasedRenderTick() const noexcept
+	{
+		return m_ReleasedRenderTick;
+	}
+
+	void
+	Crowd::WaitForRenderReader(uint64_t tick)
+	{
+		const uint64_t ring = m_RenderTicks.size();
+		if (ring == 0 || tick <= ring)
+			return;
+
+		// CanStep held, so the earliest release covering the overwritten tick exists.
+		const uint64_t overwritten = tick - ring;
+		while (!m_RenderReleases.empty() && m_RenderReleases.front().throughTick < overwritten)
+			m_RenderReleases.pop_front();
+		core::ensure(!m_RenderReleases.empty(), "A Step overwrote ticks no reader released");
+
+		const bgpu::QueuePoint& done = m_RenderReleases.front().done;
+		m_Queue->InsertWaitForQueueFence(done.queue.Get(), done.value);
+	}
+
+	std::optional<float>
+	Crowd::GetTickGpuMilliseconds(uint64_t tick) const
+	{
+		if (tick == 0 || tick > GetCompletedTick())
+			return std::nullopt;
+
+		const TickSlot& slot = SlotOf(tick);
+		if (slot.tick != tick || !slot.timed)
+			return std::nullopt;
+
+		std::array<uint64_t, 2> stamps{};
+		m_TickTimer->Read(static_cast<uint32_t>(2 * (tick % m_Slots.size())), stamps);
+		return static_cast<float>(bgpu::TimestampSpanMilliseconds(
+			stamps[0],
+			stamps[1],
+			m_Queue->GetTimestampFrequency()));
 	}
 
 	CrowdRef

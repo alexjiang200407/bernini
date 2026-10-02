@@ -1,4 +1,6 @@
 #pragma once
+#include <bgpu/cmd/QueuePoint.h>
+#include <bgpu/resource/NativeBufferDesc.h>
 #include <core/containers/slot_vector.h>
 #include <core/ref/RefCounter.h>
 #include <crowdlib/CrowdDesc.h>
@@ -8,6 +10,7 @@
 #include <crowdlib/GroupReport.h>
 #include <crowdlib/ICrowd.h>
 #include <crowdlib/ObstacleSegment.h>
+#include <crowdlib/RenderTick.h>
 #include <crowdlib/debug/AgentReadback.h>
 #include <crowdlib/debug/CrowdReadback.h>
 #include <cstdint>
@@ -41,8 +44,11 @@ namespace crowd::test
 
 	/**
 	 * ICrowd on the CPU, with no simulation: a tick measures every group standing at its orders'
-	 * goal, each agent in its slot, as if it had arrived at once. A tick completes only when the test completes it
-	 * (CompleteTick) or waits, which is what lets a case hold one in flight.
+	 * goal, each agent in its slot, as if it had arrived at once. A tick completes only when the
+	 * test completes it (CompleteTick) or waits, which is what lets a case hold one in flight.
+	 *
+	 * Its render ring is bookkeeping alone: no buffer behind it, no queue point on a tick, and no
+	 * tick timed.
 	 */
 	class FakeCrowd final : public core::RefCounter<ICrowd>
 	{
@@ -104,6 +110,21 @@ namespace crowd::test
 		[[nodiscard]] std::optional<debug::CrowdReadback>
 		ReadDebugAgents() const override;
 
+		[[nodiscard]] bgpu::NativeBufferDesc
+		GetRenderRing() const override;
+
+		[[nodiscard]] std::optional<RenderTick>
+		GetRenderTick(uint64_t tick) const override;
+
+		void
+		ReleaseRenderReads(uint64_t throughTick, const bgpu::QueuePoint& readerDone) override;
+
+		[[nodiscard]] uint64_t
+		GetReleasedRenderTick() const noexcept override;
+
+		[[nodiscard]] std::optional<float>
+		GetTickGpuMilliseconds(uint64_t tick) const override;
+
 		/**
 		 * Invalidates a readback ReadDebugAgents returned, as Wait does.
 		 *
@@ -129,5 +150,7 @@ namespace crowd::test
 		std::deque<FakeTick>         m_InFlight;
 		FakeTick                     m_Completed;
 		std::vector<ObstacleSegment> m_Obstacles;
+		std::vector<RenderTick>      m_RenderTicks;
+		uint64_t                     m_ReleasedRenderTick = 0;
 	};
 }

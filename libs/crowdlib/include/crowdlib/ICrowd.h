@@ -1,5 +1,7 @@
 #pragma once
 #include <bgpu/GpuContext.h>
+#include <bgpu/cmd/QueuePoint.h>
+#include <bgpu/resource/NativeBufferDesc.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 #include <crowdlib/CrowdDesc.h>
@@ -8,6 +10,7 @@
 #include <crowdlib/GroupOrders.h>
 #include <crowdlib/GroupReport.h>
 #include <crowdlib/ObstacleSegment.h>
+#include <crowdlib/RenderTick.h>
 #include <crowdlib/api.h>
 #include <crowdlib/debug/CrowdReadback.h>
 #include <cstdint>
@@ -121,10 +124,18 @@ namespace crowd
 		[[nodiscard]] virtual uint64_t
 		GetCompletedTick() const noexcept = 0;
 
+		/**
+		 * Whether a Step may run now: fewer than maxTicksInFlight ticks are in flight and, with a
+		 * render ring, its reader has released the tick the next one would overwrite.
+		 */
 		[[nodiscard]] bool
 		CanStep() const noexcept
 		{
-			return GetSubmittedTick() - GetCompletedTick() < GetDesc().maxTicksInFlight;
+			const CrowdDesc& desc = GetDesc();
+			const uint64_t   next = GetSubmittedTick() + 1;
+			return GetSubmittedTick() - GetCompletedTick() < desc.maxTicksInFlight &&
+			       (desc.renderRingTicks == 0 ||
+			        next <= GetReleasedRenderTick() + desc.renderRingTicks);
 		}
 
 		/** Blocks until every tick submitted has completed. */
@@ -149,6 +160,48 @@ namespace crowd
 		 */
 		[[nodiscard]] virtual std::optional<debug::CrowdReadback>
 		ReadDebugAgents() const = 0;
+
+		/**
+		 * The render ring, for another owner to import once (bgpu::IResourceManager::
+		 * ImportNativeBuffer): renderRingTicks * maxAgents RenderAgent records in one buffer, fixed
+		 * for the crowd's life, tick t's from record (t % renderRingTicks) * maxAgents on.
+		 *
+		 * @throws std::runtime_error unless the crowd was created with CrowdDesc::renderRingTicks.
+		 */
+		[[nodiscard]] virtual bgpu::NativeBufferDesc
+		GetRenderRing() const = 0;
+
+		/**
+		 * Where `tick`'s records are, from its Step until the ring is stepped past it
+		 * renderRingTicks Steps later; empty outside that, and for tick 0.
+		 *
+		 * @throws std::runtime_error unless the crowd was created with CrowdDesc::renderRingTicks.
+		 */
+		[[nodiscard]] virtual std::optional<RenderTick>
+		GetRenderTick(uint64_t tick) const = 0;
+
+		/**
+		 * The reader is done with every tick through `throughTick` once `readerDone` passes on its
+		 * own queue. A Step that overwrites a released tick's records first waits for that point on
+		 * the GPU; one that would overwrite a tick not yet released cannot run (CanStep). The crowd
+		 * never waits for a reader on the CPU.
+		 *
+		 * @throws std::runtime_error without a render ring, for a null `readerDone`, or a
+		 *         `throughTick` past GetSubmittedTick() or before an earlier release's.
+		 */
+		virtual void
+		ReleaseRenderReads(uint64_t throughTick, const bgpu::QueuePoint& readerDone) = 0;
+
+		/** The last tick released by ReleaseRenderReads; 0 before the first. */
+		[[nodiscard]] virtual uint64_t
+		GetReleasedRenderTick() const noexcept = 0;
+
+		/**
+		 * The GPU time `tick` took on the crowd's queue, once it has completed and while it is one of
+		 * the last maxTicksInFlight + 1 ticks; empty otherwise.
+		 */
+		[[nodiscard]] virtual std::optional<float>
+		GetTickGpuMilliseconds(uint64_t tick) const = 0;
 
 	protected:
 		ICrowd() noexcept = default;

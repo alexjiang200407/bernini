@@ -12,6 +12,7 @@
 #include <crowdlib/ObstacleSegment.h>
 #include <crowdlib/SolverDesc.h>
 #include <cstdint>
+#include <limits>
 #include <span>
 #include <utility>
 #include <vector>
@@ -121,6 +122,16 @@ namespace crowd
 			core::throw_runtime_error("A crowd's capacities must be positive");
 		if (!IsPositive(m_Desc.tickSeconds))
 			core::throw_runtime_error("A crowd's tick must be positive");
+		if (m_Desc.renderRingTicks != 0 && m_Desc.renderRingTicks < m_Desc.maxTicksInFlight + 3)
+		{
+			core::throw_runtime_error(
+				"A render ring holds at least maxTicksInFlight + 3 ({}) ticks, not {}",
+				m_Desc.maxTicksInFlight + 3,
+				m_Desc.renderRingTicks);
+		}
+		if (uint64_t{ m_Desc.renderRingTicks } * m_Desc.maxAgents >
+		    std::numeric_limits<uint32_t>::max())
+			core::throw_runtime_error("A render ring's records must be indexable by a uint");
 		ValidateSolver(m_Desc.solver);
 
 		m_Groups.reset(m_Desc.maxGroups);

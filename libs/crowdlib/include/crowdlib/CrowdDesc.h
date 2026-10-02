@@ -23,6 +23,12 @@ namespace crowd
 
 		uint32_t maxTicksInFlight = 2;
 
+		// Ticks of RenderAgent records the crowd keeps for a renderer (ICrowd::GetRenderRing): 0 for
+		// none, else at least maxTicksInFlight + 3 -- the ticks in flight, the two a reader
+		// interpolates between and the one before them its motion is taken from. Past that, each
+		// tick is how far the crowd may run ahead of a reader before it stops stepping.
+		uint32_t renderRingTicks = 0;
+
 		SolverDesc solver;
 
 		// Keeps every agent's position and facing for ICrowd::ReadDebugAgents, at a copy per tick.
