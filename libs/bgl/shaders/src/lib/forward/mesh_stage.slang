@@ -159,9 +159,9 @@ groupshared uint gSurvivorMask[cMaxCompactedGroups / 32];
 // The instance this amplification group covers, and how many meshlets it dispatches: every meshlet
 // of every group whose cooked sphere LocalSphereInCullFrustum keeps, marked in gCulledPayload so the
 // mesh stage draws them in meshlet order, the order an unculled draw has. A kept group dispatches
-// all cMeshletsPerGroup of its meshlets and the mesh stage tests each on its own, so a group is
-// tested once where a meshlet list would have been read cMeshletsPerGroup times. Every lane of the
-// group calls it.
+// every meshlet it has -- cMeshletsPerGroup, fewer only for a submesh's short last group -- and the
+// mesh stage tests each on its own, so a group is tested once where a meshlet list would have been
+// read cMeshletsPerGroup times. Every lane of the group calls it.
 public uint CullMeshlets(uint gid, uint lane)
 {
     let compacted = expansionData.compactedInstances[ResolveInstanceBase() + gid];

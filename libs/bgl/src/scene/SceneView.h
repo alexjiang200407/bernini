@@ -640,6 +640,10 @@ namespace bgl
 		void
 		SyncInstanceScratch();
 
+		/** Erases the submesh instances of a block's placements and releases its range. */
+		void
+		ReleaseBlockRange(const bgpu::EntryRange& range);
+
 		SceneRef                                m_Scene;
 		Scene*                                  m_SceneRaw = nullptr;
 		core::SharedRef<bgpu::IResourceManager> m_ResourceManager;

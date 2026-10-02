@@ -39,7 +39,10 @@ namespace crowd_render
 		uint64_t             lastTick,
 		float                lastAlpha);
 
-	/** Writes CrowdInstanceWriter's Params for agent type `type`, posed by `model`; no type the frame holds draws nothing. */
+	/**
+	 * Writes CrowdInstanceWriter's Params for agent type `type`, posed by `model`. A type the frame
+	 * has no run for draws nothing.
+	 */
 	void
 	WriteWriterParams(
 		bgpu::UniformsBase::Accessor params,

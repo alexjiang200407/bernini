@@ -38,8 +38,7 @@
 // Groups of infantry and cavalry marching across a field, simulated by crowdlib on its compute queue
 // and drawn by the renderer as one box per agent from the crowd's debug readback -- the only
 // per-agent read the crowd has, and the one a game would never drive itself with. The frame draws
-// whatever tick last completed. With --handoff the crowd is drawn GPU to GPU instead
-// (crowd_render::CrowdInstanceBlocks): no readback and no posing, interpolated between ticks. Partway through, a group splits off its rear and a cavalry group
+// whatever tick last completed. Partway through, a group splits off its rear and a cavalry group
 // merges into another; the log prints each moving group's report as it goes. Agents do not yet keep
 // out of each other's way -- the crowd only plans velocities so far -- so boxes overlap wherever
 // groups cross.
@@ -49,6 +48,9 @@
 // so the run is the same every time and its end can be checked. --units multiplies the crowd, and
 // the log splits each frame's time into the crowd, posing a box per agent, and the renderer, and
 // gives the crowd's mean GPU time a tick.
+//
+// With --handoff the crowd is drawn GPU to GPU instead (crowd_render::CrowdInstanceBlocks): no
+// readback and no posing, interpolated between ticks.
 
 namespace
 {

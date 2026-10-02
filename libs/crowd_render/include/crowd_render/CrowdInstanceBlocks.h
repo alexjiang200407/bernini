@@ -98,8 +98,8 @@ namespace crowd_render
 	/**
 	 * A crowd's agents drawn GPU to GPU: one instance block per agent type in the view, placed
 	 * every frame from the type's run of the crowd's render ring by a writer kernel, with no
-	 * per-agent work on the CPU. A frame draws the crowd between its last two completed ticks, `alpha` of the way, and
-	 * each agent's motion vector is its pose last frame.
+	 * per-agent work on the CPU. A frame draws the crowd between its last two completed ticks,
+	 * `alpha` of the way, and each agent's motion vector is its pose last frame.
 	 *
 	 * Every frame is bracketed: PrepareFrame before the renderer's frame begins, FinishFrame after
 	 * it ends. FinishFrame hands the ticks no later frame reads back to the crowd, which cannot step

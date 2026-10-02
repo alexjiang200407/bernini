@@ -8,6 +8,7 @@
 #include <core/containers/slot_handle.h>
 #include <core/containers/slot_vector.h>
 #include <core/err/util.h>
+#include <core/math.h>
 #include <core/type_traits.h>
 #include <cstddef>
 #include <cstdint>
@@ -258,8 +259,8 @@ namespace bgpu
 		{
 			core::ensure(count > 0, "ClaimRange of no elements");
 			const uint32_t perBlock = ElementsPerBlock();
-			const uint32_t first    = AlignUp(Capacity(), perBlock);
-			const uint32_t end      = AlignUp(first + count, perBlock);
+			const uint32_t first    = core::round_up(Capacity(), perBlock);
+			const uint32_t end      = core::round_up(first + count, perBlock);
 			core::ensure(first + count > first && end >= first + count, "ClaimRange past 2^32");
 
 			GrowTo(end);
@@ -299,7 +300,7 @@ namespace bgpu
 					range.first,
 					range.count);
 			}
-			const uint32_t end = AlignUp(range.first + range.count, ElementsPerBlock());
+			const uint32_t end = core::round_up(range.first + range.count, ElementsPerBlock());
 			m_Entries.release_range(range.first, end - range.first);
 			m_Ranges.erase(claim);
 		}
@@ -457,12 +458,6 @@ namespace bgpu
 				m_Desc.blockSize % sizeof(T) == 0,
 				"A range is block-aligned only when a block holds whole elements");
 			return static_cast<uint32_t>(m_Desc.blockSize / sizeof(T));
-		}
-
-		[[nodiscard]] static uint32_t
-		AlignUp(uint32_t value, uint32_t alignment) noexcept
-		{
-			return (value + alignment - 1) / alignment * alignment;
 		}
 
 		// A no-op without a writable view, and for a buffer that has not been replaced.

@@ -1576,6 +1576,7 @@ namespace bgl
 					desc.capacity));
 		}
 
+		auto range = std::optional<bgpu::EntryRange>();
 		try
 		{
 			const idl::LodSubmeshRange submeshes =
@@ -1589,11 +1590,11 @@ namespace bgl
 			WriteInstanceTransform(mesh, glm::mat4(1.0f));
 			WriteInstancePrevTransform(mesh, glm::mat4(1.0f));
 
-			const bgpu::EntryRange range = m_MeshBuffer.ClaimRange(desc.capacity, mesh);
+			range = m_MeshBuffer.ClaimRange(desc.capacity, mesh);
 
 			for (uint32_t slot = 0; slot < desc.capacity; ++slot)
 			{
-				const uint32_t meshIndex = range.first + slot;
+				const uint32_t meshIndex = range->first + slot;
 
 				MeshMeta& meta   = m_MeshBuffer.MetaAt(meshIndex);
 				meta.geomType    = desc.geom.geomType;
@@ -1628,15 +1629,32 @@ namespace bgl
 			MeshInstanceBlock& block = m_InstanceBlocks[handle.index];
 			block.geom               = desc.geom;
 			block.capacity           = desc.capacity;
-			block.range              = range;
+			block.range              = *range;
 
 			++m_TemporalEpoch;
 			return MeshInstanceBlockHandle{ handle };
 		}
 		catch (const std::runtime_error& e)
 		{
+			// A failed create leaves nothing behind: not the range, nor the records made so far.
+			if (range)
+				ReleaseBlockRange(*range);
 			throw SceneError(e.what());
 		}
+	}
+
+	void
+	SceneView::ReleaseBlockRange(const bgpu::EntryRange& range)
+	{
+		for (uint32_t slot = 0; slot < range.count; ++slot)
+		{
+			for (const core::slot_handle submeshInstance :
+			     m_MeshBuffer.MetaAt(range.first + slot).submeshInstances)
+			{
+				m_InstanceBuffer.Erase(submeshInstance);
+			}
+		}
+		m_MeshBuffer.ReleaseRange(range);
 	}
 
 	void
@@ -1650,15 +1668,7 @@ namespace bgl
 		}
 
 		MeshInstanceBlock& record = m_InstanceBlocks[block.handle.index];
-		for (uint32_t slot = 0; slot < record.range.count; ++slot)
-		{
-			for (const core::slot_handle submeshInstance :
-			     m_MeshBuffer.MetaAt(record.range.first + slot).submeshInstances)
-			{
-				m_InstanceBuffer.Erase(submeshInstance);
-			}
-		}
-		m_MeshBuffer.ReleaseRange(record.range);
+		ReleaseBlockRange(record.range);
 
 		record = MeshInstanceBlock();
 		m_InstanceBlocks.release_slot(block.handle);

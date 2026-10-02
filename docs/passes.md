@@ -201,13 +201,14 @@ The survivors are **compacted** in the amplification group (`CullMeshlets` in
 lane per group marks a bit, one lane writes a running count per mask word, and the group dispatches
 `cMeshletsPerGroup` mesh groups per survivor, each finding its group by a binary search over the
 counts and its meshlet within that group by the remainder. They are dispatched in meshlet order, the
-order an unculled draw has, and the last group of a submesh whose meshlet count does not divide
-stands for meshlets that do not exist -- those mesh groups emit nothing.
+order an unculled draw has. Only a submesh's last group can be short of `cMeshletsPerGroup`
+meshlets, and when it survives it is the last survivor, so the dispatch leaves off its missing
+meshlets as trailing mesh groups: a one-meshlet box launches one mesh group, not eight.
 
 **The mesh stage then tests the meshlet it draws**, against the same planes and its own cooked
-sphere, and emits nothing when it fails: a kept group is launched whole, so the meshlets of it that
-are off screen are rejected here. The vertex work and the raster setup are saved; the mesh-group
-launch is not. That is the trade the group makes -- the amplification stage reads an eighth as many
+sphere, and emits nothing when it fails: a kept group launches every meshlet it has, so the meshlets
+of it that are off screen are rejected here. The vertex work and the raster setup are saved; the
+mesh-group launch is not. That is the trade the group makes -- the amplification stage reads an eighth as many
 spheres, and pays for it in launches that draw nothing.
 
 **The payload is kept small on purpose.** It is copied out whole for every instance drawn -- on Metal,

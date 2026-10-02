@@ -52,7 +52,8 @@ namespace
 		uint64_t                        tick = 0;
 		std::vector<crowd::RenderAgent> records;
 
-		// Each type's run of `records`: slot i of a type's block is record runs[type].firstRecordIndex + i.
+		// Each type's run of `records`: slot i of a type's block is record
+		// runs[type].firstRecordIndex + i.
 		std::vector<crowd::RenderTypeRecords> runs;
 
 		// One per type, each c_MaxAgents slots.
