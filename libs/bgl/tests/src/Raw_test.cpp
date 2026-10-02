@@ -7,6 +7,7 @@
 #include <bgpu/buffer/GrowableGpuBuffer.h>
 #include <bgpu/buffer/RangeBuffer.h>
 #include <bgpu/buffer/RawBuffer.h>
+#include <bgpu/buffer/dirty_blocks.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
