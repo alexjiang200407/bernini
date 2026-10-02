@@ -275,7 +275,7 @@ TEST_CASE("EntryBuffer", "[entry][scene]")
 		CHECK(entryBuffer.MetaAt(reused.index).refCount == 0);
 	}
 
-	// Regression: IssueCopy used to source every upload from the mirror's base, so a dirty run
+	// Regression: the upload used to source every copy from the mirror's base, so a dirty run
 	// past block 0 uploaded the mirror's FIRST bytes into a LATER GPU region.
 	SECTION("A dirty slot past the first block uploads its own bytes")
 	{
