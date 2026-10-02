@@ -29,7 +29,7 @@ namespace assetlib
 
 	/**
 	 * `key` with `extension` in place of its own, directory and stem untouched -- how a file finds
-	 * the one authored beside it, `kirk.glb` -> `kirk.bimport` and back.
+	 * the one authored beside it, `toad.glb` -> `toad.bimport` and back.
 	 *
 	 * @throws std::runtime_error if `key` has no extension, since there would be nothing to swap
 	 *         and the result would silently be a different name rather than the same one.

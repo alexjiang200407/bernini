@@ -140,18 +140,18 @@ TEST_CASE("A mesh the project already holds is opened without asking", "[meshdro
 
 	SECTION("a dropped container is itself")
 	{
-		SetLocalFiles(mime, { "/tmp/loose/kirk.bmesh" });
-		CHECK(editor::MeshForDrop(host, &mime, root) == QString("/tmp/loose/kirk.bmesh"));
+		SetLocalFiles(mime, { "/tmp/loose/toad.bmesh" });
+		CHECK(editor::MeshForDrop(host, &mime, root) == QString("/tmp/loose/toad.bmesh"));
 	}
 
 	SECTION("a dropped source resolves through its document")
 	{
-		const QString source = WriteSource(root, "kirk", { "Derived/Meshes/kirk.bmesh" });
+		const QString source = WriteSource(root, "toad", { "Derived/Meshes/toad.bmesh" });
 		SetLocalFiles(mime, { source });
 
 		CHECK(
 			editor::MeshForDrop(host, &mime, root) ==
-			QDir(root).filePath("Derived/Meshes/kirk.bmesh"));
+			QDir(root).filePath("Derived/Meshes/toad.bmesh"));
 	}
 
 	// The point of both: importing a second copy of what is already here would be the worst
@@ -200,17 +200,17 @@ TEST_CASE("A source belonging elsewhere is imported rather than reached into", "
 
 	// Imported, with a mesh of its own -- but into another project, whose Derived tree this one
 	// must not open out of.
-	const QString source = WriteSource(elsewhere.path(), "kirk", { "Derived/Meshes/kirk.bmesh" });
+	const QString source = WriteSource(elsewhere.path(), "toad", { "Derived/Meshes/toad.bmesh" });
 
 	ImportingHost host;
-	host.answer = "Derived/Meshes/kirk.bmesh";
+	host.answer = "Derived/Meshes/toad.bmesh";
 
 	auto mime = QMimeData();
 	SetLocalFiles(mime, { source });
 
 	CHECK(
 		editor::MeshForDrop(host, &mime, temp.path()) ==
-		QDir(temp.path()).filePath("Derived/Meshes/kirk.bmesh"));
+		QDir(temp.path()).filePath("Derived/Meshes/toad.bmesh"));
 	CHECK(host.imported == std::vector<std::filesystem::path>{ source.toStdString() });
 }
 

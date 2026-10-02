@@ -432,7 +432,7 @@ pixel shader does — measured on an M3 Pro at 2292×1996, one full-screen layer
 costs 1.6 ms axis-aligned and 4.5 ms rolled 45°, opaque as much as hashed; four times as many strips
 over the same pixels cost 13.4 ms; and the same strips cut into twenty pieces along their length
 cost 1.8 ms. An 80k-triangle plane of compact triangles costs the same as two triangles. The
-per-part harness (`gamelib_tests "[.cha800cost]"`) put nine tenths of a hero character's face
+per-part harness (`gamelib_tests "[.referencecost]"`) put nine tenths of the reference character's face
 close-up in its hair, whose 46k triangles are exactly such slivers, drawn on both sides; the pixel
 shader was exonerated by costing the same with every fragment discarded.
 
@@ -1117,9 +1117,9 @@ the whole rule:
 * An edge **pointing out of** it is fine, for exactly the reason deleting a mesh does not take its
   materials — what the deleted thing referenced was never the deleted thing's to take.
 
-So `Derived/Meshes/` always deletes and leaves every material, while `Derived/SourceTextures/kirk/` does not, because the
-materials in `Authored/Materials/kirk/` route from it. A reference into *any depth* of the directory holds it, so
-`Derived/SourceTextures/` is held by a material naming `Derived/SourceTextures/kirk/albedo.ktx2`.
+So `Derived/Meshes/` always deletes and leaves every material, while `Derived/SourceTextures/toad/` does not, because the
+materials in `Authored/Materials/toad/` route from it. A reference into *any depth* of the directory holds it, so
+`Derived/SourceTextures/` is held by a material naming `Derived/SourceTextures/toad/albedo.ktx2`.
 
 `DeletionPlan::contents` lists **every file** beneath the directory, not just the ones the project
 tracks: `remove_all` does not ask what a file is for, so a `notes.txt` the user dropped in the folder
@@ -1132,7 +1132,7 @@ a deletion from what points at what, and a category with nothing in it points at
 sources and their `.bimport` documents) and `Authored/EnvSources` (the imported `.hdr` and float-cube
 sources and theirs) among them. `Project::Open` puts a missing one
 straight back, so deleting one would not even stick. A folder made *inside* a
-category, like `Derived/SourceTextures/kirk`, is the user's.
+category, like `Derived/SourceTextures/toad`, is the user's.
 
 Three things the implementation must get right, each of which is a real failure and not a hypothetical:
 

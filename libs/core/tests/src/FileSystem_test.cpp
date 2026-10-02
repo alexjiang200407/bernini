@@ -82,33 +82,33 @@ namespace
 TEST_CASE("LooseFileSystem reads whole files and ranges", "[filesystem]")
 {
 	const TempDir dir("fs_loose_read");
-	dir.Write("Materials/kirk.bmaterial", "0123456789");
+	dir.Write("Materials/toad.bmaterial", "0123456789");
 
 	const core::file::LooseFileSystem fs(dir.Path());
 
-	CHECK(fs.Exists("Materials/kirk.bmaterial"));
+	CHECK(fs.Exists("Materials/toad.bmaterial"));
 	CHECK_FALSE(fs.Exists("Materials/nobody.bmaterial"));
 	CHECK_FALSE(fs.IsReadOnly());
 
-	CHECK(AsString(fs.Read("Materials/kirk.bmaterial")) == "0123456789");
+	CHECK(AsString(fs.Read("Materials/toad.bmaterial")) == "0123456789");
 
 	SECTION("a range reads only its bytes")
 	{
-		CHECK(AsString(fs.ReadRange("Materials/kirk.bmaterial", 3, 4)) == "3456");
+		CHECK(AsString(fs.ReadRange("Materials/toad.bmaterial", 3, 4)) == "3456");
 	}
 
 	SECTION("an empty range is legal and empty")
 	{
-		CHECK(fs.ReadRange("Materials/kirk.bmaterial", 10, 0).empty());
+		CHECK(fs.ReadRange("Materials/toad.bmaterial", 10, 0).empty());
 	}
 
 	SECTION("a range past the end throws rather than returning short")
 	{
-		CHECK_THROWS_AS(fs.ReadRange("Materials/kirk.bmaterial", 8, 4), std::runtime_error);
+		CHECK_THROWS_AS(fs.ReadRange("Materials/toad.bmaterial", 8, 4), std::runtime_error);
 
 		// offset + size would wrap; the check must not be an addition.
 		CHECK_THROWS_AS(
-			fs.ReadRange("Materials/kirk.bmaterial", UINT64_MAX, 4),
+			fs.ReadRange("Materials/toad.bmaterial", UINT64_MAX, 4),
 			std::runtime_error);
 	}
 

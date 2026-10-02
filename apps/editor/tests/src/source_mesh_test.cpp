@@ -104,36 +104,36 @@ TEST_CASE("A source resolves to what its document says it produced", "[sourcemes
 	const QString root = temp.path();
 
 	auto document       = assetlib::ImportDocument();
-	document.outputs    = { "Derived/Animations/AdaWong/kirk.banim",
-		                    "Derived/Meshes/AdaWong/kirk.bmesh",
-		                    "Derived/Skeletons/AdaWong/kirk.bskel" };
-	document.textureDir = "Derived/SourceTextures/AdaWong";
+	document.outputs    = { "Derived/Animations/Characters/toad.banim",
+		                    "Derived/Meshes/Characters/toad.bmesh",
+		                    "Derived/Skeletons/Characters/toad.bskel" };
+	document.textureDir = "Derived/SourceTextures/Characters";
 
-	const QString source = WriteImport(root, "kirk", document);
+	const QString source = WriteImport(root, "toad", document);
 
 	const QString mesh = editor::GetSourceMesh(root, source);
 
 	// The mesh is picked out of `outputs` by what kind of asset it is, not by its position: the
 	// list is sorted by key, so the `.banim` leads it.
-	CHECK(mesh == QDir(root).filePath("Derived/Meshes/AdaWong/kirk.bmesh"));
+	CHECK(mesh == QDir(root).filePath("Derived/Meshes/Characters/toad.bmesh"));
 }
 
 TEST_CASE("A stem carrying dots keeps every part of itself", "[sourcemesh]")
 {
-	// `cha800_00.reduced.glb` is a real name in the test project, and only the last extension is
+	// `hero_01.reduced.glb` is the kind of name a project holds, and only the last extension is
 	// the extension -- swapping the wrong one looks for a document that does not exist.
 	QTemporaryDir temp;
 	REQUIRE(temp.isValid());
 	const QString root = temp.path();
 
 	auto document    = assetlib::ImportDocument();
-	document.outputs = { "Derived/Meshes/cha800_00.reduced.bmesh" };
+	document.outputs = { "Derived/Meshes/hero_01.reduced.bmesh" };
 
-	const QString source = WriteImport(root, "cha800_00.reduced", document);
+	const QString source = WriteImport(root, "hero_01.reduced", document);
 
 	CHECK(
 		editor::GetSourceMesh(root, source) ==
-		QDir(root).filePath("Derived/Meshes/cha800_00.reduced.bmesh"));
+		QDir(root).filePath("Derived/Meshes/hero_01.reduced.bmesh"));
 }
 
 TEST_CASE("A source with nothing behind it resolves to nothing", "[sourcemesh]")
@@ -184,7 +184,7 @@ TEST_CASE("A source with nothing behind it resolves to nothing", "[sourcemesh]")
 				.isEmpty());
 	}
 
-	SECTION("no project open") { CHECK(editor::GetSourceMesh({}, "/tmp/kirk.glb").isEmpty()); }
+	SECTION("no project open") { CHECK(editor::GetSourceMesh({}, "/tmp/toad.glb").isEmpty()); }
 }
 
 TEST_CASE("The cache follows the document it answered from", "[sourcemesh]")
@@ -194,25 +194,25 @@ TEST_CASE("The cache follows the document it answered from", "[sourcemesh]")
 	const QString root = temp.path();
 
 	auto document    = assetlib::ImportDocument();
-	document.outputs = { "Derived/Meshes/kirk.bmesh" };
+	document.outputs = { "Derived/Meshes/toad.bmesh" };
 
-	const QString source = WriteImport(root, "kirk", document);
+	const QString source = WriteImport(root, "toad", document);
 
 	auto cache = editor::SourceMeshCache();
 	cache.SetDataRoot(root);
 
-	REQUIRE(cache.Of(source) == QDir(root).filePath("Derived/Meshes/kirk.bmesh"));
+	REQUIRE(cache.Of(source) == QDir(root).filePath("Derived/Meshes/toad.bmesh"));
 
 	// A reimport into a different folder rewrites the document, and the answer has to move with it.
 	// The stamp is the document's modification time, so the rewrite is made to land on a later
 	// millisecond rather than trusting two writes in a row to differ.
-	document.outputs = { "Derived/Meshes/moved/kirk.bmesh" };
+	document.outputs = { "Derived/Meshes/moved/toad.bmesh" };
 	const QString documentPath =
-		QDir(root).filePath(QStringLiteral("Authored/Meshes/kirk.bimport"));
+		QDir(root).filePath(QStringLiteral("Authored/Meshes/toad.bimport"));
 	SaveAt(document, std::filesystem::path(documentPath.toStdString()));
 	SetModified(documentPath, QDateTime::currentDateTime().addSecs(1));
 
-	CHECK(cache.Of(source) == QDir(root).filePath("Derived/Meshes/moved/kirk.bmesh"));
+	CHECK(cache.Of(source) == QDir(root).filePath("Derived/Meshes/moved/toad.bmesh"));
 
 	// A new root is a different project; nothing resolved against the last one still applies. The
 	// folder is *made* first: a relative path climbs out of a root with `../`, which resolves fine
@@ -227,7 +227,7 @@ TEST_CASE("The cache follows the document it answered from", "[sourcemesh]")
 
 TEST_CASE("A source belonging to another project resolves to nothing", "[sourcemesh]")
 {
-	// Two projects side by side, each with a `kirk` import. Resolving one project's source against
+	// Two projects side by side, each with a `toad` import. Resolving one project's source against
 	// the other's root must answer nothing -- not the other project's mesh. `QDir::relativeFilePath`
 	// will happily climb out with `../`, and `QDir::filePath` reattaches that without cleaning it,
 	// so the containment has to be checked rather than assumed.
@@ -238,19 +238,19 @@ TEST_CASE("A source belonging to another project resolves to nothing", "[sourcem
 	const QString theirs = QDir(temp.path()).filePath("theirs");
 
 	auto document    = assetlib::ImportDocument();
-	document.outputs = { "Derived/Meshes/kirk.bmesh" };
+	document.outputs = { "Derived/Meshes/toad.bmesh" };
 
-	const QString source = WriteImport(mine, "kirk", document);
+	const QString source = WriteImport(mine, "toad", document);
 
 	auto other    = assetlib::ImportDocument();
 	other.outputs = { "Derived/Meshes/not-yours.bmesh" };
-	WriteImport(theirs, "kirk", other);
+	WriteImport(theirs, "toad", other);
 
-	CHECK(editor::GetSourceMesh(mine, source) == QDir(mine).filePath("Derived/Meshes/kirk.bmesh"));
+	CHECK(editor::GetSourceMesh(mine, source) == QDir(mine).filePath("Derived/Meshes/toad.bmesh"));
 	CHECK(editor::GetSourceMesh(theirs, source).isEmpty());
 
 	// A source nowhere near any project answers nothing rather than climbing to find out.
-	CHECK(editor::GetSourceMesh(mine, QDir(temp.path()).filePath("loose/kirk.glb")).isEmpty());
+	CHECK(editor::GetSourceMesh(mine, QDir(temp.path()).filePath("loose/toad.glb")).isEmpty());
 }
 
 TEST_CASE("The cache answers without re-reading the document", "[sourcemesh]")
@@ -264,22 +264,22 @@ TEST_CASE("The cache answers without re-reading the document", "[sourcemesh]")
 	const QString root = temp.path();
 
 	auto document    = assetlib::ImportDocument();
-	document.outputs = { "Derived/Meshes/kirk.bmesh" };
+	document.outputs = { "Derived/Meshes/toad.bmesh" };
 
-	const QString source = WriteImport(root, "kirk", document);
+	const QString source = WriteImport(root, "toad", document);
 	const QString documentPath =
-		QDir(root).filePath(QStringLiteral("Authored/Meshes/kirk.bimport"));
+		QDir(root).filePath(QStringLiteral("Authored/Meshes/toad.bimport"));
 	const QDateTime stamp = QFileInfo(documentPath).lastModified();
 
 	auto cache = editor::SourceMeshCache();
 	cache.SetDataRoot(root);
-	REQUIRE(cache.Of(source) == QDir(root).filePath("Derived/Meshes/kirk.bmesh"));
+	REQUIRE(cache.Of(source) == QDir(root).filePath("Derived/Meshes/toad.bmesh"));
 
 	document.outputs = { "Derived/Meshes/rewritten.bmesh" };
 	SaveAt(document, std::filesystem::path(documentPath.toStdString()));
 	SetModified(documentPath, stamp);
 
-	CHECK(cache.Of(source) == QDir(root).filePath("Derived/Meshes/kirk.bmesh"));
+	CHECK(cache.Of(source) == QDir(root).filePath("Derived/Meshes/toad.bmesh"));
 	CHECK(
 		editor::GetSourceMesh(root, source) ==
 		QDir(root).filePath("Derived/Meshes/rewritten.bmesh"));

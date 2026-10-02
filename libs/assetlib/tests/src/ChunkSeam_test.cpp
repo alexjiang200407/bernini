@@ -119,7 +119,7 @@ namespace
 	void
 	Stage(const fs::path& root)
 	{
-		SaveAt(MakeMesh(), root / "Derived/Meshes/kirk.bmesh");
+		SaveAt(MakeMesh(), root / "Derived/Meshes/toad.bmesh");
 		SaveAt(MakeSkeleton(), root / "Derived/Skeletons/rig.bskel");
 		SaveAt(MakeAnimations(), root / "Derived/Animations/idle.banim");
 
@@ -142,13 +142,13 @@ TEST_CASE("a chunked container loads the same from a directory and from an archi
 
 	SECTION(".bmesh")
 	{
-		const BMesh direct = StoreAt(scratch.path).Load<BMesh>("Derived/Meshes/kirk.bmesh");
+		const BMesh direct = StoreAt(scratch.path).Load<BMesh>("Derived/Meshes/toad.bmesh");
 
 		for (const core::file::IFileSystem* mount :
 		     { static_cast<const core::file::IFileSystem*>(&loose),
 		       static_cast<const core::file::IFileSystem*>(&pak) })
 		{
-			const BMesh mounted = load<BMesh>(*mount, "Derived/Meshes/kirk.bmesh");
+			const BMesh mounted = load<BMesh>(*mount, "Derived/Meshes/toad.bmesh");
 
 			CHECK(mounted.vertexData == direct.vertexData);
 			CHECK(mounted.indexData == direct.indexData);
@@ -201,7 +201,7 @@ TEST_CASE("a reference read stays a ranged read through the seam", "[chunkseam]"
 	const core::file::LooseFileSystem loose(scratch.path);
 	const PakFile                     pak(scratch.path / "Data.bpak");
 
-	const uint64_t meshSize = loose.Stat("Derived/Meshes/kirk.bmesh").value().size;
+	const uint64_t meshSize = loose.Stat("Derived/Meshes/toad.bmesh").value().size;
 
 	// The container has to be big enough for the distinction to exist at all.
 	REQUIRE(meshSize > 256u * 1024u);
@@ -217,7 +217,7 @@ TEST_CASE("a reference read stays a ranged read through the seam", "[chunkseam]"
 	SECTION("a full load does read the whole container, which is the contrast")
 	{
 		CountingFileSystem counting(pak);
-		(void)load<BMesh>(counting, "Derived/Meshes/kirk.bmesh");
+		(void)load<BMesh>(counting, "Derived/Meshes/toad.bmesh");
 
 		CHECK(counting.bytesRead == meshSize);
 		CHECK(counting.reads == 1u);

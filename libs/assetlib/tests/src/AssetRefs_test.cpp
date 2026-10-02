@@ -544,44 +544,44 @@ TEST_CASE("A directory is held only from outside it", "[assetrefs]")
 
 	// A self-contained folder: its material routes from its own texture, and nothing else names either.
 	WriteSource(
-		root.path / "Derived/SourceTextures" / "kirk" / "tex0.ktx2",
+		root.path / "Derived/SourceTextures" / "toad" / "tex0.ktx2",
 		{ { 200, 0, 0, 255 } });
-	fs::create_directories(root.path / "Authored/Materials" / "kirk");
-	BakeAndSave(root, "kirk/Body.bmaterial", "Derived/SourceTextures/kirk/tex0.ktx2");
+	fs::create_directories(root.path / "Authored/Materials" / "toad");
+	BakeAndSave(root, "toad/Body.bmaterial", "Derived/SourceTextures/toad/tex0.ktx2");
 
 	SECTION("a folder whose references are all internal deletes, and takes them with it")
 	{
-		// Materials/kirk names a texture *outside* itself, which is an edge pointing out, not in. That
+		// Materials/toad names a texture *outside* itself, which is an edge pointing out, not in. That
 		// texture stays -- the same rule that keeps a deleted mesh's materials.
-		const DeletionPlan plan = planDeletion(root.Scan(), "Authored/Materials/kirk");
+		const DeletionPlan plan = planDeletion(root.Scan(), "Authored/Materials/toad");
 
 		REQUIRE(plan.Allowed());
 		REQUIRE(plan.IsDirectory());
 		CHECK(
-			plan.contents == std::vector<std::string>{ "Authored/Materials/kirk/Body.bmaterial" });
+			plan.contents == std::vector<std::string>{ "Authored/Materials/toad/Body.bmaterial" });
 
 		REQUIRE(root.Source().DeleteAsset(plan).status == DeletionStatus::kDeleted);
 
-		CHECK_FALSE(fs::exists(root.path / "Authored/Materials" / "kirk"));
-		CHECK(fs::exists(root.path / "Derived/SourceTextures" / "kirk" / "tex0.ktx2"));
+		CHECK_FALSE(fs::exists(root.path / "Authored/Materials" / "toad"));
+		CHECK(fs::exists(root.path / "Derived/SourceTextures" / "toad" / "tex0.ktx2"));
 	}
 
 	SECTION("a folder something outside routes from does not")
 	{
-		const DeletionPlan plan = planDeletion(root.Scan(), "Derived/SourceTextures/kirk");
+		const DeletionPlan plan = planDeletion(root.Scan(), "Derived/SourceTextures/toad");
 
 		REQUIRE_FALSE(plan.Allowed());
 		REQUIRE(plan.blockers.size() == 1);
-		CHECK(plan.blockers.front().referrer == "Authored/Materials/kirk/Body.bmaterial");
+		CHECK(plan.blockers.front().referrer == "Authored/Materials/toad/Body.bmaterial");
 		CHECK(plan.blockers.front().kind == RefKind::kChannelRoute);
 
 		CHECK(root.Source().DeleteAsset(plan).status == DeletionStatus::kRefused);
-		CHECK(fs::exists(root.path / "Derived/SourceTextures" / "kirk" / "tex0.ktx2"));
+		CHECK(fs::exists(root.path / "Derived/SourceTextures" / "toad" / "tex0.ktx2"));
 	}
 
 	SECTION("and a folder holding the mesh is never held, because nothing names a mesh")
 	{
-		SaveMesh(root, "kirk.bmesh", { "Authored/Materials/kirk/Body.bmaterial" });
+		SaveMesh(root, "toad.bmesh", { "Authored/Materials/toad/Body.bmaterial" });
 
 		CHECK(planDeletion(root.Scan(), "Derived/Meshes").Allowed());
 	}
@@ -616,20 +616,20 @@ TEST_CASE("Deleting a directory takes every file under it, tracked or not", "[as
 
 TEST_CASE("A directory is held by a reference into any depth of it", "[assetrefs]")
 {
-	// Deleting Derived/SourceTextures would take kirk/tex0.ktx2 with it, so the material two levels
+	// Deleting Derived/SourceTextures would take toad/tex0.ktx2 with it, so the material two levels
 	// down still
 	// holds the whole tree. A check that only looked at the folder's immediate children would miss it.
 	const DataRoot root("bernini_refs_dir_deep");
 
 	WriteSource(
-		root.path / "Derived/SourceTextures" / "kirk" / "tex0.ktx2",
+		root.path / "Derived/SourceTextures" / "toad" / "tex0.ktx2",
 		{ { 200, 0, 0, 255 } });
-	BakeAndSave(root, "mat.bmaterial", "Derived/SourceTextures/kirk/tex0.ktx2");
+	BakeAndSave(root, "mat.bmaterial", "Derived/SourceTextures/toad/tex0.ktx2");
 
 	const DeletionPlan plan = planDeletion(root.Scan(), "Derived/SourceTextures");
 
 	REQUIRE_FALSE(plan.Allowed());
-	CHECK(plan.blockers.front().target == "Derived/SourceTextures/kirk/tex0.ktx2");
+	CHECK(plan.blockers.front().target == "Derived/SourceTextures/toad/tex0.ktx2");
 }
 
 TEST_CASE("The data root itself is not something inside the data root", "[assetrefs]")

@@ -163,7 +163,7 @@ TEST_CASE("A source's tile is repainted by the mesh its import produced", "[thum
 	// and the tile that has to be repainted is the source's.
 	const Sandbox sandbox;
 	const QString root        = sandbox.temp.path();
-	const auto [source, mesh] = WriteImport(root, "kirk");
+	const auto [source, mesh] = WriteImport(root, "toad");
 
 	AssetFileModel      model;
 	TexturePreviewCache previews;
@@ -189,7 +189,7 @@ TEST_CASE("A source nothing resolves stays on its shell icon", "[thumbnails]")
 {
 	const Sandbox sandbox;
 	const QString root        = sandbox.temp.path();
-	const auto [source, mesh] = WriteImport(root, "kirk");
+	const auto [source, mesh] = WriteImport(root, "toad");
 
 	AssetFileModel      model;
 	TexturePreviewCache previews;

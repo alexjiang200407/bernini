@@ -30,23 +30,26 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <vector>
 
-// What the cha800 face close-up costs Forward, part by part, on the grid the editor drew it on at
-// 2x. Not a test of behaviour and not runnable in CI: it wants the test project's cooked cha800
-// and the repo's forest environment, reached through BERNINI_CHECKOUT, and it is run by hand --
-// `BERNINI_CHECKOUT=$PWD just run gamelib_tests -- "[.cha800cost]"` -- with the numbers read off
-// the warnings it prints. Every mesh entry of the file is instanced under its node's transform,
-// as the editor places it, and the camera fills the frame with the face from the front.
+// What the reference character's face close-up costs Forward, part by part, on the grid the editor
+// drew it on at 2x. Not a test of behaviour and not runnable in CI: it wants a character cooked in
+// the test project, named by BERNINI_REFERENCE_MESH, and the repo's forest environment, reached
+// through BERNINI_CHECKOUT, and it is run by hand --
+// `BERNINI_CHECKOUT=$PWD BERNINI_REFERENCE_MESH=<key> just run gamelib_tests -- "[.referencecost]"`
+// -- with the numbers read off the warnings it prints. Every mesh entry of the file is instanced
+// under its node's transform, as the editor places it, and the camera fills the frame with the
+// face from the front. The views pick parts by generic name fragments (Face, Hair, Eye, Lash, Mouth);
+// BERNINI_REFERENCE_HEAD_PARTS, a comma-separated list of fragments, adds a head-only view.
 namespace
 {
 	constexpr uint32_t c_Width  = 2292;
 	constexpr uint32_t c_Height = 1996;
 
-	constexpr std::string_view c_Mesh = "Authored/Meshes/cha800_00.reduced.glb";
-	constexpr std::string_view c_Env  = "Authored/Environments/forest.benv";
+	constexpr std::string_view c_Env = "Authored/Environments/forest.benv";
 
 	glm::mat4
 	WorldTransform(const assetlib::BMesh& mesh, uint32_t nodeIndex)
@@ -97,14 +100,33 @@ namespace
 		std::ranges::sort(samples);
 		return samples[samples.size() / 2];
 	}
+
+	std::vector<std::string>
+	SplitOnCommas(std::string_view list)
+	{
+		std::vector<std::string> pieces;
+		for (const auto piece : std::views::split(list, ','))
+		{
+			if (!piece.empty())
+				pieces.emplace_back(std::string_view(piece));
+		}
+		return pieces;
+	}
 }
 
-TEST_CASE("what the cha800 face close-up costs Forward, part by part", "[.cha800cost]")
+TEST_CASE(
+	"what the reference character's face close-up costs Forward, part by part",
+	"[.referencecost]")
 {
 	const std::optional<std::string> checkout = core::env_var("BERNINI_CHECKOUT");
 	if (!checkout.has_value())
 	{
 		SKIP("BERNINI_CHECKOUT is not set");
+	}
+	const std::optional<std::string> meshKey = core::env_var("BERNINI_REFERENCE_MESH");
+	if (!meshKey.has_value())
+	{
+		SKIP("BERNINI_REFERENCE_MESH is not set");
 	}
 
 	const auto projectRoot = std::filesystem::path(*checkout) / "test-project" / "Data";
@@ -143,7 +165,7 @@ TEST_CASE("what the cha800 face close-up costs Forward, part by part", "[.cha800
 	REQUIRE(env.HasLighting());
 
 	const assetlib::AssetStore store(projectRoot);
-	const auto                 output = store.ResolveImport(c_Mesh, assetlib::AssetType::kMesh);
+	const auto                 output = store.ResolveImport(*meshKey, assetlib::AssetType::kMesh);
 	const auto                 file   = store.LoadRegenMesh(output.outputKey).mesh;
 
 	std::vector<Part> parts;
@@ -158,7 +180,7 @@ TEST_CASE("what the cha800 face close-up costs Forward, part by part", "[.cha800
 		part.name      = std::string(file.stringPool.at(file.meshes[node.mesh].nameOffset));
 		part.transform =
 			assetlib::isSkinned(file, node.mesh) ? glm::mat4(1.0f) : WorldTransform(file, n);
-		part.geom = assets.AcquireMesh(c_Mesh, node.mesh);
+		part.geom = assets.AcquireMesh(*meshKey, node.mesh);
 
 		const assetlib::Mesh& entry = file.meshes[node.mesh];
 		part.boxMin                 = glm::vec3(1e30f);
@@ -250,9 +272,15 @@ TEST_CASE("what the cha800 face close-up costs Forward, part by part", "[.cha800
 		return !has(p, "Eye") && !has(p, "Lash") && !has(p, "Blow");
 	});
 	viewFor("face+mouth only", [&](const Part& p) { return has(p, "Face") || has(p, "Mouth"); });
-	viewFor("head only (cha80010+cha80020)", [&](const Part& p) {
-		return has(p, "cha80010") || has(p, "cha80020");
-	});
+	if (const std::optional<std::string> headParts = core::env_var("BERNINI_REFERENCE_HEAD_PARTS"))
+	{
+		const std::vector<std::string> needles = SplitOnCommas(*headParts);
+		viewFor("head only", [&](const Part& p) {
+			return std::ranges::any_of(needles, [&](const std::string& fragment) {
+				return has(p, fragment);
+			});
+		});
+	}
 
 	gfx->WaitIdle();
 }

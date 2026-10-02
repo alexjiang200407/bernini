@@ -66,13 +66,13 @@ namespace
 TEST_CASE("an import document records where its textures went", "[importdoc]")
 {
 	ImportDocument document;
-	document.textureDir = "Derived/SourceTextures/kirk";
+	document.textureDir = "Derived/SourceTextures/toad";
 
 	document.textureStamp     = { 4096, 0xfeedfacecafebeefull };
 	document.textureBakeToken = c_TextureBakeToken;
 
 	const ImportDocument read = DocumentFrom(DocumentText(document));
-	CHECK(read.textureDir == "Derived/SourceTextures/kirk");
+	CHECK(read.textureDir == "Derived/SourceTextures/toad");
 	CHECK(read.textureStamp == document.textureStamp);
 	CHECK(read.textureBakeToken == c_TextureBakeToken);
 
@@ -99,7 +99,7 @@ TEST_CASE("an import document records where its textures went", "[importdoc]")
 		// Which no revision equals, so its folder is stale exactly once: the only way a change to
 		// the bytes a bake writes can reach a `.ktx2`, which carries no header to compare.
 		const auto old = DocumentFrom(
-			R"({"textureDir":"Derived/SourceTextures/kirk","textureStampSize":4096,"textureStampHash":7})");
+			R"({"textureDir":"Derived/SourceTextures/toad","textureStampSize":4096,"textureStampHash":7})");
 		CHECK(old.textureStamp == SourceStamp{ 4096, 7 });
 		CHECK(old.textureBakeToken == 0);
 	}
@@ -125,8 +125,8 @@ TEST_CASE("an import document round-trips, canonically", "[importdoc]")
 {
 	ImportDocument document;
 	document.sampleRate = 60.0f;
-	document.bindings   = { { "kirk[1]", "Authored/Materials/kirk/teeth.bmaterial" },
-		                    { "kirk[0]", "Authored/Materials/kirk/skin.bmaterial" } };
+	document.bindings   = { { "toad[1]", "Authored/Materials/toad/teeth.bmaterial" },
+		                    { "toad[0]", "Authored/Materials/toad/skin.bmaterial" } };
 
 	const std::string text = DocumentText(document);
 	ImportDocument    read = DocumentFrom(text);
@@ -135,17 +135,17 @@ TEST_CASE("an import document round-trips, canonically", "[importdoc]")
 	REQUIRE(read.bindings.size() == 2);
 	// An object's keys come back sorted; the order a caller pushed them in is not part of the document.
 	CHECK(
-		read.bindings[0] == MaterialBinding{ "kirk[0]", "Authored/Materials/kirk/skin.bmaterial" });
+		read.bindings[0] == MaterialBinding{ "toad[0]", "Authored/Materials/toad/skin.bmaterial" });
 	CHECK(
 		read.bindings[1] ==
-		MaterialBinding{ "kirk[1]", "Authored/Materials/kirk/teeth.bmaterial" });
+		MaterialBinding{ "toad[1]", "Authored/Materials/toad/teeth.bmaterial" });
 
 	SECTION("identical documents serialize to identical bytes, whatever the construction order")
 	{
 		ImportDocument reversed;
 		reversed.sampleRate = 60.0f;
-		reversed.bindings   = { { "kirk[0]", "Authored/Materials/kirk/skin.bmaterial" },
-			                    { "kirk[1]", "Authored/Materials/kirk/teeth.bmaterial" } };
+		reversed.bindings   = { { "toad[0]", "Authored/Materials/toad/skin.bmaterial" },
+			                    { "toad[1]", "Authored/Materials/toad/teeth.bmaterial" } };
 		CHECK(DocumentText(reversed) == text);
 	}
 
@@ -266,22 +266,22 @@ TEST_CASE(
 		AssetCodec<BMaterial>::Serialize(material));
 
 	ImportDocument document;
-	document.materialOverrides = { { "kirk[0]", "Rusty", "Authored/Materials/rust.bmaterial" } };
-	WriteText(root.path / "Authored/Meshes" / "kirk.bimport", DocumentText(document));
-	WriteText(root.path / "Authored/Meshes" / "kirk.glb", "not really a glb");
+	document.materialOverrides = { { "toad[0]", "Rusty", "Authored/Materials/rust.bmaterial" } };
+	WriteText(root.path / "Authored/Meshes" / "toad.bimport", DocumentText(document));
+	WriteText(root.path / "Authored/Meshes" / "toad.glb", "not really a glb");
 
 	// The one thing that stops the explorer deleting a look a game can still ask for by name.
 	const AssetRefGraph graph                 = root.Scan();
 	bool                documentHoldsMaterial = false;
 	for (const AssetRef& ref : graph.ReferrersOf("Authored/Materials/rust.bmaterial"))
 		documentHoldsMaterial |=
-			ref.referrer == "Authored/Meshes/kirk.bimport" && ref.kind == RefKind::kSubmeshMaterial;
+			ref.referrer == "Authored/Meshes/toad.bimport" && ref.kind == RefKind::kSubmeshMaterial;
 	CHECK(documentHoldsMaterial);
 }
 
 TEST_CASE("the document lives beside its source, one key from the other", "[importdoc]")
 {
-	CHECK(importDocumentKeyFor("Authored/Meshes/kirk.glb") == "Authored/Meshes/kirk.bimport");
+	CHECK(importDocumentKeyFor("Authored/Meshes/toad.glb") == "Authored/Meshes/toad.bimport");
 	CHECK_THROWS(importDocumentKeyFor("Authored/Meshes/no_extension"));
 }
 
@@ -289,13 +289,13 @@ TEST_CASE("the document lives beside its source, one key from the other", "[impo
 // ordinary texture everywhere but the environment sources' folder.
 TEST_CASE("an imported source is known by its category and extension", "[importdoc]")
 {
-	CHECK(isImportedSourceKey("Authored/Meshes/kirk.glb"));
-	CHECK(isImportedSourceKey("Authored/Meshes/crew/kirk.GLB"));
+	CHECK(isImportedSourceKey("Authored/Meshes/toad.glb"));
+	CHECK(isImportedSourceKey("Authored/Meshes/crew/toad.GLB"));
 	CHECK(isImportedSourceKey("Authored/EnvSources/forest.hdr"));
 	CHECK(isImportedSourceKey("Authored/EnvSources/outdoor/forest.ktx2"));
 
-	CHECK_FALSE(isImportedSourceKey("Derived/Meshes/kirk.glb"));
-	CHECK_FALSE(isImportedSourceKey("Authored/Meshes/kirk.bimport"));
+	CHECK_FALSE(isImportedSourceKey("Derived/Meshes/toad.glb"));
+	CHECK_FALSE(isImportedSourceKey("Authored/Meshes/toad.bimport"));
 	CHECK_FALSE(isImportedSourceKey("Derived/SourceTextures/forest_sky.ktx2"));
 	CHECK_FALSE(isImportedSourceKey("Authored/Environments/forest.hdr"));
 	CHECK_FALSE(isImportedSourceKey(""));
@@ -337,8 +337,8 @@ TEST_CASE("an imported source is copied and stamped by its key", "[importdoc]")
 TEST_CASE("the document names the source it describes", "[importdoc]")
 {
 	ImportDocument document;
-	document.source = "Authored/Meshes/kirk.glb";
-	CHECK(importedSourceKeyFor("Authored/Meshes/kirk.bimport", document) == document.source);
+	document.source = "Authored/Meshes/toad.glb";
+	CHECK(importedSourceKeyFor("Authored/Meshes/toad.bimport", document) == document.source);
 
 	// The name is recorded rather than derived, so a source whose extension the swap could never
 	// have guessed is still reachable. This is what a second source kind rests on.
@@ -355,8 +355,8 @@ TEST_CASE("a document with no recorded source falls back to the .glb beside it",
 	const ImportDocument document = DocumentFrom("{}");
 	REQUIRE(document.source.empty());
 	CHECK(
-		importedSourceKeyFor("Authored/Meshes/kirk.bimport", document) ==
-		"Authored/Meshes/kirk.glb");
+		importedSourceKeyFor("Authored/Meshes/toad.bimport", document) ==
+		"Authored/Meshes/toad.glb");
 }
 
 // The source is outside `parameters`: naming the file says nothing about what the importer computes
@@ -367,7 +367,7 @@ TEST_CASE("naming the source does not move the parameter hash", "[importdoc]")
 	ImportDocument document;
 	const uint64_t unnamed = parametersHashOf(document);
 
-	document.source = "Authored/Meshes/kirk.glb";
+	document.source = "Authored/Meshes/toad.glb";
 	CHECK(parametersHashOf(document) == unnamed);
 }
 
@@ -393,23 +393,23 @@ TEST_CASE(
 		AssetCodec<BMaterial>::Serialize(material));
 
 	ImportDocument document;
-	document.bindings = { { "kirk[0]", "Authored/Materials/skin.bmaterial" } };
-	WriteText(root.path / "Authored/Meshes" / "kirk.bimport", DocumentText(document));
-	WriteText(root.path / "Authored/Meshes" / "kirk.glb", "not really a glb");
+	document.bindings = { { "toad[0]", "Authored/Materials/skin.bmaterial" } };
+	WriteText(root.path / "Authored/Meshes" / "toad.bimport", DocumentText(document));
+	WriteText(root.path / "Authored/Meshes" / "toad.glb", "not really a glb");
 
 	const AssetRefGraph graph = root.Scan();
 
-	REQUIRE(graph.ReferrersOf("Authored/Meshes/kirk.glb").size() == 1);
+	REQUIRE(graph.ReferrersOf("Authored/Meshes/toad.glb").size() == 1);
 	CHECK(
-		graph.ReferrersOf("Authored/Meshes/kirk.glb")[0] ==
-		AssetRef{ "Authored/Meshes/kirk.bimport",
-	              "Authored/Meshes/kirk.glb",
+		graph.ReferrersOf("Authored/Meshes/toad.glb")[0] ==
+		AssetRef{ "Authored/Meshes/toad.bimport",
+	              "Authored/Meshes/toad.glb",
 	              RefKind::kImportedSource });
 
 	bool documentHoldsMaterial = false;
 	for (const AssetRef& ref : graph.ReferrersOf("Authored/Materials/skin.bmaterial"))
 		documentHoldsMaterial |=
-			ref.referrer == "Authored/Meshes/kirk.bimport" && ref.kind == RefKind::kSubmeshMaterial;
+			ref.referrer == "Authored/Meshes/toad.bimport" && ref.kind == RefKind::kSubmeshMaterial;
 	CHECK(documentHoldsMaterial);
 }
 
@@ -433,30 +433,30 @@ namespace
 TEST_CASE("an import records the bindings the mesh carries", "[importdoc]")
 {
 	const DataRoot root("bernini_importdoc_write");
-	WriteText(root.path / "kirk.glb", "the source");
+	WriteText(root.path / "toad.glb", "the source");
 
 	const BMesh mesh =
-		NamedMesh({ { "kirk[0]", 0 }, { "kirk[1]", 1 }, { "props", c_InvalidIndex } });
+		NamedMesh({ { "toad[0]", 0 }, { "toad[1]", 1 }, { "props", c_InvalidIndex } });
 
-	ImportTarget target{ "Authored/Meshes/kirk.glb", 24.0f, "Derived/SourceTextures/kirk" };
+	ImportTarget target{ "Authored/Meshes/toad.glb", 24.0f, "Derived/SourceTextures/toad" };
 	target.bindings =
-		std::vector<MaterialBinding>{ { "kirk[0]", "Authored/Materials/skin.bmaterial" },
-		                              { "kirk[1]", "Authored/Materials/teeth.bmaterial" } };
+		std::vector<MaterialBinding>{ { "toad[0]", "Authored/Materials/skin.bmaterial" },
+		                              { "toad[1]", "Authored/Materials/teeth.bmaterial" } };
 	const AssetStore store(root.path);
-	const SourceRef  ref = store.CopyImportedSource(root.path / "kirk.glb", target);
-	CHECK(ref.key == "Authored/Meshes/kirk.glb");
+	const SourceRef  ref = store.CopyImportedSource(root.path / "toad.glb", target);
+	CHECK(ref.key == "Authored/Meshes/toad.glb");
 	CHECK(ref.stamp.size > 0);
 	store.WriteImportedDocument(target, &mesh);
 
-	CHECK(fs::exists(root.path / "Authored/Meshes/kirk.glb"));
+	CHECK(fs::exists(root.path / "Authored/Meshes/toad.glb"));
 	const ImportDocument document =
-		loadImportDocument(core::file::LooseFileSystem(root.path), "Authored/Meshes/kirk.bimport");
+		loadImportDocument(core::file::LooseFileSystem(root.path), "Authored/Meshes/toad.bimport");
 	CHECK(document.sampleRate == 24.0f);
 	REQUIRE(document.bindings.size() == 2);  // the unbound submesh records nothing
 	CHECK(
-		document.bindings[0] == MaterialBinding{ "kirk[0]", "Authored/Materials/skin.bmaterial" });
+		document.bindings[0] == MaterialBinding{ "toad[0]", "Authored/Materials/skin.bmaterial" });
 	CHECK(
-		document.bindings[1] == MaterialBinding{ "kirk[1]", "Authored/Materials/teeth.bmaterial" });
+		document.bindings[1] == MaterialBinding{ "toad[1]", "Authored/Materials/teeth.bmaterial" });
 }
 
 TEST_CASE(
@@ -552,7 +552,7 @@ TEST_CASE("a source may be copied into a folder of its own", "[importdoc]")
 TEST_CASE("a source placed outside its category is refused", "[importdoc]")
 {
 	const DataRoot root("bernini_importdoc_stray");
-	WriteText(root.path / "kirk.glb", "the source");
+	WriteText(root.path / "toad.glb", "the source");
 
 	const AssetStore store(root.path);
 
@@ -560,16 +560,16 @@ TEST_CASE("a source placed outside its category is refused", "[importdoc]")
 	// `Authored/Meshes`, so a source anywhere else is silently absent from all of them and the
 	// project stops being one a checkout can rebuild.
 	const std::string_view stray = GENERATE(
-		std::string_view("Authored/Levels/kirk.glb"),      // another authored category
-		std::string_view("Derived/Meshes/kirk.glb"),       // the wrong half entirely
-		std::string_view("kirk.glb"),                      // the data root itself
-		std::string_view("Authored/MeshesOld/kirk.glb"));  // a prefix that only looks like one
+		std::string_view("Authored/Levels/toad.glb"),      // another authored category
+		std::string_view("Derived/Meshes/toad.glb"),       // the wrong half entirely
+		std::string_view("toad.glb"),                      // the data root itself
+		std::string_view("Authored/MeshesOld/toad.glb"));  // a prefix that only looks like one
 
 	INFO("key: " << stray);
 
 	CHECK_THROWS_WITH(
 		store.CopyImportedSource(
-			root.path / "kirk.glb",
+			root.path / "toad.glb",
 			ImportTarget{ std::string(stray), 30.0f, {} }),
 		Catch::Matchers::ContainsSubstring("Authored/Meshes"));
 
@@ -583,24 +583,24 @@ TEST_CASE("a source placed outside its category is refused", "[importdoc]")
 TEST_CASE("a source key that is not a .glb is refused", "[importdoc]")
 {
 	const DataRoot root("bernini_importdoc_extension");
-	WriteText(root.path / "kirk.glb", "the source");
+	WriteText(root.path / "toad.glb", "the source");
 
 	CHECK_THROWS_WITH(
 		AssetStore(root.path).CopyImportedSource(
-			root.path / "kirk.glb",
-			ImportTarget{ "Authored/Meshes/kirk.gltf", 30.0f, {} }),
+			root.path / "toad.glb",
+			ImportTarget{ "Authored/Meshes/toad.gltf", 30.0f, {} }),
 		Catch::Matchers::ContainsSubstring(".glb"));
 }
 
 TEST_CASE("a source that is not self-contained is refused", "[importdoc]")
 {
 	const DataRoot root("bernini_importdoc_gltf");
-	WriteText(root.path / "kirk.gltf", "{}");
+	WriteText(root.path / "toad.gltf", "{}");
 
 	CHECK_THROWS_WITH(
 		AssetStore(root.path).CopyImportedSource(
-			root.path / "kirk.gltf",
-			ImportTarget{ "Authored/Meshes/kirk.glb", 30.0f, {} }),
+			root.path / "toad.gltf",
+			ImportTarget{ "Authored/Meshes/toad.glb", 30.0f, {} }),
 		Catch::Matchers::ContainsSubstring("export as .glb"));
 }
 
@@ -616,17 +616,17 @@ TEST_CASE("colliding submesh names are refused before anything is written", "[im
 TEST_CASE("a document records the rig it binds and the outputs it produced", "[importdoc]")
 {
 	ImportDocument document;
-	document.skeleton = "Derived/Skeletons/kirk.bskel";
-	document.outputs  = { "Derived/Meshes/kirk.bmesh", "Derived/Animations/kirk.banim" };
+	document.skeleton = "Derived/Skeletons/toad.bskel";
+	document.outputs  = { "Derived/Meshes/toad.bmesh", "Derived/Animations/toad.banim" };
 
 	const ImportDocument read = DocumentFrom(DocumentText(document));
-	CHECK(read.skeleton == "Derived/Skeletons/kirk.bskel");
+	CHECK(read.skeleton == "Derived/Skeletons/toad.bskel");
 
 	// Sorted on write, so two imports that wrote the same set in different orders are one byte
 	// sequence -- the same rule every other key in this document follows.
 	CHECK(
 		read.outputs ==
-		std::vector<std::string>{ "Derived/Animations/kirk.banim", "Derived/Meshes/kirk.bmesh" });
+		std::vector<std::string>{ "Derived/Animations/toad.banim", "Derived/Meshes/toad.bmesh" });
 
 	SECTION("neither is written when empty, so a document from before them is byte-identical")
 	{
@@ -648,7 +648,7 @@ TEST_CASE("a document refuses a skeleton or outputs of the wrong shape", "[impor
 		Catch::Matchers::ContainsSubstring("'skeleton' is not a string"));
 
 	CHECK_THROWS_WITH(
-		DocumentFrom(R"({"outputs": "Derived/Meshes/kirk.bmesh"})"),
+		DocumentFrom(R"({"outputs": "Derived/Meshes/toad.bmesh"})"),
 		Catch::Matchers::ContainsSubstring("'outputs' is not an array"));
 
 	CHECK_THROWS_WITH(

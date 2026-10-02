@@ -86,9 +86,9 @@ namespace
 			std::ofstream(root.path / ".overlay.json") << "{}";
 
 			fs::create_directories(root.path / "Authored/Meshes");
-			std::ofstream(root.path / "Authored/Meshes/kirk.glb") << "the imported source";
+			std::ofstream(root.path / "Authored/Meshes/toad.glb") << "the imported source";
 			core::file::write_atomic(
-				root.path / "Authored/Meshes/kirk.bimport",
+				root.path / "Authored/Meshes/toad.bimport",
 				AssetCodec<ImportDocument>::Serialize(ImportDocument{}));
 			fs::create_directories(root.path / "Authored/EnvSources");
 			std::ofstream(root.path / "Authored/EnvSources/forest.hdr") << "the imported source";
@@ -164,8 +164,8 @@ TEST_CASE("pack carries what the runtime reads and nothing that produces it", "[
 
 	SECTION("sidecars ship while the imported sources stay out")
 	{
-		CHECK_FALSE(Contains(entries, "Authored/Meshes/kirk.glb"));
-		CHECK(Contains(entries, "Authored/Meshes/kirk.bimport"));
+		CHECK_FALSE(Contains(entries, "Authored/Meshes/toad.glb"));
+		CHECK(Contains(entries, "Authored/Meshes/toad.bimport"));
 		CHECK_FALSE(Contains(entries, "Authored/EnvSources/forest.hdr"));
 		CHECK(Contains(entries, "Authored/EnvSources/forest.bimport"));
 		CHECK(Contains(entries, "stray.bimport"));
