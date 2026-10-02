@@ -309,18 +309,20 @@ namespace crowd
 			      .frontage   = group.orders.formation.frontage,
 			      .spacing    = group.orders.formation.spacing,
 			      .speed      = type.preferredSpeed * group.orders.pace,
-			      .maxSpeed   = type.maxSpeed });
+			      .maxSpeed   = type.maxSpeed,
+			      .agentType  = group.agentType });
 			plan.groupHandles.push_back({ .handle = { index, m_Groups.generation(index) } });
 
 			group.pieces = { { .sourceFirstAgent = firstAgent, .agentCount = group.agentCount } };
 			firstAgent += group.agentCount;
 		}
 
-		plan.params = { .tickSeconds     = m_Desc.tickSeconds,
-			            .velocityInertia = m_Desc.solver.velocityInertia,
-			            .agentCount      = firstAgent,
-			            .groupCount      = static_cast<uint32_t>(plan.groups.size()),
-			            .agentRangeCount = static_cast<uint32_t>(plan.ranges.size()) };
+		plan.params = { .tickSeconds       = m_Desc.tickSeconds,
+			            .velocityInertia   = m_Desc.solver.velocityInertia,
+			            .agentCount        = firstAgent,
+			            .groupCount        = static_cast<uint32_t>(plan.groups.size()),
+			            .agentRangeCount   = static_cast<uint32_t>(plan.ranges.size()),
+			            .renderFirstRecord = idl::c_NoRenderRing };
 		return plan;
 	}
 

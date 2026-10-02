@@ -141,8 +141,10 @@ each refuses; what follows is why it is shaped as it is.
   `Step` that overwrites one waits for `readerDone` on the crowd's queue, and one that would
   overwrite a tick not yet released cannot run (`CanStep`). Nothing waits on the CPU either way: a
   slow reader stalls the crowd's stepping, by as many ticks as the ring holds past its minimum.
-  **Nothing writes the records yet**: the ring, its bookkeeping and the waits are in place, and the
-  step's write of each agent's record is not.
+  `CSStep` writes each agent's record as it writes the agent, at the agent's index, so `source` is
+  the `AgentRange`'s source index: the layout already says where each agent came from, and the
+  records cost no pass of their own. `tests/src/CrowdRenderRing_test.cpp` reads them back through
+  an import of its own, as a renderer would.
 * **Tick timing.** Every tick that dispatches is timed on the crowd's queue, and
   `GetTickGpuMilliseconds(t)` reads it back while `t` is one of the last `maxTicksInFlight + 1`.
 

@@ -3,12 +3,14 @@ import crowd.idl.Agent;
 import crowd.idl.AgentRange;
 import crowd.idl.Constants;
 import crowd.idl.Group;
+import crowd.idl.RenderAgent;
 import crowd.idl.TickParams;
 import lib.types.ComputeBuffer;
 import lib.types.UploadBuffer;
 
 // One tick of one agent: laid out from the previous tick's buffer (or spawned in its slot) by the
 // AgentRange covering it, then its velocity planned toward its slot and its position integrated.
+// With a render ring, it also writes the agent's RenderAgent record into the tick's slot of it.
 struct Uniforms
 {
     TickParams params;
@@ -16,6 +18,7 @@ struct Uniforms
     UploadBuffer<AgentRange> ranges;
     ComputeBuffer<Agent> previous;
     ComputeBuffer<Agent> agents;
+    ComputeBuffer<RenderAgent> renderRing;
 };
 
 ConstantBuffer<Uniforms> gUniforms;
@@ -93,4 +96,19 @@ void main(uint3 id: SV_DispatchThreadID)
     agent.facing = speed > c_WalkingSpeedShare * group.speed ? agent.velocity / speed : group.front;
 
     gUniforms.agents[index] = agent;
+
+    let renderFirst = gUniforms.params.renderFirstRecord;
+    if (renderFirst != c_NoRenderRing)
+    {
+        // An agent's index in the previous tick is its record's index there too: both ticks wrote
+        // their records in agent order.
+        var record : RenderAgent;
+        record.position = agent.position;
+        record.facing = agent.facing;
+        let offset = index - range.firstAgent;
+        let spawned = range.sourceFirstAgent == c_SpawnSource;
+        record.source = spawned ? c_RenderSpawned : range.sourceFirstAgent + offset;
+        record.type = group.agentType;
+        gUniforms.renderRing[renderFirst + index] = record;
+    }
 }
