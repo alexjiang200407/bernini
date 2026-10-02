@@ -20,6 +20,7 @@
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/Viewport.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
@@ -465,14 +466,16 @@ TEST_CASE(
 
 	const auto cube = scene->AddCubeGeom(scene->CreatePbrMaterial(bgl::PbrMaterialDesc()));
 
-	const auto     before   = view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
+	const auto before = view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(cube).SetTransform(glm::mat4(1.0f)));
 	const uint32_t baseline = view->GetInstanceCount();
 
 	// Past one upload block (256 MeshInstances), so the run spans two.
 	constexpr uint32_t c_Capacity = 300;
 	const auto         block      = view->CreateMeshInstanceBlock(
 		bgl::MeshInstanceBlockDesc().SetGeom(cube).SetCapacity(c_Capacity));
-	const auto after = view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
+	const auto after = view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(cube).SetTransform(glm::mat4(1.0f)));
 
 	const bgpu::EntryRange range = sceneView->GetInstanceBlock(block).range;
 	CHECK(range.count == c_Capacity);
@@ -566,7 +569,8 @@ TEST_CASE("A block with no writer draws nothing", "[instance_block][render]")
 
 	// The control: one cube there is visible.
 	view->DeleteMeshInstanceBlock(block);
-	view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
+	view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(cube).SetTransform(glm::mat4(1.0f)));
 	CHECK(draw() != empty);
 }
 
@@ -664,8 +668,8 @@ TEST_CASE(
 	for (uint32_t i = 0; i < 3; ++i)
 	{
 		fromCpu.view->CreateStaticMeshInstance(
-			s.cube,
-			glm::translate(glm::mat4(1.0f), glm::vec3(-2.0f + 2.0f * float(i), 0.0f, 0.0f)));
+			bgl::StaticMeshInstanceDesc().SetGeom(s.cube).SetTransform(
+				glm::translate(glm::mat4(1.0f), glm::vec3(-2.0f + 2.0f * float(i), 0.0f, 0.0f))));
 	}
 
 	// Eight slots, three shown: the five hidden ones sit at the origin of their run and must not draw.
@@ -692,10 +696,10 @@ TEST_CASE("A written block's motion is the pair its writer placed", "[instance_b
 	for (uint32_t i = 0; i < 3; ++i)
 	{
 		instances.push_back(fromCpu.view->CreateStaticMeshInstance(
-			s.cube,
-			glm::translate(
-				glm::mat4(1.0f),
-				glm::vec3(-2.0f + 2.0f * float(i), 0.0f, 0.0f) - motion)));
+			bgl::StaticMeshInstanceDesc().SetGeom(s.cube).SetTransform(
+				glm::translate(
+					glm::mat4(1.0f),
+					glm::vec3(-2.0f + 2.0f * float(i), 0.0f, 0.0f) - motion))));
 	}
 	(void)s.Draw(fromCpu, 3);
 	for (uint32_t i = 0; i < 3; ++i)
@@ -748,8 +752,8 @@ TEST_CASE(
 	for (const glm::vec4& p : positions)
 	{
 		fromCpu.view->CreateStaticMeshInstance(
-			s.cube,
-			glm::translate(glm::mat4(1.0f), glm::vec3(p)));
+			bgl::StaticMeshInstanceDesc().SetGeom(s.cube).SetTransform(
+				glm::translate(glm::mat4(1.0f), glm::vec3(p))));
 	}
 	const auto cpu = s.Draw(fromCpu, 4);
 
