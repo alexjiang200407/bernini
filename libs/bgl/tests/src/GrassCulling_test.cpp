@@ -160,7 +160,8 @@ namespace
 
 			const auto material = sceneRef->CreatePbrMaterial(bgl::PbrMaterialDesc());
 			const auto ground   = sceneRef->AddPlaneGeom(1, 1, 1.0f, 1.0f, material);
-			REQUIRE(viewRef->CreateStaticMeshInstance(ground, glm::mat4(1.0f)).IsValid());
+			REQUIRE(viewRef->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(ground))
+			            .IsValid());
 
 			auto look                                   = bgl::GrassDesc();
 			look.material                               = material;

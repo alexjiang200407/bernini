@@ -881,12 +881,12 @@ namespace bgl
 	}
 
 	GeomHandle
-	Scene::AddStaticMeshGeom(
-		const assetlib::BMesh&          mesh,
-		uint32_t                        meshIndex,
-		std::span<const MaterialHandle> materials)
+	Scene::AddStaticMeshGeom(const StaticMeshGeomDesc& desc)
 	{
-		return AddStaticMeshGeom(CookStaticMesh(mesh, meshIndex), materials);
+		if (desc.mesh == nullptr)
+			throw SceneError("AddStaticMeshGeom: mesh is null");
+
+		return AddStaticMeshGeom(CookStaticMesh(*desc.mesh, desc.meshIndex), desc.materials);
 	}
 
 	GeomHandle

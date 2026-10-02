@@ -300,7 +300,9 @@ TEST_CASE(
 
 	// The identical BMesh down both paths. Same bytes, same material, same place on screen -- the
 	// only difference is which pipeline decodes it.
-	const auto staticGeom  = scene->AddStaticMeshGeom(MakeSkinnedStrip(), 0, materials);
+	const auto strip = MakeSkinnedStrip();
+	const auto staticGeom =
+		scene->AddStaticMeshGeom(bgl::StaticMeshGeomDesc().SetMesh(&strip).SetMaterials(materials));
 	const auto skinnedGeom = scene->AddSkinnedMeshGeom(
 		MakeSkinnedStrip(),
 		0,
@@ -313,7 +315,8 @@ TEST_CASE(
 	const auto* staticPng  = "assets/golden/skinned_static_ref.got.png";
 	const auto* skinnedPng = "assets/golden/skinned_bind_pose.got.png";
 
-	const auto staticInstance = view->CreateStaticMeshInstance(staticGeom, glm::mat4(1.0f));
+	const auto staticInstance =
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(staticGeom));
 	gfx->DrawFrame(target, job);
 	gfx->ScreenshotPng(target, staticPng);
 	view->DeleteMeshInstance(staticInstance);
@@ -396,7 +399,9 @@ TEST_CASE("a rig past the old groupshared ceiling poses correctly", "[skinned][r
 	// The refusal this used to hit is gone, and that is half of what the test is for.
 	REQUIRE(deepGeom.IsValid());
 
-	const auto staticGeom = scene->AddStaticMeshGeom(MakeSkinnedStrip(), 0, materials);
+	const auto strip = MakeSkinnedStrip();
+	const auto staticGeom =
+		scene->AddStaticMeshGeom(bgl::StaticMeshGeomDesc().SetMesh(&strip).SetMaterials(materials));
 	REQUIRE(staticGeom.IsValid());
 
 	// The same strip on the rig this suite already trusts, to measure the deep one against.
@@ -437,7 +442,8 @@ TEST_CASE("a rig past the old groupshared ceiling poses correctly", "[skinned][r
 
 	SECTION("at bind pose it draws what the static path draws")
 	{
-		const auto staticInstance = view->CreateStaticMeshInstance(staticGeom, glm::mat4(1.0f));
+		const auto staticInstance =
+			view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(staticGeom));
 		gfx->DrawFrame(target, job);
 		gfx->ScreenshotPng(target, "assets/golden/skinned_deep_static_ref.got.png");
 		view->DeleteMeshInstance(staticInstance);
@@ -721,7 +727,9 @@ TEST_CASE("a blended skinned mesh sorts among blended static geometry", "[skinne
 	const auto blue = blendMaterial(glm::vec3(0.1f, 0.1f, 0.9f));
 
 	const auto staticGeom = [&](std::span<const bgl::MaterialHandle> materials) {
-		return scene->AddStaticMeshGeom(MakeSkinnedStrip(), 0, materials);
+		const auto strip = MakeSkinnedStrip();
+		return scene->AddStaticMeshGeom(
+			bgl::StaticMeshGeomDesc().SetMesh(&strip).SetMaterials(materials));
 	};
 	const auto skinnedGeom = [&](std::span<const bgl::MaterialHandle> materials) {
 		return scene->AddSkinnedMeshGeom(
@@ -755,7 +763,8 @@ TEST_CASE("a blended skinned mesh sorts among blended static geometry", "[skinne
 	const auto place = [&](bgl::GeomHandle geom, float z) {
 		return geom.geomType == bgl::GeomType::kSkinnedMesh ?
 		           view->CreateSkinnedMeshInstance(geom, at(z), { 0, 0.0f, 0.0f }) :
-		           view->CreateStaticMeshInstance(geom, at(z));
+		           view->CreateStaticMeshInstance(
+					   bgl::StaticMeshInstanceDesc().SetGeom(geom).SetTransform(at(z)));
 	};
 
 	const auto render = [&](const char* png, bgl::GeomHandle nearGeom, bgl::GeomHandle farGeom) {

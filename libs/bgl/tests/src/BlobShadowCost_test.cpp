@@ -100,7 +100,8 @@ TEST_CASE("what blob-shadow discs behind and ahead of the camera cost Forward", 
 
 	const auto groundGeom = scene->AddPlaneGeom(1, 1, 400.0f, 400.0f, white);
 	const auto casterGeom = scene->AddPlaneGeom(1, 1, 0.5f, 0.5f, white);
-	view->CreateStaticMeshInstance(groundGeom, flat);
+	view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(groundGeom).SetTransform(flat));
 
 	// Two rows either side of the track, one disc every 2 m, starting 3 m from the eye.
 	const auto row = [&](const float direction) {
@@ -110,8 +111,9 @@ TEST_CASE("what blob-shadow discs behind and ahead of the camera cost Forward", 
 			const float x = (i % 2 == 0) ? -3.0f : 3.0f;
 			const float z = direction * (3.0f + 2.0f * static_cast<float>(i / 2));
 			casters.emplace_back(view->CreateStaticMeshInstance(
-				casterGeom,
-				glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, z)) * flat));
+				bgl::StaticMeshInstanceDesc()
+					.SetGeom(casterGeom)
+					.SetTransform(glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, z)) * flat)));
 		}
 		return casters;
 	};

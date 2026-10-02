@@ -153,7 +153,8 @@ namespace
 
 		// Normal +Z, facing the camera, and wider than the frustum at this distance.
 		const auto plane = probe.scene->AddPlaneGeom(1, 1, 40.0f, 40.0f, matte);
-		probe.plane      = probe.view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
+		probe.plane =
+			probe.view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(plane));
 
 		return probe;
 	}

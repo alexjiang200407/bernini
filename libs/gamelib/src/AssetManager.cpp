@@ -19,6 +19,8 @@
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/StaticMeshGeomDesc.h>
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <concepts>
 #include <core/str/str.h>
@@ -691,8 +693,9 @@ namespace game
 			submeshMaterials[i]              = handle;
 		}
 
-		auto record                     = GeomRecord();
-		record.handle                   = m_Scene->AddStaticMeshGeom(mesh, meshIndex, {});
+		auto record   = GeomRecord();
+		record.handle = m_Scene->AddStaticMeshGeom(
+			bgl::StaticMeshGeomDesc().SetMesh(&mesh).SetMeshIndex(meshIndex));
 		record.key                      = key;
 		record.submeshMaterials         = std::move(submeshMaterials);
 		record.submeshMaterialOverrides = MaterialOverridesOf(loaded.bindings, entry);
@@ -1356,7 +1359,8 @@ namespace game
 				"expired");
 		}
 
-		const bgl::MeshInstanceHandle instance = view->CreateStaticMeshInstance(geom, transform);
+		const bgl::MeshInstanceHandle instance = view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(geom).SetTransform(transform));
 
 		RegisterInstance(std::move(view), geom.handle.index, instance);
 

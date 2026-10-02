@@ -15,6 +15,7 @@
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/SkyboxDesc.h>  // IWYU pragma: keep
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/Viewport.h>
 #include <bgpu/GpuContext.h>
 #include <cmath>
@@ -132,9 +133,10 @@ main(int argc, char** argv)
 
 		// One geom, two placements: anything that differs between them is the placement, since the
 		// geometry, the material and the lighting are shared.
-		const bgl::MeshInstanceHandle mover =
-			view->CreateStaticMeshInstance(cube, At(-c_Separation));
-		(void)view->CreateStaticMeshInstance(cube, At(c_Separation));
+		const bgl::MeshInstanceHandle mover = view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(cube).SetTransform(At(-c_Separation)));
+		(void)view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(cube).SetTransform(At(c_Separation)));
 
 		const float aspect = static_cast<float>(width) / static_cast<float>(height);
 

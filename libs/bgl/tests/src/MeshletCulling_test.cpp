@@ -341,7 +341,8 @@ namespace
 		desc.doubleSided     = true;
 
 		const std::array<bgl::MaterialHandle, 1> materials = { sceneRef->CreatePbrMaterial(desc) };
-		const auto floor = sceneRef->AddStaticMeshGeom(mesh, 0, materials);
+		const auto                               floor     = sceneRef->AddStaticMeshGeom(
+			bgl::StaticMeshGeomDesc().SetMesh(&mesh).SetMaterials(materials));
 		REQUIRE(floor.IsValid());
 
 		const uint32_t meshlets = OnlySubmesh(*scene, floor).meshlets.count;
@@ -357,11 +358,12 @@ namespace
 		// Enough that the culling loop runs many chunks, and an odd survivor count straddles a word.
 		REQUIRE(groups > 2u * bgl::idl::cMeshletCullGroupSize);
 
-		view->CreateStaticMeshInstance(floor, glm::mat4(1.0f));
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(floor));
 
 		const auto caster = view->CreateStaticMeshInstance(
-			sceneRef->AddCubeGeom(),
-			glm::translate(glm::mat4(1.0f), glm::vec3(2.5f, 0.6f, -9.0f)));
+			bgl::StaticMeshInstanceDesc()
+				.SetGeom(sceneRef->AddCubeGeom())
+				.SetTransform(glm::translate(glm::mat4(1.0f), glm::vec3(2.5f, 0.6f, -9.0f))));
 
 		auto blob       = bgl::BlobShadowDesc();
 		blob.radius     = 2.0f;
@@ -446,14 +448,17 @@ TEST_CASE(
 	material.materialType = bgl::MaterialType::kNull;
 
 	const std::array<bgl::MaterialHandle, 1> materials = { material };
-	const auto floor = sceneRef->AddStaticMeshGeom(mesh, 0, materials);
+	const auto                               floor     = sceneRef->AddStaticMeshGeom(
+		bgl::StaticMeshGeomDesc().SetMesh(&mesh).SetMaterials(materials));
 	REQUIRE(floor.IsValid());
 
 	// Turned and scaled, so the reference below checks the sphere is placed as the draw places it.
 	const glm::mat4 transform = glm::scale(
 		glm::rotate(glm::mat4(1.0f), glm::radians(20.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
 		glm::vec3(1.5f));
-	REQUIRE(view->CreateStaticMeshInstance(floor, transform).IsValid());
+	REQUIRE(view->CreateStaticMeshInstance(
+					bgl::StaticMeshInstanceDesc().SetGeom(floor).SetTransform(transform))
+	            .IsValid());
 
 	const glm::mat4 viewProj = FloorCamera().GetViewProjection();
 

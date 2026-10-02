@@ -115,7 +115,7 @@ TEST_CASE("A matte sphere under forest sits at Blender's level", "[pbr][ibl][par
 	      .specularFactor  = 0.0f });
 
 	const auto sphere = scene->AddSphereGeom(64, 32, 5.0f, matte);
-	(void)view->CreateStaticMeshInstance(sphere, glm::mat4(1.0f));
+	(void)view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(sphere));
 
 	auto camera = bgl::Camera();
 	camera.LookAt(glm::vec3(0.0f, 0.0f, 20.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))
@@ -241,8 +241,9 @@ TEST_CASE(
 	      .roughnessFactor = 1.0f,
 	      .specularFactor  = 0.0f });
 
-	const auto sphere   = scene->AddSphereGeom(64, 32, 5.0f, matte);
-	const auto instance = view->CreateStaticMeshInstance(sphere, glm::mat4(1.0f));
+	const auto sphere = scene->AddSphereGeom(64, 32, 5.0f, matte);
+	const auto instance =
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(sphere));
 
 	auto camera = bgl::Camera();
 	camera.LookAt(glm::vec3(0.0f, 0.0f, 20.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))

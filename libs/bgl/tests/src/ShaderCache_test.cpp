@@ -57,7 +57,8 @@ namespace
 
 		auto sphere    = scene->AddSphereGeom(32, 32, 5.0f, metalMat);
 		auto transform = glm::mat4(1.0f);
-		view->CreateStaticMeshInstance(sphere, transform);
+		view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(sphere).SetTransform(transform));
 
 		auto camera = bgl::Camera();
 		camera

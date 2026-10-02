@@ -20,6 +20,7 @@
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/RigHandle.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/StaticMeshGeomDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <bgl/types/TextureAssetHandle.h>
 #include <core/ref/Ref.h>
@@ -86,19 +87,13 @@ namespace bgl
 		/**
 		 * Adds one mesh of a loaded BMesh as static-mesh geometry, uploading its submeshes'
 		 * geometry into this scene's buffers. Each submesh is bound to
-		 * `materials[submesh.material]`; a submesh whose material index is out of range (e.g. the
-		 * source had none) is left unlit.
+		 * `desc.materials[submesh.material]` -- see StaticMeshGeomDesc.
 		 *
-		 * @param mesh       A BMesh loaded from disk (see assetlib::load).
-		 * @param meshIndex  Index into `mesh.meshes`.
-		 * @param materials  Materials parallel to `mesh.materials`, resolved by the caller.
-		 * @throws SceneError if `meshIndex` is out of range or a buffer allocation fails.
+		 * @throws SceneError if `desc.mesh` is null, `desc.meshIndex` is out of range, or a buffer
+		 *         allocation fails.
 		 */
 		virtual GeomHandle
-		AddStaticMeshGeom(
-			const assetlib::BMesh&          mesh,
-			uint32_t                        meshIndex,
-			std::span<const MaterialHandle> materials) = 0;
+		AddStaticMeshGeom(const StaticMeshGeomDesc& desc) = 0;
 
 		/**
 		 * The commit half of the AddStaticMeshGeom split: uploads a mesh CookStaticMesh flattened,

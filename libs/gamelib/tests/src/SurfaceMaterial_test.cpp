@@ -201,8 +201,9 @@ TEST_CASE("A project's own surface draws the material that names it", "[gamelib]
 	job.viewport = bgl::Viewport(256.0f, 256.0f);
 
 	const auto draw = [&](bgl::MaterialHandle material, const char* png) {
-		const bgl::GeomHandle geom     = scene->AddSphereGeom(24, 24, 3.0f, material);
-		const auto            instance = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		const bgl::GeomHandle geom = scene->AddSphereGeom(24, 24, 3.0f, material);
+		const auto            instance =
+			view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 
 		for (int i = 0; i < 4; ++i) gfx->DrawFrame(target, job);
 		gfx->ScreenshotPng(target, png);
@@ -485,7 +486,7 @@ TEST_CASE("A lit surface material routes by its document's model", "[gamelib][su
 	gfx->ScreenshotPng(target, emptyPng);
 
 	const bgl::GeomHandle geom = scene->AddSphereGeom(24, 24, 3.0f, lit);
-	view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+	view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 	for (int i = 0; i < 4; ++i) gfx->DrawFrame(target, job);
 
 	const auto* litPng = "assets/golden/gamelib_lit_glow.got.png";
@@ -649,8 +650,7 @@ TEST_CASE("A toon surface material draws from its document", "[gamelib][surface]
 				assets.AcquireMaterial(std::string("Authored/Materials/") + material);
 			REQUIRE(handle.IsValid());
 			view->CreateStaticMeshInstance(
-				scene->AddSphereGeom(24, 24, 3.0f, handle),
-				glm::mat4(1.0f));
+				bgl::StaticMeshInstanceDesc().SetGeom(scene->AddSphereGeom(24, 24, 3.0f, handle)));
 		}
 
 		auto job     = bgl::RenderJob();

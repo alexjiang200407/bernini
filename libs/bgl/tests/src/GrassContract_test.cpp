@@ -225,8 +225,11 @@ TEST_CASE("a look bound by a live geom cannot be deleted", "[grass][contract]")
 	const std::array<bgl::MaterialHandle, 1> materials = { ground };
 	const std::array<bgl::GrassHandle, 2>    looks     = { bgl::GrassHandle(), grass };
 
-	const bgl::GeomHandle first  = scene->AddStaticMeshGeom(MakeTriangleMesh(), 0, materials);
-	const bgl::GeomHandle second = scene->AddStaticMeshGeom(MakeTriangleMesh(), 0, materials);
+	const auto            triangle = MakeTriangleMesh();
+	const bgl::GeomHandle first    = scene->AddStaticMeshGeom(
+		bgl::StaticMeshGeomDesc().SetMesh(&triangle).SetMaterials(materials));
+	const bgl::GeomHandle second = scene->AddStaticMeshGeom(
+		bgl::StaticMeshGeomDesc().SetMesh(&triangle).SetMaterials(materials));
 	scene->AttachGrass(first, MakeGrass(), 0, looks);
 	scene->AttachGrass(second, MakeGrass(), 0, looks);
 
@@ -248,7 +251,9 @@ TEST_CASE("attaching grass again releases the looks the geom held", "[grass][con
 	const bgl::GrassHandle    after  = scene->CreateGrass(ValidLook(ground));
 
 	const std::array<bgl::MaterialHandle, 1> materials = { ground };
-	const bgl::GeomHandle geom = scene->AddStaticMeshGeom(MakeTriangleMesh(), 0, materials);
+	const auto                               triangle  = MakeTriangleMesh();
+	const bgl::GeomHandle                    geom      = scene->AddStaticMeshGeom(
+		bgl::StaticMeshGeomDesc().SetMesh(&triangle).SetMaterials(materials));
 
 	const std::array<bgl::GrassHandle, 2> first  = { bgl::GrassHandle(), before };
 	const std::array<bgl::GrassHandle, 2> second = { bgl::GrassHandle(), after };
@@ -268,7 +273,9 @@ TEST_CASE("a grass field bound to no look holds nothing", "[grass][contract]")
 	const bgl::MaterialHandle ground = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
 	const bgl::GrassHandle    grass  = scene->CreateGrass(ValidLook(ground));
 	const std::array<bgl::MaterialHandle, 1> materials = { ground };
-	const bgl::GeomHandle geom = scene->AddStaticMeshGeom(MakeTriangleMesh(), 0, materials);
+	const auto                               triangle  = MakeTriangleMesh();
+	const bgl::GeomHandle                    geom      = scene->AddStaticMeshGeom(
+		bgl::StaticMeshGeomDesc().SetMesh(&triangle).SetMaterials(materials));
 
 	SECTION("the looks are fewer than the field's slot")
 	{
@@ -309,7 +316,9 @@ TEST_CASE("AttachGrass refuses what it cannot bind, and changes nothing", "[gras
 	const bgl::MaterialHandle ground = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
 	const bgl::GrassHandle    held   = scene->CreateGrass(ValidLook(ground));
 	const std::array<bgl::MaterialHandle, 1> materials = { ground };
-	const bgl::GeomHandle geom = scene->AddStaticMeshGeom(MakeTriangleMesh(), 0, materials);
+	const auto                               triangle  = MakeTriangleMesh();
+	const bgl::GeomHandle                    geom      = scene->AddStaticMeshGeom(
+		bgl::StaticMeshGeomDesc().SetMesh(&triangle).SetMaterials(materials));
 
 	const std::array<bgl::GrassHandle, 2> heldLooks = { bgl::GrassHandle(), held };
 	scene->AttachGrass(geom, MakeGrass(), 0, heldLooks);
@@ -324,7 +333,8 @@ TEST_CASE("AttachGrass refuses what it cannot bind, and changes nothing", "[gras
 
 	SECTION("a dead geom")
 	{
-		const bgl::GeomHandle dead = scene->AddStaticMeshGeom(MakeTriangleMesh(), 0, materials);
+		const bgl::GeomHandle dead = scene->AddStaticMeshGeom(
+			bgl::StaticMeshGeomDesc().SetMesh(&triangle).SetMaterials(materials));
 		scene->DeleteGeom(dead);
 		CHECK_THROWS_AS(scene->AttachGrass(dead, MakeGrass(), 0, heldLooks), bgl::SceneError);
 	}
@@ -348,7 +358,9 @@ TEST_CASE("AttachGrass refuses grass ranges the file cannot back", "[grass][cont
 
 	const std::array<bgl::MaterialHandle, 1> materials = { scene->CreatePbrMaterial(
 		bgl::PbrMaterialDesc()) };
-	const bgl::GeomHandle geom = scene->AddStaticMeshGeom(MakeTriangleMesh(), 0, materials);
+	const auto                               triangle  = MakeTriangleMesh();
+	const bgl::GeomHandle                    geom      = scene->AddStaticMeshGeom(
+		bgl::StaticMeshGeomDesc().SetMesh(&triangle).SetMaterials(materials));
 
 	SECTION("a well-formed field, and one belonging to another mesh, attach")
 	{

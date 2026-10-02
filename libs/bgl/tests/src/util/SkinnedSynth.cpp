@@ -169,6 +169,8 @@ namespace bgl::test::skinned_synth
 	{
 		const std::array<MaterialHandle, 1> materials = { { material } };
 
-		return scene.AddStaticMeshGeom(MakeQuad(), 0, materials);
+		const auto quad = MakeQuad();
+		return scene.AddStaticMeshGeom(
+			bgl::StaticMeshGeomDesc().SetMesh(&quad).SetMaterials(materials));
 	}
 }

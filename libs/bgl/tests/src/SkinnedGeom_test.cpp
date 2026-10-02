@@ -693,8 +693,9 @@ TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
 		CHECK_THROWS_AS(view->SetSkinnedPlayback(table, crossfade), bgl::SceneError);
 		CHECK_THROWS_AS(view->GetSkinnedPlayback(table), bgl::SceneError);
 
-		const auto cube  = scene->AddCubeGeom(bgl::MaterialHandle());
-		const auto still = view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
+		const auto cube = scene->AddCubeGeom(bgl::MaterialHandle());
+		const auto still =
+			view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(cube));
 		CHECK_THROWS_AS(view->SetSkinnedPlayback(still, crossfade), bgl::SceneError);
 		CHECK_THROWS_AS(view->GetSkinnedPlayback(still), bgl::SceneError);
 
@@ -979,7 +980,9 @@ TEST_CASE("a skinned submesh culls by its posed box, not its bind pose", "[skinn
 
 	// The same bytes as static geometry: its sphere is the cooked bind pose, so the two spheres
 	// differing is the whole point -- and a skinned add that ignored its box would match it.
-	const auto asStatic = scene->AddStaticMeshGeom(MakeSkinnedMesh(), 0, materials);
+	const auto skinnedMesh = MakeSkinnedMesh();
+	const auto asStatic    = scene->AddStaticMeshGeom(
+		bgl::StaticMeshGeomDesc().SetMesh(&skinnedMesh).SetMaterials(materials));
 	REQUIRE(asStatic.IsValid());
 
 	auto& submeshBuffer = scene->GetSubmeshBuffer();

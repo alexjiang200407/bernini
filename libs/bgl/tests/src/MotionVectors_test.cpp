@@ -154,8 +154,8 @@ namespace
 		{
 			auto plane = scene->AddPlaneGeom(1, 1, c_QuadExtent * 2.0f, c_QuadExtent * 2.0f);
 			return view->CreateStaticMeshInstance(
-				plane,
-				glm::translate(glm::mat4(1.0f), { 0, 0, c_PlaneZ }));
+				bgl::StaticMeshInstanceDesc().SetGeom(plane).SetTransform(
+					glm::translate(glm::mat4(1.0f), { 0, 0, c_PlaneZ })));
 		}
 
 		// The synthesised sliding quad, on the per-instance pose source so its palette carries both

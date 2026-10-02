@@ -15,6 +15,7 @@
 #include <bgl/types/MeshInstanceFlags.h>
 #include <bgl/types/MeshInstanceHandle.h>
 #include <bgl/types/SkinnedMeshInstanceDesc.h>
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/WindDesc.h>
 #include <bgpu/uniforms/UniformsBase.h>
 #include <core/ref/Ref.h>
@@ -56,7 +57,7 @@ namespace bgl
 		 * Places an instance of `geom` in this view, one drawable per submesh.
 		 */
 		virtual MeshInstanceHandle
-		CreateStaticMeshInstance(GeomHandle geom, glm::mat4 transform) = 0;
+		CreateStaticMeshInstance(const StaticMeshInstanceDesc& desc) = 0;
 
 		/**
 		 * The kSkinnedMesh counterpart of CreateStaticMeshInstance. Deleted through the same

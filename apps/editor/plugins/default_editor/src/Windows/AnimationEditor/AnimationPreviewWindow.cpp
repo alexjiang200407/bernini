@@ -52,6 +52,7 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Bounds.h>
 #include <bgl/types/FootIKDesc.h>
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <core/err/util.h>
 #include <core/glm.h>
 #include <core/math.h>
@@ -313,8 +314,10 @@ AnimationPreviewWindow::PlaceGround(editor::RenderContext& context, const bgl::S
 		const glm::mat4 flip =
 			glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 
-		m_GroundInstances[0] = view->CreateStaticMeshInstance(m_GroundGeom, floor);
-		m_GroundInstances[1] = view->CreateStaticMeshInstance(m_GroundGeom, floor * flip);
+		m_GroundInstances[0] = view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(m_GroundGeom).SetTransform(floor));
+		m_GroundInstances[1] = view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(m_GroundGeom).SetTransform(floor * flip));
 	}
 }
 

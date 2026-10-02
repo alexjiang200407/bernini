@@ -103,8 +103,10 @@ TEST_CASE("A blob shadow darkens the ground under its placement", "[blobshadow][
 	const auto groundGeom = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, white);
 	const auto casterGeom = scene->AddPlaneGeom(1, 1, 0.5f, 0.5f, white);
 
-	const auto groundInstance = view->CreateStaticMeshInstance(groundGeom, c_Flat);
-	const auto caster         = view->CreateStaticMeshInstance(casterGeom, Lifted(0.5f));
+	const auto groundInstance = view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(groundGeom).SetTransform(c_Flat));
+	const auto caster = view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(casterGeom).SetTransform(Lifted(0.5f)));
 
 	auto camera = bgl::Camera();
 	camera
@@ -284,9 +286,12 @@ TEST_CASE("A blob shadow drapes over a raised static receiver", "[blobshadow][re
 	constexpr float c_PlatformY = 1.2f;
 	constexpr float c_CasterY   = 1.7f;
 
-	const auto groundInstance = view->CreateStaticMeshInstance(groundGeom, c_Flat);
-	const auto platform       = view->CreateStaticMeshInstance(platformGeom, Lifted(c_PlatformY));
-	const auto caster         = view->CreateStaticMeshInstance(casterGeom, Lifted(c_CasterY));
+	const auto groundInstance = view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(groundGeom).SetTransform(c_Flat));
+	const auto platform = view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(platformGeom).SetTransform(Lifted(c_PlatformY)));
+	const auto caster = view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(casterGeom).SetTransform(Lifted(c_CasterY)));
 
 	auto camera = bgl::Camera();
 	camera
@@ -359,7 +364,8 @@ TEST_CASE("A blob shadow drapes over a raised static receiver", "[blobshadow][re
 		cutoutDesc.layerType = bgl::LayerType::kMask;
 		const auto cutoutGeom =
 			scene->AddPlaneGeom(1, 1, 2.0f, 2.0f, scene->CreatePbrMaterial(cutoutDesc));
-		(void)view->CreateStaticMeshInstance(cutoutGeom, Lifted(c_PlatformY));
+		(void)view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(cutoutGeom).SetTransform(Lifted(c_PlatformY)));
 
 		auto shortFade       = desc;
 		shortFade.fadeHeight = 1.5f;
@@ -387,7 +393,8 @@ TEST_CASE("A blob shadow drapes over a raised static receiver", "[blobshadow][re
 		cutoutDesc.baseColorFactor = glm::vec4(1.0f, 1.0f, 1.0f, 0.1f);
 		const auto cutoutGeom =
 			scene->AddPlaneGeom(1, 1, 2.0f, 2.0f, scene->CreatePbrMaterial(cutoutDesc));
-		(void)view->CreateStaticMeshInstance(cutoutGeom, Lifted(c_PlatformY));
+		(void)view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(cutoutGeom).SetTransform(Lifted(c_PlatformY)));
 
 		auto shortFade       = desc;
 		shortFade.fadeHeight = 1.5f;
@@ -415,7 +422,8 @@ TEST_CASE("A blob shadow drapes over a raised static receiver", "[blobshadow][re
 		hashedDesc.baseColorFactor = glm::vec4(1.0f, 1.0f, 1.0f, 0.6f);
 		const auto hashedGeom =
 			scene->AddPlaneGeom(1, 1, 2.0f, 2.0f, scene->CreatePbrMaterial(hashedDesc));
-		(void)view->CreateStaticMeshInstance(hashedGeom, Lifted(c_PlatformY));
+		(void)view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(hashedGeom).SetTransform(Lifted(c_PlatformY)));
 
 		auto shortFade       = desc;
 		shortFade.fadeHeight = 1.5f;
@@ -464,7 +472,10 @@ TEST_CASE("A blob shadow drapes over a raised static receiver", "[blobshadow][re
 		oneSided.doubleSided = false;
 		const auto oneSidedGeom =
 			scene->AddPlaneGeom(1, 1, 2.0f, 2.0f, scene->CreatePbrMaterial(oneSided));
-		(void)view->CreateStaticMeshInstance(oneSidedGeom, UpsideDown(c_PlatformY));
+		(void)view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc()
+				.SetGeom(oneSidedGeom)
+				.SetTransform(UpsideDown(c_PlatformY)));
 
 		auto shortFade       = desc;
 		shortFade.fadeHeight = 1.5f;
@@ -598,17 +609,22 @@ TEST_CASE(
 	const glm::vec3 eye(0.0f, 2.0f, 5.0f);
 	const glm::vec3 lookAt(0.0f, 0.0f, -3.0f);
 
-	const auto groundInstance = view->CreateStaticMeshInstance(groundGeom, c_Flat);
+	const auto groundInstance = view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(groundGeom).SetTransform(c_Flat));
 
 	// Radius 5 about z = 4: the volume runs from z = -1, ahead, to z = 9, behind the eye.
 	const auto underfoot = view->CreateStaticMeshInstance(
-		casterGeom,
-		glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 4.0f)) * Lifted(0.5f));
+		bgl::StaticMeshInstanceDesc()
+			.SetGeom(casterGeom)
+			.SetTransform(
+				glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 4.0f)) * Lifted(0.5f)));
 
 	// Radius 5 about z = 20: every corner of the volume is behind the eye.
 	const auto behind = view->CreateStaticMeshInstance(
-		casterGeom,
-		glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 20.0f)) * Lifted(0.5f));
+		bgl::StaticMeshInstanceDesc()
+			.SetGeom(casterGeom)
+			.SetTransform(
+				glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 20.0f)) * Lifted(0.5f)));
 
 	const float aspect = static_cast<float>(c_Width) / static_cast<float>(c_Height);
 

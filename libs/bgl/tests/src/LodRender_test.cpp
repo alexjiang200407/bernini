@@ -123,11 +123,12 @@ namespace
 			scene = gfx->CreateScene(bgl::SceneDesc());
 			view  = gfx->CreateSceneView(scene, 4);
 
-			const auto geom = scene->AddStaticMeshGeom(MakeSplitLevels(), 0, {});
+			const auto levels = MakeSplitLevels();
+			const auto geom = scene->AddStaticMeshGeom(bgl::StaticMeshGeomDesc().SetMesh(&levels));
 			REQUIRE(geom.IsValid());
 			view->CreateStaticMeshInstance(
-				geom,
-				glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -2.0f)));
+				bgl::StaticMeshInstanceDesc().SetGeom(geom).SetTransform(
+					glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -2.0f))));
 
 			auto targetDesc       = bgl::RenderTargetDesc();
 			targetDesc.width      = c_Size;

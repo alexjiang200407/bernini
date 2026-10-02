@@ -130,7 +130,7 @@ TEST_CASE("A surface material draws what the engine's own PBR path draws", "[sur
 		static_cast<MaterialType>(std::to_underlying(MaterialType::kGameStart) + 1u));
 
 	auto sphere = scene->AddSphereGeom(32, 32, 5.0f, material);
-	view->CreateStaticMeshInstance(sphere, glm::mat4(1.0f));
+	view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(sphere));
 
 	auto job     = bgl::RenderJob();
 	job.view     = view;
@@ -234,8 +234,8 @@ TEST_CASE("Two surfaces draw side by side across three layers", "[surface][rende
 
 	for (const auto& [geom, x] : spheres)
 		view->CreateStaticMeshInstance(
-			geom,
-			glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, 0.0f)));
+			bgl::StaticMeshInstanceDesc().SetGeom(geom).SetTransform(
+				glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, 0.0f))));
 
 	auto job     = bgl::RenderJob();
 	job.view     = view;
@@ -358,7 +358,9 @@ TEST_CASE("More than four surfaces draw, opaque and blended", "[surface][render]
 		{
 			const glm::vec3 centre(x, y, 0.0f);
 			const auto      geom = scene->AddSphereGeom(16, 16, 1.8f, material);
-			view->CreateStaticMeshInstance(geom, glm::translate(glm::mat4(1.0f), centre));
+			view->CreateStaticMeshInstance(
+				bgl::StaticMeshInstanceDesc().SetGeom(geom).SetTransform(
+					glm::translate(glm::mat4(1.0f), centre)));
 			spheres.push_back({ centre, i });
 		}
 	}
@@ -638,7 +640,8 @@ TEST_CASE("A surface material draws on skinned geometry", "[surface][render][ski
 	const auto still = AddQuadStaticGeom(*scene, rim);
 	REQUIRE(still.IsValid());
 
-	const auto stillInstance = view->CreateStaticMeshInstance(still, glm::mat4(1.0f));
+	const auto stillInstance =
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(still));
 	gfx->DrawFrame(target, job);
 	gfx->ScreenshotPng(target, staticPng);
 	view->DeleteMeshInstance(stillInstance);
@@ -736,7 +739,7 @@ TEST_CASE("A routed data slot draws what its composited map draws", "[surface][r
 
 	auto material = scene->CreateSurfaceMaterial(whole);
 	auto sphere   = scene->AddSphereGeom(32, 32, 5.0f, material);
-	view->CreateStaticMeshInstance(sphere, glm::mat4(1.0f));
+	view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(sphere));
 
 	auto job     = bgl::RenderJob();
 	job.view     = view;
@@ -824,8 +827,9 @@ TEST_CASE("A double-sided surface shades its back face as its front", "[surface]
 	                         { "baseColorFactor", glm::vec4(0.05f, 0.05f, 0.06f, 1.0f) } },
 		});
 
-	auto       plane    = scene->AddPlaneGeom(4, 4, 10.0f, 7.0f, material);
-	const auto instance = view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
+	auto       plane = scene->AddPlaneGeom(4, 4, 10.0f, 7.0f, material);
+	const auto instance =
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(plane));
 
 	auto job     = bgl::RenderJob();
 	job.view     = view;
@@ -898,11 +902,13 @@ TEST_CASE("A lit surface draws its own lighting", "[surface][lit][render]")
 	auto band = scene->CreateSurfaceMaterial({ .surface = "Band" });
 
 	view->CreateStaticMeshInstance(
-		scene->AddSphereGeom(24, 24, 3.5f, unlit),
-		glm::translate(glm::mat4(1.0f), glm::vec3(-5.5f, 0.0f, 0.0f)));
+		bgl::StaticMeshInstanceDesc()
+			.SetGeom(scene->AddSphereGeom(24, 24, 3.5f, unlit))
+			.SetTransform(glm::translate(glm::mat4(1.0f), glm::vec3(-5.5f, 0.0f, 0.0f))));
 	view->CreateStaticMeshInstance(
-		scene->AddSphereGeom(24, 24, 3.5f, band),
-		glm::translate(glm::mat4(1.0f), glm::vec3(5.5f, 0.0f, 0.0f)));
+		bgl::StaticMeshInstanceDesc()
+			.SetGeom(scene->AddSphereGeom(24, 24, 3.5f, band))
+			.SetTransform(glm::translate(glm::mat4(1.0f), glm::vec3(5.5f, 0.0f, 0.0f))));
 
 	auto job     = bgl::RenderJob();
 	job.view     = view;
@@ -979,8 +985,8 @@ TEST_CASE("A lit surface draws beside PBR across layers", "[surface][lit][render
 
 	for (const auto& [geom, x] : spheres)
 		view->CreateStaticMeshInstance(
-			geom,
-			glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, 0.0f)));
+			bgl::StaticMeshInstanceDesc().SetGeom(geom).SetTransform(
+				glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, 0.0f))));
 
 	auto job     = bgl::RenderJob();
 	job.view     = view;

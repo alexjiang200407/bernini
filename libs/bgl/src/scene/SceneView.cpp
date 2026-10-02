@@ -428,8 +428,9 @@ namespace bgl
 	}
 
 	MeshInstanceHandle
-	SceneView::CreateStaticMeshInstance(GeomHandle geom, glm::mat4 transform)
+	SceneView::CreateStaticMeshInstance(const StaticMeshInstanceDesc& desc)
 	{
+		const GeomHandle geom = desc.geom;
 		if (geom.geomType != GeomType::kStaticMesh)
 		{
 			throw SceneError(
@@ -448,7 +449,7 @@ namespace bgl
 		}
 
 		// No playback record: a static placement's MeshInstance.playback stays null.
-		return WritePlacement(geom, transform, 0);
+		return WritePlacement(geom, desc.transform, 0);
 	}
 
 	namespace

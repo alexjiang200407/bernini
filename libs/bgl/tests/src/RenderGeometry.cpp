@@ -69,7 +69,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 			.Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
 
 		auto cubeGeom = scene->AddCubeGeom();
-		view->CreateStaticMeshInstance(cubeGeom, glm::mat4(1.0f));
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(cubeGeom));
 
 		auto job     = bgl::RenderJob();
 		job.view     = view;
@@ -101,7 +101,7 @@ TEST_CASE("Geometry", "[geometry][render]")
 
 		// Deliberately not square: a width/height swap would otherwise be invisible here.
 		auto planeGeom = scene->AddPlaneGeom(4, 4, 12.0f, 6.0f);
-		view->CreateStaticMeshInstance(planeGeom, glm::mat4(1.0f));
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(planeGeom));
 
 		auto job     = bgl::RenderJob();
 		job.view     = view;
@@ -137,7 +137,8 @@ TEST_CASE("Geometry", "[geometry][render]")
 
 		bgl::GeomHandle planeGeom;
 		REQUIRE_NOTHROW(planeGeom = scene->AddPlaneGeom(64, 64, 12.0f, 6.0f));
-		REQUIRE_NOTHROW(view->CreateStaticMeshInstance(planeGeom, glm::mat4(1.0f)));
+		REQUIRE_NOTHROW(
+			view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(planeGeom)));
 
 		auto job     = bgl::RenderJob();
 		job.view     = view;
@@ -175,7 +176,8 @@ TEST_CASE("Geometry", "[geometry][render]")
 			glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 
 		auto planeGeom = scene->AddPlaneGeom(4, 4, 10.0f, 10.0f);
-		view->CreateStaticMeshInstance(planeGeom, toFloor);
+		view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(planeGeom).SetTransform(toFloor));
 
 		auto job     = bgl::RenderJob();
 		job.view     = view;
@@ -222,8 +224,10 @@ TEST_CASE("Geometry", "[geometry][render]")
 		auto sphereTransform  = glm::mat4(1.0f);
 		sphereTransform[3][0] = -5.0f;
 
-		view->CreateStaticMeshInstance(cubeGeom, cubeTransform);
-		view->CreateStaticMeshInstance(sphereGeom, sphereTransform);
+		view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(cubeGeom).SetTransform(cubeTransform));
+		view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(sphereGeom).SetTransform(sphereTransform));
 
 		auto job     = bgl::RenderJob();
 		job.view     = view;
@@ -255,12 +259,13 @@ TEST_CASE("Geometry", "[geometry][render]")
 			.Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
 
 		auto cubeGeom = cubeScene->AddCubeGeom();
-		cubeView->CreateStaticMeshInstance(cubeGeom, glm::mat4(1.0f));
+		cubeView->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(cubeGeom));
 
 		auto sphereGeom       = sphereScene->AddSphereGeom(32, 32, 1.0f);
 		auto sphereTransform  = glm::mat4(1.0f);
 		sphereTransform[3][0] = -5.0f;
-		sphereView->CreateStaticMeshInstance(sphereGeom, sphereTransform);
+		sphereView->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(sphereGeom).SetTransform(sphereTransform));
 
 		const auto viewport =
 			bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
@@ -308,8 +313,10 @@ TEST_CASE("Geometry", "[geometry][render]")
 		auto secondTransform  = glm::mat4(1.0f);
 		secondTransform[3][0] = -5.0f;
 
-		view->CreateStaticMeshInstance(cubeGeom, firstTransform);
-		view->CreateStaticMeshInstance(cubeGeom, secondTransform);
+		view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(cubeGeom).SetTransform(firstTransform));
+		view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(cubeGeom).SetTransform(secondTransform));
 
 		auto job     = bgl::RenderJob();
 		job.view     = view;
@@ -343,8 +350,9 @@ TEST_CASE("Geometry", "[geometry][render]")
 		auto sphereTransform  = glm::mat4(1.0f);
 		sphereTransform[3][0] = -5.0f;
 
-		view->CreateStaticMeshInstance(cubeGeom, glm::mat4(1.0f));
-		auto sphereInst = view->CreateStaticMeshInstance(sphereGeom, sphereTransform);
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(cubeGeom));
+		auto sphereInst = view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(sphereGeom).SetTransform(sphereTransform));
 
 		// Removing the sphere instance leaves only the cube at the origin, so the
 		// frame must match the lone-cube golden.
@@ -381,8 +389,9 @@ TEST_CASE("Geometry", "[geometry][render]")
 		auto secondTransform  = glm::mat4(1.0f);
 		secondTransform[3][0] = -5.0f;
 
-		view->CreateStaticMeshInstance(cubeGeom, glm::mat4(1.0f));
-		auto secondInst = view->CreateStaticMeshInstance(cubeGeom, secondTransform);
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(cubeGeom));
+		auto secondInst = view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(cubeGeom).SetTransform(secondTransform));
 
 		// Removing the x=-5 cube leaves only the cube at the origin.
 		view->DeleteMeshInstance(secondInst);
@@ -454,7 +463,7 @@ TEST_CASE("Render to two targets", "[geometry][render][multitarget]")
 	auto cubeScene = gfxBase->CreateScene(sceneDesc);
 	auto cubeView  = gfxBase->CreateSceneView(cubeScene, 8);
 	auto cubeGeomA = cubeScene->AddCubeGeom();
-	cubeView->CreateStaticMeshInstance(cubeGeomA, glm::mat4(1.0f));
+	cubeView->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(cubeGeomA));
 
 	auto cubeContext     = bgl::RenderJob();
 	cubeContext.view     = cubeView;
@@ -468,8 +477,9 @@ TEST_CASE("Render to two targets", "[geometry][render][multitarget]")
 
 	auto secondTransform  = glm::mat4(1.0f);
 	secondTransform[3][0] = -5.0f;
-	twoView->CreateStaticMeshInstance(cubeGeomB, glm::mat4(1.0f));
-	twoView->CreateStaticMeshInstance(cubeGeomB, secondTransform);
+	twoView->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(cubeGeomB));
+	twoView->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(cubeGeomB).SetTransform(secondTransform));
 
 	auto twoContext     = bgl::RenderJob();
 	twoContext.view     = twoView;

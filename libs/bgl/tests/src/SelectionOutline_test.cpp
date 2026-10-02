@@ -150,7 +150,7 @@ TEST_CASE("Selection outline contours the selected instance", "[selection][rende
 	auto geom = scene->AddCubeGeom(bgl::MaterialHandle());
 	REQUIRE(geom.IsValid());
 
-	auto instance = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+	auto instance = view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 	REQUIRE(instance.IsValid());
 
 	auto camera = bgl::Camera();
@@ -262,7 +262,8 @@ TEST_CASE(
 	auto instances = std::vector<bgl::MeshInstanceHandle>();
 	for (uint32_t i = 0; i < c_Instances; ++i)
 	{
-		instances.push_back(view->CreateStaticMeshInstance(geom, glm::mat4(1.0f)));
+		instances.push_back(
+			view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom)));
 	}
 
 	for (const auto& instance : instances)
@@ -318,10 +319,12 @@ TEST_CASE("The outline contours the level of detail the view draws", "[selection
 	auto view  = gfx->CreateSceneView(scene, 4);
 
 	const auto material = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
-	auto       geom     = scene->AddStaticMeshGeom(TwoSquares(), 0, std::array{ material });
+	const auto squares  = TwoSquares();
+	auto       geom     = scene->AddStaticMeshGeom(
+		bgl::StaticMeshGeomDesc().SetMesh(&squares).SetMaterials(std::array{ material }));
 	REQUIRE(geom.IsValid());
 
-	auto instance = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+	auto instance = view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 	view->SetSubmeshSelected(instance, 0, true);
 
 	// Up close level 0 would draw; pinning level 1 is what the Mesh Editor's selector does.
@@ -376,7 +379,7 @@ TEST_CASE("The outline keeps its share of the frame as the resolution drops", "[
 	auto geom = scene->AddCubeGeom(bgl::MaterialHandle());
 	REQUIRE(geom.IsValid());
 
-	auto instance = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+	auto instance = view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 	REQUIRE(instance.IsValid());
 	view->SetSubmeshSelected(instance, 0, true);
 

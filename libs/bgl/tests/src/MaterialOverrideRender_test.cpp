@@ -185,8 +185,10 @@ TEST_CASE(
 		// ONE geom. Both instances share it, so the geometry cannot explain any difference below.
 		const auto plane = scene->AddPlaneGeom(1, 1, c_PlaneSize, c_PlaneSize, red);
 
-		const auto worn  = view->CreateStaticMeshInstance(plane, At(-c_PlaneOffset));
-		const auto plain = view->CreateStaticMeshInstance(plane, At(c_PlaneOffset));
+		const auto worn = view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(plane).SetTransform(At(-c_PlaneOffset)));
+		const auto plain = view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(plane).SetTransform(At(c_PlaneOffset)));
 
 		{
 			const std::string png = capture("bernini_override_before");
@@ -262,8 +264,10 @@ TEST_CASE(
 
 		const auto plane = scene->AddPlaneGeom(1, 1, c_PlaneSize, c_PlaneSize, opaque);
 
-		const auto worn  = view->CreateStaticMeshInstance(plane, At(-c_PlaneOffset));
-		const auto plain = view->CreateStaticMeshInstance(plane, At(c_PlaneOffset));
+		const auto worn = view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(plane).SetTransform(At(-c_PlaneOffset)));
+		const auto plain = view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(plane).SetTransform(At(c_PlaneOffset)));
 
 		view->SetSubmeshMaterialOverride(worn, 0, cutout);
 

@@ -506,10 +506,7 @@ namespace bgl
 			MaterialHandle material = {}) override;
 
 		GeomHandle
-		AddStaticMeshGeom(
-			const assetlib::BMesh&          mesh,
-			uint32_t                        meshIndex,
-			std::span<const MaterialHandle> materials) override;
+		AddStaticMeshGeom(const StaticMeshGeomDesc& desc) override;
 
 		GeomHandle
 		AddStaticMeshGeom(PreparedStaticMesh mesh, std::span<const MaterialHandle> materials)

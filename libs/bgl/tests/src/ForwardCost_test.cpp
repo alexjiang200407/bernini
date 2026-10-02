@@ -126,8 +126,8 @@ namespace
 			auto material         = scene->CreatePbrMaterial(desc);
 			auto plane = scene->AddPlaneGeom(segmentsX, segmentsY, c_Plane, c_Plane, material);
 			view->CreateStaticMeshInstance(
-				plane,
-				glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -2.0f)) * roll);
+				bgl::StaticMeshInstanceDesc().SetGeom(plane).SetTransform(
+					glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -2.0f)) * roll));
 		}
 
 		for (uint32_t i = 0; i < layers; ++i)
@@ -143,11 +143,11 @@ namespace
 			auto material         = scene->CreatePbrMaterial(desc);
 			auto plane = scene->AddPlaneGeom(segmentsX, segmentsY, c_Plane, c_Plane, material);
 			view->CreateStaticMeshInstance(
-				plane,
-				glm::translate(
-					glm::mat4(1.0f),
-					glm::vec3(0.0f, 0.0f, 0.5f * static_cast<float>(i))) *
-					roll);
+				bgl::StaticMeshInstanceDesc().SetGeom(plane).SetTransform(
+					glm::translate(
+						glm::mat4(1.0f),
+						glm::vec3(0.0f, 0.0f, 0.5f * static_cast<float>(i))) *
+					roll));
 		}
 
 		auto camera = bgl::Camera();

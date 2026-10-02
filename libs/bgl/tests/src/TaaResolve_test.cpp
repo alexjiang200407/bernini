@@ -72,8 +72,11 @@ namespace
 	{
 		auto plane = scene->AddPlaneGeom(1, 1, c_QuadScale * 2.0f, c_QuadScale * 2.0f);
 		view->CreateStaticMeshInstance(
-			plane,
-			glm::rotate(glm::mat4(1.0f), glm::radians(c_QuadYaw), glm::vec3(0.0f, 0.0f, 1.0f)));
+			bgl::StaticMeshInstanceDesc().SetGeom(plane).SetTransform(
+				glm::rotate(
+					glm::mat4(1.0f),
+					glm::radians(c_QuadYaw),
+					glm::vec3(0.0f, 0.0f, 1.0f))));
 	}
 
 	// Abutting slats in two mid greys: fine detail at moderate contrast, which is what actual scene
@@ -126,8 +129,9 @@ namespace
 		{
 			const float x = startX + static_cast<float>(i) * slatWidth;
 			view->CreateStaticMeshInstance(
-				slats[i % 2],
-				glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, 0.0f)));
+				bgl::StaticMeshInstanceDesc()
+					.SetGeom(slats[i % 2])
+					.SetTransform(glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, 0.0f))));
 		}
 	}
 
@@ -359,9 +363,12 @@ namespace
 
 		auto quad = scene->AddPlaneGeom(1, 1, c_ParallaxQuadSize, c_ParallaxQuadSize);
 		view->CreateStaticMeshInstance(
-			quad,
-			glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, c_ParallaxQuadZ)) *
-				glm::rotate(glm::mat4(1.0f), glm::radians(c_QuadYaw), glm::vec3(0.0f, 0.0f, 1.0f)));
+			bgl::StaticMeshInstanceDesc().SetGeom(quad).SetTransform(
+				glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, c_ParallaxQuadZ)) *
+				glm::rotate(
+					glm::mat4(1.0f),
+					glm::radians(c_QuadYaw),
+					glm::vec3(0.0f, 0.0f, 1.0f))));
 	}
 
 	// Converges at the pan's start, then arrives at x = 0 exactly as RenderPan's pan does -- so the
@@ -474,7 +481,7 @@ namespace
 			c_BackdropSize,
 			c_BackdropSize,
 			scene->CreatePbrMaterial(Grey(c_BackdropGrey)));
-		view->CreateStaticMeshInstance(backdrop, glm::mat4(1.0f));
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(backdrop));
 
 		const auto quad = bgl::test::skinned_synth::AddSlidingQuadGeom(
 			*scene,
@@ -2146,8 +2153,8 @@ TEST_CASE(
 			0.15f);
 		auto quad = scene->AddPlaneGeom(1, 1, 6.0f, 6.0f, scene->CreatePbrMaterial(Grey(0.2f)));
 		(void)view->CreateStaticMeshInstance(
-			quad,
-			glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, c_ParallaxQuadZ)));
+			bgl::StaticMeshInstanceDesc().SetGeom(quad).SetTransform(
+				glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, c_ParallaxQuadZ))));
 	};
 	auto moving = [](int frame) { return CameraAt(frame < c_ConvergeFrames ? -6.0f : 0.0f); };
 	const std::string moved = "assets/golden/taa_rapid_disocclusion.got.png";

@@ -1251,7 +1251,7 @@ TEST_CASE("AssetManager: moving an instance it does not own is refused", "[gamel
 
 	// Placed directly on the view, so the manager never recorded it.
 	const bgl::MeshInstanceHandle foreign =
-		fx.view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		fx.view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 
 	REQUIRE_THROWS_AS(
 		(*fx).SetInstanceTransform(fx.view, foreign, glm::mat4(1.0f)),

@@ -1326,7 +1326,8 @@ TEST_CASE("a hero instance's foot-IK record starts at weight one", "[skinned][pl
 		CHECK_THROWS_AS(view->SetFootIK(table, bgl::FootIKDesc()), bgl::SceneError);
 
 		const auto cube = legScene.scene->AddCubeGeom(bgl::MaterialHandle());
-		const auto stat = view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
+		const auto stat =
+			view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(cube));
 		CHECK_THROWS_AS(view->GetFootIK(stat), bgl::SceneError);
 
 		// HasFootIK answers exactly the question the two calls throw on.

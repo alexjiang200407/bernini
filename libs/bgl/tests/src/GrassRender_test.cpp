@@ -152,7 +152,8 @@ namespace
 			green                     = scene->CreatePbrMaterial(greenDesc);
 
 			ground         = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, white);
-			groundInstance = view->CreateStaticMeshInstance(ground, c_Flat);
+			groundInstance = view->CreateStaticMeshInstance(
+				bgl::StaticMeshInstanceDesc().SetGeom(ground).SetTransform(c_Flat));
 
 			desc.material        = green;
 			desc.blade.rootWidth = 0.05f;

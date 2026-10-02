@@ -196,10 +196,12 @@ TEST_CASE(
 
 	const auto groundGeom = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, white);
 	const auto casterGeom = scene->AddPlaneGeom(1, 1, 0.5f, 0.5f, white);
-	view->CreateStaticMeshInstance(groundGeom, c_Flat);
+	view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(groundGeom).SetTransform(c_Flat));
 	const auto caster = view->CreateStaticMeshInstance(
-		casterGeom,
-		glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.5f, 0.0f)) * c_Flat);
+		bgl::StaticMeshInstanceDesc()
+			.SetGeom(casterGeom)
+			.SetTransform(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.5f, 0.0f)) * c_Flat));
 
 	const std::array<bgl::MaterialHandle, 1> materials = { { white } };
 

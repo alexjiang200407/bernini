@@ -68,7 +68,7 @@ TEST_CASE("A crowd steps on its own queue beside a renderer on the same context"
 
 	auto scene = gfx->CreateScene(bgl::SceneDesc());
 	auto view  = gfx->CreateSceneView(scene, 8);
-	view->CreateStaticMeshInstance(scene->AddCubeGeom(), glm::mat4(1.0f));
+	view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(scene->AddCubeGeom()));
 
 	auto camera = bgl::Camera();
 	camera.LookAt(glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))

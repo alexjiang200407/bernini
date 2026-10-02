@@ -145,8 +145,10 @@ TEST_CASE(
 	const auto early = scene->CreatePbrMaterial(TexturedDesc(green));
 	const auto plane = scene->AddPlaneGeom(1, 1, c_PlaneSize, c_PlaneSize, early);
 
-	const auto left  = view->CreateStaticMeshInstance(plane, At(-c_PlaneOffset));
-	const auto right = view->CreateStaticMeshInstance(plane, At(c_PlaneOffset));
+	const auto left = view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(plane).SetTransform(At(-c_PlaneOffset)));
+	const auto right = view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(plane).SetTransform(At(c_PlaneOffset)));
 	(void)left;  // sampled on screen, never named again
 
 	auto camera = bgl::Camera();

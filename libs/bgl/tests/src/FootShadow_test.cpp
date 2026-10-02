@@ -249,8 +249,13 @@ namespace
 		// The plane geoms are authored in XY; this lays one flat with its normal up.
 		const auto groundGeom = result.scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, white);
 		result.ground         = result.view->CreateStaticMeshInstance(
-			groundGeom,
-			glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)));
+			bgl::StaticMeshInstanceDesc()
+				.SetGeom(groundGeom)
+				.SetTransform(
+					glm::rotate(
+						glm::mat4(1.0f),
+						glm::radians(-90.0f),
+						glm::vec3(1.0f, 0.0f, 0.0f))));
 
 		const std::array<bgl::MaterialHandle, 1> materials = { { white } };
 

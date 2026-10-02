@@ -109,7 +109,8 @@ namespace
 			      .metallicFactor  = 0.0f,
 			      .roughnessFactor = 0.4f });
 
-			view->CreateStaticMeshInstance(scene->AddCubeGeom(orange), glm::mat4(1.0f));
+			view->CreateStaticMeshInstance(
+				bgl::StaticMeshInstanceDesc().SetGeom(scene->AddCubeGeom(orange)));
 
 			auto camera = bgl::Camera();
 			camera

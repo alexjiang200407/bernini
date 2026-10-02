@@ -94,10 +94,11 @@ TEST_CASE("A hidden placement draws nothing and casts nothing", "[meshinstancefl
 		scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, scene->CreatePbrMaterial(whiteDesc));
 	const auto cubeGeom = scene->AddCubeGeom(scene->CreatePbrMaterial(blackDesc));
 
-	const auto groundInstance = view->CreateStaticMeshInstance(groundGeom, c_Flat);
-	const auto cube           = view->CreateStaticMeshInstance(
-		cubeGeom,
-		glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
+	const auto groundInstance = view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(groundGeom).SetTransform(c_Flat));
+	const auto cube = view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(cubeGeom).SetTransform(
+			glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 1.0f, 0.0f))));
 
 	auto camera = bgl::Camera();
 	camera
