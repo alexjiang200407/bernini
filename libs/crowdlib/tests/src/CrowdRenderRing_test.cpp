@@ -159,7 +159,7 @@ TEMPLATE_LIST_TEST_CASE(
 		const std::optional<crowd::RenderTick> held = crowd->GetRenderTick(tick);
 		REQUIRE(held.has_value());
 		CHECK(held->tick == tick);
-		CHECK(held->firstRecord == (tick % c_Ring) * c_MaxAgents);
+		CHECK(held->firstRecordIndex == (tick % c_Ring) * c_MaxAgents);
 		CHECK(held->agentCount == c_Agents);
 	}
 	CHECK_FALSE(crowd->GetRenderTick(c_Ring + 1).has_value());
@@ -241,4 +241,50 @@ TEST_CASE(
 	CHECK(crowd->GetRenderTick(c_Ring + 1).has_value());
 
 	gfx->WaitIdle();
+}
+
+TEMPLATE_LIST_TEST_CASE(
+	"A tick's records run by agent type, in the crowd's type order",
+	"[crowd][render_ring]",
+	CrowdFactories)
+{
+	auto desc = MakeDesc(5);
+	desc.agentTypes.push_back(
+		crowd::AgentType{ .radius         = 0.8f,
+	                      .preferredSpeed = 4.0f,
+	                      .maxSpeed       = 6.0f,
+	                      .mass           = 500.0f });
+	desc.maxGroups = 4;
+	auto crowd     = TestType::Create(desc);
+
+	auto orders      = crowd::GroupOrders();
+	orders.facing    = glm::vec2(1.0f, 0.0f);
+	orders.formation = { .frontage = 4, .spacing = 1.0f };
+
+	// Created out of type order, with a type-0 group on each side of the type-1 one.
+	const auto horse = crowd->CreateGroup({ .agentType = 1, .agentCount = 6, .orders = orders });
+	crowd->CreateGroup({ .agentType = 0, .agentCount = 9, .orders = orders });
+	crowd->CreateGroup({ .agentType = 1, .agentCount = 4, .orders = orders });
+	crowd->Step();
+	crowd->Wait();
+
+	const std::optional<crowd::RenderTick> first = crowd->GetRenderTick(1);
+	REQUIRE(first.has_value());
+	REQUIRE(first->types.size() == 2);
+	CHECK(first->types[0].firstRecordIndex == first->firstRecordIndex);
+	CHECK(first->types[0].count == 9);
+	CHECK(first->types[1].firstRecordIndex == first->firstRecordIndex + 9);
+	CHECK(first->types[1].count == 10);
+
+	// Destroying a type-1 group shortens that type's run; the runs stay back to back.
+	crowd->DestroyGroup(horse);
+	crowd->Step();
+	crowd->Wait();
+	const std::optional<crowd::RenderTick> second = crowd->GetRenderTick(2);
+	REQUIRE(second.has_value());
+	REQUIRE(second->types.size() == 2);
+	CHECK(second->types[0].count == 9);
+	CHECK(second->types[1].firstRecordIndex == second->firstRecordIndex + 9);
+	CHECK(second->types[1].count == 4);
+	CHECK(second->agentCount == 13);
 }
