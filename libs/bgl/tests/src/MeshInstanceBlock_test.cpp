@@ -47,7 +47,7 @@
 #include <vector>
 
 // Instance blocks end to end: what the block, writer, import and frame-wait calls refuse, the epoch a
-// block moves, the run it claims in the view's mesh buffer, and what Place Blocks draws from it --
+// block moves, the run it claims in the view's mesh buffer, and what Write Instance Blocks draws from it --
 // the same pixels and motion as the same placements made on the CPU, from parameters or from a
 // buffer another owner wrote.
 

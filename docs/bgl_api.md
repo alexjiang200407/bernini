@@ -403,7 +403,7 @@ flowchart TD
   view's instance buffer, each culled, drawn and re-resolved on a material change like any
   placement, and every one is hidden until its writer places it; a capacity of N costs N slots in
   the cull whether the writer shows them or not. The geom's grass is not grown on them. Each frame
-  the `Place Blocks` pass runs every block's writer first (docs/passes.md).
+  the `Write Instance Blocks` pass runs every block's writer first (docs/passes.md).
 * **`SetBlockWriter(block, writer)` / `GetBlockParams(block)`** — binds a writer compiled by
   the same `IGraphics` and gives the block its own copy of the writer's `Params`, written by name
   like any constant buffer and kept across frames. Rebinding starts from zeros; null unbinds, and

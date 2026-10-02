@@ -1,4 +1,4 @@
-#include "passes/PlaceBlocksPass.h"
+#include "passes/WriteInstanceBlocksPass.h"
 #include "fg/FrameGraph.h"
 #include "fg/PassDesc.h"
 #include "instance_block/MeshInstanceBlock.h"
@@ -15,10 +15,10 @@
 namespace bgl
 {
 	void
-	PlaceBlocksPass::AttachToFrameGraph(FrameGraph& fg, const DrawData& draw)
+	WriteInstanceBlocksPass::AttachToFrameGraph(FrameGraph& fg, const DrawData& draw)
 	{
 		auto* view = draw.view->As<SceneView>();
-		core::ensure(view != nullptr, "PlaceBlocksPass requires a bgl::SceneView");
+		core::ensure(view != nullptr, "WriteInstanceBlocksPass requires a bgl::SceneView");
 
 		bool written = false;
 		view->ForEachWrittenBlock([&written](const MeshInstanceBlock&) { written = true; });
@@ -29,7 +29,7 @@ namespace bgl
 
 		fg.AddPass(
 			PassDesc()
-				.SetName("Place Blocks {}", draw.drawIdx)
+				.SetName("Write Instance Blocks {}", draw.drawIdx)
 				.AddBufferReadWrite(
 					"scene.meshInstanceBuffer",
 					bgpu::BarrierSyncFlag::kComputeShader)
@@ -37,10 +37,10 @@ namespace bgl
 	}
 
 	void
-	PlaceBlocksPass::Execute(const PassContext& ctx, const DrawData& draw)
+	WriteInstanceBlocksPass::Execute(const PassContext& ctx, const DrawData& draw)
 	{
 		auto* view = draw.view->As<SceneView>();
-		core::ensure(view != nullptr, "PlaceBlocksPass requires a bgl::SceneView");
+		core::ensure(view != nullptr, "WriteInstanceBlocksPass requires a bgl::SceneView");
 
 		// The buffer's writable view, re-read now: a growth since the last frame replaced it.
 		const bgpu::BufferUavHandle meshes = view->GetMeshBuffer().GetWritableView();

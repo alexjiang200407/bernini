@@ -16,20 +16,20 @@ namespace bgl
 	 * Absent from the graph on a frame whose view has no written block, so a scene without one pays
 	 * nothing. It compiles nothing of its own: each block brings its writer's kernel.
 	 */
-	class PlaceBlocksPass
+	class WriteInstanceBlocksPass
 	{
 	public:
-		PlaceBlocksPass() noexcept = default;
-		~PlaceBlocksPass() noexcept { spdlog::trace("~PlaceBlocksPass"); }
+		WriteInstanceBlocksPass() noexcept = default;
+		~WriteInstanceBlocksPass() noexcept { spdlog::trace("~WriteInstanceBlocksPass"); }
 
-		PlaceBlocksPass(const PlaceBlocksPass&) noexcept = delete;
-		PlaceBlocksPass(PlaceBlocksPass&&) noexcept      = delete;
+		WriteInstanceBlocksPass(const WriteInstanceBlocksPass&) noexcept = delete;
+		WriteInstanceBlocksPass(WriteInstanceBlocksPass&&) noexcept      = delete;
 
-		PlaceBlocksPass&
-		operator=(const PlaceBlocksPass&) noexcept = delete;
+		WriteInstanceBlocksPass&
+		operator=(const WriteInstanceBlocksPass&) noexcept = delete;
 
-		PlaceBlocksPass&
-		operator=(PlaceBlocksPass&&) noexcept = delete;
+		WriteInstanceBlocksPass&
+		operator=(WriteInstanceBlocksPass&&) noexcept = delete;
 
 		void
 		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw);

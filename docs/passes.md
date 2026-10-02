@@ -32,7 +32,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 
 `RenderContext` ([gfx/RenderContext.cpp](libs/bgl/src/gfx/RenderContext.cpp)) drives the frame and
 owns the long-lived pass objects (`m_BrdfLut`, `m_Forward`, `m_BlobShadows`, `m_Skybox`, `m_TransparentSort`,
-`m_CompactInstances`, `m_PlaceBlocks`, `m_RigFrames`, `m_SkinnedPose`, `m_OutlineMask`, `m_TaaResolve`,
+`m_CompactInstances`, `m_WriteInstanceBlocks`, `m_RigFrames`, `m_SkinnedPose`, `m_OutlineMask`, `m_TaaResolve`,
 `m_BloomPass`, `m_PostProcess`, `m_OverlayPass`, `m_PreparePresentPass`); `Graphics` owns one context and
 forwards the frame methods to it. A frame is built between `BeginFrame` and `EndFrame`, with one `Draw` per
 view in between; the passes are added in this order and, because the graph never reorders, execute
@@ -44,7 +44,7 @@ flowchart TD
     CLR --> D["per Draw(view)"]
     subgraph D["per Draw(view) — resources imported under the view's namespace"]
         IMP["Scene / SceneView import their buffers"] --> SKY["Skybox (only if the view has one)"]
-        SKY --> PB["Place Blocks (only when an instance block has a writer; one dispatch per block)"]
+        SKY --> PB["Write Instance Blocks (only when an instance block has a writer; one dispatch per block)"]
         PB --> RIG["Pose Rig Frames (only when a rig wants its bone anim table)"]
         RIG --> POSE["Pose Skinned (one workgroup per skinned instance)"]
         POSE --> TS["Transparent Sort (3 sub-passes)"]
@@ -570,7 +570,7 @@ reprojects through a pose nothing drew, which is the caller's to avoid.
   anim table is not one of them. The dense list is built from instances that own a palette, which is
   what this pass writes into; a table instance owns none and is posed by `Pose Rig Frames` once.
 
-### Place Blocks — [passes/PlaceBlocksPass.{h,cpp}](libs/bgl/src/passes/PlaceBlocksPass.cpp)
+### Write Instance Blocks — [passes/WriteInstanceBlocksPass.{h,cpp}](libs/bgl/src/passes/WriteInstanceBlocksPass.cpp)
 
 * **What it is:** the writer of every instance block (`ISceneView::CreateMeshInstanceBlock`). One
   dispatch per block that has a writer, `MeshInstanceWriter::DispatchGroups(capacity)` groups of
