@@ -207,12 +207,13 @@ TEST_CASE(
 
 	const bgl::RigHandle rig = scene->AddRig(MakeOneBoneRig(), MakeStill());
 	REQUIRE(rig.IsValid());
+	const auto            quad     = MakeSkinnedQuad();
 	const bgl::GeomHandle unitGeom = scene->AddSkinnedMeshGeom(
-		MakeSkinnedQuad(),
-		0,
-		materials,
-		rig,
-		assetlib::Bounds{ glm::vec3(-1.0f), glm::vec3(1.0f) });
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&quad)
+			.SetMaterials(materials)
+			.SetRig(rig)
+			.SetPosedBounds(assetlib::Bounds{ glm::vec3(-1.0f), glm::vec3(1.0f) }));
 	REQUIRE(unitGeom.IsValid());
 	view->CreateSkinnedMeshInstance(
 		unitGeom,

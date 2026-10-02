@@ -19,6 +19,7 @@
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/SkinnedMeshGeomDesc.h>
 #include <bgl/types/StaticMeshGeomDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
@@ -1014,9 +1015,13 @@ namespace game
 			{
 				// Adapt per-submesh bindings without copying the cached vertex payload.
 				const ScopedMaterialSlots slots(mesh, entry);
-				record.handle =
-					m_Scene
-						->AddSkinnedMeshGeom(mesh, meshIndex, submeshMaterials, rig.handle, bounds);
+				record.handle = m_Scene->AddSkinnedMeshGeom(
+					bgl::SkinnedMeshGeomDesc()
+						.SetMesh(&mesh)
+						.SetMeshIndex(meshIndex)
+						.SetMaterials(submeshMaterials)
+						.SetRig(rig.handle)
+						.SetPosedBounds(bounds));
 			}
 			record.key                      = key;
 			record.submeshMaterials         = std::move(submeshMaterials);

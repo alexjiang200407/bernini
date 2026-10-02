@@ -263,12 +263,13 @@ namespace
 			result.scene->AddRig(MakeTwoLegRig(), MakeStance(rightLift), legs);
 		REQUIRE(rig.IsValid());
 
-		result.geom = result.scene->AddSkinnedMeshGeom(
-			MakeSkinnedTriangle(),
-			0,
-			materials,
-			rig,
-			assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
+		const auto triangle = MakeSkinnedTriangle();
+		result.geom         = result.scene->AddSkinnedMeshGeom(
+			bgl::SkinnedMeshGeomDesc()
+				.SetMesh(&triangle)
+				.SetMaterials(materials)
+				.SetRig(rig)
+				.SetPosedBounds(assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) }));
 		REQUIRE(result.geom.IsValid());
 		return result;
 	}
@@ -516,12 +517,13 @@ TEST_CASE("only a hero whose rig authored legs may cast foot shadows", "[blobsha
 			feet.scene->AddRig(MakeTwoLegRig(), MakeStance(0.0f), bgl::FootPlantDesc());
 		const std::array<bgl::MaterialHandle, 1> materials = { { feet.scene->CreatePbrMaterial(
 			bgl::PbrMaterialDesc()) } };
+		const auto                               triangle  = MakeSkinnedTriangle();
 		const auto                               geom      = feet.scene->AddSkinnedMeshGeom(
-			MakeSkinnedTriangle(),
-			0,
-			materials,
-			legless,
-			assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
+			bgl::SkinnedMeshGeomDesc()
+				.SetMesh(&triangle)
+				.SetMaterials(materials)
+				.SetRig(legless)
+				.SetPosedBounds(assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) }));
 		const auto leglessHero = feet.view->CreateSkinnedMeshInstance(
 			geom,
 			glm::mat4(1.0f),

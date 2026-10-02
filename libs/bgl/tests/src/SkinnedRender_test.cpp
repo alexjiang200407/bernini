@@ -304,11 +304,11 @@ TEST_CASE(
 	const auto staticGeom =
 		scene->AddStaticMeshGeom(bgl::StaticMeshGeomDesc().SetMesh(&strip).SetMaterials(materials));
 	const auto skinnedGeom = scene->AddSkinnedMeshGeom(
-		MakeSkinnedStrip(),
-		0,
-		materials,
-		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
-		c_StripPosedBounds);
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&strip)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()))
+			.SetPosedBounds(c_StripPosedBounds));
 	REQUIRE(staticGeom.IsValid());
 	REQUIRE(skinnedGeom.IsValid());
 
@@ -389,28 +389,28 @@ TEST_CASE("a rig past the old groupshared ceiling poses correctly", "[skinned][r
 	job.camera   = StripCamera();
 	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
+	const auto strip    = MakeSkinnedStrip();
 	const auto deepGeom = scene->AddSkinnedMeshGeom(
-		MakeSkinnedStrip(),
-		0,
-		materials,
-		scene->AddRig(MakeTwoBoneRig(c_DeepBones), MakeSwingClip(c_DeepBones)),
-		c_StripPosedBounds);
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&strip)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(MakeTwoBoneRig(c_DeepBones), MakeSwingClip(c_DeepBones)))
+			.SetPosedBounds(c_StripPosedBounds));
 
 	// The refusal this used to hit is gone, and that is half of what the test is for.
 	REQUIRE(deepGeom.IsValid());
 
-	const auto strip = MakeSkinnedStrip();
 	const auto staticGeom =
 		scene->AddStaticMeshGeom(bgl::StaticMeshGeomDesc().SetMesh(&strip).SetMaterials(materials));
 	REQUIRE(staticGeom.IsValid());
 
 	// The same strip on the rig this suite already trusts, to measure the deep one against.
 	const auto shallowGeom = scene->AddSkinnedMeshGeom(
-		MakeSkinnedStrip(),
-		0,
-		materials,
-		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
-		c_StripPosedBounds);
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&strip)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()))
+			.SetPosedBounds(c_StripPosedBounds));
 	REQUIRE(shallowGeom.IsValid());
 
 	const auto capture = [&](const char* png, bgl::GeomHandle geom, float phase) {
@@ -499,12 +499,13 @@ TEST_CASE("a posed skinned mesh moves the bones' vertices and nothing else", "[s
 
 	const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(material) } };
 
-	const auto geom = scene->AddSkinnedMeshGeom(
-		MakeSkinnedStrip(),
-		0,
-		materials,
-		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
-		c_StripPosedBounds);
+	const auto strip = MakeSkinnedStrip();
+	const auto geom  = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&strip)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()))
+			.SetPosedBounds(c_StripPosedBounds));
 	REQUIRE(geom.IsValid());
 
 	auto job     = bgl::RenderJob();
@@ -563,12 +564,13 @@ TEST_CASE("a vertex bound to no bone keeps its bind pose", "[skinned][render]")
 
 	const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(material) } };
 
-	const auto geom = scene->AddSkinnedMeshGeom(
-		MakeSkinnedStrip(true),
-		0,
-		materials,
-		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
-		c_StripPosedBounds);
+	const auto strip = MakeSkinnedStrip(true);
+	const auto geom  = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&strip)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()))
+			.SetPosedBounds(c_StripPosedBounds));
 	REQUIRE(geom.IsValid());
 
 	auto job     = bgl::RenderJob();
@@ -628,12 +630,13 @@ TEST_CASE(
 
 	const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(material) } };
 
-	const auto geom = scene->AddSkinnedMeshGeom(
-		MakeSkinnedStrip(),
-		0,
-		materials,
-		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
-		c_StripPosedBounds);
+	const auto strip = MakeSkinnedStrip();
+	const auto geom  = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&strip)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()))
+			.SetPosedBounds(c_StripPosedBounds));
 
 	auto job     = bgl::RenderJob();
 	job.view     = view;
@@ -732,12 +735,13 @@ TEST_CASE("a blended skinned mesh sorts among blended static geometry", "[skinne
 			bgl::StaticMeshGeomDesc().SetMesh(&strip).SetMaterials(materials));
 	};
 	const auto skinnedGeom = [&](std::span<const bgl::MaterialHandle> materials) {
+		const auto strip = MakeSkinnedStrip();
 		return scene->AddSkinnedMeshGeom(
-			MakeSkinnedStrip(),
-			0,
-			materials,
-			scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
-			c_StripPosedBounds);
+			bgl::SkinnedMeshGeomDesc()
+				.SetMesh(&strip)
+				.SetMaterials(materials)
+				.SetRig(scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()))
+				.SetPosedBounds(c_StripPosedBounds));
 	};
 
 	const auto staticRed   = staticGeom(red);
@@ -846,12 +850,13 @@ TEST_CASE("a selected skinned instance contours its pose", "[skinned][selection]
 
 	const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(material) } };
 
-	const auto geom = scene->AddSkinnedMeshGeom(
-		MakeSkinnedStrip(),
-		0,
-		materials,
-		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
-		c_StripPosedBounds);
+	const auto strip = MakeSkinnedStrip();
+	const auto geom  = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&strip)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()))
+			.SetPosedBounds(c_StripPosedBounds));
 	REQUIRE(geom.IsValid());
 
 	// rate 1 at frame 1's time: bone 1 has swung 90 degrees, which carries the strip's top edge from
@@ -939,12 +944,13 @@ TEST_CASE("an instance on its rig's table draws what the pose pass draws", "[ski
 	                        bgl::PoseSource               source,
 	                        float                         phase,
 	                        const char*                   png) {
-		const auto geom = scene->AddSkinnedMeshGeom(
-			MakeSkinnedStrip(),
-			0,
-			materials,
-			scene->AddRig(MakeTwoBoneRig(), clips),
-			c_StripPosedBounds);
+		const auto strip = MakeSkinnedStrip();
+		const auto geom  = scene->AddSkinnedMeshGeom(
+			bgl::SkinnedMeshGeomDesc()
+				.SetMesh(&strip)
+				.SetMaterials(materials)
+				.SetRig(scene->AddRig(MakeTwoBoneRig(), clips))
+				.SetPosedBounds(c_StripPosedBounds));
 		REQUIRE(geom.IsValid());
 
 		auto desc   = bgl::SkinnedInstanceDesc();
@@ -990,12 +996,13 @@ TEST_CASE("an instance on its rig's table draws what the pose pass draws", "[ski
 
 	SECTION("and a moving one writes motion vectors, where a held one writes none")
 	{
-		const auto geom = scene->AddSkinnedMeshGeom(
-			MakeSkinnedStrip(),
-			0,
-			materials,
-			scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
-			c_StripPosedBounds);
+		const auto strip = MakeSkinnedStrip();
+		const auto geom  = scene->AddSkinnedMeshGeom(
+			bgl::SkinnedMeshGeomDesc()
+				.SetMesh(&strip)
+				.SetMaterials(materials)
+				.SetRig(scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()))
+				.SetPosedBounds(c_StripPosedBounds));
 
 		// The camera never moves, so any velocity on screen came from the pose -- which on this path
 		// is a second read of the table at prevTime rather than a second palette. A fresh view each
@@ -1072,12 +1079,13 @@ TEST_CASE("a clip blended with itself draws what the clip draws", "[skinned][ren
 
 	const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(material) } };
 
-	const auto geom = scene->AddSkinnedMeshGeom(
-		MakeSkinnedStrip(),
-		0,
-		materials,
-		scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()),
-		c_StripPosedBounds);
+	const auto strip = MakeSkinnedStrip();
+	const auto geom  = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&strip)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()))
+			.SetPosedBounds(c_StripPosedBounds));
 	REQUIRE(geom.IsValid());
 
 	auto job     = bgl::RenderJob();
@@ -1179,12 +1187,13 @@ TEST_CASE("what a crowd costs on each pose source", "[.posetiming]")
 		}
 	}
 
-	const auto geom = scene->AddSkinnedMeshGeom(
-		MakeSkinnedStrip(),
-		0,
-		materials,
-		scene->AddRig(skeleton, MakeSwingClip(c_CrowdBones)),
-		c_StripPosedBounds);
+	const auto strip = MakeSkinnedStrip();
+	const auto geom  = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&strip)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(skeleton, MakeSwingClip(c_CrowdBones)))
+			.SetPosedBounds(c_StripPosedBounds));
 	REQUIRE(geom.IsValid());
 
 	const auto msPerFrame = [&](bgl::PoseSource source) {

@@ -587,12 +587,7 @@ namespace bgl
 		DeleteRig(RigHandle rig) override;
 
 		GeomHandle
-		AddSkinnedMeshGeom(
-			const assetlib::BMesh&          mesh,
-			uint32_t                        meshIndex,
-			std::span<const MaterialHandle> materials,
-			RigHandle                       rig,
-			const assetlib::Bounds&         posedBounds) override;
+		AddSkinnedMeshGeom(const SkinnedMeshGeomDesc& desc) override;
 
 		TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") override;

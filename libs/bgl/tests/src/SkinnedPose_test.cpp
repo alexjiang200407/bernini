@@ -453,12 +453,13 @@ TEST_CASE("the pose pass blends a record's slots as the reference does", "[skinn
 	const assetlib::Skeleton     skeleton   = MakeChain();
 	const assetlib::AnimationSet animations = MakeTwoClipSet();
 
-	const auto geom = scene->AddSkinnedMeshGeom(
-		MakeSkinnedTriangle(),
-		0,
-		materials,
-		scene->AddRig(skeleton, animations),
-		assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
+	const auto triangle = MakeSkinnedTriangle();
+	const auto geom     = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&triangle)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(skeleton, animations))
+			.SetPosedBounds(assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) }));
 	REQUIRE(geom.IsValid());
 
 	auto job     = bgl::RenderJob();
@@ -610,12 +611,13 @@ TEST_CASE("a rig far past the old ceiling poses every bone", "[skinned][pose][re
 
 	const std::array<bgl::MaterialHandle, 1> materials = { { pbr } };
 
-	const auto geom = scene->AddSkinnedMeshGeom(
-		MakeSkinnedTriangle(),
-		0,
-		materials,
-		scene->AddRig(MakeChain(c_DeepBones), MakeSwingClip(c_DeepBones)),
-		assetlib::Bounds{ glm::vec3(-400.0f), glm::vec3(400.0f) });
+	const auto triangle = MakeSkinnedTriangle();
+	const auto geom     = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&triangle)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(MakeChain(c_DeepBones), MakeSwingClip(c_DeepBones)))
+			.SetPosedBounds(assetlib::Bounds{ glm::vec3(-400.0f), glm::vec3(400.0f) }));
 	REQUIRE(geom.IsValid());
 
 	auto* viewRaw = dynamic_cast<bgl::SceneView*>(view.Get());
@@ -715,12 +717,13 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 
 	const std::array<bgl::MaterialHandle, 1> materials = { { pbr } };
 
-	const auto geom = scene->AddSkinnedMeshGeom(
-		MakeSkinnedTriangle(),
-		0,
-		materials,
-		scene->AddRig(MakeChain(), MakeSwingClip()),
-		assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
+	const auto triangle = MakeSkinnedTriangle();
+	const auto geom     = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&triangle)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(MakeChain(), MakeSwingClip()))
+			.SetPosedBounds(assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) }));
 	REQUIRE(geom.IsValid());
 
 	auto camera = bgl::Camera();
@@ -920,11 +923,11 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 		// phase 0.5 gives. Wrapping over frameCount instead would spend a third interval blending
 		// frame 2 onto frame 0, which are the same pose, and leave this at the bind pose.
 		const auto looping = scene->AddSkinnedMeshGeom(
-			MakeSkinnedTriangle(),
-			0,
-			materials,
-			scene->AddRig(MakeChain(), MakeSwingLoop()),
-			assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
+			bgl::SkinnedMeshGeomDesc()
+				.SetMesh(&triangle)
+				.SetMaterials(materials)
+				.SetRig(scene->AddRig(MakeChain(), MakeSwingLoop()))
+				.SetPosedBounds(assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) }));
 		REQUIRE(looping.IsValid());
 
 		const auto instance =
@@ -950,11 +953,11 @@ TEST_CASE("the pose pass writes the palette a rig's hierarchy implies", "[skinne
 		// Phase 2.0 is exactly one cycle, so the pose is frame 0's -- the bind pose, which this rig
 		// answers with an identity palette.
 		const auto looping = scene->AddSkinnedMeshGeom(
-			MakeSkinnedTriangle(),
-			0,
-			materials,
-			scene->AddRig(MakeChain(), MakeSwingLoop()),
-			assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
+			bgl::SkinnedMeshGeomDesc()
+				.SetMesh(&triangle)
+				.SetMaterials(materials)
+				.SetRig(scene->AddRig(MakeChain(), MakeSwingLoop()))
+				.SetPosedBounds(assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) }));
 		REQUIRE(looping.IsValid());
 
 		const auto instance =
@@ -1058,12 +1061,13 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 	const auto rig = scene->AddRig(skeleton, animations, bgl::FootPlantDesc(), MakeSpaceSet());
 	REQUIRE(rig.IsValid());
 
-	const auto geom = scene->AddSkinnedMeshGeom(
-		MakeSkinnedTriangle(),
-		0,
-		materials,
-		rig,
-		assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
+	const auto triangle = MakeSkinnedTriangle();
+	const auto geom     = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&triangle)
+			.SetMaterials(materials)
+			.SetRig(rig)
+			.SetPosedBounds(assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) }));
 	REQUIRE(geom.IsValid());
 
 	auto job     = bgl::RenderJob();
@@ -1145,11 +1149,11 @@ TEST_CASE("the pose pass blends a space as the reference does", "[skinned][pose]
 		REQUIRE(heldRig.IsValid());
 
 		const auto heldGeom = scene->AddSkinnedMeshGeom(
-			MakeSkinnedTriangle(),
-			0,
-			materials,
-			heldRig,
-			assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
+			bgl::SkinnedMeshGeomDesc()
+				.SetMesh(&triangle)
+				.SetMaterials(materials)
+				.SetRig(heldRig)
+				.SetPosedBounds(assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) }));
 		REQUIRE(heldGeom.IsValid());
 
 		constexpr float c_Parameter = 0.5f;

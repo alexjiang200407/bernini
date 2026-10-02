@@ -319,12 +319,13 @@ namespace
 			options.plant ? *options.plant : MakeLeg(weight, options));
 		REQUIRE(rig.IsValid());
 
-		legScene.geom = legScene.scene->AddSkinnedMeshGeom(
-			MakeSkinnedTriangle(),
-			0,
-			materials,
-			rig,
-			assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) });
+		const auto triangle = MakeSkinnedTriangle();
+		legScene.geom       = legScene.scene->AddSkinnedMeshGeom(
+			bgl::SkinnedMeshGeomDesc()
+				.SetMesh(&triangle)
+				.SetMaterials(materials)
+				.SetRig(rig)
+				.SetPosedBounds(assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) }));
 		REQUIRE(legScene.geom.IsValid());
 		return legScene;
 	}
@@ -824,12 +825,13 @@ TEST_CASE(
 	const bgl::RigHandle rig = scene->AddRig(MakeLegRig(), MakeStillClip(), MakeLeg(255));
 	REQUIRE(rig.IsValid());
 
-	const auto geom = scene->AddSkinnedMeshGeom(
-		MakeFootQuad(),
-		0,
-		materials,
-		rig,
-		assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) });
+	const auto footQuad = MakeFootQuad();
+	const auto geom     = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&footQuad)
+			.SetMaterials(materials)
+			.SetRig(rig)
+			.SetPosedBounds(assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) }));
 	REQUIRE(geom.IsValid());
 
 	auto camera = bgl::Camera();
@@ -920,12 +922,13 @@ TEST_CASE("a planted foot on a slope draws", "[skinned][pose][plant][render]")
 	const bgl::RigHandle rig = scene->AddRig(MakeLegRig(), MakeStillClip(), MakeLeg(255));
 	REQUIRE(rig.IsValid());
 
-	const auto geom = scene->AddSkinnedMeshGeom(
-		MakeFootQuad(),
-		0,
-		materials,
-		rig,
-		assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) });
+	const auto footQuad = MakeFootQuad();
+	const auto geom     = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&footQuad)
+			.SetMaterials(materials)
+			.SetRig(rig)
+			.SetPosedBounds(assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) }));
 	REQUIRE(geom.IsValid());
 
 	view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
@@ -1111,12 +1114,13 @@ namespace
 			scene->AddRig(MakeTwoLegRig(), MakeTwoLegClip(), MakeTwoLegs(255));
 		REQUIRE(rig.IsValid());
 
-		const auto geom = scene->AddSkinnedMeshGeom(
-			MakeSkinnedTriangle(),
-			0,
-			materials,
-			rig,
-			assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) });
+		const auto triangle = MakeSkinnedTriangle();
+		const auto geom     = scene->AddSkinnedMeshGeom(
+			bgl::SkinnedMeshGeomDesc()
+				.SetMesh(&triangle)
+				.SetMaterials(materials)
+				.SetRig(rig)
+				.SetPosedBounds(assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) }));
 		REQUIRE(geom.IsValid());
 
 		auto* viewRaw = view->As<bgl::SceneView>();
@@ -1381,13 +1385,14 @@ TEST_CASE("a rig without legs owns no foot-IK record", "[skinned][plant][footik]
 
 	const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(
 		bgl::PbrMaterialDesc()) } };
-	const bgl::RigHandle                     rig  = scene->AddRig(MakeLegRig(), MakeStillClip());
-	const auto                               geom = scene->AddSkinnedMeshGeom(
-		MakeSkinnedTriangle(),
-		0,
-		materials,
-		rig,
-		assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) });
+	const bgl::RigHandle                     rig = scene->AddRig(MakeLegRig(), MakeStillClip());
+	const auto                               triangle = MakeSkinnedTriangle();
+	const auto                               geom     = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&triangle)
+			.SetMaterials(materials)
+			.SetRig(rig)
+			.SetPosedBounds(assetlib::Bounds{ glm::vec3(-8.0f), glm::vec3(8.0f) }));
 	REQUIRE(geom.IsValid());
 
 	const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), { 0, 0.0f, 0.0f });

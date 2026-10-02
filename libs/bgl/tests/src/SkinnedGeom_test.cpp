@@ -303,12 +303,13 @@ TEST_CASE("AddSkinnedMeshGeom uploads a rig's bones, clips and samples", "[skinn
 	const auto                               animations = MakeClips();
 	const std::array<bgl::MaterialHandle, 1> materials  = { { material } };
 
-	const auto geom = scene->AddSkinnedMeshGeom(
-		MakeSkinnedMesh(),
-		0,
-		materials,
-		scene->AddRig(skeleton, animations),
-		c_AnyPose);
+	const auto skinnedMesh = MakeSkinnedMesh();
+	const auto geom        = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(skeleton, animations))
+			.SetPosedBounds(c_AnyPose));
 	REQUIRE(geom.IsValid());
 	REQUIRE(geom.geomType == bgl::GeomType::kSkinnedMesh);
 
@@ -424,13 +425,14 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	auto* view       = viewHandle->As<bgl::SceneView>();
 	REQUIRE(view != nullptr);
 
-	const std::array<bgl::MaterialHandle, 1> materials = { { OpaquePbr(scene) } };
-	const auto                               geom      = scene->AddSkinnedMeshGeom(
-		MakeSkinnedMesh(),
-		0,
-		materials,
-		scene->AddRig(MakeRig(), MakeClips()),
-		c_AnyPose);
+	const std::array<bgl::MaterialHandle, 1> materials   = { { OpaquePbr(scene) } };
+	const auto                               skinnedMesh = MakeSkinnedMesh();
+	const auto                               geom        = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(MakeRig(), MakeClips()))
+			.SetPosedBounds(c_AnyPose));
 	REQUIRE(geom.IsValid());
 
 	auto desc  = bgl::SkinnedInstanceDesc();
@@ -543,13 +545,14 @@ TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
 	auto* view       = viewHandle->As<bgl::SceneView>();
 	REQUIRE(view != nullptr);
 
-	const std::array<bgl::MaterialHandle, 1> materials = { { OpaquePbr(scene) } };
-	const auto                               geom      = scene->AddSkinnedMeshGeom(
-		MakeSkinnedMesh(),
-		0,
-		materials,
-		scene->AddRig(MakeRig(), MakeClips()),
-		c_AnyPose);
+	const std::array<bgl::MaterialHandle, 1> materials   = { { OpaquePbr(scene) } };
+	const auto                               skinnedMesh = MakeSkinnedMesh();
+	const auto                               geom        = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(MakeRig(), MakeClips()))
+			.SetPosedBounds(c_AnyPose));
 	REQUIRE(geom.IsValid());
 
 	// A crossfade from clip 0 to clip 1 over one second from t = 2, both sides rebased to that
@@ -773,10 +776,18 @@ TEST_CASE("AddSkinnedMeshGeom refuses a mesh the skinned path could not draw", "
 	const bgl::RigHandle rig = scene->AddRig(MakeRig(), MakeClips());
 	REQUIRE(rig.IsValid());
 
+	const auto skinnedMesh = MakeSkinnedMesh();
+	const auto unskinned   = MakeSkinnedMesh(false);
+
 	SECTION("a submesh with no skin binding")
 	{
 		CHECK_THROWS_AS(
-			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(false), 0, materials, rig, c_AnyPose),
+			scene->AddSkinnedMeshGeom(
+				bgl::SkinnedMeshGeomDesc()
+					.SetMesh(&unskinned)
+					.SetMaterials(materials)
+					.SetRig(rig)
+					.SetPosedBounds(c_AnyPose)),
 			bgl::SceneError);
 	}
 
@@ -786,7 +797,12 @@ TEST_CASE("AddSkinnedMeshGeom refuses a mesh the skinned path could not draw", "
 			bgl::LoosePbrMaterialDesc()) } };
 
 		CHECK_THROWS_AS(
-			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, loose, rig, c_AnyPose),
+			scene->AddSkinnedMeshGeom(
+				bgl::SkinnedMeshGeomDesc()
+					.SetMesh(&skinnedMesh)
+					.SetMaterials(loose)
+					.SetRig(rig)
+					.SetPosedBounds(c_AnyPose)),
 			bgl::SceneError);
 	}
 
@@ -801,8 +817,12 @@ TEST_CASE("AddSkinnedMeshGeom refuses a mesh the skinned path could not draw", "
 			const std::array<bgl::MaterialHandle, 1> layered = { { scene->CreatePbrMaterial(
 				layerDesc) } };
 
-			const bgl::GeomHandle uploaded =
-				scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, layered, rig, c_AnyPose);
+			const bgl::GeomHandle uploaded = scene->AddSkinnedMeshGeom(
+				bgl::SkinnedMeshGeomDesc()
+					.SetMesh(&skinnedMesh)
+					.SetMaterials(layered)
+					.SetRig(rig)
+					.SetPosedBounds(c_AnyPose));
 
 			CHECK(uploaded.IsValid());
 		}
@@ -811,7 +831,13 @@ TEST_CASE("AddSkinnedMeshGeom refuses a mesh the skinned path could not draw", "
 	SECTION("a meshIndex past the mesh table")
 	{
 		CHECK_THROWS_AS(
-			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 1, materials, rig, c_AnyPose),
+			scene->AddSkinnedMeshGeom(
+				bgl::SkinnedMeshGeomDesc()
+					.SetMesh(&skinnedMesh)
+					.SetMeshIndex(1)
+					.SetMaterials(materials)
+					.SetRig(rig)
+					.SetPosedBounds(c_AnyPose)),
 			bgl::SceneError);
 	}
 
@@ -821,26 +847,62 @@ TEST_CASE("AddSkinnedMeshGeom refuses a mesh the skinned path could not draw", "
 			assetlib::Bounds{ glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(-1.0f, 1.0f, 1.0f) };
 
 		CHECK_THROWS_AS(
-			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, rig, inverted),
+			scene->AddSkinnedMeshGeom(
+				bgl::SkinnedMeshGeomDesc()
+					.SetMesh(&skinnedMesh)
+					.SetMaterials(materials)
+					.SetRig(rig)
+					.SetPosedBounds(inverted)),
+			bgl::SceneError);
+	}
+
+	SECTION("a desc that never names a posed box, or a mesh")
+	{
+		CHECK_THROWS_AS(
+			scene->AddSkinnedMeshGeom(
+				bgl::SkinnedMeshGeomDesc()
+					.SetMesh(&skinnedMesh)
+					.SetMaterials(materials)
+					.SetRig(rig)),
+			bgl::SceneError);
+		CHECK_THROWS_AS(
+			scene->AddSkinnedMeshGeom(
+				bgl::SkinnedMeshGeomDesc().SetMaterials(materials).SetRig(rig).SetPosedBounds(
+					c_AnyPose)),
 			bgl::SceneError);
 	}
 
 	SECTION("a rig that was never added, or was deleted")
 	{
 		CHECK_THROWS_AS(
-			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, bgl::RigHandle(), c_AnyPose),
+			scene->AddSkinnedMeshGeom(
+				bgl::SkinnedMeshGeomDesc()
+					.SetMesh(&skinnedMesh)
+					.SetMaterials(materials)
+					.SetRig(bgl::RigHandle())
+					.SetPosedBounds(c_AnyPose)),
 			bgl::SceneError);
 
 		const bgl::RigHandle retired = scene->AddRig(MakeRig(), MakeClips());
 		scene->DeleteRig(retired);
 		CHECK_THROWS_AS(
-			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, retired, c_AnyPose),
+			scene->AddSkinnedMeshGeom(
+				bgl::SkinnedMeshGeomDesc()
+					.SetMesh(&skinnedMesh)
+					.SetMaterials(materials)
+					.SetRig(retired)
+					.SetPosedBounds(c_AnyPose)),
 			bgl::SceneError);
 	}
 
 	// Every refusal above must leave the scene addable: a failed add that leaked its geometry half
 	// would show up here as a geom slot or a submesh range that never came back.
-	const auto good = scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, rig, c_AnyPose);
+	const auto good = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(materials)
+			.SetRig(rig)
+			.SetPosedBounds(c_AnyPose));
 	CHECK(good.IsValid());
 }
 
@@ -889,9 +951,14 @@ TEST_CASE("a refused skinned add leaves the scene's arenas untouched", "[skinned
 	const bgl::RigHandle rig = scene->AddRig(MakeRig(), MakeClips());
 	REQUIRE(rig.IsValid());
 
+	const auto skinnedMesh         = MakeSkinnedMesh();
 	const auto offsetsOfAFreshGeom = [&] {
-		const auto geom =
-			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, rig, c_AnyPose);
+		const auto geom = scene->AddSkinnedMeshGeom(
+			bgl::SkinnedMeshGeomDesc()
+				.SetMesh(&skinnedMesh)
+				.SetMaterials(materials)
+				.SetRig(rig)
+				.SetPosedBounds(c_AnyPose));
 		REQUIRE(geom.IsValid());
 
 		const uint32_t taken = scene->GetGeomSubmeshes(geom.handle.index).range.offsetStart;
@@ -901,11 +968,22 @@ TEST_CASE("a refused skinned add leaves the scene's arenas untouched", "[skinned
 
 	const uint32_t beforeGeom = offsetsOfAFreshGeom();
 
-	CHECK_THROWS(scene->AddSkinnedMeshGeom(MakeSkinnedMesh(false), 0, materials, rig, c_AnyPose));
+	const auto unskinned = MakeSkinnedMesh(false);
+	CHECK_THROWS(scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&unskinned)
+			.SetMaterials(materials)
+			.SetRig(rig)
+			.SetPosedBounds(c_AnyPose)));
 
 	const std::array<bgl::MaterialHandle, 1> looseMaterials = { { scene->CreateLoosePbrMaterial(
 		bgl::LoosePbrMaterialDesc()) } };
-	CHECK_THROWS(scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, looseMaterials, rig, c_AnyPose));
+	CHECK_THROWS(scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(looseMaterials)
+			.SetRig(rig)
+			.SetPosedBounds(c_AnyPose)));
 
 	CHECK(offsetsOfAFreshGeom() == beforeGeom);
 
@@ -927,8 +1005,19 @@ TEST_CASE("skinned geoms share one rig, and it outlives them", "[skinned]")
 	const bgl::RigHandle rig = scene->AddRig(MakeRig(), MakeClips());
 	REQUIRE(rig.IsValid());
 
-	const auto first  = scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, rig, c_AnyPose);
-	const auto second = scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, rig, c_AnyPose);
+	const auto skinnedMesh = MakeSkinnedMesh();
+	const auto first       = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(materials)
+			.SetRig(rig)
+			.SetPosedBounds(c_AnyPose));
+	const auto second = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(materials)
+			.SetRig(rig)
+			.SetPosedBounds(c_AnyPose));
 	REQUIRE(first.IsValid());
 	REQUIRE(second.IsValid());
 
@@ -970,18 +1059,18 @@ TEST_CASE("a skinned submesh culls by its posed box, not its bind pose", "[skinn
 	const auto posed =
 		assetlib::Bounds{ glm::vec3(-100.0f, 0.0f, -100.0f), glm::vec3(100.0f, 300.0f, 100.0f) };
 
-	const auto skinned = scene->AddSkinnedMeshGeom(
-		MakeSkinnedMesh(),
-		0,
-		materials,
-		scene->AddRig(MakeRig(), MakeClips()),
-		posed);
+	const auto skinnedMesh = MakeSkinnedMesh();
+	const auto skinned     = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(MakeRig(), MakeClips()))
+			.SetPosedBounds(posed));
 	REQUIRE(skinned.IsValid());
 
 	// The same bytes as static geometry: its sphere is the cooked bind pose, so the two spheres
 	// differing is the whole point -- and a skinned add that ignored its box would match it.
-	const auto skinnedMesh = MakeSkinnedMesh();
-	const auto asStatic    = scene->AddStaticMeshGeom(
+	const auto asStatic = scene->AddStaticMeshGeom(
 		bgl::StaticMeshGeomDesc().SetMesh(&skinnedMesh).SetMaterials(materials));
 	REQUIRE(asStatic.IsValid());
 
@@ -1456,7 +1545,13 @@ TEST_CASE("A blend space is reached through the record, not through the spawn", 
 		scene->AddRig(MakeRig(), MakeBlendClips(), bgl::FootPlantDesc(), MakeBlendSet());
 	REQUIRE(rig.IsValid());
 
-	const auto geom = scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, rig, c_AnyPose);
+	const auto skinnedMesh = MakeSkinnedMesh();
+	const auto geom        = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(materials)
+			.SetRig(rig)
+			.SetPosedBounds(c_AnyPose));
 	REQUIRE(geom.IsValid());
 
 	// Two clips, then one space: the space is node 2, one past the clip table.

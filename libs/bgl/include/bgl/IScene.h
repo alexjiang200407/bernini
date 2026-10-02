@@ -20,6 +20,7 @@
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/RigHandle.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/SkinnedMeshGeomDesc.h>
 #include <bgl/types/StaticMeshGeomDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <bgl/types/TextureAssetHandle.h>
@@ -270,26 +271,17 @@ namespace bgl
 		 * `.banim`'s bake (`assetlib::findPosedBounds`)
 		 * or measured (`assetlib::posedBounds`), which is gamelib's acquire either way.
 		 *
-		 * `materials` must resolve every submesh to a baked `kPBR` material or to a game surface's,
-		 * in any layer: the skinned pipeline shades through those pixel stages and has no unlit or
-		 * loose variant.
+		 * `desc.materials` must resolve every submesh to a baked `kPBR` material or to a game
+		 * surface's, in any layer: the skinned pipeline shades through those pixel stages and has no
+		 * unlit or loose variant.
 		 *
-		 * @param mesh        A BMesh loaded from disk, carrying skin binding on every submesh.
-		 * @param meshIndex   Index into `mesh.meshes`.
-		 * @param materials   Materials parallel to `mesh.materials`, resolved by the caller.
-		 * @param rig         The rig the mesh's joint indices address, from AddRig.
-		 * @param posedBounds A box holding the mesh in every pose of every clip, in model space.
-		 * @throws SceneError for anything AddStaticMeshGeom refuses, a null or deleted `rig`, a
+		 * @throws SceneError for anything AddStaticMeshGeom refuses, a null or deleted `desc.rig`, a
 		 *         submesh without skin binding, a submesh whose material resolves to neither of
-		 *         those, or a `posedBounds` whose min exceeds its max on any axis.
+		 *         those, or a `desc.posedBounds` whose min exceeds its max on any axis -- which the
+		 *         default is.
 		 */
 		virtual GeomHandle
-		AddSkinnedMeshGeom(
-			const assetlib::BMesh&          mesh,
-			uint32_t                        meshIndex,
-			std::span<const MaterialHandle> materials,
-			RigHandle                       rig,
-			const assetlib::Bounds&         posedBounds) = 0;
+		AddSkinnedMeshGeom(const SkinnedMeshGeomDesc& desc) = 0;
 
 		virtual TextureAssetHandle
 		AddTextureAsset(assetlib::ImageData img, std::string debugName = "") = 0;

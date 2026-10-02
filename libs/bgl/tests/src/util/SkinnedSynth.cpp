@@ -156,12 +156,13 @@ namespace bgl::test::skinned_synth
 	{
 		const std::array<MaterialHandle, 1> materials = { { material } };
 
+		const auto quad = MakeQuad();
 		return scene.AddSkinnedMeshGeom(
-			MakeQuad(),
-			0,
-			materials,
-			scene.AddRig(MakeOneBoneRig(), MakeSlideClips()),
-			c_PosedBounds);
+			bgl::SkinnedMeshGeomDesc()
+				.SetMesh(&quad)
+				.SetMaterials(materials)
+				.SetRig(scene.AddRig(MakeOneBoneRig(), MakeSlideClips()))
+				.SetPosedBounds(c_PosedBounds));
 	}
 
 	GeomHandle
