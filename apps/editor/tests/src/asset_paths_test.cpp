@@ -18,12 +18,12 @@ TEST_CASE("The explorer does not list a source's sidecar", "[assetpaths]")
 {
 	// A `.bimport` is the settings sidecar of the `.glb` beside it, and the source is the row that
 	// stands for the model.
-	CHECK(editor::IsHiddenInExplorer("Authored/Meshes/kirk.bimport"));
-	CHECK(editor::IsHiddenInExplorer("Authored/Meshes/KIRK.BIMPORT"));
+	CHECK(editor::IsHiddenInExplorer("Authored/Meshes/toad.bimport"));
+	CHECK(editor::IsHiddenInExplorer("Authored/Meshes/TOAD.BIMPORT"));
 
 	// The source itself is the row, and everything else is listed as it always was.
-	CHECK_FALSE(editor::IsHiddenInExplorer("Authored/Meshes/kirk.glb"));
-	CHECK_FALSE(editor::IsHiddenInExplorer("Derived/Meshes/kirk.bmesh"));
+	CHECK_FALSE(editor::IsHiddenInExplorer("Authored/Meshes/toad.glb"));
+	CHECK_FALSE(editor::IsHiddenInExplorer("Derived/Meshes/toad.bmesh"));
 	CHECK_FALSE(editor::IsHiddenInExplorer("Authored/Materials/skin.bmaterial"));
 	CHECK_FALSE(editor::IsHiddenInExplorer({}));
 }
@@ -33,22 +33,22 @@ TEST_CASE("A key under a root is the one answer to is this inside that", "[asset
 	const QString root = QStringLiteral("/projects/MyGame/Data");
 
 	CHECK(
-		editor::GetKeyUnder(root, root + "/Authored/Meshes/kirk.glb") ==
-		QString("Authored/Meshes/kirk.glb"));
+		editor::GetKeyUnder(root, root + "/Authored/Meshes/toad.glb") ==
+		QString("Authored/Meshes/toad.glb"));
 
 	// A directory contains itself, and a caller that cares can tell "." from empty.
 	CHECK(editor::GetKeyUnder(root, root) == QString("."));
 
 	// Cleaned first, so a key is judged on where it lands rather than how it is spelt.
 	CHECK(
-		editor::GetKeyUnder(root, root + "/Authored/../Derived/Meshes/kirk.bmesh") ==
-		QString("Derived/Meshes/kirk.bmesh"));
+		editor::GetKeyUnder(root, root + "/Authored/../Derived/Meshes/toad.bmesh") ==
+		QString("Derived/Meshes/toad.bmesh"));
 
 	SECTION("outside is empty, however it is spelt")
 	{
-		CHECK(editor::GetKeyUnder(root, "/projects/MyGame/Other/kirk.glb").isEmpty());
+		CHECK(editor::GetKeyUnder(root, "/projects/MyGame/Other/toad.glb").isEmpty());
 		CHECK(editor::GetKeyUnder(root, "/projects/MyGame").isEmpty());
-		CHECK(editor::GetKeyUnder(root, "/elsewhere/kirk.glb").isEmpty());
+		CHECK(editor::GetKeyUnder(root, "/elsewhere/toad.glb").isEmpty());
 		CHECK(editor::GetKeyUnder(root, root + "/../sneaky.glb").isEmpty());
 		CHECK(editor::GetKeyUnder(root, {}).isEmpty());
 		CHECK(editor::GetKeyUnder({}, root + "/Authored").isEmpty());
@@ -75,13 +75,13 @@ TEST_CASE("The predicate spelling answers exactly what the key does", "[assetpat
 {
 	const QString root = QStringLiteral("/projects/MyGame/Data");
 
-	CHECK(editor::IsKeyUnder(root, root + "/Authored/Meshes/kirk.glb"));
+	CHECK(editor::IsKeyUnder(root, root + "/Authored/Meshes/toad.glb"));
 
 	// The root itself is inside itself -- "." is a key, not a refusal, and a predicate that
 	// disagreed with the key would be the divergence this whole seam exists to remove.
 	CHECK(editor::IsKeyUnder(root, root));
 
-	CHECK_FALSE(editor::IsKeyUnder(root, "/elsewhere/kirk.glb"));
+	CHECK_FALSE(editor::IsKeyUnder(root, "/elsewhere/toad.glb"));
 	CHECK_FALSE(editor::IsKeyUnder(root, root + "/../sneaky.glb"));
 	CHECK_FALSE(editor::IsKeyUnder(root, {}));
 	CHECK_FALSE(editor::IsKeyUnder({}, root + "/Authored"));

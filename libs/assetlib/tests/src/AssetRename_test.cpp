@@ -418,23 +418,23 @@ TEST_CASE("Renaming a directory re-points every reference into it", "[assetrenam
 	// Two referrers of different kinds, both outside: the plan collects an edge by where its
 	// *target* sits, so one directory rename has to re-point every kind that reached into it. The
 	// case below covers a referrer that is itself inside.
-	WriteSource(root.path / "Authored/Textures" / "kirk" / "tex0.ktx2", { { 200, 0, 0, 255 } });
-	WriteSource(root.path / "Authored/Textures" / "kirk" / "tex1.ktx2", { { 0, 200, 0, 255 } });
-	BakeAndSave(root, "outside.bmaterial", "Authored/Textures/kirk/tex0.ktx2");
+	WriteSource(root.path / "Authored/Textures" / "toad" / "tex0.ktx2", { { 200, 0, 0, 255 } });
+	WriteSource(root.path / "Authored/Textures" / "toad" / "tex1.ktx2", { { 0, 200, 0, 255 } });
+	BakeAndSave(root, "outside.bmaterial", "Authored/Textures/toad/tex0.ktx2");
 
 	BSky sky;
 	sky.name       = "dusk";
-	sky.sky.source = "Authored/Textures/kirk/tex1.ktx2";
+	sky.sky.source = "Authored/Textures/toad/tex1.ktx2";
 	StoreAt(root.path).Save(sky, KeyIn(c_SkyDirectoryName, "dusk.bsky"));
 
 	const RenamePlan plan =
-		planRename(root.Scan(), "Authored/Textures/kirk", "Authored/Textures/spock");
+		planRename(root.Scan(), "Authored/Textures/toad", "Authored/Textures/spock");
 
 	CHECK(plan.IsDirectory());
 
 	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
 
-	CHECK_FALSE(fs::exists(root.path / "Authored/Textures" / "kirk"));
+	CHECK_FALSE(fs::exists(root.path / "Authored/Textures" / "toad"));
 	CHECK(fs::exists(root.path / "Authored/Textures" / "spock" / "tex0.ktx2"));
 
 	CHECK(
@@ -457,11 +457,11 @@ TEST_CASE("Renaming a directory of sources re-points the documents inside it", "
 	const DataRoot root("bernini_rename_dir_sources");
 
 	auto document   = ImportDocument();
-	document.source = "Authored/Meshes/crew/kirk.glb";
+	document.source = "Authored/Meshes/crew/toad.glb";
 	fs::create_directories(root.path / "Authored/Meshes/crew");
-	std::ofstream(root.path / "Authored/Meshes/crew/kirk.glb") << "source";
+	std::ofstream(root.path / "Authored/Meshes/crew/toad.glb") << "source";
 	core::file::write_atomic(
-		root.path / "Authored/Meshes/crew/kirk.bimport",
+		root.path / "Authored/Meshes/crew/toad.bimport",
 		AssetCodec<ImportDocument>::Serialize(document));
 
 	const RenamePlan plan =
@@ -469,10 +469,10 @@ TEST_CASE("Renaming a directory of sources re-points the documents inside it", "
 	REQUIRE(plan.IsDirectory());
 	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
 
-	CHECK(fs::exists(root.path / "Authored/Meshes/bridge/kirk.glb"));
+	CHECK(fs::exists(root.path / "Authored/Meshes/bridge/toad.glb"));
 	CHECK(
-		loadImportDocument(root.Source().GetFiles(), "Authored/Meshes/bridge/kirk.bimport")
-			.source == "Authored/Meshes/bridge/kirk.glb");
+		loadImportDocument(root.Source().GetFiles(), "Authored/Meshes/bridge/toad.bimport")
+			.source == "Authored/Meshes/bridge/toad.glb");
 
 	CHECK(root.Scan().broken.empty());
 }
@@ -622,14 +622,14 @@ TEST_CASE("A destination taken since the plan fails the rename", "[assetrename]"
 TEST_CASE("Derived files and directories cannot move independently", "[assetrename]")
 {
 	const DataRoot root("bernini_rename_derived");
-	const Import   imported = WriteImport(root, "kirk", true);
-	WriteSource(root.path / "Derived/SourceTextures/kirk/image.ktx2", { { 200, 0, 0, 255 } });
+	const Import   imported = WriteImport(root, "toad", true);
+	WriteSource(root.path / "Derived/SourceTextures/toad/image.ktx2", { { 200, 0, 0, 255 } });
 	const auto graph = root.Scan();
 	for (const auto& key : { imported.mesh,
 	                         imported.skeleton,
 	                         imported.animations,
-	                         std::string("Derived/SourceTextures/kirk/image.ktx2"),
-	                         std::string("Derived/SourceTextures/kirk"),
+	                         std::string("Derived/SourceTextures/toad/image.ktx2"),
+	                         std::string("Derived/SourceTextures/toad"),
 	                         std::string("Derived/Meshes"),
 	                         std::string("Derived") })
 	{
@@ -656,12 +656,12 @@ TEST_CASE("Renaming a material re-points the import document that binds it", "[a
 		AssetCodec<BMaterial>::Serialize(material));
 
 	ImportDocument document;
-	document.bindings = { { "kirk[0]", "Authored/Materials/old.bmaterial" } };
+	document.bindings = { { "toad[0]", "Authored/Materials/old.bmaterial" } };
 	fs::create_directories(root.path / "Authored/Meshes");
 	core::file::write_atomic(
-		root.path / "Authored/Meshes" / "kirk.bimport",
+		root.path / "Authored/Meshes" / "toad.bimport",
 		AssetCodec<ImportDocument>::Serialize(document));
-	std::ofstream(root.path / "Authored/Meshes" / "kirk.glb") << "source";
+	std::ofstream(root.path / "Authored/Meshes" / "toad.glb") << "source";
 
 	const RenamePlan plan = planRename(
 		root.Scan(),
@@ -670,7 +670,7 @@ TEST_CASE("Renaming a material re-points the import document that binds it", "[a
 	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
 
 	const ImportDocument rewritten =
-		loadImportDocument(root.Source().GetFiles(), "Authored/Meshes/kirk.bimport");
+		loadImportDocument(root.Source().GetFiles(), "Authored/Meshes/toad.bimport");
 	REQUIRE(rewritten.bindings.size() == 1);
 	CHECK(rewritten.bindings[0].material == "Authored/Materials/new.bmaterial");
 }
@@ -688,12 +688,12 @@ TEST_CASE(
 		AssetCodec<BMaterial>::Serialize(material));
 
 	ImportDocument document;
-	document.materialOverrides = { { "kirk[0]", "Burnt", "Authored/Materials/old.bmaterial" } };
+	document.materialOverrides = { { "toad[0]", "Burnt", "Authored/Materials/old.bmaterial" } };
 	fs::create_directories(root.path / "Authored/Meshes");
 	core::file::write_atomic(
-		root.path / "Authored/Meshes" / "kirk.bimport",
+		root.path / "Authored/Meshes" / "toad.bimport",
 		AssetCodec<ImportDocument>::Serialize(document));
-	std::ofstream(root.path / "Authored/Meshes" / "kirk.glb") << "source";
+	std::ofstream(root.path / "Authored/Meshes" / "toad.glb") << "source";
 
 	const RenamePlan plan = planRename(
 		root.Scan(),
@@ -702,17 +702,17 @@ TEST_CASE(
 	REQUIRE(root.Source().RenameAsset(plan).status == RenameStatus::kRenamed);
 
 	const ImportDocument rewritten =
-		loadImportDocument(root.Source().GetFiles(), "Authored/Meshes/kirk.bimport");
+		loadImportDocument(root.Source().GetFiles(), "Authored/Meshes/toad.bimport");
 	REQUIRE(rewritten.materialOverrides.size() == 1);
 	CHECK(
 		rewritten.materialOverrides[0] ==
-		MaterialOverrideBinding{ "kirk[0]", "Burnt", "Authored/Materials/new.bmaterial" });
+		MaterialOverrideBinding{ "toad[0]", "Burnt", "Authored/Materials/new.bmaterial" });
 }
 
 TEST_CASE("Renaming a legacy imported source preserves every output", "[assetrename]")
 {
 	const DataRoot root("bernini_rename_import_group");
-	const Import   before = WriteImport(root, "kirk", true);
+	const Import   before = WriteImport(root, "toad", true);
 	const auto     mesh   = root.Source().GetFiles().Read(before.mesh);
 	const auto     rig    = root.Source().GetFiles().Read(before.skeleton);
 	const auto     clips  = root.Source().GetFiles().Read(before.animations);
@@ -738,26 +738,26 @@ TEST_CASE("A shared rig stays fixed when its source moves", "[assetrename]")
 	// produced by one import and may be *bound* by another, whose document stores the path. Move
 	// the rig without rewriting that document and the second model is skinned to nothing.
 	const DataRoot root("bernini_rename_import_shared_rig");
-	const Import   kirk = WriteImport(root, "kirk", /*rigged*/ true);
+	const Import   toad = WriteImport(root, "toad", /*rigged*/ true);
 
 	auto bound     = ImportDocument();
-	bound.skeleton = kirk.skeleton;
+	bound.skeleton = toad.skeleton;
 	bound.outputs  = { "Derived/Meshes/spock.bmesh" };
-	SaveMesh(root, "spock.bmesh", {}, kirk.skeleton);
+	SaveMesh(root, "spock.bmesh", {}, toad.skeleton);
 	core::file::write_atomic(
 		root.path / "Authored/Meshes" / "spock.bimport",
 		AssetCodec<ImportDocument>::Serialize(bound));
 	std::ofstream(root.path / "Authored/Meshes" / "spock.glb") << "source";
 
-	REQUIRE(Rename(root, kirk.source, "Authored/Meshes/hero.glb").status == RenameStatus::kRenamed);
+	REQUIRE(Rename(root, toad.source, "Authored/Meshes/hero.glb").status == RenameStatus::kRenamed);
 
 	const ImportDocument after =
 		loadImportDocument(root.Source().GetFiles(), "Authored/Meshes/spock.bimport");
-	CHECK(after.skeleton == kirk.skeleton);
+	CHECK(after.skeleton == toad.skeleton);
 
 	// The document is only half of what the second import says about the rig: its `.bmesh` stores
 	// the same path as its own edge, and a mesh left naming the old file is skinned to nothing.
-	CHECK(root.Source().LoadRegenMeshRefs("Derived/Meshes/spock.bmesh").skeleton == kirk.skeleton);
+	CHECK(root.Source().LoadRegenMeshRefs("Derived/Meshes/spock.bmesh").skeleton == toad.skeleton);
 
 	// The second source's own outputs are none of this rename's business.
 	CHECK(after.outputs == std::vector<std::string>{ "Derived/Meshes/spock.bmesh" });
@@ -788,7 +788,7 @@ TEST_CASE("An import document names the same move its source does", "[assetrenam
 	// key is derived from its path. It now carries the group like the source does -- the two are one
 	// asset under two names, so either spelling has to reach the same plan.
 	const DataRoot root("bernini_rename_import_bydocument");
-	const Import   before = WriteImport(root, "kirk", /*rigged*/ false);
+	const Import   before = WriteImport(root, "toad", /*rigged*/ false);
 
 	const RenamePlan plan =
 		planRename(root.Scan(), before.document, "Authored/Meshes/hero.bimport");
@@ -810,15 +810,15 @@ TEST_CASE("A document claiming no outputs still has its source rewritten", "[ass
 	const DataRoot root("bernini_rename_import_nooutputs");
 
 	auto document   = ImportDocument();
-	document.source = "Authored/Meshes/kirk.glb";
+	document.source = "Authored/Meshes/toad.glb";
 	fs::create_directories(root.path / "Authored/Meshes");
-	std::ofstream(root.path / "Authored/Meshes/kirk.glb") << "source";
+	std::ofstream(root.path / "Authored/Meshes/toad.glb") << "source";
 	core::file::write_atomic(
-		root.path / "Authored/Meshes/kirk.bimport",
+		root.path / "Authored/Meshes/toad.bimport",
 		AssetCodec<ImportDocument>::Serialize(document));
 
 	REQUIRE(
-		Rename(root, "Authored/Meshes/kirk.glb", "Authored/Meshes/hero.glb").status ==
+		Rename(root, "Authored/Meshes/toad.glb", "Authored/Meshes/hero.glb").status ==
 		RenameStatus::kRenamed);
 
 	CHECK(
@@ -829,7 +829,7 @@ TEST_CASE("A document claiming no outputs still has its source rewritten", "[ass
 TEST_CASE("An imported output cannot be renamed separately", "[assetrename]")
 {
 	const DataRoot root("bernini_rename_import_output");
-	const Import   before = WriteImport(root, "kirk", false);
+	const Import   before = WriteImport(root, "toad", false);
 	CHECK_THROWS(planRename(root.Scan(), before.mesh, "Derived/Meshes/other.bmesh"));
 	CHECK(fs::exists(root.path / before.mesh));
 }
@@ -843,7 +843,7 @@ TEST_CASE("A missing source fails the rename, where a missing output does not", 
 	SECTION("a swept output is skipped")
 	{
 		const DataRoot root("bernini_rename_import_swept_output");
-		const Import   before = WriteImport(root, "kirk", /*rigged*/ false);
+		const Import   before = WriteImport(root, "toad", /*rigged*/ false);
 
 		const RenamePlan plan = planRename(root.Scan(), before.source, "Authored/Meshes/hero.glb");
 		fs::remove(root.path / before.mesh);
@@ -860,7 +860,7 @@ TEST_CASE("A missing source fails the rename, where a missing output does not", 
 	SECTION("a missing source fails, and the document stays put")
 	{
 		const DataRoot root("bernini_rename_import_lost_source");
-		const Import   before = WriteImport(root, "kirk", /*rigged*/ false);
+		const Import   before = WriteImport(root, "toad", /*rigged*/ false);
 
 		const RenamePlan plan =
 			planRename(root.Scan(), before.document, "Authored/Meshes/hero.bimport");
@@ -874,7 +874,7 @@ TEST_CASE("A missing source fails the rename, where a missing output does not", 
 	SECTION("a document whose source was already gone cannot even be planned")
 	{
 		const DataRoot root("bernini_rename_import_plan_lost_source");
-		const Import   before = WriteImport(root, "kirk", /*rigged*/ false);
+		const Import   before = WriteImport(root, "toad", /*rigged*/ false);
 		fs::remove(root.path / before.source);
 
 		CHECK_THROWS(planRename(root.Scan(), before.document, "Authored/Meshes/hero.bimport"));
@@ -886,7 +886,7 @@ TEST_CASE("A group destination taken by something else fails the plan", "[assetr
 	// The subject's destination is checked when the plan is made, so a caller can refuse before it
 	// asks the user to confirm. What the group would land on is held to the same promise.
 	const DataRoot root("bernini_rename_import_group_collision");
-	const Import   before = WriteImport(root, "kirk", /*rigged*/ false);
+	const Import   before = WriteImport(root, "toad", /*rigged*/ false);
 
 	std::ofstream(root.path / "Authored/Meshes/hero.glb") << "occupied";
 
@@ -896,7 +896,7 @@ TEST_CASE("A group destination taken by something else fails the plan", "[assetr
 TEST_CASE("An imported source cannot be renamed into another kind of asset", "[assetrename]")
 {
 	const DataRoot root("bernini_rename_import_kind");
-	const Import   before = WriteImport(root, "kirk", /*rigged*/ false);
+	const Import   before = WriteImport(root, "toad", /*rigged*/ false);
 
 	// Without this the `.bmesh` would be swapped for a `.bimport` on the way in and the rename
 	// would look ordinary.
@@ -932,14 +932,14 @@ TEST_CASE("A UI document renames as a leaf, and not into another kind", "[assetr
 TEST_CASE("An imported source cannot leave its category", "[assetrename]")
 {
 	const DataRoot root("bernini_rename_import_category");
-	const Import   kirk = WriteImport(root, "kirk", /*rigged*/ false);
+	const Import   toad = WriteImport(root, "toad", /*rigged*/ false);
 
 	CHECK_THROWS_WITH(
-		planRename(root.Scan(), kirk.source, "Authored/Levels/kirk.glb"),
+		planRename(root.Scan(), toad.source, "Authored/Levels/toad.glb"),
 		Catch::Matchers::ContainsSubstring("Authored/Meshes"));
 	CHECK_THROWS_WITH(
-		planRename(root.Scan(), kirk.document, "Authored/EnvSources/kirk.bimport"),
+		planRename(root.Scan(), toad.document, "Authored/EnvSources/toad.bimport"),
 		Catch::Matchers::ContainsSubstring("Authored/Meshes"));
 	fs::create_directories(root.path / "Authored/Meshes/crew");
-	CHECK_NOTHROW(planRename(root.Scan(), kirk.source, "Authored/Meshes/crew/kirk.glb"));
+	CHECK_NOTHROW(planRename(root.Scan(), toad.source, "Authored/Meshes/crew/toad.glb"));
 }
