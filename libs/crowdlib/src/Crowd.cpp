@@ -157,12 +157,13 @@ namespace crowd
 		void
 		SetTickParams(bgpu::ComputeKernel& kernel, const TickUploads& plan)
 		{
-			auto params               = kernel["gUniforms"]["params"];
-			params["tickSeconds"]     = plan.params.tickSeconds;
-			params["velocityInertia"] = plan.params.velocityInertia;
-			params["agentCount"]      = plan.params.agentCount;
-			params["groupCount"]      = plan.params.groupCount;
-			params["agentRangeCount"] = plan.params.agentRangeCount;
+			auto params                 = kernel["gUniforms"]["params"];
+			params["tickSeconds"]       = plan.params.tickSeconds;
+			params["velocityInertia"]   = plan.params.velocityInertia;
+			params["agentCount"]        = plan.params.agentCount;
+			params["groupCount"]        = plan.params.groupCount;
+			params["agentRangeCount"]   = plan.params.agentRangeCount;
+			params["renderFirstRecord"] = plan.params.renderFirstRecord;
 		}
 
 		void
@@ -363,9 +364,15 @@ namespace crowd
 				m_SubmittedTick + 1 - GetDesc().renderRingTicks);
 		}
 
-		const auto plan = m_Plan.PlanTick();
+		auto       plan = m_Plan.PlanTick();
 		const auto tick = m_SubmittedTick + 1;
 		auto&      slot = SlotOf(tick);
+		if (!m_RenderTicks.empty())
+		{
+			const auto ring = static_cast<uint32_t>(m_RenderTicks.size());
+			plan.params.renderFirstRecord =
+				static_cast<uint32_t>(tick % ring) * GetDesc().maxAgents;
+		}
 		Unmap(slot);
 		WaitForRenderReader(tick);
 		Record(slot, tick, plan);
@@ -375,7 +382,7 @@ namespace crowd
 			const auto ring    = static_cast<uint32_t>(m_RenderTicks.size());
 			auto       written = RenderTick{
 				.tick             = tick,
-				.firstRecordIndex = static_cast<uint32_t>(tick % ring) * GetDesc().maxAgents,
+				.firstRecordIndex = plan.params.renderFirstRecord,
 				.agentCount       = plan.params.agentCount,
 				.written          = bgpu::QueuePoint{ m_Queue, slot.fence },
 			};
@@ -489,6 +496,8 @@ namespace crowd
 		list.Barrier(m_Groups.GetBufferHandle(), c_ReadToUpload);
 		list.Barrier(m_Ranges.GetBufferHandle(), c_ReadToUpload);
 		list.Barrier(agents, c_UavToUav);
+		if (!m_RenderRing.IsNull())
+			list.Barrier(m_RenderRing, c_UavToUav);
 		list.Barrier(m_GroupSums, c_CopyToWrite);
 		if (!m_AgentReadback.IsNull())
 			list.Barrier(m_AgentReadback, c_CopyToWrite);
@@ -509,6 +518,8 @@ namespace crowd
 			m_Step["gUniforms"]["ranges"]   = m_Ranges.GetBufferHandle();
 			m_Step["gUniforms"]["previous"] = previous;
 			m_Step["gUniforms"]["agents"]   = agents;
+			// Bound even when null: the step writes no record without a ring (c_NoRenderRing).
+			m_Step["gUniforms"]["renderRing"] = m_RenderRing;
 			Dispatch(list, m_Step, core::div_ceil(agentCount, idl::c_ThreadsPerGroup));
 			list.Barrier(agents, c_UavToUav);
 

@@ -9,6 +9,7 @@
 #include <bgpu/constants/constants.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/Dsv.h>
+#include <bgpu/resource/NativeBufferDesc.h>
 #include <bgpu/resource/Readback.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Rtv.h>
@@ -16,6 +17,7 @@
 #include <bgpu/resource/Srv.h>
 #include <bgpu/resource/Texture.h>
 #include <bgpu/types/FormatInfo.h>
+#include <bgpu/types/NativeObject.h>
 #include <bgpu/uniforms/DescriptorHandle.h>
 #include <core/containers/slot_handle.h>
 #include <core/containers/slot_vector.h>
@@ -56,7 +58,8 @@ namespace bgpu
 	ResourceManager::ResourceManager(MTL::Device* device, const ResourceManagerDesc& desc) :
 		m_Device(device), m_Buffers(desc.maxBuffers), m_Readbacks(desc.maxReadbackBuffers),
 		m_Textures(desc.maxTextures), m_Srvs(desc.maxSrvs), m_BufferSrvs(desc.maxBufferSrvs),
-		m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs), m_Samplers(desc.maxSamplers)
+		m_BufferUavs(desc.maxBufferUavs), m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs),
+		m_Samplers(desc.maxSamplers)
 	{
 		const auto pool = ScopeAutoreleasePool();
 		// Sizing the pools here is what makes the lock-free Get*/Valid* reads sound: a slot_vector
@@ -98,6 +101,7 @@ namespace bgpu
 		BufferDesc bufferDesc;
 		bufferDesc.byteSize  = static_cast<uint64_t>(desc.stride) * desc.elementCount;
 		bufferDesc.isUav     = desc.isUav;
+		bufferDesc.allowsUav = desc.allowsUav;
 		bufferDesc.debugName = desc.debugName;
 
 		return EmplaceBuffer(bufferDesc);
@@ -118,6 +122,40 @@ namespace bgpu
 		bufferDesc.debugName = desc.debugName;
 
 		return EmplaceBuffer(bufferDesc);
+	}
+
+	BufferHandle
+	ResourceManager::ImportNativeBuffer(const NativeBufferDesc& desc) noexcept
+	{
+		const auto pool = ScopeAutoreleasePool();
+		if (desc.type != NativeObjectType::kMtlBuffer || desc.IsNull())
+		{
+			return BufferHandle{};
+		}
+
+		auto*          buffer = desc.object.As<MTL::Buffer>();
+		const uint64_t byteSize =
+			static_cast<uint64_t>(desc.buffer.stride) * desc.buffer.elementCount;
+		core::ensure(buffer->device() == m_Device, "ImportNativeBuffer of another device's buffer");
+		core::ensure(
+			byteSize > 0 && byteSize <= buffer->length(),
+			"ImportNativeBuffer views more bytes than the buffer holds");
+		core::ensure(
+			!desc.buffer.isUav && !desc.buffer.allowsUav,
+			"An imported buffer is read-only");
+
+		auto bufferDesc      = BufferDesc();
+		bufferDesc.byteSize  = byteSize;
+		bufferDesc.debugName = desc.buffer.debugName;
+
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		const auto slot = TryAllocateBounded(m_Buffers, NS::RetainPtr(buffer), bufferDesc);
+		if (slot.is_null())
+		{
+			spdlog::error("ImportNativeBuffer '{}': buffer pool exhausted", bufferDesc.debugName);
+			return BufferHandle{};
+		}
+		return BufferHandle{ slot, slot.index };
 	}
 
 	BufferSrvHandle
@@ -170,6 +208,60 @@ namespace bgpu
 	ResourceManager::ValidBufferSrvHandle(const BufferSrvHandle& handle) const noexcept
 	{
 		return m_BufferSrvs.valid(handle.slot);
+	}
+
+	BufferUavHandle
+	ResourceManager::CreateBufferUav(BufferHandle buffer, const BufferUavDesc& desc) noexcept
+	{
+		const auto pool = ScopeAutoreleasePool();
+		core::ensure(ValidBufferHandle(buffer), "CreateBufferUav on an invalid buffer");
+		core::ensure(desc.stride > 0, "A structured view requires a stride");
+
+		const BufferDesc& bufferDesc = m_Buffers[buffer.slot].GetDesc();
+		core::ensure(
+			bufferDesc.isUav || bufferDesc.allowsUav,
+			"CreateBufferUav on a buffer created without allowsUav");
+		core::ensure(!bufferDesc.isRaw, "CreateBufferUav on a raw buffer");
+		core::ensure(
+			bufferDesc.byteSize % desc.stride == 0,
+			"A structured view must divide the buffer it views");
+
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+
+		// Every buffer is made resident read-write, so whether the shader writes it is the type it
+		// declares: the view resolves to the buffer's own index, as CreateBufferSrv's does.
+		const auto slot = TryAllocateBounded(m_BufferUavs, buffer.bindlessIndex);
+		if (slot.is_null())
+		{
+			spdlog::error("CreateBufferUav '{}': buffer view pool exhausted", desc.debugName);
+			return BufferUavHandle{};
+		}
+
+		return BufferUavHandle{ slot, buffer.bindlessIndex };
+	}
+
+	void
+	ResourceManager::DestroyBufferUav(BufferUavHandle handle, bool deferred) noexcept
+	{
+		const auto                  pool = ScopeAutoreleasePool();
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		core::ensure(ValidBufferUavHandle(handle), "Cannot destroy invalid buffer view handle");
+
+		if (deferred)
+		{
+			m_BufferUavs.retire_slot(handle.slot.index);
+			RetireDeferred(PendingType::kBufferUav, handle.slot.index);
+		}
+		else
+		{
+			m_BufferUavs.release_slot(handle.slot.index);
+		}
+	}
+
+	bool
+	ResourceManager::ValidBufferUavHandle(const BufferUavHandle& handle) const noexcept
+	{
+		return m_BufferUavs.valid(handle.slot);
 	}
 
 	BufferHandle
@@ -342,6 +434,9 @@ namespace bgpu
 				break;
 			case PendingType::kBufferSrv:
 				m_BufferSrvs.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingType::kBufferUav:
+				m_BufferUavs.reclaim_slot(pending.slotIndex);
 				break;
 			case PendingType::kRtv:
 				m_Rtvs.reclaim_slot(pending.slotIndex);

@@ -154,14 +154,14 @@ groupshared uint gSurvivors;
 // The mask is built here and copied into the payload, never built in it. An amplification payload is
 // its own address space on D3D12 and an atomic addressed into one does not land: an InterlockedOr on
 // gCulledPayload.survivorMask leaves every bit clear, so the draw culls every group it tests.
-groupshared uint gSurvivorMask[cMaxCompactedGroups / 32];
+groupshared uint gSurvivorMask[cMaxCompactedGroups / cSurvivorMaskBits];
 
 // The instance this amplification group covers, and how many meshlets it dispatches: every meshlet
 // of every group whose cooked sphere LocalSphereInCullFrustum keeps, marked in gCulledPayload so the
 // mesh stage draws them in meshlet order, the order an unculled draw has. A kept group dispatches
-// all cMeshletsPerGroup of its meshlets and the mesh stage tests each on its own, so a group is
-// tested once where a meshlet list would have been read cMeshletsPerGroup times. Every lane of the
-// group calls it.
+// every meshlet it has -- cMeshletsPerGroup, fewer only for a submesh's short last group -- and the
+// mesh stage tests each on its own, so a group is tested once where a meshlet list would have been
+// read cMeshletsPerGroup times. Every lane of the group calls it.
 public uint CullMeshlets(uint gid, uint lane)
 {
     let compacted = expansionData.compactedInstances[ResolveInstanceBase() + gid];
@@ -181,7 +181,7 @@ public uint CullMeshlets(uint gid, uint lane)
         gCulledPayload.meshletCount = meshletCount;
     }
 
-    let maskWords = (groupCount + 31u) / 32u;
+    let maskWords = (groupCount + cSurvivorMaskBits - 1u) / cSurvivorMaskBits;
 
     for (uint w = lane; w < maskWords; w += cMeshletCullGroupSize)
     {
@@ -194,7 +194,7 @@ public uint CullMeshlets(uint gid, uint lane)
         let bound = forwardData.meshletGroupBuffer.Get(submesh.meshletGroups, groupIdx);
         if (LocalSphereInCullFrustum(mesh, bound.boundingSphere))
         {
-            InterlockedOr(gSurvivorMask[groupIdx / 32u], 1u << (groupIdx % 32u));
+            InterlockedOr(gSurvivorMask[groupIdx / cSurvivorMaskBits], 1u << (groupIdx % cSurvivorMaskBits));
         }
     }
     GroupMemoryBarrierWithGroupSync();
@@ -229,7 +229,18 @@ public uint CullMeshlets(uint gid, uint lane)
     }
 #endif
 
-    return survivors * cMeshletsPerGroup;
+    if (survivors == 0u)
+    {
+        return 0u;
+    }
+
+    // Only the last group can be short, and it is the last survivor when it survives, so its
+    // missing meshlets are the dispatch's trailing groups: not launching them changes no index.
+    let lastGroup = groupCount - 1u;
+    let shortBy = (cMeshletsPerGroup - meshletCount % cMeshletsPerGroup) % cMeshletsPerGroup;
+    let lastBit = 1u << (lastGroup % cSurvivorMaskBits);
+    let lastSurvives = (gSurvivorMask[lastGroup / cSurvivorMaskBits] & lastBit) != 0u;
+    return survivors * cMeshletsPerGroup - (lastSurvives ? shortBy : 0u);
 }
 
 // @pre submeshEntry is the level's place in the geom's range, as ResolveLod gave it.

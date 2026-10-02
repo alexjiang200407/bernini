@@ -12,6 +12,9 @@ public struct InstancedPayload
     public float lodDissolve;
 }
 
+// Survivor groups one CulledPayload::survivorMask word holds, a bit each.
+public static const uint cSurvivorMaskBits = 32u;
+
 // The static tier's payload: its instance, its submesh's meshlet count, and which of its meshlet
 // groups survived the frustum -- a bit per group of cMeshletsPerGroup meshlets, and before each mask
 // word how many survivors the earlier words hold, two 16-bit counts a word.
@@ -21,12 +24,12 @@ public struct CulledPayload
     public uint submeshEntry;
     public float lodDissolve;
     public uint meshletCount;
-    public uint survivorMask[cMaxCompactedGroups / 32];
-    public uint survivorsBefore[cMaxCompactedGroups / 64];
+    public uint survivorMask[cMaxCompactedGroups / cSurvivorMaskBits];
+    public uint survivorsBefore[cMaxCompactedGroups / (2u * cSurvivorMaskBits)];
 }
 
 // Groups the submesh is cut into. The last one is short unless cMeshletsPerGroup divides the count,
-// and the mesh groups standing for its missing meshlets emit nothing.
+// and a dispatch launches no mesh group for its missing meshlets (CullMeshlets).
 public uint MeshletGroupCount(uint meshletCount)
 {
     return (meshletCount + cMeshletsPerGroup - 1u) / cMeshletsPerGroup;
@@ -37,10 +40,12 @@ public uint MeshletGroupCount(uint meshletCount)
 public uint CulledGroupIndex(CulledPayload payload, uint ordinal)
 {
     // The last mask word whose earlier survivors number no more than `ordinal` holds it. Counted to
-    // a constant number of halvings for the same reason the bit loop below is counted to 32: eight
-    // exhausts the cMaxCompactedGroups / 32 words a payload can carry.
+    // a constant number of halvings for the same reason the bit loop below is counted to the word's
+    // width: eight exhausts the cMaxCompactedGroups / cSurvivorMaskBits words a payload can carry.
     uint lo = 0u;
-    uint hi = min((MeshletGroupCount(payload.meshletCount) + 31u) / 32u, cMaxCompactedGroups / 32u);
+    uint hi =
+        min((MeshletGroupCount(payload.meshletCount) + cSurvivorMaskBits - 1u) / cSurvivorMaskBits,
+            cMaxCompactedGroups / cSurvivorMaskBits);
     for (uint step = 0u; step < 8u; ++step)
     {
         if (hi - lo <= 1u)
@@ -67,8 +72,8 @@ public uint CulledGroupIndex(CulledPayload payload, uint ordinal)
     // Counted to the word's width, never to `skip`, though the precondition puts `skip` below it.
     // Bounded by `skip` alone this loop does not terminate on D3D12 -- the group spins, the queue
     // wedges and TDR removes the device -- and it does so with the precondition holding, checked.
-    // What it turns on is the trip count being a read of payload memory; 32 is a constant instead.
-    for (uint cleared = 0u; cleared < 32u; ++cleared)
+    // What it turns on is the trip count being a read of payload memory; the width is a constant.
+    for (uint cleared = 0u; cleared < cSurvivorMaskBits; ++cleared)
     {
         if (cleared >= skip)
         {
@@ -76,7 +81,7 @@ public uint CulledGroupIndex(CulledPayload payload, uint ordinal)
         }
         mask &= mask - 1u;
     }
-    return lo * 32u + firstbitlow(mask);
+    return lo * cSurvivorMaskBits + firstbitlow(mask);
 }
 
 // The meshlet mesh group `gid` of the static tier draws: the group it falls in is the (gid /

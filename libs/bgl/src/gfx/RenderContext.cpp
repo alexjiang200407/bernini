@@ -908,6 +908,9 @@ namespace bgl
 			m_Skybox.AttachToFrameGraph(m_FrameGraph, draw);
 		}
 
+		// First: every pass below reads a placement, and a block's are written here.
+		m_WriteInstanceBlocks.AttachToFrameGraph(m_FrameGraph, draw);
+
 		// A palette is per instance, not per frustum, so posing runs once for the view rather than once
 		// per cull -- and it must be attached under the view's namespace, where its output buffer was
 		// imported. Under a cull namespace the write would resolve to a name nothing imported, which
@@ -1607,7 +1610,7 @@ namespace bgl
 		auto kernel = m_Device->CreateComputeKernel(
 			bgpu::ComputePipelineDesc()
 				.SetShader(m_Device->CreateShader(programName))
-				.SetDebugName(std::format("Place Blocks ({})", desc.slangTypeName)));
+				.SetDebugName(std::format("Write Instance Blocks ({})", desc.slangTypeName)));
 		context.ReleaseSlangSessions();
 
 		return core::SharedRef<MeshInstanceWriter>::Make(

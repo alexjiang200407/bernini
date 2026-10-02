@@ -8,6 +8,7 @@
 #include "resource/Srv_d3d12.h"
 #include "resource/Texture_d3d12.h"
 #include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/resource/NativeBufferDesc.h>
 #include <bgpu/resource/NativeTextureDesc.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/types/NativeObject.h>
@@ -37,6 +38,7 @@ namespace bgpu
 		kInvalid,
 		kBuffer,
 		kBufferSrv,
+		kBufferUav,
 		kSrv,
 		kRtv,
 		kDsv,
@@ -50,9 +52,10 @@ namespace bgpu
 		PendingType type      = PendingType::kInvalid;
 		uint32_t    slotIndex = 0xFFFFFFFF;
 
-		// Set only for the types that occupy the shader-visible heap -- kBuffer, kBufferSrv and
-		// kSrv; null for every other. A descriptor must outlive in-flight work exactly as the
-		// resource does, so it is handed back when the gate clears rather than at destroy time.
+		// Set only for the types that occupy the shader-visible heap -- kBuffer, kBufferSrv,
+		// kBufferUav and kSrv; null for every other. A descriptor must outlive in-flight work
+		// exactly as the resource does, so it is handed back when the gate clears rather than at
+		// destroy time.
 		uint32_t descriptorIndex = 0xFFFFFFFF;
 	};
 
@@ -75,6 +78,17 @@ namespace bgpu
 			           NativeObject{ GetTexture(handle).GetD3D12Resource() } :
 			           NativeObject{};
 		}
+
+		[[nodiscard]] NativeObject
+		GetNativeBuffer(BufferHandle handle, NativeObjectType type) const noexcept override
+		{
+			return type == NativeObjectType::kD3D12Resource && ValidBufferHandle(handle) ?
+			           NativeObject{ GetBuffer(handle).GetD3D12Resource() } :
+			           NativeObject{};
+		}
+
+		[[nodiscard]] BufferHandle
+		ImportNativeBuffer(const NativeBufferDesc& desc) noexcept override;
 
 		[[nodiscard]] TextureHandle
 		ImportNativeTexture(const NativeTextureDesc& desc) noexcept override
@@ -129,6 +143,16 @@ namespace bgpu
 
 		[[nodiscard]] bool
 		ValidBufferSrvHandle(const BufferSrvHandle& handle) const noexcept override;
+
+		[[nodiscard]]
+		BufferUavHandle
+		CreateBufferUav(BufferHandle buffer, const BufferUavDesc& desc) noexcept override;
+
+		void
+		DestroyBufferUav(BufferUavHandle handle, bool deferred = true) noexcept override;
+
+		[[nodiscard]] bool
+		ValidBufferUavHandle(const BufferUavHandle& handle) const noexcept override;
 
 		/**
 		 * Automatically creates SRV/UAV for the texture.
@@ -349,6 +373,7 @@ namespace bgpu
 		// A structured view onto a buffer is a descriptor and nothing else: the buffer it views owns
 		// the allocation, so unlike an Srv there is no object here to describe.
 		core::slot_vector<uint32_t> m_BufferSrvs;
+		core::slot_vector<uint32_t> m_BufferUavs;
 
 		wrl::ComPtr<ID3D12DescriptorHeap> m_RtvHeap;
 		wrl::ComPtr<ID3D12DescriptorHeap> m_DsvHeap;

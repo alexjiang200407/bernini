@@ -18,4 +18,11 @@ public struct Group
     // The type's preferred speed times the orders' pace, and the type's maximum speed.
     public float speed;
     public float maxSpeed;
+
+    // The group's index in CrowdDesc::agentTypes, which its agents' render records carry.
+    public uint agentType;
+
+    // Where its agents' render records start: a tick's records are grouped by type, so this is
+    // not firstAgent.
+    public uint firstRecord;
 };

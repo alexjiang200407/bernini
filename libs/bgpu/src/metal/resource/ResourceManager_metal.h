@@ -1,6 +1,7 @@
 #pragma once
 #include "metal_cpp.h"
 #include <bgpu/device/Device.h>
+#include <bgpu/resource/NativeBufferDesc.h>
 #include <bgpu/types/NativeObject.h>
 
 #include "resource/Buffer_metal.h"
@@ -62,6 +63,17 @@ namespace bgpu
 			           NativeObject{};
 		}
 
+		[[nodiscard]] NativeObject
+		GetNativeBuffer(BufferHandle handle, NativeObjectType type) const noexcept override
+		{
+			return type == NativeObjectType::kMtlBuffer && ValidBufferHandle(handle) ?
+			           NativeObject{ GetBuffer(handle).GetMTLResource() } :
+			           NativeObject{};
+		}
+
+		[[nodiscard]] BufferHandle
+		ImportNativeBuffer(const NativeBufferDesc& desc) noexcept override;
+
 		ResourceManager(MTL::Device* device, const ResourceManagerDesc& desc);
 
 		[[nodiscard]] MTL::Device*
@@ -109,6 +121,16 @@ namespace bgpu
 
 		[[nodiscard]] bool
 		ValidBufferSrvHandle(const BufferSrvHandle& handle) const noexcept override;
+
+		[[nodiscard]]
+		BufferUavHandle
+		CreateBufferUav(BufferHandle buffer, const BufferUavDesc& desc) noexcept override;
+
+		void
+		DestroyBufferUav(BufferUavHandle handle, bool deferred = true) noexcept override;
+
+		[[nodiscard]] bool
+		ValidBufferUavHandle(const BufferUavHandle& handle) const noexcept override;
 
 		ReadbackBufferHandle
 		CreateReadbackBuffer(const ReadbackBufferDesc& desc) noexcept override;
@@ -248,6 +270,7 @@ namespace bgpu
 			kTexture,
 			kSrv,
 			kBufferSrv,
+			kBufferUav,
 			kRtv,
 			kDsv,
 			kSampler,
@@ -289,6 +312,9 @@ namespace bgpu
 		// is the lifetime: a view outlives the buffer it views, which is the contract
 		// IResourceManager states and what m_Srvs exists for here for the same reason.
 		core::slot_vector<uint32_t> m_BufferSrvs;
+
+		// A writable view of a buffer, kept for its lifetime as m_BufferSrvs is.
+		core::slot_vector<uint32_t> m_BufferUavs;
 		core::slot_vector<Rtv>      m_Rtvs;
 		core::slot_vector<Dsv>      m_Dsvs;
 		core::slot_vector<Sampler>  m_Samplers;

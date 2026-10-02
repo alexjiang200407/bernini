@@ -11,6 +11,7 @@
 #include <bgpu/pipeline/MeshletPipeline.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/Dsv.h>
+#include <bgpu/resource/NativeBufferDesc.h>
 #include <bgpu/resource/Readback.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Rtv.h>
@@ -21,6 +22,7 @@
 #include <bgpu/types/Color.h>
 #include <bgpu/types/Format.h>
 #include <bgpu/types/MeshletState.h>
+#include <bgpu/types/NativeObject.h>
 #include <bgpu/types/QueueType.h>
 #include <bgpu/types/Viewport.h>
 #include <catch2/catch_test_macros.hpp>
@@ -58,7 +60,7 @@ TEST_CASE("Every RHI entry point runs on a device no renderer owns", "[render][r
 	auto list     = device->CreateCommandList(listDesc, alloc, rm);
 	auto timing   = device->CreateTimestampHeap(2);
 
-	// Buffers, and a second view of one.
+	// Buffers, and a second view of one, read-only and writable.
 	const auto structBuffer = rm->CreateStructBuffer(
 		bgpu::StructBufferDesc().SetElement<uint32_t>().SetElementCount(16).SetIsUav().SetDebugName(
 			"entry points: struct"));
@@ -74,6 +76,32 @@ TEST_CASE("Every RHI entry point runs on a device no renderer owns", "[render][r
 	REQUIRE(rm->ValidBufferHandle(rawBuffer));
 	REQUIRE(rm->ValidBufferHandle(computeBuffer));
 	REQUIRE(rm->ValidBufferSrvHandle(bufferSrv));
+
+	const auto readOnlyBuffer = rm->CreateStructBuffer(
+		bgpu::StructBufferDesc()
+			.SetElement<uint32_t>()
+			.SetElementCount(16)
+			.SetAllowsUav()
+			.SetDebugName("entry points: read-only, writable view"));
+	const auto bufferUav = rm->CreateBufferUav(
+		readOnlyBuffer,
+		bgpu::BufferUavDesc().SetElement<uint32_t>().SetDebugName("entry points: writable view"));
+	REQUIRE(rm->ValidBufferUavHandle(bufferUav));
+
+	// A buffer exported and imported back, as a second owner would.
+	auto exportedType = bgpu::NativeObjectType::kMtlBuffer;
+	auto exported     = rm->GetNativeBuffer(structBuffer, exportedType);
+	if (!exported)
+	{
+		exportedType = bgpu::NativeObjectType::kD3D12Resource;
+		exported     = rm->GetNativeBuffer(structBuffer, exportedType);
+	}
+	REQUIRE(exported);
+	const auto importedBuffer = rm->ImportNativeBuffer(
+		bgpu::NativeBufferDesc()
+			.SetObject(exportedType, exported)
+			.SetBuffer(bgpu::StructBufferDesc().SetElement<uint32_t>().SetElementCount(16)));
+	REQUIRE(rm->ValidBufferHandle(importedBuffer));
 
 	// A colour target with its three views, a depth target, a sampler.
 	auto colorDesc   = bgpu::TextureDesc();
@@ -173,6 +201,9 @@ TEST_CASE("Every RHI entry point runs on a device no renderer owns", "[render][r
 
 	// Deferred destroys, reclaimed once the queue has passed them; then the immediate ones.
 	rm->DestroyBufferSrv(bufferSrv);
+	rm->DestroyBufferUav(bufferUav);
+	rm->DestroyBuffer(readOnlyBuffer);
+	rm->DestroyBuffer(importedBuffer);
 	rm->DestroyBuffer(structBuffer);
 	rm->DestroyBuffer(rawBuffer);
 	rm->DestroyBuffer(computeBuffer);

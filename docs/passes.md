@@ -32,7 +32,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 
 `RenderContext` ([gfx/RenderContext.cpp](libs/bgl/src/gfx/RenderContext.cpp)) drives the frame and
 owns the long-lived pass objects (`m_BrdfLut`, `m_Forward`, `m_BlobShadows`, `m_Skybox`, `m_TransparentSort`,
-`m_CompactInstances`, `m_RigFrames`, `m_SkinnedPose`, `m_OutlineMask`, `m_TaaResolve`,
+`m_CompactInstances`, `m_WriteInstanceBlocks`, `m_RigFrames`, `m_SkinnedPose`, `m_OutlineMask`, `m_TaaResolve`,
 `m_BloomPass`, `m_PostProcess`, `m_OverlayPass`, `m_PreparePresentPass`); `Graphics` owns one context and
 forwards the frame methods to it. A frame is built between `BeginFrame` and `EndFrame`, with one `Draw` per
 view in between; the passes are added in this order and, because the graph never reorders, execute
@@ -44,7 +44,8 @@ flowchart TD
     CLR --> D["per Draw(view)"]
     subgraph D["per Draw(view) — resources imported under the view's namespace"]
         IMP["Scene / SceneView import their buffers"] --> SKY["Skybox (only if the view has one)"]
-        SKY --> RIG["Pose Rig Frames (only when a rig wants its bone anim table)"]
+        SKY --> PB["Write Instance Blocks (only when an instance block has a writer; one dispatch per block)"]
+        PB --> RIG["Pose Rig Frames (only when a rig wants its bone anim table)"]
         RIG --> POSE["Pose Skinned (one workgroup per skinned instance)"]
         POSE --> TS["Transparent Sort (3 sub-passes)"]
         TS --> CI["Compact Instances (3 sub-passes)"]
@@ -200,13 +201,14 @@ The survivors are **compacted** in the amplification group (`CullMeshlets` in
 lane per group marks a bit, one lane writes a running count per mask word, and the group dispatches
 `cMeshletsPerGroup` mesh groups per survivor, each finding its group by a binary search over the
 counts and its meshlet within that group by the remainder. They are dispatched in meshlet order, the
-order an unculled draw has, and the last group of a submesh whose meshlet count does not divide
-stands for meshlets that do not exist -- those mesh groups emit nothing.
+order an unculled draw has. Only a submesh's last group can be short of `cMeshletsPerGroup`
+meshlets, and when it survives it is the last survivor, so the dispatch leaves off its missing
+meshlets as trailing mesh groups: a one-meshlet box launches one mesh group, not eight.
 
 **The mesh stage then tests the meshlet it draws**, against the same planes and its own cooked
-sphere, and emits nothing when it fails: a kept group is launched whole, so the meshlets of it that
-are off screen are rejected here. The vertex work and the raster setup are saved; the mesh-group
-launch is not. That is the trade the group makes -- the amplification stage reads an eighth as many
+sphere, and emits nothing when it fails: a kept group launches every meshlet it has, so the meshlets
+of it that are off screen are rejected here. The vertex work and the raster setup are saved; the
+mesh-group launch is not. That is the trade the group makes -- the amplification stage reads an eighth as many
 spheres, and pays for it in launches that draw nothing.
 
 **The payload is kept small on purpose.** It is copied out whole for every instance drawn -- on Metal,
@@ -567,6 +569,22 @@ reprojects through a pose nothing drew, which is the caller's to avoid.
 * **Skipped** when the view places no skinned instance — and an instance drawing from its rig's bone
   anim table is not one of them. The dense list is built from instances that own a palette, which is
   what this pass writes into; a table instance owns none and is posed by `Pose Rig Frames` once.
+
+### Write Instance Blocks — [passes/WriteInstanceBlocksPass.{h,cpp}](libs/bgl/src/passes/WriteInstanceBlocksPass.cpp)
+
+* **What it is:** the writer of every instance block (`ISceneView::CreateMeshInstanceBlock`). One
+  dispatch per block that has a writer, `MeshInstanceWriter::DispatchGroups(capacity)` groups of
+  64, each thread calling the writer's `Write` for one slot. A block holds its own `ComputeKernel`
+  -- the writer's pipeline with a constant buffer of its own -- and the pass fills its `block`
+  (the mesh buffer's writable view, the first slot, the capacity) beside the caller's `params`.
+* **In / out:** `scene.meshInstanceBuffer`, read-write, through the writable view
+  (`EntryBuffer::GetWritableView`), re-read every frame since a growth replaces it. A buffer a
+  writer imported (`IGraphics::ImportBuffer`) is bound through its parameters and is no graph
+  resource: the frame's `WaitBeforeNextFrame` is what orders it.
+* **First in the view's frame**, ahead of `Pose Rig Frames`, `Pose Skinned` and the cull, all of
+  which read a placement. Absent from the graph when no block has a writer.
+* **Writes only its own run.** The run starts and ends on an upload block, so no CPU placement's
+  upload rewrites what a writer wrote, and the CPU writes the run once, at creation.
 
 ### Pose Rig Frames
 

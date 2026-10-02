@@ -3,6 +3,8 @@
 #include "convert_d3d12.h"
 #include "resource/BoundedPool.h"
 #include <bgpu/cmd/CommandList.h>
+#include <bgpu/resource/NativeBufferDesc.h>
+#include <bgpu/types/NativeObject.h>
 #include <core/err/util.h>
 #include <spdlog/spdlog.h>
 
@@ -17,16 +19,18 @@ namespace bgpu
 										 desc.maxCbvSrvUavs,
 										 D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE),
 		m_Buffers(desc.maxBuffers), m_Srvs(desc.maxSrvs), m_BufferSrvs(desc.maxBufferSrvs),
-		m_Samplers(desc.maxSamplers), m_Textures(desc.maxTextures),
-		m_ReadbackBuffers(desc.maxReadbackBuffers), m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs)
+		m_BufferUavs(desc.maxBufferUavs), m_Samplers(desc.maxSamplers),
+		m_Textures(desc.maxTextures), m_ReadbackBuffers(desc.maxReadbackBuffers),
+		m_Rtvs(desc.maxRtvs), m_Dsvs(desc.maxDsvs)
 	{
 		core::ensure(desc.maxBuffers > 0, "maxBuffers must be greater than zero");
 		// Every buffer, every SRV and every second view of a buffer takes a descriptor, so a heap
 		// smaller than the pools it serves turns a legal create into an exhausted-heap failure. The
 		// +1 is the unbound sentinel the allocator burns at index 0 and never hands out.
 		core::ensure(
-			desc.maxCbvSrvUavs >= desc.maxBuffers + desc.maxSrvs + desc.maxBufferSrvs + 1,
-			"maxCbvSrvUavs must cover maxBuffers + maxSrvs + maxBufferSrvs, and the unbound slot");
+			desc.maxCbvSrvUavs >=
+				desc.maxBuffers + desc.maxSrvs + desc.maxBufferSrvs + desc.maxBufferUavs + 1,
+			"maxCbvSrvUavs must cover every buffer, SRV and second view, and the unbound slot");
 		core::ensure(desc.maxSamplers <= 2048, "maxSamplers must be at most 2048");
 
 		// D3D12 refuses a heap of no descriptors, and a pool of zero is how a compute owner says it
@@ -118,6 +122,7 @@ namespace bgpu
 		BufferDesc bufferDesc;
 		bufferDesc.byteSize  = static_cast<uint64_t>(desc.stride) * desc.elementCount;
 		bufferDesc.isUav     = desc.isUav;
+		bufferDesc.allowsUav = desc.allowsUav;
 		bufferDesc.debugName = desc.debugName;
 
 		auto allocation = AllocateBuffer(bufferDesc);
@@ -164,6 +169,80 @@ namespace bgpu
 		m_Buffers[allocation.slot] = std::move(buffer);
 
 		return BufferHandle{ allocation.slot, allocation.descriptorIndex };
+	}
+
+	BufferHandle
+	ResourceManager::ImportNativeBuffer(const NativeBufferDesc& desc) noexcept
+	{
+		if (desc.type != NativeObjectType::kD3D12Resource || desc.IsNull())
+		{
+			return BufferHandle{};
+		}
+
+		auto*          resource = desc.object.As<ID3D12Resource>();
+		const uint64_t byteSize =
+			static_cast<uint64_t>(desc.buffer.stride) * desc.buffer.elementCount;
+		{
+			wrl::ComPtr<ID3D12Device> owner;
+			resource->GetDevice(IID_PPV_ARGS(&owner)) >> d3d12ErrChecker;
+			core::ensure(
+				owner.Get() == m_Device.Get(),
+				"ImportNativeBuffer of another device's buffer");
+		}
+		const D3D12_RESOURCE_DESC resourceDesc = resource->GetDesc();
+		core::ensure(
+			resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER,
+			"ImportNativeBuffer of a resource that is not a buffer");
+		core::ensure(
+			byteSize > 0 && byteSize <= resourceDesc.Width,
+			"ImportNativeBuffer views more bytes than the buffer holds");
+		core::ensure(
+			!desc.buffer.isUav && !desc.buffer.allowsUav,
+			"An imported buffer is read-only");
+
+		auto bufferDesc      = BufferDesc();
+		bufferDesc.byteSize  = byteSize;
+		bufferDesc.debugName = desc.buffer.debugName;
+
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		auto                        slot = TryAllocateBounded(m_Buffers);
+		if (slot.is_null())
+		{
+			spdlog::error("ImportNativeBuffer '{}': buffer pool exhausted", bufferDesc.debugName);
+			return BufferHandle{};
+		}
+
+		uint32_t descriptorIndex = 0xFFFFFFFF;
+		try
+		{
+			descriptorIndex = m_CbvSrvUavDescriptors.Allocate();
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("ImportNativeBuffer '{}': {}", bufferDesc.debugName, e.what());
+			m_Buffers.release_slot(slot.index);
+			return BufferHandle{};
+		}
+
+		auto buffer = Buffer(
+			m_Device.Get(),
+			m_CbvSrvUavDescriptors.GetD3D12Heap(),
+			descriptorIndex,
+			wrl::ComPtr<ID3D12Resource>(resource),
+			bufferDesc);
+
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+		srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_BUFFER;
+		srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Format                          = DXGI_FORMAT_UNKNOWN;
+		srvDesc.Buffer.FirstElement             = 0;
+		srvDesc.Buffer.NumElements              = desc.buffer.elementCount;
+		srvDesc.Buffer.StructureByteStride      = desc.buffer.stride;
+		srvDesc.Buffer.Flags                    = D3D12_BUFFER_SRV_FLAG_NONE;
+		m_Device->CreateShaderResourceView(resource, &srvDesc, buffer.GetCpuHandle());
+
+		m_Buffers[slot] = std::move(buffer);
+		return BufferHandle{ slot, descriptorIndex };
 	}
 
 	BufferHandle
@@ -303,6 +382,86 @@ namespace bgpu
 	ResourceManager::ValidBufferSrvHandle(const BufferSrvHandle& handle) const noexcept
 	{
 		return m_BufferSrvs.valid(handle.slot);
+	}
+
+	BufferUavHandle
+	ResourceManager::CreateBufferUav(BufferHandle buffer, const BufferUavDesc& desc) noexcept
+	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		core::ensure(ValidBufferHandle(buffer), "CreateBufferUav on an invalid buffer");
+		core::ensure(desc.stride > 0, "A structured view requires a stride");
+
+		const BufferDesc& bufferDesc = m_Buffers[buffer.slot].GetDesc();
+		core::ensure(
+			bufferDesc.isUav || bufferDesc.allowsUav,
+			"CreateBufferUav on a buffer created without allowsUav");
+		core::ensure(!bufferDesc.isRaw, "CreateBufferUav on a raw buffer");
+		core::ensure(
+			bufferDesc.byteSize % desc.stride == 0,
+			"A structured view must divide the buffer it views");
+
+		auto slot = TryAllocateBounded(m_BufferUavs);
+		if (slot.is_null())
+		{
+			spdlog::error("CreateBufferUav '{}': buffer view pool exhausted", desc.debugName);
+			return BufferUavHandle{};
+		}
+
+		uint32_t descriptorIndex = 0xFFFFFFFF;
+		try
+		{
+			descriptorIndex = m_CbvSrvUavDescriptors.Allocate();
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("CreateBufferUav '{}': {}", desc.debugName, e.what());
+			m_BufferUavs.release_slot(slot.index);
+			return BufferUavHandle{};
+		}
+
+		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+		uavDesc.ViewDimension                    = D3D12_UAV_DIMENSION_BUFFER;
+		uavDesc.Format                           = DXGI_FORMAT_UNKNOWN;
+		uavDesc.Buffer.FirstElement              = 0;
+		uavDesc.Buffer.NumElements = static_cast<uint32_t>(bufferDesc.byteSize / desc.stride);
+		uavDesc.Buffer.StructureByteStride = desc.stride;
+		uavDesc.Buffer.Flags               = D3D12_BUFFER_UAV_FLAG_NONE;
+
+		m_Device->CreateUnorderedAccessView(
+			m_Buffers[buffer.slot].GetD3D12Resource(),
+			nullptr,
+			&uavDesc,
+			m_CbvSrvUavDescriptors.GetCpuHandle(descriptorIndex));
+
+		m_BufferUavs[slot.index] = descriptorIndex;
+
+		return BufferUavHandle{ slot, descriptorIndex };
+	}
+
+	void
+	ResourceManager::DestroyBufferUav(BufferUavHandle handle, bool deferred) noexcept
+	{
+		std::lock_guard<std::mutex> lock(m_PoolMutex);
+		core::ensure(ValidBufferUavHandle(handle), "Cannot destroy invalid buffer view handle");
+
+		const uint32_t descriptorIndex = m_BufferUavs[handle.slot.index];
+
+		if (deferred)
+		{
+			m_BufferUavs.retire_slot(handle.slot.index);
+			RetireDeferred(PendingType::kBufferUav, handle.slot.index, descriptorIndex);
+		}
+		else
+		{
+			m_BufferUavs.release_slot(handle.slot.index);
+			m_CbvSrvUavDescriptors.Free(descriptorIndex);
+		}
+	}
+
+	bool
+	ResourceManager::ValidBufferUavHandle(const BufferUavHandle& handle) const noexcept
+	{
+		return m_BufferUavs.valid(handle.slot);
 	}
 
 	BufferHandle
@@ -732,6 +891,13 @@ namespace bgpu
 				break;
 			case PendingType::kBufferSrv:
 				m_BufferSrvs.reclaim_slot(pending.slotIndex);
+				if (pending.descriptorIndex != 0xFFFFFFFF)
+				{
+					m_CbvSrvUavDescriptors.Free(pending.descriptorIndex);
+				}
+				break;
+			case PendingType::kBufferUav:
+				m_BufferUavs.reclaim_slot(pending.slotIndex);
 				if (pending.descriptorIndex != 0xFFFFFFFF)
 				{
 					m_CbvSrvUavDescriptors.Free(pending.descriptorIndex);
