@@ -1003,12 +1003,13 @@ namespace game
 			// One upload per clip set, however many meshes are skinned to it: a unit assembled from
 			// slot meshes is several geoms on one rig.
 			const AcquiredRig rig = AcquireRig(
-				animationsNorm,
-				blendNorm,
-				skeleton,
-				animations,
-				mesh,
-				blendSet.has_value() ? &*blendSet : nullptr);
+				RigDesc()
+					.SetAnimationsNorm(animationsNorm)
+					.SetBlendNorm(blendNorm)
+					.SetSkeleton(&skeleton)
+					.SetAnimations(&animations)
+					.SetMesh(&mesh)
+					.SetBlendSet(blendSet.has_value() ? &*blendSet : nullptr));
 			rigAcquired = true;
 
 			auto record = GeomRecord();
@@ -1055,14 +1056,19 @@ namespace game
 	}
 
 	AssetManager::AcquiredRig
-	AssetManager::AcquireRig(
-		std::string_view              animationsNorm,
-		std::string_view              blendNorm,
-		const assetlib::Skeleton&     skeleton,
-		const assetlib::AnimationSet& animations,
-		const assetlib::BMesh&        mesh,
-		const assetlib::BlendSet*     blendSet)
+	AssetManager::AcquireRig(const RigDesc& desc)
 	{
+		core::ensure(
+			desc.skeleton != nullptr && desc.animations != nullptr && desc.mesh != nullptr,
+			"AcquireRig needs a skeleton, a clip set and a mesh");
+
+		const std::string_view        animationsNorm = desc.animationsNorm;
+		const std::string_view        blendNorm      = desc.blendNorm;
+		const assetlib::Skeleton&     skeleton       = *desc.skeleton;
+		const assetlib::AnimationSet& animations     = *desc.animations;
+		const assetlib::BMesh&        mesh           = *desc.mesh;
+		const assetlib::BlendSet*     blendSet       = desc.blendSet;
+
 		const uint64_t rigSignature = assetlib::skeletonSignature(skeleton);
 
 		if (const auto it = m_Rigs.find(animationsNorm); it != m_Rigs.end())
@@ -1348,11 +1354,10 @@ namespace game
 	// --- Instances --------------------------------------------------------------------------------
 
 	bgl::MeshInstanceHandle
-	AssetManager::CreateInstance(
-		bgl::SceneViewRef view,
-		bgl::GeomHandle   geom,
-		const glm::mat4&  transform)
+	AssetManager::CreateInstance(bgl::SceneViewRef view, const bgl::StaticMeshInstanceDesc& desc)
 	{
+		const bgl::GeomHandle geom = desc.geom;
+
 		if (!view)
 			throw bgl::SceneError("CreateInstance requires a valid SceneView");
 
@@ -1364,8 +1369,7 @@ namespace game
 				"expired");
 		}
 
-		const bgl::MeshInstanceHandle instance = view->CreateStaticMeshInstance(
-			bgl::StaticMeshInstanceDesc().SetGeom(geom).SetTransform(transform));
+		const bgl::MeshInstanceHandle instance = view->CreateStaticMeshInstance(desc);
 
 		RegisterInstance(std::move(view), geom.handle.index, instance);
 

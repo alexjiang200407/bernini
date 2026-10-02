@@ -26,6 +26,7 @@
 #include <bgl/types/PassTiming.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/RenderJob.h>
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/Viewport.h>
 #include <bgl/types/WindDesc.h>
 #include <core/err/util.h>
@@ -284,7 +285,11 @@ namespace
 			const glm::mat4 world = headless::InstanceTransform(model, n);
 			if (!rigged || !assetlib::isSkinned(model, meshIndex))
 			{
-				assets.CreateInstance(view, assets.AcquireMesh(document.source, meshIndex), world);
+				assets.CreateInstance(
+					view,
+					bgl::StaticMeshInstanceDesc()
+						.SetGeom(assets.AcquireMesh(document.source, meshIndex))
+						.SetTransform(world));
 				headless::GrowBounds(bounds, world, headless::MeshEntryBounds(model, meshIndex));
 				continue;
 			}
@@ -381,8 +386,13 @@ namespace
 		      .roughnessFactor = 1.0f });
 		assets.CreateInstance(
 			view,
-			assets.CreateGrassPatch(patch, opts.grass, ground),
-			glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)));
+			bgl::StaticMeshInstanceDesc()
+				.SetGeom(assets.CreateGrassPatch(patch, opts.grass, ground))
+				.SetTransform(
+					glm::rotate(
+						glm::mat4(1.0f),
+						glm::radians(-90.0f),
+						glm::vec3(1.0f, 0.0f, 0.0f))));
 
 		if (opts.wind > 0.0f)
 		{

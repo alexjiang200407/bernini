@@ -657,8 +657,10 @@ AnimationPreviewWindow::LoadMesh(
 						const bgl::GeomHandle geom =
 							context.assets.AcquireMesh(current.sourceKey, placement.meshIndex);
 						m_Geoms.push_back(geom);
-						m_Instances.push_back(
-							context.assets.CreateInstance(view, geom, placement.world));
+						m_Instances.push_back(context.assets.CreateInstance(
+							view,
+							bgl::StaticMeshInstanceDesc().SetGeom(geom).SetTransform(
+								placement.world)));
 						bmesh::GrowBoundsForMesh(
 							mesh,
 							placement.meshIndex,

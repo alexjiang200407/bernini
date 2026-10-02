@@ -311,8 +311,9 @@ main(int argc, char** argv)
 
 				(void)staticAssets->CreateInstance(
 					view,
-					staticAssets->AcquireMesh(staticDoc.source, meshIndex),
-					headless::InstanceTransform(staticModel, n));
+					bgl::StaticMeshInstanceDesc()
+						.SetGeom(staticAssets->AcquireMesh(staticDoc.source, meshIndex))
+						.SetTransform(headless::InstanceTransform(staticModel, n)));
 			}
 		}
 
@@ -407,8 +408,9 @@ main(int argc, char** argv)
 					casterParts.emplace_back(
 						casterAssets->CreateInstance(
 							view,
-							casterAssets->AcquireMesh(document.source, meshIndex),
-							local),
+							bgl::StaticMeshInstanceDesc()
+								.SetGeom(casterAssets->AcquireMesh(document.source, meshIndex))
+								.SetTransform(local)),
 						local);
 					headless::GrowBounds(
 						bounds,

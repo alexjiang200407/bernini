@@ -10,6 +10,7 @@
 #include <bgl/glm.h>
 #include <bgl/types/PassTiming.h>
 #include <bgl/types/RenderJob.h>
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/Viewport.h>
 #include <cstdint>
 #include <exception>
@@ -163,7 +164,11 @@ try
 			continue;
 
 		const glm::mat4 world = headless::InstanceTransform(model, n);
-		assets.CreateInstance(view, assets.AcquireMesh(loaded.sourceKey, meshIndex), world);
+		assets.CreateInstance(
+			view,
+			bgl::StaticMeshInstanceDesc()
+				.SetGeom(assets.AcquireMesh(loaded.sourceKey, meshIndex))
+				.SetTransform(world));
 		headless::GrowBounds(bounds, world, headless::MeshEntryBounds(model, meshIndex));
 	}
 

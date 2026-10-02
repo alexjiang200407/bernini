@@ -20,6 +20,7 @@
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/SkyboxDesc.h>  // IWYU pragma: keep
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/Viewport.h>
 #include <bgl/types/WindDesc.h>
 #include <bgpu/GpuContext.h>
@@ -185,8 +186,13 @@ main(int argc, char** argv)
 		// The patch is authored in XY facing +Z, as a plane is, so it is laid flat on its back.
 		assets.CreateInstance(
 			view,
-			assets.CreateGrassPatch(patch, grass, ground),
-			glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)));
+			bgl::StaticMeshInstanceDesc()
+				.SetGeom(assets.CreateGrassPatch(patch, grass, ground))
+				.SetTransform(
+					glm::rotate(
+						glm::mat4(1.0f),
+						glm::radians(-90.0f),
+						glm::vec3(1.0f, 0.0f, 0.0f))));
 
 		const float aspect = static_cast<float>(width) / static_cast<float>(height);
 
