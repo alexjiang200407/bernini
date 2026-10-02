@@ -228,7 +228,7 @@ Q_SIGNALS:
 	void
 	GeometryChanged();
 
-	// The mesh GetShownLods lists changed without the geometry changing: a selection on another.
+	// The mesh GetShownLods lists changed: a load, or a selection on another of the same file.
 	void
 	ShownLodsChanged();
 

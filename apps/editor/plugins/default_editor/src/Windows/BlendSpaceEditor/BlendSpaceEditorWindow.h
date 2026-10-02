@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "Windows/AnimationEditor/PlaybackTransport.h"
+#include "Windows/LodSelector.h"
 #include <editor_sdk/environment.h>
 
 class AnimationPreviewWindow;
@@ -271,6 +272,9 @@ private:
 	QComboBox* m_MeshSelector = nullptr;
 
 	GroundControls* m_GroundControls = nullptr;
+
+	// Auto, naming the level the rig draws at, or a level pinned however near the camera is.
+	editor::LodSelector* m_LodSelector = nullptr;
 
 	QComboBox*   m_SpaceSelector = nullptr;
 	QPushButton* m_AddSpace      = nullptr;

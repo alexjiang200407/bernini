@@ -3,8 +3,14 @@
 #include <assetlib/bmesh.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Mesh.h>
+#include <bgl/ISceneView.h>
+#include <bgl/LodLevel.h>
 #include <bgl/glm.h>
+#include <bgl/types/Camera.h>
+#include <bgl/types/LodSelectionDesc.h>
+#include <bgl/types/Viewport.h>
 #include <core/math.h>
+#include <editor_plugin_api/IEditorViewport.h>
 #include <gamelib/lod_select.h>
 
 #include <algorithm>
@@ -64,5 +70,45 @@ namespace editor
 		else
 			readout.level = game::ChooseLevel(lods.minPixels, readout.pixels, pixelScale, previous);
 		return readout;
+	}
+
+	std::optional<LodReadout>
+	ReadLodInView(
+		const MeshLods&               lods,
+		const glm::mat4&              world,
+		const bgl::Camera&            camera,
+		const glm::vec3&              eye,
+		const uint32_t                renderRows,
+		const std::optional<uint32_t> forced,
+		std::optional<uint32_t>&      previous)
+	{
+		if (renderRows == 0)
+			return std::nullopt;
+
+		const float pixelsPerUnit = game::PixelsPerUnit(
+			bgl::Viewport(1.0f, static_cast<float>(renderRows)),
+			camera.GetViewProjection());
+		const LodReadout readout = ReadLod(
+			lods,
+			world,
+			eye,
+			pixelsPerUnit,
+			bgl::LodSelectionDesc().pixelScale,
+			forced,
+			previous);
+		previous = readout.level;
+		return readout;
+	}
+
+	void
+	PinLod(IEditorViewport& viewport, const std::optional<uint32_t> level)
+	{
+		viewport.Invoke([&](RenderContext&, const bgl::SceneViewRef& view) {
+			auto selection       = view->GetLodSelection();
+			selection.forceLevel = level.has_value() ?
+			                           std::optional(static_cast<bgl::LodLevel>(*level)) :
+			                           std::nullopt;
+			view->SetLodSelection(selection);
+		});
 	}
 }

@@ -1,7 +1,11 @@
 #include "MainWindow.h"
 #include "Plugins/plugin_loader.h"
 
+#include "ImportUnitGroup.h"
+#include "SkinnedGltf.h"
+#include "StoreAt.h"
 #include "Windows/AnimationEditor/AnimationEditorWindow.h"
+#include "Windows/AnimationEditor/AnimationPreviewWindow.h"
 #include "Windows/AnimationEditor/GroundControls.h"
 #include "Windows/AnimationEditor/Scrubber.h"
 #include "Windows/BlendSpaceEditor/BlendSpaceEditorWindow.h"
@@ -10,6 +14,7 @@
 #include "Windows/GrassEditor/GrassEditorWindow.h"
 #include "Windows/MeshEditor/MeshEditorWindow.h"
 #include "Windows/MeshEditor/MeshPreviewWindow.h"
+#include "Windows/MeshEditor/lod_view.h"
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 #include "util/QtSupport.h"  // IWYU pragma: keep
 #include "util/follows_project.h"
@@ -18,19 +23,24 @@
 #include <algorithm>
 #include <array>
 #include <assetlib/AssetStore.h>
+#include <assetlib/ImportIdentity.h>
 #include <assetlib/Project.h>
+#include <assetlib/asset_import.h>
 #include <assetlib/blend.h>
 #include <assetlib/bmesh.h>
 #include <assetlib/bmesh_gltf.h>
 #include <assetlib/codecs.h>
 #include <assetlib/project_layout.h>
+#include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Mesh.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/LodLevel.h>
+#include <bgl/glm.h>
 #include <bgl/types/GeomHandle.h>
+#include <bgl/types/InstanceDesc.h>
 #include <bgl/types/MaterialHandle.h>
 #include <cstdint>
 #include <editor_plugin_api/EditorPanel.h>
@@ -85,6 +95,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <core/file/file.h>
 #include <filesystem>
 #include <fstream>
@@ -198,6 +209,35 @@ namespace
 			const auto path = fs::path(temp.path().toStdString()) / "external_lods.bmesh";
 			core::file::write_atomic(path, assetlib::AssetCodec<assetlib::BMesh>::Serialize(mesh));
 			return path;
+		}
+
+		// A rig with a second level, under the data root, as an import leaves one: assetlib's test
+		// skin -- one triangle on two bones with two clips -- its triangle repeated as `body_LOD1`
+		// on the same joints, bound to a material with nothing to bake. The Animation preview takes
+		// a mesh from under the data root only, and refuses one with no rig. Returns the `.bmesh`.
+		[[nodiscard]] fs::path
+		LodRigInData() const
+		{
+			const assetlib::test::SkinnedGltf rig(
+				"bernini_editor_lod_rig",
+				{ { R"("indices": 3, "mode": 4 } ] } ],)",
+			        R"("indices": 3, "mode": 4 } ] },
+    { "name": "body_LOD1", "primitives": [ { "attributes": { "POSITION": 0, "JOINTS_0": 1, "WEIGHTS_0": 2 }, "indices": 3, "mode": 4 } ] } ],)" } });
+
+			auto material                = assetlib::BMaterial();
+			material.pbr.baseColorFactor = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f);
+			SaveAt(material, DataRoot() / "Authored/Materials/rig.bmaterial");
+
+			const assetlib::ImportIdentity identity{ 1, "rig.glb" };
+			assetlib::test::ImportUnitGroup(
+				DataRoot(),
+				rig.PackGlb(),
+				"Authored/Materials/rig.bmaterial",
+				30.0f,
+				{},
+				"rig",
+				identity);
+			return DataRoot() / assetlib::importOutputKey(identity, assetlib::AssetType::kMesh);
 		}
 
 		// What main() does before the window: the directories the config names, and no others.
@@ -1689,6 +1729,136 @@ TEST_CASE(
 		CHECK(selector->count() == 2);
 		CHECK(selector->currentIndex() == 0);
 	}
+}
+
+TEST_CASE(
+	"The Animation preview reads and pins the level of the mesh it shows",
+	"[mainwindow][render][animation][lod]")
+{
+	const HeadlessEditor editor;
+	MainWindow           window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	window.show();
+	QCoreApplication::processEvents();
+
+	auto* animation = window.findChild<AnimationEditorWindow*>();
+	REQUIRE(animation != nullptr);
+	auto* preview = animation->findChild<AnimationPreviewWindow*>();
+	REQUIRE(preview != nullptr);
+	auto* view = preview->findChild<RenderTargetWindow*>();
+	REQUIRE(view != nullptr);
+
+	const auto forcedLevel = [view]() {
+		auto forced = std::optional<bgl::LodLevel>();
+		view->Invoke([&](editor::RenderContext&, const bgl::SceneViewRef& sceneView) {
+			forced = sceneView->GetLodSelection().forceLevel;
+		});
+		return forced;
+	};
+
+	// Nothing shown: no levels to list, and nothing to pin.
+	CHECK(preview->GetShownLods() == nullptr);
+	CHECK_FALSE(preview->ReadShownLod().has_value());
+
+	// Two levels with the cook's default thresholds: level 0 from 160 pixels, level 1 to nothing.
+	int shownChanges = 0;
+	QObject::connect(preview, &AnimationPreviewWindow::ShownLodsChanged, [&] { ++shownChanges; });
+	const fs::path rig = editor.LodRigInData();
+	preview->LoadMesh(rig);
+	REQUIRE(preview->GetShownLods() != nullptr);
+	CHECK(preview->GetShownLods()->minPixels == std::vector<float>{ 160.0f, 0.0f });
+	CHECK(shownChanges == 1);
+
+	// Measured as the renderer measures an animated entry: by the box its clips pose it in, which
+	// the walk clip's travel makes larger than the bind pose's.
+	const editor::MeshLods bindPose = editor::LodsOf(LoadAt<assetlib::BMesh>(rig), 0);
+	CHECK(preview->GetShownLods()->levelZeroSphere.w > bindPose.levelZeroSphere.w);
+
+	// Whichever level the framing earns, it is one the mesh has, and nothing is pinned.
+	const std::optional<editor::LodReadout> readout = preview->ReadShownLod();
+	REQUIRE(readout.has_value());
+	CHECK(readout->level < 2);
+	CHECK(readout->pixels > 0.0f);
+	CHECK_FALSE(forcedLevel().has_value());
+
+	preview->SetForcedLod(1);
+	CHECK(preview->GetForcedLod() == 1u);
+	CHECK(forcedLevel() == bgl::LodLevel::kLod1);
+	CHECK(preview->ReadShownLod()->level == 1);
+
+	SECTION("The pin is the view's, so the respawns of a pose-source or clip switch leave it")
+	{
+		preview->SetPoseSource(bgl::PoseSource::kBoneAnimTable, 0.0f);
+		CHECK(forcedLevel() == bgl::LodLevel::kLod1);
+		CHECK(preview->GetForcedLod() == 1u);
+
+		preview->SetActiveClip(1, 0.0f);
+		CHECK(forcedLevel() == bgl::LodLevel::kLod1);
+	}
+
+	SECTION("Another mesh starts from Auto, and a clear lists nothing")
+	{
+		preview->LoadMesh(rig);
+		CHECK_FALSE(forcedLevel().has_value());
+		CHECK_FALSE(preview->GetForcedLod().has_value());
+		CHECK(shownChanges == 2);
+
+		preview->Clear();
+		CHECK(preview->GetShownLods() == nullptr);
+		CHECK(shownChanges == 3);
+	}
+}
+
+TEST_CASE(
+	"The Animation and Blend Space editors list and pin the levels of the rig they show",
+	"[mainwindow][render][animation][blendspace][lod]")
+{
+	const HeadlessEditor editor;
+	MainWindow           window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	window.show();
+	QCoreApplication::processEvents();
+
+	// One selector per panel, each over that panel's own preview: a level pinned in one is not
+	// pinned in the other. The generator holds names, not widgets: Catch keeps it across the
+	// runs of this body, and the window is built afresh for each.
+	auto* animation = window.findChild<AnimationEditorWindow*>();
+	auto* blend     = window.findChild<BlendSpaceEditorWindow*>();
+	REQUIRE(animation != nullptr);
+	REQUIRE(blend != nullptr);
+
+	const char* selectorName = GENERATE("AnimationLodSelector", "BlendSpaceLodSelector");
+	INFO(selectorName);
+	const bool onAnimation =
+		QString::fromLatin1(selectorName) == QStringLiteral("AnimationLodSelector");
+	QWidget* panelWindow = onAnimation ? static_cast<QWidget*>(animation) : blend;
+
+	auto* preview = panelWindow->findChild<AnimationPreviewWindow*>();
+	REQUIRE(preview != nullptr);
+	auto* selector = panelWindow->findChild<QComboBox*>(QString::fromLatin1(selectorName));
+	REQUIRE(selector != nullptr);
+
+	// Nothing shown: Auto alone, and nothing to pin.
+	CHECK(selector->count() == 1);
+	CHECK_FALSE(selector->isEnabled());
+
+	preview->LoadMesh(editor.LodRigInData());
+	CHECK(selector->isEnabled());
+	REQUIRE(selector->count() == 3);
+	CHECK(selector->itemText(2) == QStringLiteral("LOD 1"));
+	CHECK(selector->currentText().startsWith(QStringLiteral("Auto: LOD")));
+
+	selector->setCurrentIndex(2);
+	CHECK(preview->GetForcedLod() == 1u);
+	CHECK(selector->itemText(0) == QStringLiteral("Auto"));
+
+	// The other panel's preview is untouched.
+	QWidget* otherPanel = onAnimation ? static_cast<QWidget*>(blend) : animation;
+	auto*    other      = otherPanel->findChild<AnimationPreviewWindow*>();
+	REQUIRE(other != nullptr);
+	CHECK_FALSE(other->GetForcedLod().has_value());
+
+	selector->setCurrentIndex(0);
+	CHECK_FALSE(preview->GetForcedLod().has_value());
+	CHECK(selector->currentText().startsWith(QStringLiteral("Auto: LOD")));
 }
 
 TEST_CASE(

@@ -38,16 +38,12 @@
 #include <assetlib_structs/BMesh.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
-#include <bgl/LodLevel.h>
 #include <bgl/types/Camera.h>
-#include <bgl/types/LodSelectionDesc.h>
-#include <bgl/types/Viewport.h>
 #include <cstddef>
 #include <cstdint>
 #include <editor_plugin_api/localize.h>
 #include <exception>
 #include <filesystem>
-#include <gamelib/lod_select.h>
 #include <limits>
 #include <optional>
 #include <qlogging.h>
@@ -229,6 +225,7 @@ MeshPreviewWindow::ShowDefaultSphere()
 		qWarning("MeshPreview: could not show the default sphere: %s", e.what());
 
 		ClearGeometry();
+		Q_EMIT ShownLodsChanged();
 		Q_EMIT GeometryChanged();
 		return;
 	}
@@ -241,6 +238,7 @@ MeshPreviewWindow::ShowDefaultSphere()
 	m_SubmeshMaterialPaths = QStringList{ QString() };
 	FocusOn(glm::vec3(0.0f), 1.0f);
 
+	Q_EMIT ShownLodsChanged();
 	Q_EMIT GeometryChanged();
 }
 
@@ -388,6 +386,7 @@ MeshPreviewWindow::LoadMesh(const std::filesystem::path& path)
 
 		m_MeshPath = path;
 
+		Q_EMIT ShownLodsChanged();
 		Q_EMIT GeometryChanged();
 	}
 	catch (const std::exception& e)
@@ -686,40 +685,29 @@ MeshPreviewWindow::GetShownLods() const noexcept
 std::optional<editor::LodReadout>
 MeshPreviewWindow::ReadShownLod()
 {
-	const editor::MeshLods* lods       = GetShownLods();
-	const uint32_t          renderRows = m_Viewport->GetRenderHeight();
-	if (lods == nullptr || renderRows == 0)
+	const editor::MeshLods* lods = GetShownLods();
+	if (lods == nullptr)
 		return std::nullopt;
 
 	const auto placement = std::ranges::find(m_Instances, m_ShownGeom, &InstanceRef::geomIndex);
 	if (placement == m_Instances.end())
 		return std::nullopt;
 
-	const float pixelsPerUnit = game::PixelsPerUnit(
-		bgl::Viewport(1.0f, static_cast<float>(renderRows)),
-		m_Camera.GetViewProjection());
-	const editor::LodReadout readout = editor::ReadLod(
+	return editor::ReadLodInView(
 		*lods,
 		placement->world,
+		m_Camera,
 		m_Orbit.GetEyePosition(),
-		pixelsPerUnit,
-		bgl::LodSelectionDesc().pixelScale,
+		m_Viewport->GetRenderHeight(),
 		m_ForcedLod,
 		m_LastLod);
-	m_LastLod = readout.level;
-	return readout;
 }
 
 void
 MeshPreviewWindow::SetForcedLod(std::optional<uint32_t> level)
 {
 	m_ForcedLod = level;
-	m_Viewport->Invoke([&](editor::RenderContext&, const bgl::SceneViewRef& view) {
-		auto selection = view->GetLodSelection();
-		selection.forceLevel =
-			level.has_value() ? std::optional(static_cast<bgl::LodLevel>(*level)) : std::nullopt;
-		view->SetLodSelection(selection);
-	});
+	editor::PinLod(*m_Viewport, level);
 }
 
 void

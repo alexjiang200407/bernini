@@ -37,6 +37,11 @@ class QJsonObject;
 class QLabel;
 class QPointF;
 class QPushButton;
+
+namespace editor
+{
+	class LodSelector;
+}
 class MaterialGraphModel;
 class MaterialGraphScene;
 class MaterialGraphView;
@@ -305,14 +310,6 @@ private:
 	void
 	RefreshActions();
 
-	/** Lists the preview's shown levels in the Level of Detail selector, with what Auto draws. */
-	void
-	RefreshLodSelector();
-
-	/** Names the level the preview draws in the selector's Auto entry; plain Auto while pinned. */
-	void
-	ShowAutoLod();
-
 	editor::IEditorHost& m_Host;
 	MeshEditorWindowDesc m_Desc;
 
@@ -329,7 +326,8 @@ private:
 
 	MaterialGraphSet m_Graphs;
 
-	QComboBox* m_LodSelector     = nullptr;
+	editor::LodSelector* m_LodSelector = nullptr;
+
 	QComboBox* m_SubmeshSelector = nullptr;
 	QComboBox* m_OutputSelector  = nullptr;
 

@@ -1,4 +1,5 @@
 #include "AnimationEditorWindow.h"
+#include "Windows/LodSelector.h"
 
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
 #include "Windows/AnimationEditor/GroundControls.h"
@@ -261,6 +262,13 @@ AnimationEditorWindow::BuildPropertiesColumn()
 		m_Preview->SetPoseSource(TierSourceAt(index), m_Transport.GetTimeSeconds());
 	});
 	layout->addWidget(m_TierSelector);
+
+	layout->addSpacing(8);
+	layout->addWidget(new QLabel(editor::LodSelector::Label(m_Host.GetLanguageResolver()), column));
+	m_LodSelector = new editor::LodSelector(m_Host.GetLanguageResolver(), column);
+	m_LodSelector->setObjectName(QStringLiteral("AnimationLodSelector"));
+	editor::Bind(*m_LodSelector, *m_Preview);
+	layout->addWidget(m_LodSelector);
 
 	layout->addSpacing(8);
 

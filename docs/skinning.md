@@ -289,6 +289,15 @@ to keep in agreement beyond the one below.
   `TierIndexFor` are what `editor_tests` drives. An index the combo cannot deliver answers with the
   hero tier, which is what an unset `SkinnedInstanceDesc::source` gives.
 
+* **A level of detail is previewed where the animation plays.** The Animation panel and the Blend
+  Space Editor carry the Mesh Editor's *Level of Detail* selector (`editor::LodSelector`, one
+  widget wired to each preview by `editor::Bind`): *Auto* names the level the rig draws at this
+  size on screen, and a level pins every placement to it through `ISceneView::SetLodSelection`,
+  so a coarse level is watched animating up close. The pin is the view's, not the instance's, so
+  it holds across the respawns above — a clip switch, a source switch — and a load starts from
+  *Auto*. The levels listed are the first animated mesh entry's, measured by the box its clips
+  pose it in, as the renderer measures it; the pin reaches every entry.
+
 * **Whether to offer a material bake has nothing to do with the source.** Both refuse a material that
   draws unbaked, so the offer follows from `editor::BakeableMaterials` finding one — it was once
   tier-gated, which left the skinned tier reporting exactly the refusal a bake answers without

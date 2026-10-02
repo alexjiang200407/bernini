@@ -10,9 +10,15 @@ namespace assetlib
 {
 	struct BMesh;
 }
+namespace bgl
+{
+	class Camera;
+}
 
 namespace editor
 {
+	class IEditorViewport;
+
 	/** What the Mesh Editor reads of one mesh's levels of detail. */
 	struct MeshLods
 	{
@@ -51,4 +57,24 @@ namespace editor
 		float                   pixelScale,
 		std::optional<uint32_t> forced,
 		std::optional<uint32_t> previous) noexcept;
+
+	/**
+	 * ReadLod with the renderer's own inputs: `renderRows` is the viewport's
+	 * (IEditorViewport::GetRenderHeight), `camera` and `eye` the preview's. Nothing before the
+	 * viewport has a size. `previous` is the level read last, rewritten with this one, since the
+	 * cull's hysteresis depends on the level it drew last.
+	 */
+	[[nodiscard]] std::optional<LodReadout>
+	ReadLodInView(
+		const MeshLods&          lods,
+		const glm::mat4&         world,
+		const bgl::Camera&       camera,
+		const glm::vec3&         eye,
+		uint32_t                 renderRows,
+		std::optional<uint32_t>  forced,
+		std::optional<uint32_t>& previous);
+
+	/** Pins every placement of `viewport`'s view to `level` (ISceneView::SetLodSelection), or none. */
+	void
+	PinLod(IEditorViewport& viewport, std::optional<uint32_t> level);
 }

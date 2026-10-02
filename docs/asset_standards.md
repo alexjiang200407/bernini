@@ -496,7 +496,9 @@ object meant to switch as one is one mesh with a primitive per material.
   ([lod_select.h](libs/gamelib/include/gamelib/lod_select.h)) against the preview's first placement of that
   mesh; a level pins every placement to it (`ISceneView::SetLodSelection`), which is how a coarse
   level is inspected up close. The selection outline follows the level drawn. It reads the
-  thresholds and does not edit them.
+  thresholds and does not edit them. The Animation panel and the Blend Space Editor carry the same
+  selector over their preview, so a skinned level is watched animating
+  ([Skinned Meshes](docs/skinning.md) § In the editor).
 
 ### Grass points
 
