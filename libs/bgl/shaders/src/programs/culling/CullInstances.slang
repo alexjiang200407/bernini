@@ -73,8 +73,6 @@ void main(uint globalIdx: SV_DispatchThreadID)
     // two-frame-old one would be read back next frame.
     if (HasMeshInstanceFlag(mesh, MeshInstanceFlag.kHidden))
     {
-        // An automatic placement's word was carried by ChoosePoses already; carrying it again is
-        // the same write.
         if (writesLod)
         {
             gUniforms.lodCurrent[placement] = previous;

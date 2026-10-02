@@ -257,9 +257,10 @@ namespace bgl
 		const uint32_t groups = core::div_ceil(pose.GetPlacementCount(), idl::cHistogramGroupSize);
 		cmdList->Dispatch(groups, 1, 1);
 
-		// The grants read the counters every placement's thread above added to, and rewrite words
-		// they wrote; both run in this one pass, so the barrier between them is the pass's own.
-		for (const auto name : { c_PosePoolName, c_InstanceLodName })
+		// The grants read the counters and the requests every placement's thread above wrote, and
+		// rewrite the words they wrote; both run in this one pass, so the barrier between them is the
+		// pass's own.
+		for (const auto name : { c_PosePoolName, c_InstanceLodName, c_PoseRequestsName })
 		{
 			cmdList->Barrier(
 				ctx.GetBuffer(name),

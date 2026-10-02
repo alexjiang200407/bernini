@@ -1177,8 +1177,12 @@ namespace
 		bgl::RenderJob       job;
 	};
 
+	/**
+	 * `levels` gives the strip a second level -- the same submesh again, drawn once the strip spans
+	 * fewer than 20 pixels -- so the swap at level 0 is exercised where a mesh carries one.
+	 */
 	AutoStrip
-	MakeAutoStrip()
+	MakeAutoStrip(bool levels = false)
 	{
 		auto opts                        = bgl::test::GraphicsSetup();
 		opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
@@ -1208,8 +1212,14 @@ namespace
 
 		const std::array<bgl::MaterialHandle, 1> materials = { { strip.scene->CreatePbrMaterial(
 			bgl::PbrMaterialDesc()) } };
-		const auto                               stripMesh = MakeSkinnedStrip();
-		strip.geom                                         = strip.scene->AddSkinnedMeshGeom(
+		auto                                     stripMesh = MakeSkinnedStrip();
+		if (levels)
+		{
+			stripMesh.submeshes.push_back(stripMesh.submeshes.front());
+			stripMesh.meshes.front().lodCount = 2;
+			stripMesh.lods                    = { { 20.0f }, { 0.0f } };
+		}
+		strip.geom = strip.scene->AddSkinnedMeshGeom(
 			bgl::SkinnedMeshGeomDesc()
 				.SetMesh(&stripMesh)
 				.SetMaterials(materials)
@@ -1350,7 +1360,7 @@ TEST_CASE(
 	}
 	REQUIRE(bgl::test::FrameDelta(heroPng, tablePng, 0, 0, int(c_Width), int(c_Height)) > 1e-4f);
 
-	const auto drawTwice = [&](const bgl::LodSelectionDesc& selection) {
+	const auto drawTwiceFirstFromTable = [&](const bgl::LodSelectionDesc& selection) {
 		strip.view->SetLodSelection(selection);
 		const auto instance = spawn(bgl::PoseSource::kAuto);
 		strip.gfx->DrawFrame(strip.target, strip.job);
@@ -1368,28 +1378,28 @@ TEST_CASE(
 
 	SECTION("large on screen: the table first, while the grant comes through, then the blend")
 	{
-		CHECK(drawTwice(PoseSelection(1.0f)));
+		CHECK(drawTwiceFirstFromTable(PoseSelection(1.0f)));
 		CHECK(drew(heroPng));
 	}
 
 	SECTION("small on screen: the table, frame after frame")
 	{
-		CHECK(drawTwice(PoseSelection(1e6f)));
+		CHECK(drawTwiceFirstFromTable(PoseSelection(1e6f)));
 		CHECK(drew(tablePng));
 	}
 
 	SECTION("a forced source overrules the size")
 	{
-		CHECK(drawTwice(PoseSelection(1e6f, 256, bgl::PoseSource::kPerInstance)));
+		CHECK(drawTwiceFirstFromTable(PoseSelection(1e6f, 256, bgl::PoseSource::kPerInstance)));
 		CHECK(drew(heroPng));
 
-		CHECK(drawTwice(PoseSelection(1.0f, 256, bgl::PoseSource::kBoneAnimTable)));
+		CHECK(drawTwiceFirstFromTable(PoseSelection(1.0f, 256, bgl::PoseSource::kBoneAnimTable)));
 		CHECK(drew(tablePng));
 	}
 
 	SECTION("a budget of zero poses nothing")
 	{
-		CHECK(drawTwice(PoseSelection(1.0f, 0)));
+		CHECK(drawTwiceFirstFromTable(PoseSelection(1.0f, 0)));
 		CHECK(drew(tablePng));
 	}
 }
@@ -1435,11 +1445,13 @@ TEST_CASE(
 
 	SECTION("a budget lowered under them poses no more than it allows")
 	{
+		// The first frame under it, both incumbents ask for a slice and the second finds the list
+		// full; from then on one holds the right and nothing is granted, so exactly one is posed.
 		strip.view->SetLodSelection(PoseSelection(1.0f, 1));
 		for (int frame = 0; frame < 3; ++frame)
 		{
 			strip.gfx->DrawFrame(strip.target, strip.job);
-			CHECK(PosedPlacements(strip, units).size() <= 1u);
+			CHECK(PosedPlacements(strip, units).size() == 1u);
 		}
 	}
 
@@ -1524,6 +1536,103 @@ TEST_CASE(
 	CHECK(word.fromTable);
 	CHECK_FALSE(word.outgoing.has_value());
 	CHECK(ReadPool(strip).posed == 0u);
+}
+
+TEST_CASE(
+	"on a mesh with levels the source swaps where level 0 ends, in the level's own dissolve",
+	"[skinned][auto][render]")
+{
+	AutoStrip strip = MakeAutoStrip(true);
+
+	// A second's dissolve a quarter at a time. pixelScale moves the strip across its 20-pixel floor
+	// without moving it on screen: 1 leaves it at level 0, and a scale nothing spans puts it at 1.
+	auto selection        = bgl::LodSelectionDesc();
+	selection.fadeSeconds = 1.0f;
+	strip.view->SetLodSelection(selection);
+
+	const auto instance = strip.view->CreateSkinnedMeshInstance(
+		bgl::SkinnedMeshInstanceDesc()
+			.SetGeom(strip.geom)
+			.SetPlayback(UnequalBlend())
+			.SetSource(bgl::PoseSource::kAuto));
+
+	float      time = 0.0f;
+	const auto draw = [&] {
+		strip.job.time = time;
+		strip.gfx->DrawFrame(strip.target, strip.job);
+		time += 0.25f;
+	};
+
+	// At level 0 it wants the per-instance pose, asks, is granted, and dissolves in on one level.
+	for (int frame = 0; frame < 7; ++frame)
+	{
+		draw();
+	}
+	bgl::InstanceLodState word = ReadWord(strip, instance);
+	REQUIRE(word.level.has_value());
+	CHECK(*word.level == bgl::LodLevel::kLod0);
+	CHECK_FALSE(word.fromTable);
+	CHECK_FALSE(word.outgoing.has_value());
+
+	// Past the floor: one dissolve out of level 0 drawn per instance, into level 1 from the table,
+	// with the outgoing entry still posed.
+	selection.pixelScale = 1e6f;
+	strip.view->SetLodSelection(selection);
+	draw();
+	word = ReadWord(strip, instance);
+	REQUIRE(word.level.has_value());
+	CHECK(*word.level == bgl::LodLevel::kLod1);
+	CHECK(word.fromTable);
+	REQUIRE(word.outgoing.has_value());
+	CHECK(*word.outgoing == bgl::LodLevel::kLod0);
+	CHECK_FALSE(word.outgoingFromTable);
+	CHECK(word.fade == Catch::Approx(0.25f).margin(1e-3f));
+	CHECK(ReadPool(strip).posed == 1u);
+	CHECK(ReadFirstPosed(strip).ikScale == Catch::Approx(0.75f).margin(1e-3f));
+
+	for (int frame = 0; frame < 4; ++frame)
+	{
+		draw();
+	}
+	word = ReadWord(strip, instance);
+	CHECK(*word.level == bgl::LodLevel::kLod1);
+	CHECK(word.fromTable);
+	CHECK_FALSE(word.outgoing.has_value());
+	CHECK(ReadPool(strip).posed == 0u);
+}
+
+TEST_CASE(
+	"a placement spawned into a freed slot holds no right its slot's last occupant held",
+	"[skinned][auto][render]")
+{
+	AutoStrip strip = MakeAutoStrip();
+	strip.view->SetLodSelection(PoseSelection(1.0f));
+
+	const auto spawn = [&] {
+		return strip.view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(strip.geom)
+				.SetPlayback(UnequalBlend())
+				.SetSource(bgl::PoseSource::kAuto));
+	};
+
+	const auto first = spawn();
+	strip.gfx->DrawFrame(strip.target, strip.job);
+	strip.gfx->DrawFrame(strip.target, strip.job);
+	REQUIRE(ReadPool(strip).posed == 1u);
+	REQUIRE_FALSE(ReadWord(strip, first).fromTable);
+
+	strip.view->DeleteMeshInstance(first);
+	const auto second = spawn();
+	REQUIRE(second.handle.index == first.handle.index);
+
+	// Its first frame it has no right, so it asks and draws from its table -- its slot's word,
+	// left per instance by the unit before it, must not pass for one.
+	strip.gfx->DrawFrame(strip.target, strip.job);
+	const auto pool = ReadPool(strip);
+	CHECK(pool.posed == 0u);
+	CHECK(pool.requested == 1u);
+	CHECK(ReadWord(strip, second).fromTable);
 }
 
 TEST_CASE(

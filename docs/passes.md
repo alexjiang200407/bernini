@@ -452,7 +452,10 @@ fifth ahead of the cull:
    only a budget lowered under placements already posed — a placement draws from its table. A change
    of source dissolves like a change of level, on one level when only the source changes; a placement
    posed per instance holds there while one of its crossfades is in flight; and its list entry's
-   `ikScale` follows the dissolve toward or away from its table.
+   `ikScale` follows the dissolve toward or away from its table. Only the camera's cull chooses: a
+   second frustum's cull of the view reads automatic placements' words from its own state, which no
+   Choose Poses writes, so culling one against a shadow cascade needs the camera's words carried
+   into it first.
 
 1. **Clear** — zeroes `drawBucketPrefixSumBuffer` and `cull.stats`, uploads this draw's `CullView` into
    `cull.view`, and seeds every lane's `compactDispatchArgs` entry to `{ 0, 1, 1 }` (a group count of 0 with

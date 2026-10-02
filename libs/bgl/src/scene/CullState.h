@@ -150,6 +150,14 @@ namespace bgl
 		void
 		MarkFresh(uint32_t placement)
 		{
+			// A view not drawn for a while would otherwise grow this without bound: past one entry a
+			// slot, a clear of every word costs less and says the same.
+			if (m_FreshPlacements.size() >= m_InstanceLod[0].GetDesc().initialCount)
+			{
+				m_FreshPlacements.clear();
+				m_LodNeedsClear = true;
+				return;
+			}
 			m_FreshPlacements.push_back(placement);
 		}
 

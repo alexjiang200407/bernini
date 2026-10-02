@@ -139,9 +139,10 @@ not obvious from a signature. The headers linked below are the source of truth.
   `time` and again at `prevTime`, so a dominance that changes between the two reprojects through
   the pose each clock drew. The camera's cull resolves it once per placement into `DominantFrames`
   (the two global frames and the blend between them, at each clock), which the mesh stage and the
-  blob pass read: resolved per mesh-shader group instead, 60 table-drawn Rabbits cost 1.75 ms of
-  skinned forward against 0.70 ms on the plain table source, and resolved once they cost what the
-  table does. A blend space's heavier member counts as an entry of its own. The
+  blob pass read. Resolved per mesh-shader group instead, 60 table-drawn Rabbits cost 1.75 ms of
+  skinned forward where the same 60 on the plain table source cost 0.70 ms in the same session;
+  resolved once, a later session measured 0.57-0.58 ms for each (`bgl_ai_viewer --crowd 60`, debug
+  Metal). A blend space's heavier member counts as an entry of its own. The
   playback and foot-IK calls reach it as they reach a hero.
 
   **Which source it draws is the camera's cull's, every frame** ([Passes](passes.md) § Compact
