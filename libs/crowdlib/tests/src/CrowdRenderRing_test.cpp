@@ -441,7 +441,7 @@ TEST_CASE(
 		REQUIRE(agents->tick == tick);
 		REQUIRE(records.size() == agents->agents.size());
 		auto key = [](glm::vec2 position, glm::vec2 facing) {
-			return std::array{ position.x, position.y, facing.x, facing.y };
+			return std::array<float, 4>{ { position.x, position.y, facing.x, facing.y } };
 		};
 		auto fromRecords = std::vector<std::array<float, 4>>();
 		auto fromAgents  = std::vector<std::array<float, 4>>();
