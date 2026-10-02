@@ -26,6 +26,9 @@ set_target_properties(editor_tests PROPERTIES
 target_include_directories(editor_tests PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/src
 	${BERNINI_ROOT}/apps/editor/plugins/default_editor/src
+	# assetlib's test rig (SkinnedGltf.h), the one skinned source a case can write itself, as
+	# gamelib's tests already borrow it.
+	${BERNINI_ROOT}/libs/assetlib/tests/src
 )
 
 # editor_lib carries the editor's own objects, its include dirs, its PCH and its Qt/bgl/assetlib link

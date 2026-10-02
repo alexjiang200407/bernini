@@ -22,6 +22,7 @@
 #include <editor_sdk/environment.h>
 
 #include "Windows/AnimationEditor/AnimationPreviewWindow.h"
+#include "Windows/LodSelector.h"
 
 class QDragEnterEvent;
 class QDragMoveEvent;
@@ -224,6 +225,9 @@ private:
 	// Where its instances read their pose: posed per instance every frame, or off the rig's
 	// shared table.
 	QComboBox* m_TierSelector = nullptr;
+
+	// Auto, naming the level the rig draws at, or a level pinned however near the camera is.
+	editor::LodSelector* m_LodSelector = nullptr;
 
 	// Plant feet: the floor, the solve against it, and the sliders that shape it.
 	GroundControls* m_GroundControls = nullptr;

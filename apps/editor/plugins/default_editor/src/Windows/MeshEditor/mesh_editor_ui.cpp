@@ -1,5 +1,6 @@
 #include "mesh_editor_ui.h"
 
+#include "Windows/LodSelector.h"
 #include "Windows/MeshEditor/MaterialGraphView.h"
 #include "Windows/MeshEditor/nodes/SurfaceOutputNode.h"
 #include <editor_plugin_api/ILanguageResolver.h>
@@ -284,20 +285,10 @@ namespace editor
 
 		propertiesLayout->addSpacing(8);
 
-		// Entry 0 is Auto, which names the level the preview draws; the rest pin one.
-		propertiesLayout->addWidget(new QLabel(
-			editor::Localize(language, "bernini.material.lod_label", "Level of Detail"),
-			propertiesPanel));
-		widgets.lodSelector = new QComboBox(propertiesPanel);
+		propertiesLayout->addWidget(
+			new QLabel(editor::LodSelector::Label(language), propertiesPanel));
+		widgets.lodSelector = new editor::LodSelector(language, propertiesPanel);
 		widgets.lodSelector->setObjectName(QStringLiteral("LodSelector"));
-		widgets.lodSelector->setToolTip(
-			editor::Localize(
-				language,
-				"bernini.material.lod_selector_tooltip",
-				"Auto draws the level the game would at this size on screen. A level pins it, "
-				"however "
-				"near or far the camera is."));
-		widgets.lodSelector->setEnabled(false);
 		propertiesLayout->addWidget(widgets.lodSelector);
 
 		propertiesLayout->addWidget(new QLabel(

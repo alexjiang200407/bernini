@@ -71,11 +71,11 @@
 #include <utility>
 #include <vector>
 
+#include "Windows/LodSelector.h"
 #include "Windows/MeshEditor/MaterialGraphModel.h"
 #include "Windows/MeshEditor/MaterialGraphScene.h"
 #include "Windows/MeshEditor/MaterialGraphView.h"
 #include "Windows/MeshEditor/graph_compiler.h"
-#include "Windows/MeshEditor/lod_view.h"
 #include "Windows/MeshEditor/material_graph.h"
 #include "Windows/MeshEditor/material_io.h"
 #include "Windows/MeshEditor/material_overrides.h"
@@ -356,17 +356,7 @@ MeshEditorWindow::MeshEditorWindow(
 		m_Preview  = new MeshPreviewWindow(m_Host, splitter, m_Desc.viewport, m_Desc.previewEnv);
 		rightPanel = m_Preview;
 
-		connect(
-			m_Preview,
-			&MeshPreviewWindow::ShownLodsChanged,
-			this,
-			&MeshEditorWindow::RefreshLodSelector);
-		connect(m_Preview, &MeshPreviewWindow::ViewChanged, this, &MeshEditorWindow::ShowAutoLod);
-		connect(m_LodSelector, &QComboBox::currentIndexChanged, this, [this]() {
-			const QVariant level = m_LodSelector->currentData();
-			m_Preview->SetForcedLod(level.isValid() ? std::optional(level.toUInt()) : std::nullopt);
-			ShowAutoLod();
-		});
+		editor::Bind(*m_LodSelector, *m_Preview);
 
 		// The mesh under the boards is about to go -- with Generate Tangents, the same mesh
 		// reloading -- so what they hold unwritten is written while it is still theirs.
@@ -377,7 +367,6 @@ MeshEditorWindow::MeshEditorWindow(
 		// Dropping a mesh onto the preview swaps its geometry; rebuild the submesh selector.
 		connect(m_Preview, &MeshPreviewWindow::GeometryChanged, this, [this]() {
 			SetPreviewGeometry(m_Preview->SubmeshNames());
-			RefreshLodSelector();
 			RefreshStage();
 		});
 
@@ -740,64 +729,6 @@ MeshEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 		m_SubmeshSelector->setCurrentIndex(0);
 
 	RefreshActions();
-}
-
-void
-MeshEditorWindow::RefreshLodSelector()
-{
-	if (m_Preview == nullptr)
-		return;
-
-	const editor::MeshLods*       lods   = m_Preview->GetShownLods();
-	const std::optional<uint32_t> forced = m_Preview->GetForcedLod();
-	{
-		const QSignalBlocker blocker(m_LodSelector);
-		m_LodSelector->clear();
-		m_LodSelector->addItem(
-			editor::Localize(m_Host.GetLanguageResolver(), "bernini.material.lod_auto", "Auto"));
-
-		const auto count = lods != nullptr ? static_cast<uint32_t>(lods->minPixels.size()) : 0u;
-		for (uint32_t level = 0; level < count; ++level)
-		{
-			m_LodSelector->addItem(
-				editor::Localize(
-					m_Host.GetLanguageResolver(),
-					"bernini.material.lod_level",
-					{ level },
-					"LOD {0}"),
-				level);
-		}
-		m_LodSelector->setCurrentIndex(
-			forced.has_value() && *forced < count ? static_cast<int>(*forced) + 1 : 0);
-		m_LodSelector->setEnabled(lods != nullptr);
-	}
-	ShowAutoLod();
-}
-
-void
-MeshEditorWindow::ShowAutoLod()
-{
-	if (m_Preview == nullptr || m_LodSelector->count() == 0)
-		return;
-
-	const editor::ILanguageResolver&        language = m_Host.GetLanguageResolver();
-	const std::optional<editor::LodReadout> readout  = m_Preview->ReadShownLod();
-	const editor::MeshLods*                 lods     = m_Preview->GetShownLods();
-
-	QString text = editor::Localize(language, "bernini.material.lod_auto", "Auto");
-	if (readout.has_value() && lods != nullptr && !m_Preview->GetForcedLod().has_value())
-	{
-		text = readout->level < lods->minPixels.size() ? editor::Localize(
-															 language,
-															 "bernini.material.lod_auto_level",
-															 { readout->level },
-															 "Auto: LOD {0}") :
-		                                                 editor::Localize(
-															 language,
-															 "bernini.material.lod_auto_nothing",
-															 "Auto: nothing drawn");
-	}
-	m_LodSelector->setItemText(0, text);
 }
 
 void
