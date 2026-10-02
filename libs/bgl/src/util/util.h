@@ -94,6 +94,14 @@ namespace bgl
 
 		// Progress toward `level`, in [0, 1]; 1 on a placement not fading.
 		float fade = 1.0f;
+
+		// An automatic placement's sources: whether `level`'s entry, and `outgoing`'s, draw from
+		// the rig's table rather than per instance. False on every other placement.
+		bool fromTable         = false;
+		bool outgoingFromTable = false;
+
+		// Whether the pose pool granted the placement a per-instance pose for next frame.
+		bool granted = false;
 	};
 
 	/** What the Slang accessors read out of `word`. */

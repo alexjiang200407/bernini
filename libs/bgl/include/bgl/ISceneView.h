@@ -14,6 +14,7 @@
 #include <bgl/types/MeshInstanceBlockHandle.h>
 #include <bgl/types/MeshInstanceFlags.h>
 #include <bgl/types/MeshInstanceHandle.h>
+#include <bgl/types/SkinnedMeshInstanceDesc.h>
 #include <bgl/types/WindDesc.h>
 #include <bgpu/uniforms/UniformsBase.h>
 #include <core/ref/Ref.h>
@@ -62,9 +63,9 @@ namespace bgl
 		 * DeleteMeshInstance as any other placement.
 		 *
 		 * @throws SceneError if `geom` is not a live kSkinnedMesh geom, `desc.clip` is out of range,
-		 *         or -- with `desc.source == PoseSource::kBoneAnimTable` -- the rig's bone anim table
+		 *         or -- with `desc.source` kBoneAnimTable or kAuto -- the rig's bone anim table
 		 *         cannot be reserved.
-		 * @post With that source, the *first* such instance on a rig reserves its table:
+		 * @post With either source, the *first* such instance on a rig reserves its table:
 		 *       `boneCount * frameCount` skinning matrices of device memory, tens of megabytes on a
 		 *       dense rig, filled by the next frame this view is drawn. Later instances on the same
 		 *       rig cost nothing.
@@ -90,7 +91,19 @@ namespace bgl
 			const SkinnedPlaybackDesc& desc) = 0;
 
 		/**
-		 * Rewrites a per-instance skinned placement's playback record in place. The instance keeps
+		 * The placement `desc` describes: its record, posed from its source -- see
+		 * SkinnedMeshInstanceDesc.
+		 *
+		 * @throws SceneError if `desc.geom` is not a live kSkinnedMesh geom, the record fails the
+		 *         checks the overload above makes, `desc.source` is kBoneAnimTable, or it is kAuto
+		 *         and the rig's table cannot be reserved.
+		 */
+		virtual MeshInstanceHandle
+		CreateSkinnedMeshInstance(const SkinnedMeshInstanceDesc& desc) = 0;
+
+		/**
+		 * Rewrites a skinned placement's playback record in place, on the per-instance or the
+		 * automatic source. The instance keeps
 		 * its pose storage and its place among the instances posed each frame; only what is
 		 * evaluated changes, from the next frame drawn.
 		 *
@@ -99,8 +112,8 @@ namespace bgl
 		 * SkinnedPlaybackDesc.
 		 *
 		 * @throws SceneError if the handle is invalid or removed, the placement is not a skinned
-		 *         one on the per-instance source, or `desc` fails the checks CreateSkinnedMeshInstance
-		 *         makes.
+		 *         one on the per-instance or automatic source, or `desc` fails the checks
+		 *         CreateSkinnedMeshInstance makes.
 		 */
 		virtual void
 		SetSkinnedPlayback(MeshInstanceHandle instance, const SkinnedPlaybackDesc& desc) = 0;
@@ -109,7 +122,7 @@ namespace bgl
 		 * The record SetSkinnedPlayback or the spawn wrote, so a caller need not keep a copy.
 		 *
 		 * @throws SceneError if the handle is invalid or removed, or the placement is not a skinned
-		 *         one on the per-instance source.
+		 *         one on the per-instance or automatic source.
 		 */
 		[[nodiscard]] virtual SkinnedPlaybackDesc
 		GetSkinnedPlayback(MeshInstanceHandle instance) const = 0;
@@ -171,14 +184,16 @@ namespace bgl
 		GetMeshInstanceFlags(MeshInstanceHandle instance) const = 0;
 
 		/**
-		 * Rewrites the runtime foot-IK weights of a skinned instance on the per-instance source --
-		 * see FootIKDesc. Written on an event and evaluated from RenderJob::time, so the pose at
+		 * Rewrites the runtime foot-IK weights of a skinned instance on the per-instance or the
+		 * automatic source -- see FootIKDesc. On the automatic source they apply while it draws per
+		 * instance, scaled toward zero as it dissolves to its table. Written on an event and evaluated from RenderJob::time, so the pose at
 		 * any clock is a function of the record: a write whose ramps all start at or after now
 		 * leaves the pose the previous frame drew unchanged, which is what keeps that frame's
 		 * motion vector exact. FootIKDesc::FadeTo builds such a write from GetFootIK's record.
 		 *
 		 * @throws SceneError if the handle is invalid or removed, the placement is not a skinned
-		 *         one on the per-instance source, its rig authored no legs, or a stored leg's ramp
+		 *         one on the per-instance or automatic source, its rig authored no legs, or a stored
+		 *         leg's ramp
 		 *         holds a weight outside [0, 1], a non-finite field, or an end before its start.
 		 */
 		virtual void
@@ -194,12 +209,19 @@ namespace bgl
 		GetFootIK(MeshInstanceHandle instance) const = 0;
 
 		/**
-		 * Whether `instance` owns a foot-IK record: a live skinned placement on the per-instance
-		 * source whose rig authored legs. Exactly when SetFootIK and GetFootIK would not throw, for
-		 * a caller that cannot tell a rig's legs from the outside.
+		 * Whether `instance` owns a foot-IK record: a live skinned placement on the per-instance or
+		 * automatic source whose rig authored legs. Exactly when SetFootIK and GetFootIK would not
+		 * throw, for a caller that cannot tell a rig's legs from the outside.
 		 */
 		[[nodiscard]] virtual bool
 		HasFootIK(MeshInstanceHandle instance) const noexcept = 0;
+
+		/**
+		 * Whether `instance` is a live skinned placement whose rig authored legs, on any source:
+		 * one whose feet a pose can find, planted or not.
+		 */
+		[[nodiscard]] virtual bool
+		HasLegs(MeshInstanceHandle instance) const noexcept = 0;
 
 		/**
 		 * Gives one placement a blob shadow: a soft radial-falloff disc draped over the static

@@ -439,7 +439,8 @@ flowchart TD
   frame's pose and its motion vector exact, and `FootIKDesc::FadeTo` builds one from the record
   read back. @throws on a static or crowd placement, a rig with no legs, a weight outside
   `[0, 1]`, a non-finite field, or a ramp ending before it starts. `HasFootIK(instance)` is
-  exactly when neither throws, for a caller that cannot tell a rig's legs from outside. See
+  exactly when neither throws, for a caller that cannot tell a rig's legs from outside;
+  `HasLegs(instance)` asks only whether the rig authored legs, on any pose source. See
   [Skinned Meshes](skinning.md) § Foot planting.
 * **`SetBlobShadow(instance, desc)` / `ClearBlobShadow(instance)` / `GetBlobShadow(instance)`** —
   the placement's blob shadow: a soft radial-falloff decal draped over whatever static surface
@@ -481,11 +482,14 @@ flowchart TD
   clumps inflated by the tallest blade -- holds whatever bends it. **Not** an epoch change:
   grass evaluates the wind at this frame's time and the last one's, so a new wind arrives as motion.
 * **`SetLodSelection(desc)` / `GetLodSelection()`** — @pre `pixelScale` finite and positive,
-  `fadeSeconds` finite and non-negative, `forceLevel` below `LodLevel::kCount`. How the view
-  chooses each placement's level of detail: every authored threshold scaled by `pixelScale`, one
-  level forced on every placement that has it, and how long a change dissolves over (0 is a hard
-  swap). Per view, and **not** an epoch change: the cull reads it as it selects, so a new selection
-  arrives through the same dissolve a change of size does. The choice is never read back: a tool
+  `fadeSeconds` finite and non-negative, `forceLevel` below `LodLevel::kCount`, `posePixels`
+  finite and positive, `forcePoseSource` not `kAuto`. How the view chooses each placement's level
+  of detail: every authored threshold scaled by `pixelScale`, one level forced on every placement
+  that has it, and how long a change dissolves over (0 is a hard swap). Its pose fields --
+  `poseBudget`, `posePixels`, `forcePoseSource` -- are kept and resolved into the cull view for
+  `PoseSource::kAuto`, which no pass draws yet ([Skinned Meshes](skinning.md)). Per view, and
+  **not** an epoch change: the cull reads it as it selects, so a new selection arrives through
+  the same dissolve a change of size does. The choice is never read back: a tool
   that says which level a placement draws runs the same size test on the CPU,
   [lod_select.h](libs/gamelib/include/gamelib/lod_select.h), which the renderer computes its own inputs
   through and `LodSelect_test` pins to the GPU's choice.

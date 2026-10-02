@@ -776,16 +776,17 @@ own receiver — though the facing test bounds it: an underside faces down and i
 remains is any upward-facing surface of the caster below its own origin.
 
 A foot's entry casts from its sole rather than from the origin: the heel and the ball, world space,
-which [Pose Skinned](#pose-skinned) wrote at the end of the hero's palette slice. The mesh stage reads
-the two once per group, off the palette arena the pass declares for them,
+which [Pose Skinned](#pose-skinned) wrote at the end of the hero's palette slice. An entry names its
+leg, not a slot: the mesh stage finds the slice through the placement's playback record and rig and
+reads the two once per group, off the palette arena the pass declares for them,
 and hands them to the pixel stage, which casts from the point of that segment nearest the receiver
 across the ground, so a heel raised off a planted toe fades while the toe stays dark. Its lift only
 lets a receiver rise that far above the sole; the fade is measured from the sole itself, because a
 planted sole is at street level and a lifted cast point would pre-fade exactly the foot that should
 be darkest.
 
-* **In:** `scene.blobShadows`, the mesh-instance buffer, the palette arena (the soles), and
-  `depth` as a shader resource.
+* **In:** `scene.blobShadows`, the mesh-instance buffer, the palette arena (the soles), the
+  playback records and rigs (where a foot's sole is), and `depth` as a shader resource.
 * **Out:** scene colour (blended).
 * **Skipped** when the view has no disc.
 

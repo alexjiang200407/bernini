@@ -4,7 +4,12 @@
 #include "util/TestOptions.h"
 #include <array>
 #include <bgl/IGraphics.h>
+#include <bgl/idl/BlobShadow.h>
+#include <bgl/idl/Constants.h>
 #include <bgl/idl/CullView.h>
+#include <bgl/idl/InstancePose.h>
+#include <bgl/idl/Rig.h>
+#include <bgl/idl/SkinnedAutoState.h>
 #include <bgl/idl/SkinnedTableState.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
@@ -31,10 +36,14 @@ namespace
 	// size, so a tangent lands at 20 in a layout carrying no normal).
 	constexpr uint32_t c_StateOffset  = 16;
 	constexpr uint32_t c_ViewOffset   = 32;
-	constexpr uint32_t c_VertexOffset = 228;
-	constexpr uint32_t c_BufferBytes  = 256;
+	constexpr uint32_t c_VertexOffset = 260;
+	constexpr uint32_t c_AutoOffset   = 288;
+	constexpr uint32_t c_RigOffset    = c_AutoOffset + 256;
+	constexpr uint32_t c_BlobOffset   = c_RigOffset + 128;
+	constexpr uint32_t c_PoseOffset   = c_BlobOffset + 32;
+	constexpr uint32_t c_BufferBytes  = c_PoseOffset + 16;
 
-	constexpr uint32_t c_OutValues = 7;
+	constexpr uint32_t c_OutValues = 10;
 }
 
 /**
@@ -98,6 +107,32 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	view.lodPixelScale             = 1.5f;
 	view.lodForcedLevel            = 3u;
 	view.lodFadeStep               = 0.25f;
+	view.posePixels                = 96.0f;
+	view.poseBudget                = 17u;
+	view.poseForced                = bgl::idl::cPoseForceTable;
+
+	// The automatic record's last slot and the field after the array, where a slot stride the two
+	// sides disagree on would land.
+	auto autoState               = bgl::idl::SkinnedAutoState();
+	autoState.rig.offset         = 9;
+	autoState.slots[3].nodeIndex = 5;
+	autoState.slots[3].paramEnd  = 2.5f;
+	autoState.footIK.offsetStart = 13;
+	autoState.slots[0].weight1   = 0.75f;
+
+	// The rig's last two ranges, the blob entry's trailing leg and the pose slice: the fields the
+	// contract added, at the ends of their structs where a misplaced one shows.
+	auto rig                      = bgl::idl::Rig();
+	rig.boneAnimTable.offsetStart = 21;
+	rig.tableSoles.offsetStart    = 22;
+
+	auto blob = bgl::idl::BlobShadow();
+	blob.mesh = 4;
+	blob.lift = 0.5f;
+	blob.leg  = 3;
+
+	auto pose                = bgl::idl::InstancePose();
+	pose.palette.offsetStart = 23;
 
 	const auto vertexVec4 = glm::vec4(11.0f, 12.0f, 13.0f, 14.0f);
 	const auto vertexVec3 = glm::vec3(21.0f, 22.0f, 23.0f);
@@ -106,12 +141,20 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	static_assert(c_ViewOffset + sizeof(bgl::idl::CullView) <= c_VertexOffset);
 	static_assert(c_VertexOffset % 16 != 0, "the loose loads must not be 16-byte aligned");
 	static_assert(c_VertexOffset % 4 == 0);
+	static_assert(c_AutoOffset + sizeof(bgl::idl::SkinnedAutoState) <= c_RigOffset);
+	static_assert(c_RigOffset + sizeof(bgl::idl::Rig) <= c_BlobOffset);
+	static_assert(c_BlobOffset + sizeof(bgl::idl::BlobShadow) <= c_PoseOffset);
+	static_assert(c_PoseOffset + sizeof(bgl::idl::InstancePose) <= c_BufferBytes);
 
 	std::array<std::byte, c_BufferBytes> bytes{};
 	std::memcpy(bytes.data() + c_StateOffset, &state, sizeof(state));
 	std::memcpy(bytes.data() + c_ViewOffset, &view, sizeof(view));
 	std::memcpy(bytes.data() + c_VertexOffset, &vertexVec4, sizeof(vertexVec4));
 	std::memcpy(bytes.data() + c_VertexOffset + 16, &vertexVec3, sizeof(vertexVec3));
+	std::memcpy(bytes.data() + c_AutoOffset, &autoState, sizeof(autoState));
+	std::memcpy(bytes.data() + c_RigOffset, &rig, sizeof(rig));
+	std::memcpy(bytes.data() + c_BlobOffset, &blob, sizeof(blob));
+	std::memcpy(bytes.data() + c_PoseOffset, &pose, sizeof(pose));
 
 	const bgpu::BufferHandle records = resourceManager->CreateRawBuffer(
 		bgpu::RawViewDesc().SetByteSize(c_BufferBytes).SetDebugName("Raw Record Arena"));
@@ -145,6 +188,10 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	kernel["gUniforms"]["stateOffset"]  = c_StateOffset;
 	kernel["gUniforms"]["viewOffset"]   = c_ViewOffset;
 	kernel["gUniforms"]["vertexOffset"] = c_VertexOffset;
+	kernel["gUniforms"]["autoOffset"]   = c_AutoOffset;
+	kernel["gUniforms"]["rigOffset"]    = c_RigOffset;
+	kernel["gUniforms"]["blobOffset"]   = c_BlobOffset;
+	kernel["gUniforms"]["poseOffset"]   = c_PoseOffset;
 
 	cmdList->Open(cmdQueue, cmdAllocator);
 
@@ -206,6 +253,23 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	CHECK(got[4].x == Catch::Approx(view.lodPixelScale).margin(c_Margin));
 	CHECK(got[4].y == Catch::Approx(static_cast<float>(view.lodForcedLevel)).margin(c_Margin));
 	CHECK(got[4].z == Catch::Approx(view.lodFadeStep).margin(c_Margin));
+	CHECK(got[4].w == Catch::Approx(view.posePixels).margin(c_Margin));
+	CHECK(got[7].x == Catch::Approx(static_cast<float>(view.poseBudget)).margin(c_Margin));
+	CHECK(got[7].y == Catch::Approx(static_cast<float>(view.poseForced)).margin(c_Margin));
+
+	CHECK(got[8].x == Catch::Approx(static_cast<float>(autoState.rig.offset)).margin(c_Margin));
+	CHECK(
+		got[8].y ==
+		Catch::Approx(static_cast<float>(autoState.slots[3].nodeIndex)).margin(c_Margin));
+	CHECK(got[8].z == Catch::Approx(autoState.slots[3].paramEnd).margin(c_Margin));
+	CHECK(
+		got[8].w ==
+		Catch::Approx(static_cast<float>(autoState.footIK.offsetStart)).margin(c_Margin));
+
+	CHECK(got[9].x == Catch::Approx(static_cast<float>(rig.boneAnimTable.offsetStart)));
+	CHECK(got[9].y == Catch::Approx(static_cast<float>(rig.tableSoles.offsetStart)));
+	CHECK(got[9].z == Catch::Approx(static_cast<float>(blob.leg)));
+	CHECK(got[9].w == Catch::Approx(static_cast<float>(pose.palette.offsetStart)));
 
 	CHECK(got[5].x == Catch::Approx(vertexVec4.x).margin(c_Margin));
 	CHECK(got[5].y == Catch::Approx(vertexVec4.y).margin(c_Margin));

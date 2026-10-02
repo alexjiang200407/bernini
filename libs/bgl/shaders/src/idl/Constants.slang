@@ -86,7 +86,7 @@ public static const uint cMaxLegsPerRig = 8;
 // as the pose at `time` stands them. The blob-shadow pass's foot shadows read them.
 public static const uint cFloat4sPerSole = 2;
 
-// A blob-shadow entry's `soleSlot` when the entry is the placement's own disc rather than a foot's.
+// A blob-shadow entry's `leg` when the entry is the placement's own disc rather than a foot's.
 public static const uint cBodyDisc = 0xFFFFFFFF;
 
 // How far a planted ankle may be turned to bring its sole onto the ground, 30 degrees. A cliff edge
@@ -110,6 +110,12 @@ public static const uint cPoseGroupSize = 64;
 
 // CullView.lodForcedLevel when no level is forced and every placement is chosen by its size.
 public static const uint cLodForceNone = uint32_t(-1);
+
+// CullView.poseForced: every automatic placement chosen by its size and the budget, or every one
+// drawn per instance (still within the budget), or every one from its rig's table.
+public static const uint cPoseForceNone = uint32_t(-1);
+public static const uint cPoseForcePerInstance = 0;
+public static const uint cPoseForceTable = 1;
 
 // The bit the compaction sets on a compacted instance index that draws a placement's outgoing
 // level while it fades out; clear on the entry that draws its current level. Instance slots stay

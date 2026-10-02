@@ -162,6 +162,9 @@ namespace bgl
 			glm::mat4                  transform,
 			const SkinnedPlaybackDesc& desc) override;
 
+		MeshInstanceHandle
+		CreateSkinnedMeshInstance(const SkinnedMeshInstanceDesc& desc) override;
+
 		void
 		SetSkinnedPlayback(MeshInstanceHandle instance, const SkinnedPlaybackDesc& desc) override;
 
@@ -191,6 +194,9 @@ namespace bgl
 
 		[[nodiscard]] bool
 		HasFootIK(MeshInstanceHandle instance) const noexcept override;
+
+		[[nodiscard]] bool
+		HasLegs(MeshInstanceHandle instance) const noexcept override;
 
 		void
 		SetBlobShadow(MeshInstanceHandle instance, const BlobShadowDesc& desc) override;

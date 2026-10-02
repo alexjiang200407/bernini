@@ -73,6 +73,32 @@ TEST_CASE("a fading placement carries the outgoing level and its progress", "[lo
 	}
 }
 
+TEST_CASE("an automatic placement's sources and grant sit in the bytes' high bits", "[lod][idl]")
+{
+	const uint32_t word =
+		(2u | bgl::idl::cInstanceLodTableBit | bgl::idl::cInstanceLodGrantBit) |
+		(1u << bgl::idl::cInstanceLodOutgoingShift) |
+		(static_cast<uint32_t>(bgl::idl::cInstanceLodFadeScale) << bgl::idl::cInstanceLodFadeShift);
+
+	const bgl::InstanceLodState state =
+		bgl::UnpackInstanceLod(bgl::idl::InstanceLod{ .packed = word });
+
+	REQUIRE(state.level.has_value());
+	CHECK(*state.level == bgl::LodLevel::kLod1);
+	CHECK(state.fromTable);
+	CHECK(state.granted);
+	REQUIRE(state.outgoing.has_value());
+	CHECK(*state.outgoing == bgl::LodLevel::kLod0);
+	CHECK_FALSE(state.outgoingFromTable);
+
+	SECTION("a source bit alone is no level")
+	{
+		const bgl::InstanceLodState bare = bgl::UnpackInstanceLod(
+			bgl::idl::InstanceLod{ .packed = bgl::idl::cInstanceLodTableBit });
+		CHECK_FALSE(bare.level.has_value());
+	}
+}
+
 // The Slang side of the same word: InstanceLod::Make on the GPU, decoded on the CPU, and the
 // geom's level-major entry lookup. This is the one place the two sides meet before a cull writes
 // the word for real.
@@ -100,7 +126,7 @@ TEST_CASE(
 	auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
 	auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
 
-	constexpr uint32_t c_Words   = 5;
+	constexpr uint32_t c_Words   = 8;
 	constexpr uint32_t c_Entries = 5;
 
 	auto wordsDesc         = bgpu::ComputeBufferDesc();
@@ -171,6 +197,9 @@ TEST_CASE(
 		bgl::LodLevel                level;
 		std::optional<bgl::LodLevel> outgoing;
 		float                        fade;
+		bool                         fromTable         = false;
+		bool                         outgoingFromTable = false;
+		bool                         granted           = false;
 	};
 	using enum bgl::LodLevel;
 	const std::array<Expected, c_Words> expected = { {
@@ -181,6 +210,9 @@ TEST_CASE(
 		{ kLod1, kLod0, 0.5f },
 		{ kLod3, kLod1, 0.0f },
 		{ kLod7, kLod6, 1.0f },
+		{ kLod2, std::nullopt, 1.0f, true },
+		{ kLod1, kLod0, 0.25f, true, false },
+		{ kLod0, kLod0, 0.75f, false, true, true },  // one level, two sources
 	} };
 	for (uint32_t i = 0; i < c_Words; ++i)
 	{
@@ -192,6 +224,9 @@ TEST_CASE(
 		CHECK(
 			read.fade ==
 			Catch::Approx(expected[i].fade).margin(1.0f / bgl::idl::cInstanceLodFadeScale));
+		CHECK(read.fromTable == expected[i].fromTable);
+		CHECK(read.outgoingFromTable == expected[i].outgoingFromTable);
+		CHECK(read.granted == expected[i].granted);
 	}
 	resourceManager->UnmapReadback(rbWords);
 
