@@ -5,16 +5,19 @@
 
 namespace crowd
 {
-	/** One agent type's records in a tick: [first, first + count) of the ring's buffer. */
+	/**
+	 * One agent type's records in a tick: elements [firstRecordIndex, firstRecordIndex + count) of
+	 * the render ring's buffer (ICrowd::GetRenderRing).
+	 */
 	struct RenderTypeRecords
 	{
-		uint32_t first = 0;
-		uint32_t count = 0;
+		uint32_t firstRecordIndex = 0;
+		uint32_t count            = 0;
 	};
 
 	/**
-	 * Where one tick's agents are in a crowd's render ring: RenderAgent records
-	 * [firstRecord, firstRecord + agentCount) of the ring's buffer, written by the crowd's queue as
+	 * Where one tick's agents are in a crowd's render ring: RenderAgent elements
+	 * [firstRecordIndex, firstRecordIndex + agentCount) of the ring's buffer (ICrowd::GetRenderRing), written by the crowd's queue as
 	 * of `written`. A reader on another queue reads them only behind a GPU-side wait on that point,
 	 * which a completed tick has already passed.
 	 *
@@ -23,9 +26,9 @@ namespace crowd
 	 */
 	struct RenderTick
 	{
-		uint64_t         tick        = 0;
-		uint32_t         firstRecord = 0;
-		uint32_t         agentCount  = 0;
+		uint64_t         tick             = 0;
+		uint32_t         firstRecordIndex = 0;
+		uint32_t         agentCount       = 0;
 		bgpu::QueuePoint written;
 
 		std::vector<RenderTypeRecords> types;

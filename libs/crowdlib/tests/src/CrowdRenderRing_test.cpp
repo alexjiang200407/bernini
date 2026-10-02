@@ -159,7 +159,7 @@ TEMPLATE_LIST_TEST_CASE(
 		const std::optional<crowd::RenderTick> held = crowd->GetRenderTick(tick);
 		REQUIRE(held.has_value());
 		CHECK(held->tick == tick);
-		CHECK(held->firstRecord == (tick % c_Ring) * c_MaxAgents);
+		CHECK(held->firstRecordIndex == (tick % c_Ring) * c_MaxAgents);
 		CHECK(held->agentCount == c_Agents);
 	}
 	CHECK_FALSE(crowd->GetRenderTick(c_Ring + 1).has_value());
@@ -271,9 +271,9 @@ TEMPLATE_LIST_TEST_CASE(
 	const std::optional<crowd::RenderTick> first = crowd->GetRenderTick(1);
 	REQUIRE(first.has_value());
 	REQUIRE(first->types.size() == 2);
-	CHECK(first->types[0].first == first->firstRecord);
+	CHECK(first->types[0].firstRecordIndex == first->firstRecordIndex);
 	CHECK(first->types[0].count == 9);
-	CHECK(first->types[1].first == first->firstRecord + 9);
+	CHECK(first->types[1].firstRecordIndex == first->firstRecordIndex + 9);
 	CHECK(first->types[1].count == 10);
 
 	// Destroying a type-1 group shortens that type's run; the runs stay back to back.
@@ -284,7 +284,7 @@ TEMPLATE_LIST_TEST_CASE(
 	REQUIRE(second.has_value());
 	REQUIRE(second->types.size() == 2);
 	CHECK(second->types[0].count == 9);
-	CHECK(second->types[1].first == second->firstRecord + 9);
+	CHECK(second->types[1].firstRecordIndex == second->firstRecordIndex + 9);
 	CHECK(second->types[1].count == 4);
 	CHECK(second->agentCount == 13);
 }

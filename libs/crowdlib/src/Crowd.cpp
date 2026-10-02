@@ -374,15 +374,15 @@ namespace crowd
 		{
 			const auto ring    = static_cast<uint32_t>(m_RenderTicks.size());
 			auto       written = RenderTick{
-				.tick        = tick,
-				.firstRecord = static_cast<uint32_t>(tick % ring) * GetDesc().maxAgents,
-				.agentCount  = plan.params.agentCount,
-				.written     = bgpu::QueuePoint{ m_Queue, slot.fence },
+				.tick             = tick,
+				.firstRecordIndex = static_cast<uint32_t>(tick % ring) * GetDesc().maxAgents,
+				.agentCount       = plan.params.agentCount,
+				.written          = bgpu::QueuePoint{ m_Queue, slot.fence },
 			};
-			uint32_t first = written.firstRecord;
+			uint32_t first = written.firstRecordIndex;
 			for (const uint32_t count : plan.typeCounts)
 			{
-				written.types.push_back({ .first = first, .count = count });
+				written.types.push_back({ .firstRecordIndex = first, .count = count });
 				first += count;
 			}
 			m_RenderTicks[tick % ring] = std::move(written);

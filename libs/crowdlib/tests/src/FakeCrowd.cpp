@@ -267,9 +267,10 @@ namespace crowd::test
 		{
 			const auto ring    = static_cast<uint32_t>(m_RenderTicks.size());
 			auto       written = RenderTick{
-				.tick        = m_SubmittedTick,
-				.firstRecord = static_cast<uint32_t>(m_SubmittedTick % ring) * m_Desc.maxAgents,
-				.agentCount  = m_AgentCount,
+				.tick = m_SubmittedTick,
+				.firstRecordIndex =
+					static_cast<uint32_t>(m_SubmittedTick % ring) * m_Desc.maxAgents,
+				.agentCount = m_AgentCount,
 			};
 			written.types.resize(m_Desc.agentTypes.size());
 			for (uint32_t index = 0; index < m_Groups.capacity(); ++index)
@@ -277,10 +278,10 @@ namespace crowd::test
 				if (m_Groups.allocated(index))
 					written.types[m_Groups[index].agentType].count += m_Groups[index].agentCount;
 			}
-			uint32_t first = written.firstRecord;
+			uint32_t first = written.firstRecordIndex;
 			for (auto& type : written.types)
 			{
-				type.first = first;
+				type.firstRecordIndex = first;
 				first += type.count;
 			}
 			m_RenderTicks[m_SubmittedTick % ring] = std::move(written);
