@@ -71,7 +71,10 @@ rm->RegisterQueue(queue.Get());
   register themselves with it, and its owner calls `CleanupExpiredResources` when it likes. What
   the RHI cannot say portably its objects hand out as `GetNativeObject(NativeObjectType)` -- an
   untyped pointer, so no RHI header names a backend type ([rhi.md](rhi.md)). That is the only way
-  out to the native device: no public header hands it out without an `IDevice`.
+  out to the native device: no public header hands it out without an `IDevice`. A buffer crosses
+  between owners the same way: the producer reads its native object (`GetNativeBuffer`) and the
+  consumer imports it into its own manager (`ImportNativeBuffer`), each ordering its use against
+  the other's queue on the GPU ([rhi.md](rhi.md)).
 * **Its Slang half is staged first.** The offset primitives (`idl.Entry`, `idl.Range` ...), the
   buffer family (`lib.types.EntryBuffer` ...) and the GPU assert channel (`lib.debug.dbg`,
   `idl.ErrorCode`, `idl.DebugRecord`) live under `libs/bgpu/shaders/src` and stage into the one

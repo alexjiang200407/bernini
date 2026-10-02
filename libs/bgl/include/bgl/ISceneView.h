@@ -391,7 +391,9 @@ namespace bgl
 		 * Reserves `desc.capacity` placements of one static geom that a GPU kernel places every
 		 * frame -- see SetBlockWriter -- and the CPU never writes again: a crowd, or mesh
 		 * particles. Its placements have no handles, so nothing here moves, flags or deletes one
-		 * alone. Every placement starts hidden, and a block with no writer stays hidden.
+		 * alone. Every placement starts hidden, and a block with no writer stays hidden. The geom's
+		 * grass is not grown on them: grass is laid out on the CPU, which never sees where a writer
+		 * put a placement.
 		 *
 		 * Moves the temporal epoch once, as one placement's creation does. Nothing the writer does
 		 * moves it: a placement it shows or hides writes its own motion.

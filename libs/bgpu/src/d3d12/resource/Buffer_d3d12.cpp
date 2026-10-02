@@ -28,7 +28,7 @@ namespace bgpu
 		D3D12_RESOURCE_DESC1  resDesc   = {};
 		D3D12_HEAP_FLAGS      heapFlags = D3D12_HEAP_FLAG_NONE;
 
-		if (desc.isUav)
+		if (desc.isUav || desc.allowsUav)
 			resDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
 		// Setup raw buffer resource description
@@ -62,4 +62,22 @@ namespace bgpu
 		m_Tracked = bgpu::TaggedBytes(MemoryTag::kDeviceBuffer, desc.byteSize);
 	}
 
+	Buffer::Buffer(
+		ID3D12Device*               device,
+		ID3D12DescriptorHeap*       descriptorHeap,
+		uint32_t                    descriptorIndex,
+		wrl::ComPtr<ID3D12Resource> adopted,
+		const BufferDesc&           desc) :
+		m_Desc(desc), m_DescriptorIndex(descriptorIndex), m_Buffer(std::move(adopted))
+	{
+		core::ensure(device != nullptr, "Device cannot be null");
+		core::ensure(descriptorHeap != nullptr, "Descriptor heap cannot be null");
+		core::ensure(m_Buffer != nullptr, "An adopted buffer cannot be null");
+
+		const uint32_t descriptorSize =
+			device->GetDescriptorHandleIncrementSize(descriptorHeap->GetDesc().Type);
+
+		m_CpuHandle = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
+		m_CpuHandle.ptr += static_cast<uint64_t>(descriptorIndex) * descriptorSize;
+	}
 }

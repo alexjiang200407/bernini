@@ -229,6 +229,12 @@ catalog](docs/api_catalog.md).
   that spawned or despawned every frame would never accumulate, and would need a batched-placement
   API rather than a wider epoch.
 
+  An **instance block** is that API. Creating or deleting one counts once, however many slots it
+  holds; what its writer does counts never. A slot it shows or hides is the crowd's spawn and
+  despawn, and it reports them the way `SetInstanceTransform` reports a move: through the pair it
+  places, so a slot appearing this frame passes the same transform twice and comes in with no
+  velocity rather than a break.
+
 * **Opaque camera disocclusions reject history before colour clipping.** A fast orbit can expose
   ribbed fabric previously hidden by a glove. Its neighbourhood spans enough colours to admit the
   old glove shading, leaving a recognisable imprint. The earlier wake-over-slats measurement,

@@ -226,6 +226,8 @@ if (TARGET bgl)
     add_subdirectory(libs/gamelib)
     # Compute beside the renderer on the device they share; it links bgpu, never bgl.
     add_subdirectory(libs/crowdlib)
+    # The crowd drawn GPU to GPU: the one library that links both the renderer and the crowd.
+    add_subdirectory(libs/crowd_render)
 endif()
 
 # Qt is not a vcpkg dependency, so an embedded build would look for one the consumer never asked

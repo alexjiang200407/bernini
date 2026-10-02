@@ -9,4 +9,7 @@ public struct TickParams
     public uint agentCount;
     public uint groupCount;
     public uint agentRangeCount;
+
+    // The tick's first record in the render ring, or c_NoRenderRing for a crowd without one.
+    public uint renderFirstRecord;
 };

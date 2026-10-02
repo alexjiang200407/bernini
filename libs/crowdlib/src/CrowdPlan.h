@@ -40,6 +40,14 @@ namespace crowd
 		uint32_t agentCount       = 0;
 	};
 
+	/** Where one group's agents and render records were in the last plan. */
+	struct LaidOutGroup
+	{
+		uint32_t firstAgent  = 0;
+		uint32_t agentCount  = 0;
+		uint32_t firstRecord = 0;
+	};
+
 	struct PlannedGroup
 	{
 		uint32_t                  agentType  = 0;
@@ -119,9 +127,16 @@ namespace crowd
 		GroupHandle
 		AddGroup(PlannedGroup group);
 
+		/** The last plan's render record of its agent `agent`. */
+		[[nodiscard]] uint32_t
+		LastRecordOf(uint32_t agent) const;
+
 		CrowdDesc                       m_Desc;
 		core::slot_vector<PlannedGroup> m_Groups;
 		uint32_t                        m_AgentCount = 0;
 		std::vector<ObstacleSegment>    m_Obstacles;
+
+		// The last plan's groups in agent order, which this plan's sources are found in.
+		std::vector<LaidOutGroup> m_LastLayout;
 	};
 }

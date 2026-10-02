@@ -27,6 +27,8 @@ namespace bgpu
 	{
 	public:
 		/**
+		 * @param allowsUav every resource it holds accepts a writable second view
+		 *        (IResourceManager::CreateBufferUav) beside its read-only one; structured only.
 		 * @throws std::runtime_error if the device cannot allocate the initial resource.
 		 */
 		BGPU_API
@@ -36,7 +38,8 @@ namespace bgpu
 			uint32_t           stride,
 			uint32_t           capacity,
 			bool               isUav,
-			bool               isRaw = false);
+			bool               isRaw     = false,
+			bool               allowsUav = false);
 
 		// Hands the storage to the manager's deferred destroy, so a frame still in flight may
 		// keep reading it.
@@ -106,7 +109,8 @@ namespace bgpu
 
 		// The view every replacement resource is created with: a buffer carries exactly one, so a
 		// growth that changed it would leave the shader's wrapper addressing the wrong thing.
-		bool m_IsRaw = false;
+		bool m_IsRaw     = false;
+		bool m_AllowsUav = false;
 	};
 
 	/**

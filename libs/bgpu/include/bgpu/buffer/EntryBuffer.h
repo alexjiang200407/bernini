@@ -8,6 +8,7 @@
 #include <core/containers/slot_handle.h>
 #include <core/containers/slot_vector.h>
 #include <core/err/util.h>
+#include <core/math.h>
 #include <core/type_traits.h>
 #include <cstddef>
 #include <cstdint>
@@ -27,6 +28,10 @@ namespace bgpu
 		uint32_t    initialCount = 0;
 		uint32_t    blockSize    = 65536;
 		std::string debugName;
+
+		// The buffer also has a writable view (GetWritableView) for a pass that writes elements the
+		// CPU claimed with ClaimRange and never changes.
+		bool writableView = false;
 
 		template <typename Self>
 		Self&&
@@ -51,6 +56,21 @@ namespace bgpu
 			self.debugName = std::move(value);
 			return std::forward<Self>(self);
 		}
+
+		template <typename Self>
+		Self&&
+		SetWritableView(this Self&& self, bool value = true) noexcept
+		{
+			self.writableView = value;
+			return std::forward<Self>(self);
+		}
+	};
+
+	// Elements [first, first + count) of an EntryBuffer, claimed together and addressed by index.
+	struct EntryRange
+	{
+		uint32_t first = 0;
+		uint32_t count = 0;
 	};
 
 	template <typename T>
@@ -73,12 +93,15 @@ namespace bgpu
 
 	public:
 		EntryBuffer(ResourceManagerRef resourceManager, EntryBufferDesc desc) :
-			m_Desc(std::move(desc)), m_Storage(
-										 std::move(resourceManager),
-										 m_Desc.debugName,
-										 sizeof(T),
-										 m_Desc.initialCount + 1,
-										 false)
+			m_Desc(std::move(desc)), m_ResourceManager(resourceManager),
+			m_Storage(
+				std::move(resourceManager),
+				m_Desc.debugName,
+				sizeof(T),
+				m_Desc.initialCount + 1,
+				false,
+				false,
+				m_Desc.writableView)
 		{
 			core::ensure(m_Desc.initialCount > 0, "EntryBuffer must have a positive initial count");
 			core::ensure(m_Desc.blockSize > 0, "Block size must be greater than zero");
@@ -94,16 +117,44 @@ namespace bgpu
 
 			ResizeDirtyBlocks(capacity);
 			ReserveNullEntry();
+			RefreshWritableView();
 		}
 
-		EntryBuffer(const EntryBuffer&)     = delete;
-		EntryBuffer(EntryBuffer&&) noexcept = default;
+		~EntryBuffer() noexcept { DestroyWritableView(); }
+
+		EntryBuffer(const EntryBuffer&) = delete;
+
+		EntryBuffer(EntryBuffer&& other) noexcept :
+			m_Desc(std::move(other.m_Desc)), m_ResourceManager(std::move(other.m_ResourceManager)),
+			m_Storage(std::move(other.m_Storage)), m_Entries(std::move(other.m_Entries)),
+			m_Metadata(std::move(other.m_Metadata)), m_DirtyBlocks(std::move(other.m_DirtyBlocks)),
+			m_HasAnyDirtyBlocks(other.m_HasAnyDirtyBlocks), m_Ranges(std::move(other.m_Ranges)),
+			m_WritableView(std::exchange(other.m_WritableView, {})),
+			m_ViewedBuffer(std::exchange(other.m_ViewedBuffer, {}))
+		{}
 
 		EntryBuffer&
 		operator=(const EntryBuffer&) = delete;
 
 		EntryBuffer&
-		operator=(EntryBuffer&&) noexcept = default;
+		operator=(EntryBuffer&& other) noexcept
+		{
+			if (this != &other)
+			{
+				DestroyWritableView();
+				m_Desc              = std::move(other.m_Desc);
+				m_ResourceManager   = std::move(other.m_ResourceManager);
+				m_Storage           = std::move(other.m_Storage);
+				m_Entries           = std::move(other.m_Entries);
+				m_Metadata          = std::move(other.m_Metadata);
+				m_DirtyBlocks       = std::move(other.m_DirtyBlocks);
+				m_HasAnyDirtyBlocks = other.m_HasAnyDirtyBlocks;
+				m_Ranges            = std::move(other.m_Ranges);
+				m_WritableView      = std::exchange(other.m_WritableView, {});
+				m_ViewedBuffer      = std::exchange(other.m_ViewedBuffer, {});
+			}
+			return *this;
+		}
 
 		[[nodiscard]] bool
 		IsValid(core::slot_handle handle) const noexcept
@@ -191,6 +242,78 @@ namespace bgpu
 		{
 			core::ensure(m_Entries.allocated(index), "EraseByIndex on an unallocated slot");
 			m_Entries.release_slot(index);
+		}
+
+		/**
+		 * Claims `count` consecutive elements past every existing one, each holding `value`, for a
+		 * caller that addresses them by index rather than by handle. The run starts on an upload
+		 * block and is padded to the end of its last, so no other element shares a block with it:
+		 * it is uploaded once here and never again because a neighbour changed, which is what lets
+		 * a pass write it on the GPU (GetWritableView).
+		 *
+		 * @pre the desc's blockSize is a multiple of sizeof(T).
+		 * @throws std::runtime_error if the buffer cannot grow to hold the run; nothing is claimed.
+		 */
+		EntryRange
+		ClaimRange(uint32_t count, const T& value)
+		{
+			core::ensure(count > 0, "ClaimRange of no elements");
+			const uint32_t perBlock = ElementsPerBlock();
+			const uint32_t first    = core::round_up(Capacity(), perBlock);
+			const uint32_t end      = core::round_up(first + count, perBlock);
+			core::ensure(first + count > first && end >= first + count, "ClaimRange past 2^32");
+
+			GrowTo(end);
+			const bool claimed = m_Entries.try_claim_range(first, end - first);
+			core::ensure(claimed, "A range past every element must be free");
+
+			for (uint32_t index = first; index < end; ++index)
+			{
+				if (index < first + count)
+				{
+					m_Entries[index] = value;
+				}
+				ResetMeta(index);
+				MarkDirty(index);
+			}
+			m_Ranges.push_back(EntryRange{ first, count });
+			return m_Ranges.back();
+		}
+
+		/**
+		 * Releases a run ClaimRange returned, padding included. A pass that wrote it must not run
+		 * again: the indices go back to single allocation and their next owner uploads over them.
+		 *
+		 * @throws std::runtime_error, releasing nothing, if `range` is not a claimed run.
+		 */
+		void
+		ReleaseRange(EntryRange range)
+		{
+			const auto claim = std::ranges::find_if(m_Ranges, [range](const EntryRange& r) {
+				return r.first == range.first && r.count == range.count;
+			});
+			if (claim == m_Ranges.end())
+			{
+				core::throw_runtime_error(
+					"EntryBuffer '{}': [{}, +{}) is not a claimed range",
+					m_Desc.debugName,
+					range.first,
+					range.count);
+			}
+			const uint32_t end = core::round_up(range.first + range.count, ElementsPerBlock());
+			m_Entries.release_range(range.first, end - range.first);
+			m_Ranges.erase(claim);
+		}
+
+		/**
+		 * The buffer as a writable structured view, for a pass that writes the elements of a
+		 * ClaimRange run on the GPU. Null without the desc's writableView. Re-read every frame, as
+		 * GetDescriptorHandle is: a growth replaces it.
+		 */
+		[[nodiscard]] BufferUavHandle
+		GetWritableView() const noexcept
+		{
+			return m_WritableView;
 		}
 
 		template <typename M = Meta>
@@ -302,19 +425,75 @@ namespace bgpu
 		void
 		Grow()
 		{
-			const uint32_t grown = NextGpuBufferCapacity(Capacity(), Capacity() + 1, sizeof(T));
+			GrowTo(NextGpuBufferCapacity(Capacity(), Capacity() + 1, sizeof(T)));
+		}
+
+		void
+		GrowTo(uint32_t capacity)
+		{
+			if (capacity <= Capacity())
+				return;
 
 			// GPU side first: it is the one that can fail, and it leaves nothing behind when it
 			// does, so the mirror and the buffer cannot end up disagreeing on capacity.
-			m_Storage.Grow(grown);
-			m_Entries.grow(grown);
+			m_Storage.Grow(capacity);
+			m_Entries.grow(capacity);
 
 			if constexpr (c_HasMeta)
 			{
-				m_Metadata.resize(grown, Meta{});
+				m_Metadata.resize(capacity, Meta{});
 			}
 
-			ResizeDirtyBlocks(grown);
+			ResizeDirtyBlocks(capacity);
+
+			// Here rather than at a frame boundary, so the buffer and its view are never
+			// observable apart (docs/rhi.md).
+			RefreshWritableView();
+		}
+
+		[[nodiscard]] uint32_t
+		ElementsPerBlock() const noexcept
+		{
+			core::ensure(
+				m_Desc.blockSize % sizeof(T) == 0,
+				"A range is block-aligned only when a block holds whole elements");
+			return static_cast<uint32_t>(m_Desc.blockSize / sizeof(T));
+		}
+
+		// A no-op without a writable view, and for a buffer that has not been replaced.
+		void
+		RefreshWritableView()
+		{
+			if (!m_Desc.writableView || m_ResourceManager == nullptr)
+				return;
+
+			const BufferHandle buffer = m_Storage.GetHandle();
+			if (buffer.slot == m_ViewedBuffer.slot &&
+			    buffer.bindlessIndex == m_ViewedBuffer.bindlessIndex)
+				return;
+
+			DestroyWritableView();
+			m_WritableView = m_ResourceManager->CreateBufferUav(
+				buffer,
+				BufferUavDesc().SetElement<T>().SetDebugName(m_Desc.debugName + " (writable)"));
+			if (m_WritableView.IsNull())
+			{
+				core::throw_runtime_error(
+					"EntryBuffer '{}': no writable view could be made (maxBufferUavs)",
+					m_Desc.debugName);
+			}
+			m_ViewedBuffer = buffer;
+		}
+
+		// A moved-from buffer has no manager and no view.
+		void
+		DestroyWritableView() noexcept
+		{
+			if (m_ResourceManager != nullptr && !m_WritableView.IsNull())
+			{
+				m_ResourceManager->DestroyBufferUav(m_WritableView);
+				m_WritableView = BufferUavHandle{};
+			}
 		}
 
 		void
@@ -383,6 +562,7 @@ namespace bgpu
 
 	private:
 		EntryBufferDesc      m_Desc;
+		ResourceManagerRef   m_ResourceManager;
 		GrowableGpuBuffer    m_Storage;
 		core::slot_vector<T> m_Entries;
 
@@ -390,6 +570,12 @@ namespace bgpu
 
 		std::vector<bool> m_DirtyBlocks;
 		bool              m_HasAnyDirtyBlocks = false;
+
+		// Every live ClaimRange, so a release names one exactly rather than any aligned run.
+		std::vector<EntryRange> m_Ranges;
+
+		BufferUavHandle m_WritableView;
+		BufferHandle    m_ViewedBuffer;
 	};
 
 	template <typename T>

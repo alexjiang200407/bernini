@@ -192,6 +192,7 @@ namespace bgl
 			bgpu::EntryBufferDesc()
 				.SetInitialCount(m_InitialInstances)
 				.SetBlockSize(sizeof(idl::MeshInstance) * 256)
+				.SetWritableView()
 				.SetDebugName("Mesh Buffer")),
 		m_Playback(m_ResourceManager, PlaybackArenaDesc()), m_Palettes(m_ResourceManager),
 		m_FootIK(
@@ -1575,19 +1576,85 @@ namespace bgl
 					desc.capacity));
 		}
 
-		core::slot_handle handle = m_InstanceBlocks.try_allocate_slot();
-		if (handle.is_null())
+		auto range = std::optional<bgpu::EntryRange>();
+		try
 		{
-			m_InstanceBlocks.grow(std::max(4u, 2 * m_InstanceBlocks.capacity()));
-			handle = m_InstanceBlocks.allocate_slot();
+			const idl::LodSubmeshRange submeshes =
+				m_SceneRaw->GetGeomSubmeshes(desc.geom.handle.index);
+
+			// What the CPU writes once: hidden until a writer places it, and at the origin rather
+			// than collapsed, so a slot that escaped the cull would show rather than vanish.
+			auto mesh  = idl::MeshInstance();
+			mesh.geom  = m_SceneRaw->GetGeomEntry(desc.geom.handle.index);
+			mesh.flags = MeshInstanceFlags(MeshInstanceFlag::kHidden).underlying();
+			WriteInstanceTransform(mesh, glm::mat4(1.0f));
+			WriteInstancePrevTransform(mesh, glm::mat4(1.0f));
+
+			range = m_MeshBuffer.ClaimRange(desc.capacity, mesh);
+
+			for (uint32_t slot = 0; slot < desc.capacity; ++slot)
+			{
+				const uint32_t meshIndex = range->first + slot;
+
+				MeshMeta& meta   = m_MeshBuffer.MetaAt(meshIndex);
+				meta.geomType    = desc.geom.geomType;
+				meta.geom        = desc.geom;
+				meta.submeshRoot = submeshes.range.offsetStart;
+				meta.overrides.assign(submeshes.submeshCount, MaterialHandle{});
+				meta.selected.assign(submeshes.submeshCount, 0);
+				meta.submeshInstances.reserve(submeshes.submeshCount);
+
+				for (uint32_t s = 0; s < submeshes.submeshCount; ++s)
+				{
+					auto instance         = SubmeshInstance();
+					instance.meshInstance = bgpu::idl::Entry{ meshIndex };
+					instance.submeshIndex = s;
+					ResolveShading(
+						instance,
+						submeshes.range.offsetStart,
+						MaterialHandle{},
+						desc.geom.geomType);
+					meta.submeshInstances.emplace_back(m_InstanceBuffer.Add(std::move(instance)));
+				}
+			}
+			SyncInstanceScratch();
+
+			core::slot_handle handle = m_InstanceBlocks.try_allocate_slot();
+			if (handle.is_null())
+			{
+				m_InstanceBlocks.grow(std::max(4u, 2 * m_InstanceBlocks.capacity()));
+				handle = m_InstanceBlocks.allocate_slot();
+			}
+
+			MeshInstanceBlock& block = m_InstanceBlocks[handle.index];
+			block.geom               = desc.geom;
+			block.capacity           = desc.capacity;
+			block.range              = *range;
+
+			++m_TemporalEpoch;
+			return MeshInstanceBlockHandle{ handle };
 		}
+		catch (const std::runtime_error& e)
+		{
+			// A failed create leaves nothing behind: not the range, nor the records made so far.
+			if (range)
+				ReleaseBlockRange(*range);
+			throw SceneError(e.what());
+		}
+	}
 
-		MeshInstanceBlock& block = m_InstanceBlocks[handle.index];
-		block.geom               = desc.geom;
-		block.capacity           = desc.capacity;
-
-		++m_TemporalEpoch;
-		return MeshInstanceBlockHandle{ handle };
+	void
+	SceneView::ReleaseBlockRange(const bgpu::EntryRange& range)
+	{
+		for (uint32_t slot = 0; slot < range.count; ++slot)
+		{
+			for (const core::slot_handle submeshInstance :
+			     m_MeshBuffer.MetaAt(range.first + slot).submeshInstances)
+			{
+				m_InstanceBuffer.Erase(submeshInstance);
+			}
+		}
+		m_MeshBuffer.ReleaseRange(range);
 	}
 
 	void
@@ -1600,7 +1667,10 @@ namespace bgl
 				"removed");
 		}
 
-		m_InstanceBlocks[block.handle.index] = MeshInstanceBlock();
+		MeshInstanceBlock& record = m_InstanceBlocks[block.handle.index];
+		ReleaseBlockRange(record.range);
+
+		record = MeshInstanceBlock();
 		m_InstanceBlocks.release_slot(block.handle);
 		++m_TemporalEpoch;
 	}
@@ -1623,10 +1693,15 @@ namespace bgl
 
 		MeshInstanceBlock& record = m_InstanceBlocks[block.handle.index];
 		record.writer             = std::move(writer);
-		record.uniforms =
-			compiled == nullptr ?
-				nullptr :
-				std::make_unique<bgpu::Uniforms>(compiled->GetKernel().pipeline.Get(), "gUniforms");
+		record.kernel             = bgpu::ComputeKernel();
+		if (compiled != nullptr)
+		{
+			record.kernel.pipeline = compiled->GetKernel().pipeline;
+			record.kernel.uniforms.try_emplace(
+				"gUniforms",
+				record.kernel.pipeline.Get(),
+				"gUniforms");
+		}
 	}
 
 	bgpu::UniformsBase::Accessor
@@ -1639,12 +1714,12 @@ namespace bgl
 		}
 
 		MeshInstanceBlock& record = m_InstanceBlocks[block.handle.index];
-		if (record.uniforms == nullptr)
+		if (!record.writer.IsInitialized())
 		{
 			throw SceneError("GetBlockParams: the block has no writer");
 		}
 
-		return (*record.uniforms)["params"];
+		return record.kernel["gUniforms"]["params"];
 	}
 
 	void

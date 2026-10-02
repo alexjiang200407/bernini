@@ -134,15 +134,20 @@ each refuses; what follows is why it is shaped as it is.
   ring is one buffer for the crowd's life (`GetRenderRing`), which a renderer imports once;
   `GetRenderTick(t)` says where tick `t`'s records are and the queue point that wrote them, from its
   `Step` until the ring is stepped past it. A tick's records are grouped by agent type, in
-  `agentTypes` order, and `RenderTick::types` gives each type's run: a reader drawing one type
-  reads one run, so the work it does per type is that type's agents, not the crowd's. The ring is
-  at least `maxTicksInFlight + 3` ticks: those in flight, the two a reader interpolates between and
-  the one before them its motion follows `source` back to. A reader hands ticks back with `ReleaseRenderReads(through, readerDone)`; the
-  `Step` that overwrites one waits for `readerDone` on the crowd's queue, and one that would
-  overwrite a tick not yet released cannot run (`CanStep`). Nothing waits on the CPU either way: a
-  slow reader stalls the crowd's stepping, by as many ticks as the ring holds past its minimum.
-  **Nothing writes the records yet**: the ring, its bookkeeping and the waits are in place, and the
-  step's write of each agent's record is not.
+  `agentTypes` order, and `RenderTick::types` gives each type's run: a reader drawing one type reads
+  one run, so the work it does per type is that type's agents, not the crowd's. The ring is at least
+  `maxTicksInFlight + 3` ticks: those in flight, the two a reader interpolates between and the one
+  before them its motion follows `source` back to. A reader hands ticks back with
+  `ReleaseRenderReads(through, readerDone)`; the `Step` that overwrites one waits for `readerDone`
+  on the crowd's queue, and one that would overwrite a tick not yet released cannot run (`CanStep`).
+  Nothing waits on the CPU either way: a slow reader stalls the crowd's stepping, by as many ticks
+  as the ring holds past its minimum. The agent buffers stay in group order; only the records are
+  grouped by type. `CrowdPlan` lays the record runs out on the CPU, O(groups): each `Group` gets its
+  `firstRecord`, and each `AgentRange` the record its source agent had last tick
+  (`sourceFirstRecord`). `CSStep` writes each agent's record as it writes the agent, at its group's
+  `firstRecord` plus its slot, so the records cost no pass of their own.
+  `tests/src/CrowdRenderRing_test.cpp` reads them back through an import of its own, as a renderer
+  would. The reader that draws them is `crowd_render` ([crowd_render.md](crowd_render.md)).
 * **Tick timing.** Every tick that dispatches is timed on the crowd's queue, and
   `GetTickGpuMilliseconds(t)` reads it back while `t` is one of the last `maxTicksInFlight + 1`.
 
@@ -185,9 +190,11 @@ groups cross, since no constraint keeps agents apart yet. `--units N` multiplies
 136 agents) and grows the field by √N, and the log splits a frame's time into the crowd, posing a
 box per agent, and drawing. In a release build on an M-series Mac the crowd's share stays at
 0.03 ms of CPU from 136 to 139k agents, and the GPU keeps a tick a frame, while the frame grows
-from 0.50 ms to 35 ms with drawing (one placement per agent) and posing (one `SetInstanceTransform`
-per agent): the cost of reading the crowd back to the CPU, which the GPU-to-renderer handoff, a
-later feature, removes. The release preset leaves examples off; measure with
+from 0.46 ms to 9.4 ms with drawing (one placement per agent, about 8.7 ms of it Forward World on
+the GPU) and posing (one `SetInstanceTransform` per agent, 5.3 ms): the cost of reading the crowd
+back to the CPU, which the GPU-to-renderer handoff, a later feature, removes. `--pass-timings` times
+every pass on the GPU and prints each one's mean a frame; run it apart from the frame split,
+since a timed frame costs more on Metal. The release preset leaves examples off; measure with
 `-DBERNINI_BUILD_EXAMPLES=ON` in a build directory of its own. `--frames N` exits non-zero unless
 every group's mean stands within one spacing of its goal by then (450 is enough), `--headless`
 draws offscreen, and `--screenshot <png>` writes the last frame drawn, which is how an agent looks

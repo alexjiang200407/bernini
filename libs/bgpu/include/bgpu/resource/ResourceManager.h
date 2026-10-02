@@ -28,15 +28,19 @@ namespace bgpu
 	{
 		// Descriptors in the shader-visible heap. Every buffer, every SRV and every second view of a
 		// buffer takes one, and index 0 is burned as the unbound sentinel, so it must be at least
-		// maxBuffers + maxSrvs + maxBufferSrvs + 1.
-		uint32_t maxCbvSrvUavs = 1089;
+		// maxBuffers + maxSrvs + maxBufferSrvs + maxBufferUavs + 1.
+		uint32_t maxCbvSrvUavs = 1105;
 
 		uint32_t maxBuffers = 512;
 		uint32_t maxSrvs    = 512;
 
 		// Second, structured views of buffers (CreateBufferSrv). Far fewer than buffers: only an
 		// arena whose records hold resource handles needs one.
-		uint32_t maxBufferSrvs      = 64;
+		uint32_t maxBufferSrvs = 64;
+
+		// Writable second views of read-only buffers (CreateBufferUav). Fewer still: only a buffer
+		// one pass writes and every other pass reads needs one.
+		uint32_t maxBufferUavs      = 16;
 		uint32_t maxRtvs            = 128;
 		uint32_t maxDsvs            = 128;
 		uint32_t maxTextures        = 1024;
@@ -53,7 +57,7 @@ namespace bgpu
 			desc.maxDsvs       = 0;
 			desc.maxTextures   = 0;
 			desc.maxSamplers   = 0;
-			desc.maxCbvSrvUavs = desc.maxBuffers + desc.maxBufferSrvs + 1;
+			desc.maxCbvSrvUavs = desc.maxBuffers + desc.maxBufferSrvs + desc.maxBufferUavs + 1;
 			return desc;
 		}
 	};
@@ -113,6 +117,29 @@ namespace bgpu
 
 		[[nodiscard]] virtual bool
 		ValidBufferSrvHandle(const BufferSrvHandle& handle) const noexcept = 0;
+
+		/**
+		 * A writable view of a buffer every other reader sees read-only, for the pass that writes
+		 * it while the rest of the frame reads it through its own view.
+		 *
+		 * Barriers are the caller's, as for any buffer: a write through this view is a
+		 * kUnorderedAccess access to the same resource.
+		 *
+		 * @pre the buffer is valid, structured, created with `allowsUav` or `isUav`, and its byte
+		 * size is a multiple of `desc.stride`.
+		 * @post destroying the buffer does not destroy the view, and a growth replaces the resource
+		 * the view describes, so whoever owns the buffer re-issues the view with it -- as with
+		 * CreateBufferSrv.
+		 */
+		[[nodiscard]]
+		virtual BufferUavHandle
+		CreateBufferUav(BufferHandle buffer, const BufferUavDesc& desc) noexcept = 0;
+
+		virtual void
+		DestroyBufferUav(BufferUavHandle handle, bool deferred = true) noexcept = 0;
+
+		[[nodiscard]] virtual bool
+		ValidBufferUavHandle(const BufferUavHandle& handle) const noexcept = 0;
 
 		// Creation is upload-free: the manager makes resources and descriptors, never issues
 		// copies. A caller with pixel data creates the texture, keeps the bytes, and writes them

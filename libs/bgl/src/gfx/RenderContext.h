@@ -22,6 +22,7 @@
 #include "passes/SkyboxPass.h"
 #include "passes/TaaResolvePass.h"
 #include "passes/TransparentSortPass.h"
+#include "passes/WriteInstanceBlocksPass.h"
 #include "postprocess/TonemapLut.h"
 #include "types/DrawBucketMask.h"
 #include <array>
@@ -377,6 +378,7 @@ namespace bgl
 		OutlineMaskPass               m_OutlineMask;
 		TaaResolvePass                m_TaaResolve;
 		CompactInstancesPass          m_CompactInstances;
+		WriteInstanceBlocksPass       m_WriteInstanceBlocks;
 		RigFramesPass                 m_RigFrames;
 		SkinnedPosePass               m_SkinnedPose;
 		TransparentSortPass           m_TransparentSort;

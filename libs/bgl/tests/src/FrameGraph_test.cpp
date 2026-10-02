@@ -329,6 +329,19 @@ namespace
 		{
 			return false;
 		}
+		bgpu::BufferUavHandle
+		CreateBufferUav(bgpu::BufferHandle, const bgpu::BufferUavDesc&) noexcept override
+		{
+			return {};
+		}
+		void
+		DestroyBufferUav(bgpu::BufferUavHandle, bool) noexcept override
+		{}
+		bool
+		ValidBufferUavHandle(const bgpu::BufferUavHandle&) const noexcept override
+		{
+			return false;
+		}
 		bgpu::TextureHandle
 		CreateTexture(const bgpu::TextureDesc&) noexcept override
 		{

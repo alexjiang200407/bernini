@@ -6,7 +6,7 @@ add_executable(bgl_crowd ${BGL_CROWD_SOURCES})
 
 find_package(CLI11 CONFIG REQUIRED)
 
-target_link_libraries(bgl_crowd PRIVATE core bgpu bgl crowdlib CLI11::CLI11 example_util)
+target_link_libraries(bgl_crowd PRIVATE core bgpu bgl crowdlib crowd_render CLI11::CLI11 example_util)
 
 if(RENDERER_BACKEND STREQUAL "DX12")
     target_link_libraries(bgl_crowd PRIVATE bgpu_d3d12_agility)
