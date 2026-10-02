@@ -167,7 +167,7 @@ TEST_CASE("A mesh cooked on a worker draws what the direct path draws", "[scene]
 
 	const auto shoot = [&](bgl::GeomHandle geom) {
 		const bgl::MeshInstanceHandle instance =
-			view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+			view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 
 		// Two frames so the presented backbuffer holds a fully uploaded scene.
 		gfx->DrawFrame(target, TriangleJob(view));
@@ -179,7 +179,8 @@ TEST_CASE("A mesh cooked on a worker draws what the direct path draws", "[scene]
 		return image;
 	};
 
-	const assetlib::ImageData direct = shoot(scene->AddStaticMeshGeom(mesh, 0, materials));
+	const assetlib::ImageData direct = shoot(
+		scene->AddStaticMeshGeom(bgl::StaticMeshGeomDesc().SetMesh(&mesh).SetMaterials(materials)));
 
 	// The cook must not need the driving thread; this is the one bgl call allowed off it.
 	auto prepared = bgl::PreparedStaticMesh();

@@ -95,7 +95,8 @@ namespace
 		Place(float x)
 		{
 			auto* impl = scene->As<bgl::Scene>();
-			return view->CreateStaticMeshInstance(impl->AddCubeGeom(), At(x));
+			return view->CreateStaticMeshInstance(
+				bgl::StaticMeshInstanceDesc().SetGeom(impl->AddCubeGeom()).SetTransform(At(x)));
 		}
 	};
 }

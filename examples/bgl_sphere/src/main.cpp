@@ -9,6 +9,7 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SkyboxDesc.h>  // IWYU pragma: keep
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgpu/GpuContext.h>
 #include <core/glm.h>
 #include <cstdint>
@@ -101,7 +102,7 @@ main(int argc, char** argv)
 
 		auto sphere = scene->AddSphereGeom(32, 32, sphereRadius, metalMat);
 
-		view->CreateStaticMeshInstance(sphere, glm::mat4(1.0f));
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(sphere));
 
 		const float aspect = static_cast<float>(width) / static_cast<float>(height);
 

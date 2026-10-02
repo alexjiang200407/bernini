@@ -216,7 +216,8 @@ TEST_CASE("what the cha800 face close-up costs Forward, part by part", "[.cha800
 		for (const Part& p : parts)
 		{
 			if (keep(p))
-				(void)view->CreateStaticMeshInstance(p.geom, p.transform);
+				(void)view->CreateStaticMeshInstance(
+					bgl::StaticMeshInstanceDesc().SetGeom(p.geom).SetTransform(p.transform));
 		}
 
 		for (const float side : { 1.0f, -1.0f })

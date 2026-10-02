@@ -231,7 +231,7 @@ namespace
 		      .metallicFactor  = 1.0f,
 		      .roughnessFactor = 0.3f });
 		const auto sphere = scene->AddSphereGeom(32, 32, 5.0f, glossy);
-		(void)view->CreateStaticMeshInstance(sphere, glm::mat4(1.0f));
+		(void)view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(sphere));
 
 		auto camera = bgl::Camera();
 		camera.LookAt(glm::vec3(0.0f, 0.0f, 20.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))

@@ -37,7 +37,7 @@ namespace bgl
 	 *
 	 * These append *after* the clip nodes `AddRig` synthesizes, so space `i` is node
 	 * `clipCount + i` and no clip's node index moves when a set is added. That ordering is what lets
-	 * `SkinnedInstanceDesc::clip` keep meaning what it always did.
+	 * a slot's `nodeIndex` below the clip count keep meaning that clip.
 	 */
 	struct BlendSetDesc
 	{

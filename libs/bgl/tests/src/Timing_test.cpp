@@ -186,7 +186,7 @@ namespace
 			view->SetSkyBox(bgl::SkyboxDesc{ cubeTex });
 
 			auto geom = scene->AddCubeGeom();
-			(void)view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+			(void)view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 
 			auto camera = bgl::Camera();
 			camera

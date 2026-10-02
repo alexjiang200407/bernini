@@ -239,8 +239,10 @@ TEST_CASE("a rig acquires as skinned geometry, shares, and releases", "[skinned]
 
 	SECTION("an instance places and destroys through the manager")
 	{
-		const auto instance =
-			assets.CreateSkinnedInstance(view, mesh.geom, glm::mat4(1.0f), { 0, 0.0f, 1.0f });
+		const auto instance = assets.CreateSkinnedInstance(
+			view,
+			bgl::SkinnedMeshInstanceDesc().SetGeom(mesh.geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0)));
 		REQUIRE(instance.IsValid());
 		CHECK(view->GetInstanceCount() == 1);
 
@@ -659,20 +661,20 @@ TEST_CASE("a two-slot unit draws off one rig's bone anim table", "[skinned][acqu
 	// Frame 1 of the fixture's clip slides the rig to x = 1, and the two sources must put it in the
 	// same place -- the bone anim table is a different route to the same pose, not a different pose.
 	const auto drawUnit = [&](bgl::PoseSource source, const char* png) {
-		auto desc   = bgl::SkinnedInstanceDesc();
-		desc.clip   = 0;
-		desc.phase  = 1.0f;
-		desc.rate   = 0.0f;
-		desc.source = source;
+		const auto desc = bgl::SkinnedMeshInstanceDesc()
+		                      .SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0, 1.0f, 0.0f))
+		                      .SetSource(source);
 
 		// Offset, so the second slot occupies pixels the first does not. Placed coincident they
 		// would be one silhouette, and a slot that drew nothing at all would pass every check below.
-		const auto a = assets.CreateSkinnedInstance(view, body.geom, glm::mat4(1.0f), desc);
+		const auto a = assets.CreateSkinnedInstance(
+			view,
+			bgl::SkinnedMeshInstanceDesc(desc).SetGeom(body.geom));
 		const auto b = assets.CreateSkinnedInstance(
 			view,
-			piece.geom,
-			glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.0f, 0.0f)),
-			desc);
+			bgl::SkinnedMeshInstanceDesc(desc)
+				.SetGeom(piece.geom)
+				.SetTransform(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.0f, 0.0f))));
 
 		gfx->DrawFrame(target, job);
 		gfx->ScreenshotPng(target, png);
@@ -700,12 +702,12 @@ TEST_CASE("a two-slot unit draws off one rig's bone anim table", "[skinned][acqu
 
 	const auto* bodyOnlyPng = "assets/golden/crowd_unit_body_only.got.png";
 	{
-		auto desc   = bgl::SkinnedInstanceDesc();
-		desc.phase  = 1.0f;
-		desc.rate   = 0.0f;
-		desc.source = bgl::PoseSource::kBoneAnimTable;
-
-		const auto only = assets.CreateSkinnedInstance(view, body.geom, glm::mat4(1.0f), desc);
+		const auto only = assets.CreateSkinnedInstance(
+			view,
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(body.geom)
+				.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0, 1.0f, 0.0f))
+				.SetSource(bgl::PoseSource::kBoneAnimTable));
 		gfx->DrawFrame(target, job);
 		gfx->ScreenshotPng(target, bodyOnlyPng);
 		assets.DestroyInstance(view, only);

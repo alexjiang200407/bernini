@@ -34,6 +34,7 @@
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
 #include <bgl/types/Camera.h>
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/Viewport.h>
 
 #include <chrono>
@@ -979,9 +980,9 @@ AssetThumbnailCache::BuildMesh(Shot& shot)
 			m_Geoms.push_back(
 				scene->AddStaticMeshGeom(std::move(shot.item.cooked->at(node.mesh)), {}));
 
-		const glm::mat4               world = bmesh::GetInstanceTransform(mesh, nodeIndex);
-		const bgl::MeshInstanceHandle instance =
-			view->CreateStaticMeshInstance(m_Geoms[it->second], world);
+		const glm::mat4               world    = bmesh::GetInstanceTransform(mesh, nodeIndex);
+		const bgl::MeshInstanceHandle instance = view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(m_Geoms[it->second]).SetTransform(world));
 		m_Instances.push_back(instance);
 
 		const assetlib::Mesh& entry = mesh.meshes[node.mesh];
@@ -1020,7 +1021,8 @@ AssetThumbnailCache::BuildMaterial(Shot& shot)
 	const bgl::MaterialHandle material = AcquireMaterial(relPath, shot.item.prefetch.get());
 
 	m_Geoms.push_back(m_Desc.renderer->GetScene()->AddSphereGeom(32, 32, 1.0f, material));
-	m_Instances.push_back(m_SceneView->CreateStaticMeshInstance(m_Geoms.back(), glm::mat4(1.0f)));
+	m_Instances.push_back(m_SceneView->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(m_Geoms.back())));
 
 	FrameShot(shot, glm::vec3(0.0f), 1.0f);
 }

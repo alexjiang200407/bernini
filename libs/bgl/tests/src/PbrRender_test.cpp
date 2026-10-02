@@ -71,7 +71,8 @@ TEST_CASE("PBR instances render headlessly", "[pbr][ibl][render]")
 	auto sphere = scene->AddSphereGeom(32, 32, 5.0f, metalMat);
 
 	auto transform = glm::mat4(1.0f);
-	view->CreateStaticMeshInstance(sphere, transform);
+	view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(sphere).SetTransform(transform));
 
 	auto camera = bgl::Camera();
 	camera
@@ -157,7 +158,8 @@ TEST_CASE("A distant mirror does not alias its reflection", "[pbr][ibl][render]"
 
 	auto sphere    = scene->AddSphereGeom(32, 32, 5.0f, mirror);
 	auto transform = glm::mat4(1.0f);
-	view->CreateStaticMeshInstance(sphere, transform);
+	view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(sphere).SetTransform(transform));
 
 	// Far enough back that the sphere is roughly 40 px across in a 400x300 view.
 	auto camera = bgl::Camera();
@@ -232,7 +234,8 @@ TEST_CASE("Loose PBR material renders equivalently to PBR", "[pbr][loose][render
 	auto sphere = scene->AddSphereGeom(32, 32, 5.0f, looseMat);
 
 	auto transform = glm::mat4(1.0f);
-	view->CreateStaticMeshInstance(sphere, transform);
+	view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(sphere).SetTransform(transform));
 
 	auto camera = bgl::Camera();
 	camera

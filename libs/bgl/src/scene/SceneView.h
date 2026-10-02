@@ -148,19 +148,7 @@ namespace bgl
 		}
 
 		MeshInstanceHandle
-		CreateStaticMeshInstance(GeomHandle geom, glm::mat4 transform) override;
-
-		MeshInstanceHandle
-		CreateSkinnedMeshInstance(
-			GeomHandle                 geom,
-			glm::mat4                  transform,
-			const SkinnedInstanceDesc& desc) override;
-
-		MeshInstanceHandle
-		CreateSkinnedMeshInstance(
-			GeomHandle                 geom,
-			glm::mat4                  transform,
-			const SkinnedPlaybackDesc& desc) override;
+		CreateStaticMeshInstance(const StaticMeshInstanceDesc& desc) override;
 
 		MeshInstanceHandle
 		CreateSkinnedMeshInstance(const SkinnedMeshInstanceDesc& desc) override;
@@ -546,6 +534,20 @@ namespace bgl
 		 */
 		MeshInstanceHandle
 		WritePlacement(GeomHandle geom, glm::mat4 transform, uint32_t animState);
+
+		/**
+		 * A kBoneAnimTable placement of `geom` playing `clip` from the rig's shared table, which this
+		 * reserves. The caller has checked `clip` against the rig's clip count.
+		 */
+		MeshInstanceHandle
+		PlaceTable(
+			GeomHandle        geom,
+			glm::mat4         transform,
+			core::slot_handle rig,
+			uint32_t          nodeCount,
+			uint32_t          clip,
+			float             phase,
+			float             rate);
 
 		/**
 		 * Spawns a per-instance placement on the rig `rig` of `boneCount` bones: a palette slice, a

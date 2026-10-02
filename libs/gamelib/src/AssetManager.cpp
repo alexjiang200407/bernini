@@ -19,6 +19,10 @@
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/SkinnedMeshGeomDesc.h>
+#include <bgl/types/SkinnedMeshInstanceDesc.h>
+#include <bgl/types/StaticMeshGeomDesc.h>
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <concepts>
 #include <core/str/str.h>
@@ -691,8 +695,9 @@ namespace game
 			submeshMaterials[i]              = handle;
 		}
 
-		auto record                     = GeomRecord();
-		record.handle                   = m_Scene->AddStaticMeshGeom(mesh, meshIndex, {});
+		auto record   = GeomRecord();
+		record.handle = m_Scene->AddStaticMeshGeom(
+			bgl::StaticMeshGeomDesc().SetMesh(&mesh).SetMeshIndex(meshIndex));
 		record.key                      = key;
 		record.submeshMaterials         = std::move(submeshMaterials);
 		record.submeshMaterialOverrides = MaterialOverridesOf(loaded.bindings, entry);
@@ -999,21 +1004,26 @@ namespace game
 			// One upload per clip set, however many meshes are skinned to it: a unit assembled from
 			// slot meshes is several geoms on one rig.
 			const AcquiredRig rig = AcquireRig(
-				animationsNorm,
-				blendNorm,
-				skeleton,
-				animations,
-				mesh,
-				blendSet.has_value() ? &*blendSet : nullptr);
+				RigDesc()
+					.SetAnimationsNorm(animationsNorm)
+					.SetBlendNorm(blendNorm)
+					.SetSkeleton(&skeleton)
+					.SetAnimations(&animations)
+					.SetMesh(&mesh)
+					.SetBlendSet(blendSet.has_value() ? &*blendSet : nullptr));
 			rigAcquired = true;
 
 			auto record = GeomRecord();
 			{
 				// Adapt per-submesh bindings without copying the cached vertex payload.
 				const ScopedMaterialSlots slots(mesh, entry);
-				record.handle =
-					m_Scene
-						->AddSkinnedMeshGeom(mesh, meshIndex, submeshMaterials, rig.handle, bounds);
+				record.handle = m_Scene->AddSkinnedMeshGeom(
+					bgl::SkinnedMeshGeomDesc()
+						.SetMesh(&mesh)
+						.SetMeshIndex(meshIndex)
+						.SetMaterials(submeshMaterials)
+						.SetRig(rig.handle)
+						.SetPosedBounds(bounds));
 			}
 			record.key                      = key;
 			record.submeshMaterials         = std::move(submeshMaterials);
@@ -1047,14 +1057,19 @@ namespace game
 	}
 
 	AssetManager::AcquiredRig
-	AssetManager::AcquireRig(
-		std::string_view              animationsNorm,
-		std::string_view              blendNorm,
-		const assetlib::Skeleton&     skeleton,
-		const assetlib::AnimationSet& animations,
-		const assetlib::BMesh&        mesh,
-		const assetlib::BlendSet*     blendSet)
+	AssetManager::AcquireRig(const RigDesc& desc)
 	{
+		core::ensure(
+			desc.skeleton != nullptr && desc.animations != nullptr && desc.mesh != nullptr,
+			"AcquireRig needs a skeleton, a clip set and a mesh");
+
+		const std::string_view        animationsNorm = desc.animationsNorm;
+		const std::string_view        blendNorm      = desc.blendNorm;
+		const assetlib::Skeleton&     skeleton       = *desc.skeleton;
+		const assetlib::AnimationSet& animations     = *desc.animations;
+		const assetlib::BMesh&        mesh           = *desc.mesh;
+		const assetlib::BlendSet*     blendSet       = desc.blendSet;
+
 		const uint64_t rigSignature = assetlib::skeletonSignature(skeleton);
 
 		if (const auto it = m_Rigs.find(animationsNorm); it != m_Rigs.end())
@@ -1340,11 +1355,10 @@ namespace game
 	// --- Instances --------------------------------------------------------------------------------
 
 	bgl::MeshInstanceHandle
-	AssetManager::CreateInstance(
-		bgl::SceneViewRef view,
-		bgl::GeomHandle   geom,
-		const glm::mat4&  transform)
+	AssetManager::CreateInstance(bgl::SceneViewRef view, const bgl::StaticMeshInstanceDesc& desc)
 	{
+		const bgl::GeomHandle geom = desc.geom;
+
 		if (!view)
 			throw bgl::SceneError("CreateInstance requires a valid SceneView");
 
@@ -1356,7 +1370,7 @@ namespace game
 				"expired");
 		}
 
-		const bgl::MeshInstanceHandle instance = view->CreateStaticMeshInstance(geom, transform);
+		const bgl::MeshInstanceHandle instance = view->CreateStaticMeshInstance(desc);
 
 		RegisterInstance(std::move(view), geom.handle.index, instance);
 
@@ -1408,11 +1422,11 @@ namespace game
 
 	bgl::MeshInstanceHandle
 	AssetManager::CreateSkinnedInstance(
-		bgl::SceneViewRef               view,
-		bgl::GeomHandle                 geom,
-		const glm::mat4&                transform,
-		const bgl::SkinnedInstanceDesc& desc)
+		bgl::SceneViewRef                   view,
+		const bgl::SkinnedMeshInstanceDesc& desc)
 	{
+		const bgl::GeomHandle geom = desc.geom;
+
 		if (!view)
 			throw bgl::SceneError("CreateSkinnedInstance requires a valid SceneView");
 
@@ -1424,8 +1438,7 @@ namespace game
 				"has expired");
 		}
 
-		const bgl::MeshInstanceHandle instance =
-			view->CreateSkinnedMeshInstance(geom, transform, desc);
+		const bgl::MeshInstanceHandle instance = view->CreateSkinnedMeshInstance(desc);
 
 		RegisterInstance(std::move(view), geom.handle.index, instance);
 

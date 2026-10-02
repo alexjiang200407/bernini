@@ -72,7 +72,8 @@ TEST_CASE("Placing or deleting an instance breaks the temporal continuity", "[sc
 
 	SECTION("A placement is reported once, to the frame that draws after it")
 	{
-		const auto instance = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		const auto instance =
+			view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 		REQUIRE(instance.IsValid());
 
 		CHECK(view->AdvanceTemporalEpoch());
@@ -83,7 +84,8 @@ TEST_CASE("Placing or deleting an instance breaks the temporal continuity", "[sc
 
 	SECTION("A deletion is reported")
 	{
-		const auto instance = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		const auto instance =
+			view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 		Consume(view);
 
 		view->DeleteMeshInstance(instance);
@@ -97,11 +99,12 @@ TEST_CASE("Placing or deleting an instance breaks the temporal continuity", "[sc
 	// break -- the pose that arrives is the new clip's, against history holding the old clip's.
 	SECTION("A destroy-and-respawn is one break, seen by the next frame")
 	{
-		const auto instance = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		const auto instance =
+			view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 		Consume(view);
 
 		view->DeleteMeshInstance(instance);
-		view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 
 		CHECK(view->AdvanceTemporalEpoch());
 		CHECK_FALSE(view->AdvanceTemporalEpoch());
@@ -113,7 +116,8 @@ TEST_CASE("Placing or deleting an instance breaks the temporal continuity", "[sc
 	// exists to prevent, and the one a new bump is most likely to reintroduce.
 	SECTION("Selecting a submesh is not a break")
 	{
-		const auto instance = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		const auto instance =
+			view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 		Consume(view);
 
 		view->SetSubmeshSelected(instance, 0, true);
@@ -125,7 +129,8 @@ TEST_CASE("Placing or deleting an instance breaks the temporal continuity", "[sc
 	// has none -- but rewriting the word it already holds changes no pixel.
 	SECTION("Hiding and unhiding are breaks; rewriting the same flags is not")
 	{
-		const auto instance = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		const auto instance =
+			view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 		Consume(view);
 
 		const auto hidden = bgl::MeshInstanceFlags(bgl::MeshInstanceFlag::kHidden);

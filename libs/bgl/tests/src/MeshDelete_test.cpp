@@ -183,7 +183,7 @@ TEST_CASE("Buffer contents around mesh deletion", "[delete][buffers][scene]")
 	auto geom = scene->AddCubeGeom(material);
 	REQUIRE(geom.IsValid());
 
-	auto inst = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+	auto inst = view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 	REQUIRE(inst.IsValid());
 
 	// Geometry range buffers live on the Scene; instance buffers on the SceneView.
@@ -296,7 +296,7 @@ TEST_CASE("A submesh maps 1:1 to a GPU submesh whatever its meshlet count", "[sc
 	const std::array<uint32_t, 2> counts = { { c_LargeMeshletCount, 1 } };
 	const assetlib::BMesh         mesh   = MakeMeshletMesh(counts);
 
-	auto geom = scene->AddStaticMeshGeom(mesh, 0, {});
+	auto geom = scene->AddStaticMeshGeom(bgl::StaticMeshGeomDesc().SetMesh(&mesh));
 	REQUIRE(geom.IsValid());
 
 	// Two source submeshes in, two GPU submeshes out -- the 65-meshlet one did not split.
@@ -315,14 +315,14 @@ TEST_CASE("A submesh maps 1:1 to a GPU submesh whatever its meshlet count", "[sc
 		submeshBuffer.AtIndex(root).vertexData.byteStart !=
 		submeshBuffer.AtIndex(root + 1).vertexData.byteStart);
 
-	auto inst = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+	auto inst = view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 	REQUIRE(inst.IsValid());
 	view->DeleteMeshInstance(inst);
 
 	REQUIRE_NOTHROW(scene->DeleteGeom(geom));
 
 	// The freed ranges are reusable: re-adding the same mesh succeeds (the drop-the-same-mesh path).
-	auto geom2 = scene->AddStaticMeshGeom(mesh, 0, {});
+	auto geom2 = scene->AddStaticMeshGeom(bgl::StaticMeshGeomDesc().SetMesh(&mesh));
 	REQUIRE(geom2.IsValid());
 }
 
@@ -361,7 +361,7 @@ TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][
 
 	SECTION("Materialing a submesh covers it and leaves its neighbour alone")
 	{
-		auto geom = scene->AddStaticMeshGeom(mesh, 0, {});
+		auto geom = scene->AddStaticMeshGeom(bgl::StaticMeshGeomDesc().SetMesh(&mesh));
 		REQUIRE(geom.IsValid());
 
 		REQUIRE_NOTHROW(scene->SetSubmeshMaterial(geom, 1, pbr));
@@ -373,7 +373,7 @@ TEST_CASE("SetSubmeshMaterial addresses submeshes by source index", "[material][
 
 	SECTION("One past the last source submesh throws")
 	{
-		auto geom = scene->AddStaticMeshGeom(mesh, 0, {});
+		auto geom = scene->AddStaticMeshGeom(bgl::StaticMeshGeomDesc().SetMesh(&mesh));
 		REQUIRE(geom.IsValid());
 
 		REQUIRE_THROWS_AS(scene->SetSubmeshMaterial(geom, 2, pbr), bgl::SceneError);
@@ -475,7 +475,7 @@ TEST_CASE(
 	REQUIRE(geom.IsValid());
 
 	// Placed *before* the material changes: this is the instance the epoch has to reach.
-	auto inst = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+	auto inst = view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 	REQUIRE(inst.IsValid());
 
 	auto& instanceBuffer = view->GetInstanceBuffer();
@@ -550,7 +550,7 @@ TEST_CASE(
 	{
 		scene->SetSubmeshMaterial(geom, 0, pbr);
 
-		auto later = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		auto later = view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 		REQUIRE(later.IsValid());
 
 		const auto& laterMeta = meshBuffer.MetaAt(later.handle.index);
@@ -594,8 +594,8 @@ TEST_CASE(
 	auto geom = scene->AddCubeGeom(pbr);
 	REQUIRE(geom.IsValid());
 
-	auto worn  = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
-	auto plain = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+	auto worn  = view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
+	auto plain = view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 	REQUIRE(worn.IsValid());
 	REQUIRE(plain.IsValid());
 

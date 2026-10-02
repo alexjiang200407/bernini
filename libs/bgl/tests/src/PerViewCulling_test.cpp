@@ -127,7 +127,9 @@ TEST_CASE("One view culled against two frustums keeps both results", "[culling][
 
 	for (const glm::vec3& position : positions)
 	{
-		REQUIRE(view->CreateStaticMeshInstance(geom, glm::translate(glm::mat4(1.0f), position))
+		REQUIRE(view->CreateStaticMeshInstance(
+						bgl::StaticMeshInstanceDesc().SetGeom(geom).SetTransform(
+							glm::translate(glm::mat4(1.0f), position)))
 		            .IsValid());
 	}
 

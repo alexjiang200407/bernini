@@ -253,11 +253,12 @@ namespace
 		probe.map = probe.scene->AddTextureAsset(HalfOccludedMap(), "half_occluded");
 
 		const auto placeholder = probe.scene->CreatePbrMaterial({});
+		const auto plane       = MakePlane(withUv1);
 		const auto geom        = probe.scene->AddStaticMeshGeom(
-			MakePlane(withUv1),
-			0,
-			std::span<const bgl::MaterialHandle>(&placeholder, 1));
-		probe.plane = probe.view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+			bgl::StaticMeshGeomDesc().SetMesh(&plane).SetMaterials(
+				std::span<const bgl::MaterialHandle>(&placeholder, 1)));
+		probe.plane =
+			probe.view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 
 		return probe;
 	}

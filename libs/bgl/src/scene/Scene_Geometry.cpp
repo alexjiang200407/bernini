@@ -373,13 +373,17 @@ namespace bgl
 	}
 
 	GeomHandle
-	Scene::AddSkinnedMeshGeom(
-		const assetlib::BMesh&          mesh,
-		uint32_t                        meshIndex,
-		std::span<const MaterialHandle> materials,
-		RigHandle                       rig,
-		const assetlib::Bounds&         posedBounds)
+	Scene::AddSkinnedMeshGeom(const SkinnedMeshGeomDesc& desc)
 	{
+		if (desc.mesh == nullptr)
+			throw SceneError("AddSkinnedMeshGeom: mesh is null");
+
+		const assetlib::BMesh&                mesh        = *desc.mesh;
+		const uint32_t                        meshIndex   = desc.meshIndex;
+		const std::span<const MaterialHandle> materials   = desc.materials;
+		const RigHandle                       rig         = desc.rig;
+		const assetlib::Bounds&               posedBounds = desc.posedBounds;
+
 		const RigMeta* meta = FindRig(rig);
 		if (meta == nullptr)
 		{
@@ -881,12 +885,12 @@ namespace bgl
 	}
 
 	GeomHandle
-	Scene::AddStaticMeshGeom(
-		const assetlib::BMesh&          mesh,
-		uint32_t                        meshIndex,
-		std::span<const MaterialHandle> materials)
+	Scene::AddStaticMeshGeom(const StaticMeshGeomDesc& desc)
 	{
-		return AddStaticMeshGeom(CookStaticMesh(mesh, meshIndex), materials);
+		if (desc.mesh == nullptr)
+			throw SceneError("AddStaticMeshGeom: mesh is null");
+
+		return AddStaticMeshGeom(CookStaticMesh(*desc.mesh, desc.meshIndex), desc.materials);
 	}
 
 	GeomHandle

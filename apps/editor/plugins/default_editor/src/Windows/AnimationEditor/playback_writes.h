@@ -23,7 +23,7 @@ namespace editor
 	 * The node `desc` is mostly showing at `nowSeconds` -- what a fresh single-clip spawn takes so
 	 * a respawn lands on the pose the record was already displaying.
 	 *
-	 * `SkinnedInstanceDesc` carries one clip, so a respawn cannot carry a record across; this is
+	 * A kBoneAnimTable spawn holds one clip, so a respawn cannot carry a record across; this is
 	 * the one slot of it that survives. Ties go to the lowest slot, and a record where no slot
 	 * carries weight yet answers slot 0, which is what such a record shows.
 	 *

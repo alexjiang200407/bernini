@@ -96,7 +96,7 @@ TEST_CASE("A split-phase capture resolves to the frame a blocking screenshot ret
 
 	auto scene = gfx->CreateScene(CubeSceneDesc());
 	auto view  = gfx->CreateSceneView(scene, 8);
-	view->CreateStaticMeshInstance(scene->AddCubeGeom(), glm::mat4(1.0f));
+	view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(scene->AddCubeGeom()));
 
 	// Two frames so the presented backbuffer holds a fully uploaded scene.
 	gfx->DrawFrame(target, CubeJob(view));

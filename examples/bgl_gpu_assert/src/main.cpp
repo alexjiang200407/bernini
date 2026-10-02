@@ -5,6 +5,7 @@
 #include <bgl/MaterialType.h>
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/RenderJob.h>
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgpu/GpuContext.h>
 #include <core/err/util.h>
 #include <stdexcept>
@@ -53,7 +54,7 @@ main(int, char**)
 		auto view           = graphics->CreateSceneView(scene, 100);
 		auto assertMaterial = bgl::MaterialHandle{ .materialType = bgl::MaterialType::kAssert };
 		auto cube           = scene->AddCubeGeom(assertMaterial);
-		view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(cube));
 
 		const float aspect = static_cast<float>(opts.width) / static_cast<float>(opts.height);
 

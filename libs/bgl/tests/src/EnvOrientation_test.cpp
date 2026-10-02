@@ -171,7 +171,7 @@ namespace
 		      .roughnessFactor = 1.0f });
 
 		const auto sphere = probe.scene->AddSphereGeom(32, 32, 5.0f, matte);
-		(void)probe.view->CreateStaticMeshInstance(sphere, glm::mat4(1.0f));
+		(void)probe.view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(sphere));
 
 		return probe;
 	}

@@ -303,12 +303,13 @@ TEST_CASE("AddSkinnedMeshGeom uploads a rig's bones, clips and samples", "[skinn
 	const auto                               animations = MakeClips();
 	const std::array<bgl::MaterialHandle, 1> materials  = { { material } };
 
-	const auto geom = scene->AddSkinnedMeshGeom(
-		MakeSkinnedMesh(),
-		0,
-		materials,
-		scene->AddRig(skeleton, animations),
-		c_AnyPose);
+	const auto skinnedMesh = MakeSkinnedMesh();
+	const auto geom        = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(skeleton, animations))
+			.SetPosedBounds(c_AnyPose));
 	REQUIRE(geom.IsValid());
 	REQUIRE(geom.geomType == bgl::GeomType::kSkinnedMesh);
 
@@ -424,23 +425,22 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	auto* view       = viewHandle->As<bgl::SceneView>();
 	REQUIRE(view != nullptr);
 
-	const std::array<bgl::MaterialHandle, 1> materials = { { OpaquePbr(scene) } };
-	const auto                               geom      = scene->AddSkinnedMeshGeom(
-		MakeSkinnedMesh(),
-		0,
-		materials,
-		scene->AddRig(MakeRig(), MakeClips()),
-		c_AnyPose);
+	const std::array<bgl::MaterialHandle, 1> materials   = { { OpaquePbr(scene) } };
+	const auto                               skinnedMesh = MakeSkinnedMesh();
+	const auto                               geom        = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(MakeRig(), MakeClips()))
+			.SetPosedBounds(c_AnyPose));
 	REQUIRE(geom.IsValid());
-
-	auto desc  = bgl::SkinnedInstanceDesc();
-	desc.clip  = 1;
-	desc.phase = 4.5f;
-	desc.rate  = 2.0f;
 
 	const auto placed = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 2.0f, 3.0f));
 
-	const auto instance = view->CreateSkinnedMeshInstance(geom, placed, desc);
+	const auto desc = bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetTransform(placed).SetPlayback(
+		bgl::SkinnedPlaybackDesc::FromClip(1, 4.5f, 2.0f));
+
+	const auto instance = view->CreateSkinnedMeshInstance(desc);
 	REQUIRE(instance.IsValid());
 
 	auto& meshBuffer = view->GetMeshBuffer();
@@ -471,10 +471,8 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 
 	SECTION("a crowd instance is a record of its own kind, owning no palette")
 	{
-		auto crowd   = desc;
-		crowd.source = bgl::PoseSource::kBoneAnimTable;
-
-		const auto other = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), crowd);
+		const auto other = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc(desc).SetSource(bgl::PoseSource::kBoneAnimTable));
 		REQUIRE(other.IsValid());
 
 		const bgl::idl::MeshInstance& crowdMesh = meshBuffer.AtIndex(other.handle.index);
@@ -505,10 +503,10 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 
 	SECTION("a clip past the geom's table is refused")
 	{
-		auto tooFar = desc;
-		tooFar.clip = 2;
 		CHECK_THROWS_AS(
-			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), tooFar),
+			view->CreateSkinnedMeshInstance(
+				bgl::SkinnedMeshInstanceDesc(desc).SetPlayback(
+					bgl::SkinnedPlaybackDesc::FromClip(2))),
 			bgl::SceneError);
 	}
 
@@ -516,7 +514,7 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 	{
 		const auto cube = scene->AddCubeGeom(bgl::MaterialHandle());
 		CHECK_THROWS_AS(
-			view->CreateSkinnedMeshInstance(cube, glm::mat4(1.0f), desc),
+			view->CreateSkinnedMeshInstance(bgl::SkinnedMeshInstanceDesc(desc).SetGeom(cube)),
 			bgl::SceneError);
 	}
 
@@ -527,6 +525,105 @@ TEST_CASE("CreateSkinnedMeshInstance writes the playback record once", "[skinned
 
 		scene->DeleteGeom(geom);
 		CHECK_FALSE(scene->IsGeomAlive(geom));
+	}
+}
+
+TEST_CASE("A table spawn plays the one clip its record weights", "[skinned]")
+{
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(TestSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	auto  viewHandle = gfx->CreateSceneView(sceneHandle, 8);
+	auto* view       = viewHandle->As<bgl::SceneView>();
+	REQUIRE(view != nullptr);
+
+	const std::array<bgl::MaterialHandle, 1> materials   = { { OpaquePbr(scene) } };
+	const auto                               skinnedMesh = MakeSkinnedMesh();
+	const auto                               geom        = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(MakeRig(), MakeClips()))
+			.SetPosedBounds(c_AnyPose));
+	REQUIRE(geom.IsValid());
+
+	const auto onTable = [&](const bgl::SkinnedPlaybackDesc& playback) {
+		return bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(playback).SetSource(
+			bgl::PoseSource::kBoneAnimTable);
+	};
+
+	const auto tableRecordOf = [&](bgl::MeshInstanceHandle instance) {
+		auto&          playback = view->GetPlaybackArena();
+		const uint32_t offset =
+			view->GetMeshBuffer().AtIndex(instance.handle.index).playback.byteOffset;
+		REQUIRE(playback.GetTagAt(offset) == bgl::idl::PlaybackType::kSkinnedTable);
+		return playback.GetPayloadAt<bgl::idl::SkinnedTableState>(offset);
+	};
+
+	SECTION("a one-clip record becomes the table's clip, phase and rate")
+	{
+		const auto instance = view->CreateSkinnedMeshInstance(
+			onTable(bgl::SkinnedPlaybackDesc::FromClip(1, 4.5f, 2.0f)));
+		REQUIRE(instance.IsValid());
+
+		const auto table = tableRecordOf(instance);
+		CHECK(table.playback.clip == 1);
+		CHECK(table.playback.phase == Catch::Approx(4.5f));
+		CHECK(table.playback.rate == Catch::Approx(2.0f));
+		CHECK(
+			table.playback.rig.offset == scene->GetGeomSkinnedInfo(geom.handle.index).record.index);
+
+		// Still a placement with no slots of its own to read back or rewrite.
+		CHECK_THROWS_AS(view->GetSkinnedPlayback(instance), bgl::SceneError);
+	}
+
+	SECTION("the weighted slot need not be slot 0, nor weigh one")
+	{
+		auto record              = bgl::SkinnedPlaybackDesc();
+		record.slot[2].nodeIndex = 1;
+		record.slot[2].phase     = 3.0f;
+		record.slot[2].rate      = 0.5f;
+		record.slot[2].weight0   = 0.25f;
+		record.slot[2].weight1   = 0.25f;
+
+		const auto table = tableRecordOf(view->CreateSkinnedMeshInstance(onTable(record)));
+		CHECK(table.playback.clip == 1);
+		CHECK(table.playback.phase == Catch::Approx(3.0f));
+		CHECK(table.playback.rate == Catch::Approx(0.5f));
+	}
+
+	SECTION("a record the table cannot hold is refused, never cut down to one clip")
+	{
+		const uint32_t before = view->GetInstanceCount();
+
+		auto twoClips              = bgl::SkinnedPlaybackDesc::FromClip(0);
+		twoClips.slot[1].nodeIndex = 1;
+		twoClips.slot[1].weight0   = 1.0f;
+		twoClips.slot[1].weight1   = 1.0f;
+		CHECK_THROWS_AS(view->CreateSkinnedMeshInstance(onTable(twoClips)), bgl::SceneError);
+
+		auto fadingIn              = bgl::SkinnedPlaybackDesc::FromClip(0);
+		fadingIn.slot[0].weight0   = 0.0f;
+		fadingIn.slot[0].rampStart = 1.0f;
+		fadingIn.slot[0].rampEnd   = 2.0f;
+		CHECK_THROWS_AS(view->CreateSkinnedMeshInstance(onTable(fadingIn)), bgl::SceneError);
+
+		auto rebased         = bgl::SkinnedPlaybackDesc::FromClip(0);
+		rebased.slot[0].tRef = 2.0f;
+		CHECK_THROWS_AS(view->CreateSkinnedMeshInstance(onTable(rebased)), bgl::SceneError);
+
+		CHECK_THROWS_AS(
+			view->CreateSkinnedMeshInstance(onTable(bgl::SkinnedPlaybackDesc::FromClip(2))),
+			bgl::SceneError);
+		CHECK_THROWS_AS(
+			view->CreateSkinnedMeshInstance(onTable(bgl::SkinnedPlaybackDesc())),
+			bgl::SceneError);
+
+		CHECK(view->GetInstanceCount() == before);
 	}
 }
 
@@ -543,13 +640,14 @@ TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
 	auto* view       = viewHandle->As<bgl::SceneView>();
 	REQUIRE(view != nullptr);
 
-	const std::array<bgl::MaterialHandle, 1> materials = { { OpaquePbr(scene) } };
-	const auto                               geom      = scene->AddSkinnedMeshGeom(
-		MakeSkinnedMesh(),
-		0,
-		materials,
-		scene->AddRig(MakeRig(), MakeClips()),
-		c_AnyPose);
+	const std::array<bgl::MaterialHandle, 1> materials   = { { OpaquePbr(scene) } };
+	const auto                               skinnedMesh = MakeSkinnedMesh();
+	const auto                               geom        = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(MakeRig(), MakeClips()))
+			.SetPosedBounds(c_AnyPose));
 	REQUIRE(geom.IsValid());
 
 	// A crossfade from clip 0 to clip 1 over one second from t = 2, both sides rebased to that
@@ -599,9 +697,8 @@ TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
 	SECTION("a spawn on one clip reads back as that clip in slot 0")
 	{
 		const auto instance = view->CreateSkinnedMeshInstance(
-			geom,
-			glm::mat4(1.0f),
-			bgl::SkinnedInstanceDesc{ 1, 4.5f, 2.0f });
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(1, 4.5f, 2.0f)));
 
 		const auto got  = view->GetSkinnedPlayback(instance);
 		const auto want = bgl::SkinnedPlaybackDesc::FromClip(1, 4.5f, 2.0f);
@@ -611,9 +708,8 @@ TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
 	SECTION("a rewrite keeps the record's offset, kind and palette, and moves only its slots")
 	{
 		const auto instance = view->CreateSkinnedMeshInstance(
-			geom,
-			glm::mat4(1.0f),
-			bgl::SkinnedInstanceDesc{ 0, 0.0f, 1.0f });
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0)));
 
 		auto& meshBuffer = view->GetMeshBuffer();
 		auto& playback   = view->GetPlaybackArena();
@@ -636,21 +732,22 @@ TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
 
 	SECTION("a spawn on a whole record is the same record")
 	{
-		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), crossfade);
-		const auto got      = view->GetSkinnedPlayback(instance);
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(crossfade));
+		const auto got = view->GetSkinnedPlayback(instance);
 		for (uint32_t s = 0; s < bgl::c_BlendSlots; ++s) same(got.slot[s], crossfade.slot[s]);
 	}
 
 	SECTION("a record the rig cannot play is refused, at spawn and at rewrite")
 	{
 		const auto instance = view->CreateSkinnedMeshInstance(
-			geom,
-			glm::mat4(1.0f),
-			bgl::SkinnedInstanceDesc{ 0, 0.0f, 1.0f });
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0)));
 
 		const auto refused = [&](const bgl::SkinnedPlaybackDesc& bad) {
 			CHECK_THROWS_AS(
-				view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), bad),
+				view->CreateSkinnedMeshInstance(
+					bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(bad)),
 				bgl::SceneError);
 			CHECK_THROWS_AS(view->SetSkinnedPlayback(instance, bad), bgl::SceneError);
 		};
@@ -687,14 +784,17 @@ TEST_CASE("SetSkinnedPlayback rewrites the record in place", "[skinned]")
 
 	SECTION("a placement with no slots to rewrite is refused")
 	{
-		auto crowd       = bgl::SkinnedInstanceDesc{ 0, 0.0f, 1.0f };
-		crowd.source     = bgl::PoseSource::kBoneAnimTable;
-		const auto table = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), crowd);
+		const auto table = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(geom)
+				.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0))
+				.SetSource(bgl::PoseSource::kBoneAnimTable));
 		CHECK_THROWS_AS(view->SetSkinnedPlayback(table, crossfade), bgl::SceneError);
 		CHECK_THROWS_AS(view->GetSkinnedPlayback(table), bgl::SceneError);
 
-		const auto cube  = scene->AddCubeGeom(bgl::MaterialHandle());
-		const auto still = view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
+		const auto cube = scene->AddCubeGeom(bgl::MaterialHandle());
+		const auto still =
+			view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(cube));
 		CHECK_THROWS_AS(view->SetSkinnedPlayback(still, crossfade), bgl::SceneError);
 		CHECK_THROWS_AS(view->GetSkinnedPlayback(still), bgl::SceneError);
 
@@ -772,10 +872,18 @@ TEST_CASE("AddSkinnedMeshGeom refuses a mesh the skinned path could not draw", "
 	const bgl::RigHandle rig = scene->AddRig(MakeRig(), MakeClips());
 	REQUIRE(rig.IsValid());
 
+	const auto skinnedMesh = MakeSkinnedMesh();
+	const auto unskinned   = MakeSkinnedMesh(false);
+
 	SECTION("a submesh with no skin binding")
 	{
 		CHECK_THROWS_AS(
-			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(false), 0, materials, rig, c_AnyPose),
+			scene->AddSkinnedMeshGeom(
+				bgl::SkinnedMeshGeomDesc()
+					.SetMesh(&unskinned)
+					.SetMaterials(materials)
+					.SetRig(rig)
+					.SetPosedBounds(c_AnyPose)),
 			bgl::SceneError);
 	}
 
@@ -785,7 +893,12 @@ TEST_CASE("AddSkinnedMeshGeom refuses a mesh the skinned path could not draw", "
 			bgl::LoosePbrMaterialDesc()) } };
 
 		CHECK_THROWS_AS(
-			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, loose, rig, c_AnyPose),
+			scene->AddSkinnedMeshGeom(
+				bgl::SkinnedMeshGeomDesc()
+					.SetMesh(&skinnedMesh)
+					.SetMaterials(loose)
+					.SetRig(rig)
+					.SetPosedBounds(c_AnyPose)),
 			bgl::SceneError);
 	}
 
@@ -800,8 +913,12 @@ TEST_CASE("AddSkinnedMeshGeom refuses a mesh the skinned path could not draw", "
 			const std::array<bgl::MaterialHandle, 1> layered = { { scene->CreatePbrMaterial(
 				layerDesc) } };
 
-			const bgl::GeomHandle uploaded =
-				scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, layered, rig, c_AnyPose);
+			const bgl::GeomHandle uploaded = scene->AddSkinnedMeshGeom(
+				bgl::SkinnedMeshGeomDesc()
+					.SetMesh(&skinnedMesh)
+					.SetMaterials(layered)
+					.SetRig(rig)
+					.SetPosedBounds(c_AnyPose));
 
 			CHECK(uploaded.IsValid());
 		}
@@ -810,7 +927,13 @@ TEST_CASE("AddSkinnedMeshGeom refuses a mesh the skinned path could not draw", "
 	SECTION("a meshIndex past the mesh table")
 	{
 		CHECK_THROWS_AS(
-			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 1, materials, rig, c_AnyPose),
+			scene->AddSkinnedMeshGeom(
+				bgl::SkinnedMeshGeomDesc()
+					.SetMesh(&skinnedMesh)
+					.SetMeshIndex(1)
+					.SetMaterials(materials)
+					.SetRig(rig)
+					.SetPosedBounds(c_AnyPose)),
 			bgl::SceneError);
 	}
 
@@ -820,26 +943,62 @@ TEST_CASE("AddSkinnedMeshGeom refuses a mesh the skinned path could not draw", "
 			assetlib::Bounds{ glm::vec3(1.0f, -1.0f, -1.0f), glm::vec3(-1.0f, 1.0f, 1.0f) };
 
 		CHECK_THROWS_AS(
-			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, rig, inverted),
+			scene->AddSkinnedMeshGeom(
+				bgl::SkinnedMeshGeomDesc()
+					.SetMesh(&skinnedMesh)
+					.SetMaterials(materials)
+					.SetRig(rig)
+					.SetPosedBounds(inverted)),
+			bgl::SceneError);
+	}
+
+	SECTION("a desc that never names a posed box, or a mesh")
+	{
+		CHECK_THROWS_AS(
+			scene->AddSkinnedMeshGeom(
+				bgl::SkinnedMeshGeomDesc()
+					.SetMesh(&skinnedMesh)
+					.SetMaterials(materials)
+					.SetRig(rig)),
+			bgl::SceneError);
+		CHECK_THROWS_AS(
+			scene->AddSkinnedMeshGeom(
+				bgl::SkinnedMeshGeomDesc().SetMaterials(materials).SetRig(rig).SetPosedBounds(
+					c_AnyPose)),
 			bgl::SceneError);
 	}
 
 	SECTION("a rig that was never added, or was deleted")
 	{
 		CHECK_THROWS_AS(
-			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, bgl::RigHandle(), c_AnyPose),
+			scene->AddSkinnedMeshGeom(
+				bgl::SkinnedMeshGeomDesc()
+					.SetMesh(&skinnedMesh)
+					.SetMaterials(materials)
+					.SetRig(bgl::RigHandle())
+					.SetPosedBounds(c_AnyPose)),
 			bgl::SceneError);
 
 		const bgl::RigHandle retired = scene->AddRig(MakeRig(), MakeClips());
 		scene->DeleteRig(retired);
 		CHECK_THROWS_AS(
-			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, retired, c_AnyPose),
+			scene->AddSkinnedMeshGeom(
+				bgl::SkinnedMeshGeomDesc()
+					.SetMesh(&skinnedMesh)
+					.SetMaterials(materials)
+					.SetRig(retired)
+					.SetPosedBounds(c_AnyPose)),
 			bgl::SceneError);
 	}
 
 	// Every refusal above must leave the scene addable: a failed add that leaked its geometry half
 	// would show up here as a geom slot or a submesh range that never came back.
-	const auto good = scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, rig, c_AnyPose);
+	const auto good = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(materials)
+			.SetRig(rig)
+			.SetPosedBounds(c_AnyPose));
 	CHECK(good.IsValid());
 }
 
@@ -888,9 +1047,14 @@ TEST_CASE("a refused skinned add leaves the scene's arenas untouched", "[skinned
 	const bgl::RigHandle rig = scene->AddRig(MakeRig(), MakeClips());
 	REQUIRE(rig.IsValid());
 
+	const auto skinnedMesh         = MakeSkinnedMesh();
 	const auto offsetsOfAFreshGeom = [&] {
-		const auto geom =
-			scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, rig, c_AnyPose);
+		const auto geom = scene->AddSkinnedMeshGeom(
+			bgl::SkinnedMeshGeomDesc()
+				.SetMesh(&skinnedMesh)
+				.SetMaterials(materials)
+				.SetRig(rig)
+				.SetPosedBounds(c_AnyPose));
 		REQUIRE(geom.IsValid());
 
 		const uint32_t taken = scene->GetGeomSubmeshes(geom.handle.index).range.offsetStart;
@@ -900,11 +1064,22 @@ TEST_CASE("a refused skinned add leaves the scene's arenas untouched", "[skinned
 
 	const uint32_t beforeGeom = offsetsOfAFreshGeom();
 
-	CHECK_THROWS(scene->AddSkinnedMeshGeom(MakeSkinnedMesh(false), 0, materials, rig, c_AnyPose));
+	const auto unskinned = MakeSkinnedMesh(false);
+	CHECK_THROWS(scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&unskinned)
+			.SetMaterials(materials)
+			.SetRig(rig)
+			.SetPosedBounds(c_AnyPose)));
 
 	const std::array<bgl::MaterialHandle, 1> looseMaterials = { { scene->CreateLoosePbrMaterial(
 		bgl::LoosePbrMaterialDesc()) } };
-	CHECK_THROWS(scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, looseMaterials, rig, c_AnyPose));
+	CHECK_THROWS(scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(looseMaterials)
+			.SetRig(rig)
+			.SetPosedBounds(c_AnyPose)));
 
 	CHECK(offsetsOfAFreshGeom() == beforeGeom);
 
@@ -926,8 +1101,19 @@ TEST_CASE("skinned geoms share one rig, and it outlives them", "[skinned]")
 	const bgl::RigHandle rig = scene->AddRig(MakeRig(), MakeClips());
 	REQUIRE(rig.IsValid());
 
-	const auto first  = scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, rig, c_AnyPose);
-	const auto second = scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, rig, c_AnyPose);
+	const auto skinnedMesh = MakeSkinnedMesh();
+	const auto first       = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(materials)
+			.SetRig(rig)
+			.SetPosedBounds(c_AnyPose));
+	const auto second = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(materials)
+			.SetRig(rig)
+			.SetPosedBounds(c_AnyPose));
 	REQUIRE(first.IsValid());
 	REQUIRE(second.IsValid());
 
@@ -969,17 +1155,19 @@ TEST_CASE("a skinned submesh culls by its posed box, not its bind pose", "[skinn
 	const auto posed =
 		assetlib::Bounds{ glm::vec3(-100.0f, 0.0f, -100.0f), glm::vec3(100.0f, 300.0f, 100.0f) };
 
-	const auto skinned = scene->AddSkinnedMeshGeom(
-		MakeSkinnedMesh(),
-		0,
-		materials,
-		scene->AddRig(MakeRig(), MakeClips()),
-		posed);
+	const auto skinnedMesh = MakeSkinnedMesh();
+	const auto skinned     = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(MakeRig(), MakeClips()))
+			.SetPosedBounds(posed));
 	REQUIRE(skinned.IsValid());
 
 	// The same bytes as static geometry: its sphere is the cooked bind pose, so the two spheres
 	// differing is the whole point -- and a skinned add that ignored its box would match it.
-	const auto asStatic = scene->AddStaticMeshGeom(MakeSkinnedMesh(), 0, materials);
+	const auto asStatic = scene->AddStaticMeshGeom(
+		bgl::StaticMeshGeomDesc().SetMesh(&skinnedMesh).SetMaterials(materials));
 	REQUIRE(asStatic.IsValid());
 
 	auto& submeshBuffer = scene->GetSubmeshBuffer();
@@ -1430,12 +1618,13 @@ TEST_CASE("SetRigBlendParameters moves a run without moving the table", "[skinne
 	}
 }
 
-// The two doors onto a rig's node table are not the same door, and a caller that mixes them up
-// destroys an instance and never gets it back. A spawn desc names a *clip* and is checked against
-// the clip count; a playback slot names a *node* and is checked against the node count. So a blend
-// space -- which lives past the clips -- is reached by writing the record, never by spawning onto
-// it. Pinned here because the editor got this wrong and the symptom was a mesh that vanished.
-TEST_CASE("A blend space is reached through the record, not through the spawn", "[skinned][blend]")
+// A playback slot names a *node* of the rig's table -- its clips, then its blend spaces -- and is
+// checked against the node count, at spawn and at rewrite alike. The shared table holds clips only,
+// so a table spawn is checked against the clip count instead. Pinned because the editor once
+// confused the two counts and the symptom was a mesh that vanished.
+TEST_CASE(
+	"A blend space is reached through the record, and never from the table",
+	"[skinned][blend]")
 {
 	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 	REQUIRE(gfx != nullptr);
@@ -1453,29 +1642,37 @@ TEST_CASE("A blend space is reached through the record, not through the spawn", 
 		scene->AddRig(MakeRig(), MakeBlendClips(), bgl::FootPlantDesc(), MakeBlendSet());
 	REQUIRE(rig.IsValid());
 
-	const auto geom = scene->AddSkinnedMeshGeom(MakeSkinnedMesh(), 0, materials, rig, c_AnyPose);
+	const auto skinnedMesh = MakeSkinnedMesh();
+	const auto geom        = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&skinnedMesh)
+			.SetMaterials(materials)
+			.SetRig(rig)
+			.SetPosedBounds(c_AnyPose));
 	REQUIRE(geom.IsValid());
 
 	// Two clips, then one space: the space is node 2, one past the clip table.
 	constexpr uint32_t c_ClipCount = 2;
 	constexpr uint32_t c_SpaceNode = c_ClipCount;
 
-	SECTION("spawning onto the space node is refused, since a spawn desc names a clip")
-	{
-		auto onSpace = bgl::SkinnedInstanceDesc();
-		onSpace.clip = c_SpaceNode;
+	const auto onClip = bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+		bgl::SkinnedPlaybackDesc::FromClip(0));
 
-		CHECK_THROWS_AS(
-			view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), onSpace),
-			bgl::SceneError);
+	SECTION("a per-instance spawn onto the space node plays the space")
+	{
+		auto playing           = bgl::SkinnedPlaybackDesc::FromClip(c_SpaceNode);
+		playing.slot[0].param0 = 0.5f;
+		playing.slot[0].param1 = 0.5f;
+
+		const auto instance = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc(onClip).SetPlayback(playing));
+		REQUIRE(instance.IsValid());
+		CHECK(view->GetSkinnedPlayback(instance).slot[0].nodeIndex == c_SpaceNode);
 	}
 
 	SECTION("a record naming the space is accepted on an instance spawned onto a clip")
 	{
-		auto onClip = bgl::SkinnedInstanceDesc();
-		onClip.clip = 0;
-
-		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), onClip);
+		const auto instance = view->CreateSkinnedMeshInstance(onClip);
 		REQUIRE(instance.IsValid());
 
 		auto playing           = bgl::SkinnedPlaybackDesc::FromClip(c_SpaceNode);
@@ -1491,12 +1688,26 @@ TEST_CASE("A blend space is reached through the record, not through the spawn", 
 		CHECK(got.slot[0].param1 == 0.5f);
 	}
 
-	SECTION("a record past the node table is still refused")
+	SECTION("the table plays clips only, so a table spawn naming the space is refused")
 	{
-		auto onClip = bgl::SkinnedInstanceDesc();
-		onClip.clip = 0;
+		CHECK_THROWS_AS(
+			view->CreateSkinnedMeshInstance(
+				bgl::SkinnedMeshInstanceDesc()
+					.SetGeom(geom)
+					.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(c_SpaceNode))
+					.SetSource(bgl::PoseSource::kBoneAnimTable)),
+			bgl::SceneError);
+	}
 
-		const auto instance = view->CreateSkinnedMeshInstance(geom, glm::mat4(1.0f), onClip);
+	SECTION("a record past the node table is still refused, at spawn and at rewrite")
+	{
+		CHECK_THROWS_AS(
+			view->CreateSkinnedMeshInstance(
+				bgl::SkinnedMeshInstanceDesc(onClip).SetPlayback(
+					bgl::SkinnedPlaybackDesc::FromClip(c_SpaceNode + 1))),
+			bgl::SceneError);
+
+		const auto instance = view->CreateSkinnedMeshInstance(onClip);
 		REQUIRE(instance.IsValid());
 
 		CHECK_THROWS_AS(

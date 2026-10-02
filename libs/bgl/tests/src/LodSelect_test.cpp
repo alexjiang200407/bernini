@@ -136,10 +136,9 @@ namespace
 				{ 1, glm::vec3(-1.0f), glm::vec3(1.0f) },
 			} };
 			const auto material = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
+			const auto lodMesh  = bgl::test::MakeLodMesh(levels, 1, c_Thresholds);
 			geom                = scene->AddStaticMeshGeom(
-				bgl::test::MakeLodMesh(levels, 1, c_Thresholds),
-				0,
-				std::array{ material });
+				bgl::StaticMeshGeomDesc().SetMesh(&lodMesh).SetMaterials(std::array{ material }));
 			REQUIRE(geom.IsValid());
 
 			auto targetDesc     = bgl::RenderTargetDesc();
@@ -153,7 +152,8 @@ namespace
 		bgl::MeshInstanceHandle
 		Place(float distance)
 		{
-			placements.push_back(view->CreateStaticMeshInstance(geom, At(distance)));
+			placements.push_back(view->CreateStaticMeshInstance(
+				bgl::StaticMeshInstanceDesc().SetGeom(geom).SetTransform(At(distance))));
 			return placements.back();
 		}
 
@@ -259,7 +259,8 @@ TEST_CASE("the size test a tool reads chooses the level the cull chose", "[lod][
 	const glm::mat4 aside = glm::scale(
 		glm::translate(glm::mat4(1.0f), glm::vec3(3.0f, 1.0f, -9.0f)),
 		glm::vec3(0.5f, 1.5f, 1.0f));
-	lods.placements.push_back(lods.view->CreateStaticMeshInstance(lods.geom, aside));
+	lods.placements.push_back(lods.view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(lods.geom).SetTransform(aside)));
 	lods.Frame();
 
 	// Frame()'s camera stands at the origin looking down -Z, so its view is the identity.

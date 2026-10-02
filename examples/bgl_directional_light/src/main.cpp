@@ -17,6 +17,7 @@
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/SkyboxDesc.h>  // IWYU pragma: keep
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/Viewport.h>
 #include <bgpu/GpuContext.h>
 #include <cmath>
@@ -180,8 +181,8 @@ main(int argc, char** argv)
 		          .roughnessFactor = 0.95f }));
 
 		view->CreateStaticMeshInstance(
-			ground,
-			glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)));
+			bgl::StaticMeshInstanceDesc().SetGeom(ground).SetTransform(
+				glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f))));
 
 		// Dielectric to metal, left to right. The sun reaches the left of this row and not yet the
 		// right: a metal's kD is zero, so its whole answer is the specular lobe task 2 adds.
@@ -200,8 +201,8 @@ main(int argc, char** argv)
 				(static_cast<float>(i) - 0.5f * static_cast<float>(c_Spheres - 1u)) * c_Spacing;
 
 			view->CreateStaticMeshInstance(
-				sphere,
-				glm::translate(glm::mat4(1.0f), glm::vec3(x, c_SphereRadius, 0.0f)));
+				bgl::StaticMeshInstanceDesc().SetGeom(sphere).SetTransform(
+					glm::translate(glm::mat4(1.0f), glm::vec3(x, c_SphereRadius, 0.0f))));
 		}
 
 		const float aspect = static_cast<float>(width) / static_cast<float>(height);

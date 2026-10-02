@@ -178,7 +178,7 @@ flowchart TD
     SC -- "CreatePbrMaterial / CreateLoosePbrMaterial / CreateSurfaceMaterial" --> MH[MaterialHandle]
     SC -- "AddTextureAsset(ImageData)" --> TH[TextureAssetHandle]
 
-    GH -- "CreateStaticMeshInstance(geom, transform)" --> MI[MeshInstanceHandle]
+    GH -- "CreateStaticMeshInstance(StaticMeshInstanceDesc)" --> MI[MeshInstanceHandle]
     MI -- "belongs to" --> SV
     MH -- "bound per submesh" --> GH
     TH -- "sampled by" --> MH
@@ -373,7 +373,7 @@ flowchart TD
   alone (see [Game-Defined Surfaces § Hashed alpha](game_defined_surfaces.md#hashed-alpha)). An
   update cannot change the surface, which is what the record's kind and size were fixed by. @throws
   `SceneError` for all of the above.
-* **`AddStaticMeshGeom(mesh, meshIndex, materials)`** — `materials` is parallel to `mesh.materials`, and a
+* **`AddStaticMeshGeom(StaticMeshGeomDesc)`** — `materials` is parallel to `mesh->materials`, and a
   submesh whose material index is out of range is left unlit rather than rejected. Resolving those
   paths to handles is the caller's job — `gamelib`'s `AssetManager` is the only implementation of the
   baked-vs-loose branch that does it, so reach for it rather than rebuilding it.
@@ -540,7 +540,7 @@ view->SetExposure(env.exposure);
 auto material = scene->CreatePbrMaterial(
     { .baseColorFactor = glm::vec4(1.0f), .metallicFactor = 0.5f, .roughnessFactor = 0.5f });
 auto sphere = scene->AddSphereGeom(32, 32, 2.0f, material);
-view->CreateStaticMeshInstance(sphere, glm::mat4(1.0f));
+view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(sphere));
 
 auto camera = bgl::Camera();
 camera.LookAt({ 0.0f, 0.0f, 20.0f }, { 0.0f, 0.0f, 19.0f }, { 0.0f, 1.0f, 0.0f })

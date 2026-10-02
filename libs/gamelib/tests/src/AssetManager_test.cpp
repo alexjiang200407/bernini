@@ -482,7 +482,8 @@ TEST_CASE("AssetManager: an instance keeps its geometry alive", "[gamelib][asset
 
 	const bgl::GeomHandle geom = (*fx).AcquireMesh("Authored/Meshes/one.glb");
 
-	const bgl::MeshInstanceHandle inst = (*fx).CreateInstance(fx.view, geom, glm::mat4(1.0f));
+	const bgl::MeshInstanceHandle inst =
+		(*fx).CreateInstance(fx.view, bgl::StaticMeshInstanceDesc().SetGeom(geom));
 	REQUIRE(inst.IsValid());
 	CHECK((*fx).GeomRefCount(geom) == 2);  // ours + the instance's
 
@@ -519,12 +520,14 @@ TEST_CASE("AssetManager places instances into more than one view", "[gamelib][as
 
 	// A null view is refused here, not left to crash inside bgl.
 	REQUIRE_THROWS_AS(
-		(*fx).CreateInstance(bgl::SceneViewRef{}, geom, glm::mat4(1.0f)),
+		(*fx).CreateInstance(bgl::SceneViewRef{}, bgl::StaticMeshInstanceDesc().SetGeom(geom)),
 		bgl::SceneError);
 
 	// The same geometry, instanced once in each view.
-	const bgl::MeshInstanceHandle inFirst  = (*fx).CreateInstance(fx.view, geom, glm::mat4(1.0f));
-	const bgl::MeshInstanceHandle inSecond = (*fx).CreateInstance(second, geom, glm::mat4(1.0f));
+	const bgl::MeshInstanceHandle inFirst =
+		(*fx).CreateInstance(fx.view, bgl::StaticMeshInstanceDesc().SetGeom(geom));
+	const bgl::MeshInstanceHandle inSecond =
+		(*fx).CreateInstance(second, bgl::StaticMeshInstanceDesc().SetGeom(geom));
 
 	// Ours, plus one per instance -- across both views.
 	CHECK((*fx).GeomRefCount(geom) == 3);
@@ -622,8 +625,10 @@ TEST_CASE("AssetManager overrides one instance's material", "[gamelib][assets]")
 	const bgl::GeomHandle geom = (*fx).AcquireMesh("Authored/Meshes/one.glb");
 
 	// Two units, same mesh. One will wear a skin.
-	const bgl::MeshInstanceHandle worn  = (*fx).CreateInstance(fx.view, geom, glm::mat4(1.0f));
-	const bgl::MeshInstanceHandle plain = (*fx).CreateInstance(fx.view, geom, glm::mat4(1.0f));
+	const bgl::MeshInstanceHandle worn =
+		(*fx).CreateInstance(fx.view, bgl::StaticMeshInstanceDesc().SetGeom(geom));
+	const bgl::MeshInstanceHandle plain =
+		(*fx).CreateInstance(fx.view, bgl::StaticMeshInstanceDesc().SetGeom(geom));
 
 	const bgl::MaterialHandle m0 = (*fx).AcquireMaterial("Authored/Materials/m0.bmaterial");
 	(*fx).ReleaseMaterial(m0);
@@ -712,7 +717,8 @@ TEST_CASE(
 
 	const bgl::GeomHandle         geom = (*fx).AcquireMesh("Authored/Meshes/two.glb");
 	const bgl::MaterialHandle     m0   = (*fx).AcquireMaterial("Authored/Materials/m0.bmaterial");
-	const bgl::MeshInstanceHandle worn = (*fx).CreateInstance(fx.view, geom, glm::mat4(1.0f));
+	const bgl::MeshInstanceHandle worn =
+		(*fx).CreateInstance(fx.view, bgl::StaticMeshInstanceDesc().SetGeom(geom));
 	(*fx).ReleaseMaterial(m0);
 
 	// A registered look is not loaded until something wears it.
@@ -769,7 +775,8 @@ TEST_CASE("AssetManager refcounts procedural geometry", "[gamelib][assets]")
 	// Ours, plus one from each geom's single submesh.
 	CHECK((*fx).MaterialRefCount(mat) == 3);
 
-	const bgl::MeshInstanceHandle inst = (*fx).CreateInstance(fx.view, cube, glm::mat4(1.0f));
+	const bgl::MeshInstanceHandle inst =
+		(*fx).CreateInstance(fx.view, bgl::StaticMeshInstanceDesc().SetGeom(cube));
 	CHECK((*fx).GeomRefCount(cube) == 2);
 	(*fx).DestroyInstance(fx.view, inst);
 
@@ -1221,7 +1228,9 @@ TEST_CASE("AssetManager: an instance can be moved through the manager", "[gameli
 	const auto placed = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 2.0f, 3.0f));
 	const auto moved  = glm::translate(glm::mat4(1.0f), glm::vec3(-4.0f, 0.0f, 0.5f));
 
-	const bgl::MeshInstanceHandle inst = (*fx).CreateInstance(fx.view, geom, placed);
+	const bgl::MeshInstanceHandle inst = (*fx).CreateInstance(
+		fx.view,
+		bgl::StaticMeshInstanceDesc().SetGeom(geom).SetTransform(placed));
 	REQUIRE(inst.IsValid());
 
 	CHECK((*fx).GetInstanceTransform(fx.view, inst) == placed);
@@ -1247,11 +1256,11 @@ TEST_CASE("AssetManager: moving an instance it does not own is refused", "[gamel
 		materialIndices);
 
 	const bgl::GeomHandle geom = (*fx).AcquireMesh("Authored/Meshes/one.glb");
-	const auto            inst = (*fx).CreateInstance(fx.view, geom, glm::mat4(1.0f));
+	const auto inst = (*fx).CreateInstance(fx.view, bgl::StaticMeshInstanceDesc().SetGeom(geom));
 
 	// Placed directly on the view, so the manager never recorded it.
 	const bgl::MeshInstanceHandle foreign =
-		fx.view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		fx.view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 
 	REQUIRE_THROWS_AS(
 		(*fx).SetInstanceTransform(fx.view, foreign, glm::mat4(1.0f)),

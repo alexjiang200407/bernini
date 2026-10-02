@@ -10,6 +10,7 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SkyboxDesc.h>  // IWYU pragma: keep
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgpu/GpuContext.h>
 #include <cmath>
 #include <core/err/util.h>
@@ -122,7 +123,7 @@ main(int argc, char** argv)
 		      .roughnessFactor = 0.25f });
 
 		auto sphere = scene->AddSphereGeom(48, 48, 2.0f, material);
-		view->CreateStaticMeshInstance(sphere, glm::mat4(1.0f));
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(sphere));
 
 		auto camera = bgl::Camera();
 		camera.LookAt({ 0.0f, 0.0f, 8.0f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f })
