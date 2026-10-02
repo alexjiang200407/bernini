@@ -173,11 +173,13 @@ TEST_CASE("what a street's verge of grass costs the grass pass at 4K", "[.grassc
 		glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, c_StreetLength * 0.5f)) *
 		glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 	const auto streetGeom = scene->AddPlaneGeom(1, 1, 20.0f, c_StreetLength, ground);
-	static_cast<void>(view->CreateStaticMeshInstance(streetGeom, flat));
+	static_cast<void>(view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(streetGeom).SetTransform(flat)));
 
 	// The grass rides its own geom placed at the origin, so its clumps sit where they were generated.
 	const auto vergeGeom = scene->AddPlaneGeom(1, 1, 0.01f, 0.01f, ground);
-	static_cast<void>(view->CreateStaticMeshInstance(vergeGeom, glm::mat4(1.0f)));
+	static_cast<void>(
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(vergeGeom)));
 
 	auto look                                   = bgl::GrassDesc();
 	look.material                               = green;

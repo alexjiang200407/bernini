@@ -19,6 +19,8 @@
 #include <bgl/types/MeshInstanceHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/RigHandle.h>
+#include <bgl/types/SkinnedMeshInstanceDesc.h>
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <bgl/types/TextureAssetHandle.h>
 #include <core/str/str.h>
@@ -385,15 +387,15 @@ namespace game
 		SetGrassLook(std::string_view look, const assetlib::BGrass& authored);
 
 		/**
-		 * Places `geom` in `view` at `transform`. The instance holds a reference on the geometry, so
-		 * geometry cannot be deleted while it is still being drawn, and holds `view` too, so the view it
-		 * lives in outlives it. `view` must draw this manager's scene.
+		 * Places `desc.geom` in `view` at `desc.transform`. The instance holds a reference on the
+		 * geometry, so geometry cannot be deleted while it is still being drawn, and holds `view` too,
+		 * so the view it lives in outlives it. `view` must draw this manager's scene.
 		 *
 		 * @throws bgl::SceneError if `view` is null, or the geom is not one this manager owns or has
 		 *         expired.
 		 */
 		bgl::MeshInstanceHandle
-		CreateInstance(bgl::SceneViewRef view, bgl::GeomHandle geom, const glm::mat4& transform);
+		CreateInstance(bgl::SceneViewRef view, const bgl::StaticMeshInstanceDesc& desc);
 
 		/**
 		 * Moves where each sample of `geom`'s rig's blend spaces plays alone, and nothing else.
@@ -420,22 +422,18 @@ namespace game
 		SetBlendParameters(bgl::GeomHandle geom, std::span<const BlendSpaceInfo> spaces);
 
 		/**
-		 * The skinned counterpart of CreateInstance: places a geom AcquireSkinnedMesh returned, spawned
-		 * on `desc`'s clip, phase and rate and posed from its `source`. The same references are taken
-		 * and the same DestroyInstance releases them.
+		 * The skinned counterpart of CreateInstance: places `desc.geom`, which AcquireSkinnedMesh
+		 * returned, spawned on `desc.playback` and posed from `desc.source`. The same references are
+		 * taken and the same DestroyInstance releases them.
 		 *
 		 * `PoseSource::kBoneAnimTable` reserves the rig's table on the first such instance -- see
 		 * ISceneView::CreateSkinnedMeshInstance for what that costs.
 		 *
 		 * @throws bgl::SceneError if `view` is null, the geom is not this manager's or has expired, or
-		 *         `desc.clip` is out of the geom's clip table.
+		 *         for anything ISceneView::CreateSkinnedMeshInstance refuses.
 		 */
 		bgl::MeshInstanceHandle
-		CreateSkinnedInstance(
-			bgl::SceneViewRef               view,
-			bgl::GeomHandle                 geom,
-			const glm::mat4&                transform,
-			const bgl::SkinnedInstanceDesc& desc);
+		CreateSkinnedInstance(bgl::SceneViewRef view, const bgl::SkinnedMeshInstanceDesc& desc);
 
 		/**
 		 * Destroys `instance` in `view` and drops its reference on its geometry. `view` is the one it was
@@ -856,14 +854,72 @@ namespace game
 			std::vector<BlendSpaceInfo> spaces;
 		};
 
+		/**
+		 * What AcquireRig is asked for. `animationsNorm` is the rig's identity; everything it points
+		 * at is borrowed for the call.
+		 */
+		struct RigDesc
+		{
+			std::string_view              animationsNorm;
+			std::string_view              blendNorm;
+			const assetlib::Skeleton*     skeleton   = nullptr;
+			const assetlib::AnimationSet* animations = nullptr;
+			const assetlib::BMesh*        mesh       = nullptr;
+
+			// Null when the acquire names no blend set.
+			const assetlib::BlendSet* blendSet = nullptr;
+
+			template <typename Self>
+			Self&&
+			SetAnimationsNorm(this Self&& self, std::string_view animationsNorm) noexcept
+			{
+				self.animationsNorm = animationsNorm;
+				return std::forward<Self>(self);
+			}
+
+			template <typename Self>
+			Self&&
+			SetBlendNorm(this Self&& self, std::string_view blendNorm) noexcept
+			{
+				self.blendNorm = blendNorm;
+				return std::forward<Self>(self);
+			}
+
+			template <typename Self>
+			Self&&
+			SetSkeleton(this Self&& self, const assetlib::Skeleton* skeleton) noexcept
+			{
+				self.skeleton = skeleton;
+				return std::forward<Self>(self);
+			}
+
+			template <typename Self>
+			Self&&
+			SetAnimations(this Self&& self, const assetlib::AnimationSet* animations) noexcept
+			{
+				self.animations = animations;
+				return std::forward<Self>(self);
+			}
+
+			template <typename Self>
+			Self&&
+			SetMesh(this Self&& self, const assetlib::BMesh* mesh) noexcept
+			{
+				self.mesh = mesh;
+				return std::forward<Self>(self);
+			}
+
+			template <typename Self>
+			Self&&
+			SetBlendSet(this Self&& self, const assetlib::BlendSet* blendSet) noexcept
+			{
+				self.blendSet = blendSet;
+				return std::forward<Self>(self);
+			}
+		};
+
 		[[nodiscard]] AcquiredRig
-		AcquireRig(
-			std::string_view              animationsNorm,
-			std::string_view              blendNorm,
-			const assetlib::Skeleton&     skeleton,
-			const assetlib::AnimationSet& animations,
-			const assetlib::BMesh&        mesh,
-			const assetlib::BlendSet*     blendSet);
+		AcquireRig(const RigDesc& desc);
 
 		/**
 		 * `blendSet`'s spaces resolved against `animations`: a sample's clip name becomes the index

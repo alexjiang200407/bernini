@@ -119,7 +119,8 @@ namespace
 			      .metallicFactor  = 0.0f,
 			      .roughnessFactor = 0.3f });
 
-			view->CreateStaticMeshInstance(scene->AddCubeGeom(white), glm::mat4(1.0f));
+			view->CreateStaticMeshInstance(
+				bgl::StaticMeshInstanceDesc().SetGeom(scene->AddCubeGeom(white)));
 
 			auto camera = bgl::Camera();
 			camera
@@ -202,7 +203,7 @@ TEST_CASE("Bloom spills a bright silhouette and honours its settings", "[bloom][
 	auto geom = scene->AddCubeGeom(bgl::MaterialHandle());
 	REQUIRE(geom.IsValid());
 
-	auto instance = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+	auto instance = view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 	REQUIRE(instance.IsValid());
 
 	auto camera = bgl::Camera();
@@ -338,7 +339,7 @@ TEST_CASE("An exhausted RTV pool skips bloom instead of failing the frame", "[bl
 	auto view  = gfx->CreateSceneView(scene, 4);
 
 	auto geom = scene->AddCubeGeom(bgl::MaterialHandle());
-	view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+	view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 
 	auto camera = bgl::Camera();
 	camera
@@ -397,7 +398,7 @@ TEST_CASE("Bloom survives a resize, fed by the TAA resolve", "[bloom][render]")
 	auto view  = gfx->CreateSceneView(scene, 4);
 
 	auto geom = scene->AddCubeGeom(bgl::MaterialHandle());
-	view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+	view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 
 	auto camera = bgl::Camera();
 	camera

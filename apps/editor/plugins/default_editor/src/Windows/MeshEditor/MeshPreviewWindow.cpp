@@ -39,6 +39,8 @@
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/types/Camera.h>
+#include <bgl/types/StaticMeshGeomDesc.h>
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <cstddef>
 #include <cstdint>
 #include <editor_plugin_api/localize.h>
@@ -214,7 +216,9 @@ MeshPreviewWindow::ShowDefaultSphere()
 			m_Geoms.push_back(context.scene.AddSphereGeom(32, 32, 1.0f, m_DefaultMaterial));
 			m_GeomLods.emplace_back();
 			m_Instances.push_back(
-				{ view->CreateStaticMeshInstance(m_Geoms.back(), glm::mat4(1.0f)), 0 });
+				{ view->CreateStaticMeshInstance(
+					  bgl::StaticMeshInstanceDesc().SetGeom(m_Geoms.back())),
+			      0 });
 
 			// The sphere's triangles never exist on the CPU, so its raycast shadow is analytic.
 			m_Raycaster.AddInstance(m_Raycaster.AddSphere(1.0f), glm::mat4(1.0f));
@@ -333,7 +337,8 @@ MeshPreviewWindow::LoadMesh(const std::filesystem::path& path)
 					geomForMesh.try_emplace(node.mesh, static_cast<uint32_t>(m_Geoms.size()));
 				if (inserted)
 				{
-					m_Geoms.push_back(scene->AddStaticMeshGeom(mesh, node.mesh, {}));
+					m_Geoms.push_back(scene->AddStaticMeshGeom(
+						bgl::StaticMeshGeomDesc().SetMesh(&mesh).SetMeshIndex(node.mesh)));
 					m_GeomLods.push_back(editor::LodsOf(mesh, node.mesh));
 					raycastGeoms.push_back(m_Raycaster.AddMesh(mesh, node.mesh));
 
@@ -366,7 +371,10 @@ MeshPreviewWindow::LoadMesh(const std::filesystem::path& path)
 
 				const glm::mat4 world = bmesh::GetInstanceTransform(mesh, nodeIndex);
 				m_Instances.push_back(
-					{ view->CreateStaticMeshInstance(m_Geoms[it->second], world),
+					{ view->CreateStaticMeshInstance(
+						  bgl::StaticMeshInstanceDesc()
+							  .SetGeom(m_Geoms[it->second])
+							  .SetTransform(world)),
 				      it->second,
 				      world });
 				m_Raycaster.AddInstance(raycastGeoms[it->second], world);

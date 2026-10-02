@@ -15,6 +15,7 @@
 #include <bgl/types/MeshInstanceFlags.h>
 #include <bgl/types/MeshInstanceHandle.h>
 #include <bgl/types/SkinnedMeshInstanceDesc.h>
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/WindDesc.h>
 #include <bgpu/uniforms/UniformsBase.h>
 #include <core/ref/Ref.h>
@@ -56,47 +57,22 @@ namespace bgl
 		 * Places an instance of `geom` in this view, one drawable per submesh.
 		 */
 		virtual MeshInstanceHandle
-		CreateStaticMeshInstance(GeomHandle geom, glm::mat4 transform) = 0;
+		CreateStaticMeshInstance(const StaticMeshInstanceDesc& desc) = 0;
 
 		/**
-		 * The kSkinnedMesh counterpart of CreateStaticMeshInstance. Deleted through the same
+		 * The kSkinnedMesh counterpart of CreateStaticMeshInstance: the placement `desc` describes,
+		 * its record posed from its source -- see SkinnedMeshInstanceDesc. Deleted through the same
 		 * DeleteMeshInstance as any other placement.
 		 *
-		 * @throws SceneError if `geom` is not a live kSkinnedMesh geom, `desc.clip` is out of range,
-		 *         or -- with `desc.source` kBoneAnimTable or kAuto -- the rig's bone anim table
+		 * @throws SceneError if `desc.geom` is not a live kSkinnedMesh geom; a slot names a node
+		 *         past the rig's table, a weight is negative, a ramp ends before it starts, a value
+		 *         is not finite, or no slot carries any weight; `desc.source` is kAuto, which no pass
+		 *         draws yet; with kBoneAnimTable, the record is not one clip, or the rig's table
 		 *         cannot be reserved.
-		 * @post With either source, the *first* such instance on a rig reserves its table:
+		 * @post With kBoneAnimTable, the *first* such instance on a rig reserves its table:
 		 *       `boneCount * frameCount` skinning matrices of device memory, tens of megabytes on a
 		 *       dense rig, filled by the next frame this view is drawn. Later instances on the same
 		 *       rig cost nothing.
-		 */
-		virtual MeshInstanceHandle
-		CreateSkinnedMeshInstance(
-			GeomHandle                 geom,
-			glm::mat4                  transform,
-			const SkinnedInstanceDesc& desc) = 0;
-
-		/**
-		 * The same placement spawned on a whole playback record rather than one clip. Always the
-		 * per-instance source: a blend has nowhere to live on a pose the whole rig shares.
-		 *
-		 * @throws SceneError if `geom` is not a live kSkinnedMesh geom, a slot names a node past
-		 *         the rig's table, a weight is negative, a ramp ends before it starts, a value is
-		 *         not finite, or no slot carries any weight.
-		 */
-		virtual MeshInstanceHandle
-		CreateSkinnedMeshInstance(
-			GeomHandle                 geom,
-			glm::mat4                  transform,
-			const SkinnedPlaybackDesc& desc) = 0;
-
-		/**
-		 * The placement `desc` describes: its record, posed from its source -- see
-		 * SkinnedMeshInstanceDesc.
-		 *
-		 * @throws SceneError if `desc.geom` is not a live kSkinnedMesh geom, the record fails the
-		 *         checks the overload above makes, `desc.source` is kBoneAnimTable, or it is kAuto
-		 *         and the rig's table cannot be reserved.
 		 */
 		virtual MeshInstanceHandle
 		CreateSkinnedMeshInstance(const SkinnedMeshInstanceDesc& desc) = 0;

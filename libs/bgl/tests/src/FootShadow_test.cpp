@@ -249,8 +249,13 @@ namespace
 		// The plane geoms are authored in XY; this lays one flat with its normal up.
 		const auto groundGeom = result.scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, white);
 		result.ground         = result.view->CreateStaticMeshInstance(
-			groundGeom,
-			glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)));
+			bgl::StaticMeshInstanceDesc()
+				.SetGeom(groundGeom)
+				.SetTransform(
+					glm::rotate(
+						glm::mat4(1.0f),
+						glm::radians(-90.0f),
+						glm::vec3(1.0f, 0.0f, 0.0f))));
 
 		const std::array<bgl::MaterialHandle, 1> materials = { { white } };
 
@@ -258,12 +263,13 @@ namespace
 			result.scene->AddRig(MakeTwoLegRig(), MakeStance(rightLift), legs);
 		REQUIRE(rig.IsValid());
 
-		result.geom = result.scene->AddSkinnedMeshGeom(
-			MakeSkinnedTriangle(),
-			0,
-			materials,
-			rig,
-			assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
+		const auto triangle = MakeSkinnedTriangle();
+		result.geom         = result.scene->AddSkinnedMeshGeom(
+			bgl::SkinnedMeshGeomDesc()
+				.SetMesh(&triangle)
+				.SetMaterials(materials)
+				.SetRig(rig)
+				.SetPosedBounds(assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) }));
 		REQUIRE(result.geom.IsValid());
 		return result;
 	}
@@ -312,9 +318,10 @@ TEST_CASE(
 	{
 		const FootScene feet     = MakeFootScene(c_Lift, false);
 		const auto      instance = feet.view->CreateSkinnedMeshInstance(
-			feet.geom,
-			glm::translate(glm::mat4(1.0f), where),
-			bgl::SkinnedInstanceDesc{ 0, 0.0f, 0.0f });
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(feet.geom)
+				.SetTransform(glm::translate(glm::mat4(1.0f), where))
+				.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 
 		auto target = feet.gfx->CreateRenderTarget(targetDesc);
 		job.view    = feet.view;
@@ -333,9 +340,8 @@ TEST_CASE(
 	{
 		const FootScene feet     = MakeFootScene(c_Lift, true);
 		const auto      instance = feet.view->CreateSkinnedMeshInstance(
-			feet.geom,
-			glm::mat4(1.0f),
-			bgl::SkinnedInstanceDesc{ 0, 0.0f, 0.0f });
+			bgl::SkinnedMeshInstanceDesc().SetGeom(feet.geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 
 		auto target = feet.gfx->CreateRenderTarget(targetDesc);
 		job.view    = feet.view;
@@ -365,9 +371,8 @@ TEST_CASE(
 
 	const FootScene feet     = MakeFootScene(c_Lift, false);
 	const auto      instance = feet.view->CreateSkinnedMeshInstance(
-		feet.geom,
-		glm::mat4(1.0f),
-		bgl::SkinnedInstanceDesc{ 0, 0.0f, 0.0f });
+		bgl::SkinnedMeshInstanceDesc().SetGeom(feet.geom).SetPlayback(
+			bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 
 	auto targetDesc     = bgl::RenderTargetDesc();
 	targetDesc.width    = static_cast<int>(c_Width);
@@ -481,9 +486,8 @@ TEST_CASE("only a hero whose rig authored legs may cast foot shadows", "[blobsha
 	desc.feet = bgl::FootShadowDesc();
 
 	const auto hero = feet.view->CreateSkinnedMeshInstance(
-		feet.geom,
-		glm::mat4(1.0f),
-		bgl::SkinnedInstanceDesc{ 0, 0.0f, 0.0f });
+		bgl::SkinnedMeshInstanceDesc().SetGeom(feet.geom).SetPlayback(
+			bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 
 	SECTION("a hero with legs takes the record, and gets it back")
 	{
@@ -501,9 +505,10 @@ TEST_CASE("only a hero whose rig authored legs may cast foot shadows", "[blobsha
 	SECTION("a crowd instance, a static placement and a rig without legs are refused")
 	{
 		const auto crowd = feet.view->CreateSkinnedMeshInstance(
-			feet.geom,
-			glm::mat4(1.0f),
-			bgl::SkinnedInstanceDesc{ 0, 0.0f, 1.0f, bgl::PoseSource::kBoneAnimTable });
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(feet.geom)
+				.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0))
+				.SetSource(bgl::PoseSource::kBoneAnimTable));
 		CHECK_THROWS_AS(feet.view->SetBlobShadow(crowd, desc), bgl::SceneError);
 		CHECK_THROWS_AS(feet.view->SetBlobShadow(feet.ground, desc), bgl::SceneError);
 
@@ -511,16 +516,16 @@ TEST_CASE("only a hero whose rig authored legs may cast foot shadows", "[blobsha
 			feet.scene->AddRig(MakeTwoLegRig(), MakeStance(0.0f), bgl::FootPlantDesc());
 		const std::array<bgl::MaterialHandle, 1> materials = { { feet.scene->CreatePbrMaterial(
 			bgl::PbrMaterialDesc()) } };
+		const auto                               triangle  = MakeSkinnedTriangle();
 		const auto                               geom      = feet.scene->AddSkinnedMeshGeom(
-			MakeSkinnedTriangle(),
-			0,
-			materials,
-			legless,
-			assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) });
+			bgl::SkinnedMeshGeomDesc()
+				.SetMesh(&triangle)
+				.SetMaterials(materials)
+				.SetRig(legless)
+				.SetPosedBounds(assetlib::Bounds{ glm::vec3(-4.0f), glm::vec3(4.0f) }));
 		const auto leglessHero = feet.view->CreateSkinnedMeshInstance(
-			geom,
-			glm::mat4(1.0f),
-			bgl::SkinnedInstanceDesc{ 0, 0.0f, 0.0f });
+			bgl::SkinnedMeshInstanceDesc().SetGeom(geom).SetPlayback(
+				bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 		CHECK_THROWS_AS(feet.view->SetBlobShadow(leglessHero, desc), bgl::SceneError);
 
 		// The body disc alone is still anyone's.

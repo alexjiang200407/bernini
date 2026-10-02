@@ -75,7 +75,7 @@ namespace
 		auto scene = gfx->CreateScene(desc);
 		auto view  = gfx->CreateSceneView(scene, 8);
 		auto cube  = scene->AddCubeGeom();
-		view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(cube));
 		return view;
 	}
 

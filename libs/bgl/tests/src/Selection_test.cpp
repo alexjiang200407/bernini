@@ -54,8 +54,8 @@ TEST_CASE("Submesh selection marks", "[selection][scene]")
 	auto geom = scene->AddCubeGeom(material);
 	REQUIRE(geom.IsValid());
 
-	auto first  = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
-	auto second = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+	auto first  = view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
+	auto second = view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 
 	SECTION("An instance starts unselected")
 	{
@@ -120,7 +120,7 @@ TEST_CASE("Submesh selection marks", "[selection][scene]")
 		view->SetSubmeshSelected(first, 0, true);
 		view->DeleteMeshInstance(first);
 
-		auto reused = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		auto reused = view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 		CHECK_FALSE(view->IsSubmeshSelected(reused, 0));
 
 		const auto selected = view->GetSelectedInstances();

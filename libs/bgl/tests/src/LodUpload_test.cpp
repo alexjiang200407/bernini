@@ -81,10 +81,9 @@ TEST_CASE("every level of a mesh uploads into its geom, level-major", "[lod][geo
 	REQUIRE(scene != nullptr);
 
 	const auto material = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
+	const auto lodMesh  = MakeLodMesh(c_TwoLevels, 2, { 120.0f, 0.0f });
 	const auto geom     = scene->AddStaticMeshGeom(
-		MakeLodMesh(c_TwoLevels, 2, { 120.0f, 0.0f }),
-		0,
-		std::array{ material });
+		bgl::StaticMeshGeomDesc().SetMesh(&lodMesh).SetMaterials(std::array{ material }));
 	REQUIRE(geom.IsValid());
 
 	const bgl::idl::LodSubmeshRange& onCpu = scene->GetGeomSubmeshes(geom.handle.index);
@@ -127,7 +126,7 @@ TEST_CASE("every level of a mesh uploads into its geom, level-major", "[lod][geo
 	SECTION("a placement holds one instance per source submesh")
 	{
 		auto view = gfx->CreateSceneView(sceneHandle, 8);
-		view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 		CHECK(view->GetInstanceCount() == 2u);
 	}
 
@@ -159,8 +158,9 @@ TEST_CASE("a mesh without levels uploads as one, never dropped", "[lod][geom]")
 	auto  sceneHandle = gfx->CreateScene(LodSceneDesc());
 	auto* scene       = sceneHandle->As<bgl::Scene>();
 
-	const std::array<EntrySpec, 1> single = { { c_TwoLevels[0] } };
-	const auto geom = scene->AddStaticMeshGeom(MakeLodMesh(single, 1, {}), 0, {});
+	const std::array<EntrySpec, 1> single  = { { c_TwoLevels[0] } };
+	const auto                     lodMesh = MakeLodMesh(single, 1, {});
+	const auto geom = scene->AddStaticMeshGeom(bgl::StaticMeshGeomDesc().SetMesh(&lodMesh));
 
 	const bgl::idl::Geom& onGpu = scene->GetGeomBuffer()[scene->GetGeomEntry(geom.handle.index)];
 	CHECK(onGpu.submeshes.lodCount == 1u);

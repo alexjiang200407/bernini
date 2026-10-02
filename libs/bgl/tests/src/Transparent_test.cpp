@@ -35,7 +35,9 @@ namespace
 
 		auto material = scene->CreatePbrMaterial(desc);
 		auto plane    = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, material);
-		view->CreateStaticMeshInstance(plane, glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, z)));
+		view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(plane).SetTransform(
+				glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, z))));
 	}
 
 	// A plane whose surface finish, layer and transmission are the variables. `metallic` at 1 drives
@@ -61,7 +63,9 @@ namespace
 
 		auto material = scene->CreatePbrMaterial(desc);
 		auto plane    = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, material);
-		view->CreateStaticMeshInstance(plane, glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, z)));
+		view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(plane).SetTransform(
+				glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, z))));
 	}
 
 	// The same blend material authored the other way: a loose material routes its channels
@@ -83,7 +87,9 @@ namespace
 
 		auto material = scene->CreateLoosePbrMaterial(desc);
 		auto plane    = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, material);
-		view->CreateStaticMeshInstance(plane, glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, z)));
+		view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(plane).SetTransform(
+				glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, z))));
 	}
 }
 

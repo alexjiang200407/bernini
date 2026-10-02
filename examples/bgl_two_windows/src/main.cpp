@@ -1,6 +1,7 @@
 #include <DemoWindow.h>
 #include <SDL3/SDL_messagebox.h>
 #include <bgl/IGraphics.h>
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgpu/GpuContext.h>
 #include <cstdint>
 #include <stdexcept>
@@ -76,7 +77,7 @@ main(int, char**)
 		auto cubeScene = gfx->CreateScene(sceneDesc);
 		auto cubeView  = gfx->CreateSceneView(cubeScene, 8);
 		auto cubeGeomA = cubeScene->AddCubeGeom();
-		cubeView->CreateStaticMeshInstance(cubeGeomA, glm::mat4(1.0f));
+		cubeView->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(cubeGeomA));
 
 		auto cubeJob     = bgl::RenderJob();
 		cubeJob.view     = cubeView;
@@ -90,8 +91,9 @@ main(int, char**)
 
 		auto secondTransform  = glm::mat4(1.0f);
 		secondTransform[3][0] = -5.0f;
-		twoView->CreateStaticMeshInstance(cubeGeomB, glm::mat4(1.0f));
-		twoView->CreateStaticMeshInstance(cubeGeomB, secondTransform);
+		twoView->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(cubeGeomB));
+		twoView->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(cubeGeomB).SetTransform(secondTransform));
 
 		auto twoJob     = bgl::RenderJob();
 		twoJob.view     = twoView;

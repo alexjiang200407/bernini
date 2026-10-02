@@ -26,7 +26,9 @@
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/SkinnedMeshInstanceDesc.h>
 #include <bgl/types/SkyboxDesc.h>  // IWYU pragma: keep
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/Viewport.h>
 #include <bgpu/GpuContext.h>
 #include <cmath>
@@ -257,17 +259,18 @@ main(int argc, char** argv)
 		// Plane geoms are authored in XY; this lays the ground flat with its normal up.
 		const glm::mat4 flat =
 			glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-		(void)view->CreateStaticMeshInstance(ground, flat);
+		(void)view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(ground).SetTransform(flat));
 
 		// Two receivers of different heights across the caster's path: the disc should climb onto
 		// each top and drape over its edges rather than vanish beneath it. The cube geom spans
 		// [-1, 1] on every axis, so the half extents are the box's half size.
 		(void)view->CreateStaticMeshInstance(
-			crate,
-			Box(glm::vec3(2.5f, 0.6f, 0.0f), glm::vec3(1.5f, 0.6f, 1.5f)));
+			bgl::StaticMeshInstanceDesc().SetGeom(crate).SetTransform(
+				Box(glm::vec3(2.5f, 0.6f, 0.0f), glm::vec3(1.5f, 0.6f, 1.5f))));
 		(void)view->CreateStaticMeshInstance(
-			crate,
-			Box(glm::vec3(-2.5f, 0.3f, 0.0f), glm::vec3(1.0f, 0.3f, 1.0f)));
+			bgl::StaticMeshInstanceDesc().SetGeom(crate).SetTransform(
+				Box(glm::vec3(-2.5f, 0.3f, 0.0f), glm::vec3(1.0f, 0.3f, 1.0f))));
 
 		// An optional static receiver from a project, at the origin in the caster's path: a
 		// cutout or hashed mesh shows the shadow dappling through its coverage rather than
@@ -309,8 +312,9 @@ main(int argc, char** argv)
 
 				(void)staticAssets->CreateInstance(
 					view,
-					staticAssets->AcquireMesh(staticDoc.source, meshIndex),
-					headless::InstanceTransform(staticModel, n));
+					bgl::StaticMeshInstanceDesc()
+						.SetGeom(staticAssets->AcquireMesh(staticDoc.source, meshIndex))
+						.SetTransform(headless::InstanceTransform(staticModel, n)));
 			}
 		}
 
@@ -405,8 +409,9 @@ main(int argc, char** argv)
 					casterParts.emplace_back(
 						casterAssets->CreateInstance(
 							view,
-							casterAssets->AcquireMesh(document.source, meshIndex),
-							local),
+							bgl::StaticMeshInstanceDesc()
+								.SetGeom(casterAssets->AcquireMesh(document.source, meshIndex))
+								.SetTransform(local)),
 						local);
 					headless::GrowBounds(
 						bounds,
@@ -441,12 +446,10 @@ main(int argc, char** argv)
 				casterParts.emplace_back(
 					casterAssets->CreateSkinnedInstance(
 						view,
-						placement.geom,
-						placement.local,
-						bgl::SkinnedInstanceDesc{ clip,
-				                                  0.0f,
-				                                  1.0f,
-				                                  bgl::PoseSource::kPerInstance }),
+						bgl::SkinnedMeshInstanceDesc()
+							.SetGeom(placement.geom)
+							.SetTransform(placement.local)
+							.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(clip))),
 					placement.local);
 			}
 			if (casterParts.empty())
@@ -469,8 +472,8 @@ main(int argc, char** argv)
 		{
 			casterParts.emplace_back(
 				view->CreateStaticMeshInstance(
-					ball,
-					glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, c_Hover, 0.0f))),
+					bgl::StaticMeshInstanceDesc().SetGeom(ball).SetTransform(
+						glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, c_Hover, 0.0f)))),
 				glm::mat4(1.0f));
 		}
 
@@ -523,8 +526,8 @@ main(int argc, char** argv)
 
 		// A grounded twin for contrast: its disc is at full strength and never moves.
 		const bgl::MeshInstanceHandle rester = view->CreateStaticMeshInstance(
-			ball,
-			glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, c_CasterRadius, 2.5f)));
+			bgl::StaticMeshInstanceDesc().SetGeom(ball).SetTransform(
+				glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, c_CasterRadius, 2.5f))));
 		view->SetBlobShadow(
 			rester,
 			bgl::BlobShadowDesc{ .radius     = c_DiscRadius,

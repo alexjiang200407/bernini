@@ -26,29 +26,6 @@ namespace bgl
 		kAuto,
 	};
 
-	/**
-	 * What a skinned instance is spawned with, written once and never per frame. The pose at
-	 * RenderJob::time `t` is frame `phase + t * rate * sampleRate`, wrapped over the clip when it
-	 * loops and clamped to its last frame when it does not; fractional frames blend the two they
-	 * fall between.
-	 *
-	 * `phase` staggers identical units for free, `rate` de-syncs their stride; `rate = 0` holds an
-	 * instance on `phase` under any clock, which is also what a caller that never sets
-	 * RenderJob::time gets.
-	 *
-	 * `source` is not one of the three playback fields -- it says where the pose is read from, not
-	 * what plays, so moving a unit between the two sources rewrites none of them. One clip is the
-	 * whole of what a shared pose can hold; a per-instance one holds the weighted slots of
-	 * SkinnedPlaybackDesc, which this is the one-slot spelling of.
-	 */
-	struct SkinnedInstanceDesc
-	{
-		uint32_t   clip   = 0;
-		float      phase  = 0.0f;
-		float      rate   = 1.0f;
-		PoseSource source = PoseSource::kPerInstance;
-	};
-
 	/** Weighted slots a per-instance playback record holds. */
 	inline constexpr uint32_t c_BlendSlots = 4;
 
@@ -102,15 +79,20 @@ namespace bgl
 	 */
 	struct SkinnedPlaybackDesc
 	{
-		// Declared so this is not an aggregate: a braced `{clip, phase, rate}` must resolve to
-		// SkinnedInstanceDesc alone rather than elide its way into the first slot of this one.
+		// Declared so this is not an aggregate: a braced `{clip, phase, rate}` would otherwise
+		// elide its way into the first slot, at weight zero. FromClip is the one-clip spelling.
 		SkinnedPlaybackDesc() noexcept = default;
 
 		// `slot`, not `slots`: the latter is a Qt keyword macro in any client compiled with Qt's
 		// keywords on, and a public header cannot know which of its clients those are.
 		std::array<PlaybackSlot, c_BlendSlots> slot = {};
 
-		/** Slot 0 playing `clip` at full weight from `phase` at `rate`, the rest weightless. */
+		/**
+		 * Slot 0 playing `clip` at full weight from `phase` at `rate`, the rest weightless: the one
+		 * record a kBoneAnimTable placement can hold. `phase` staggers identical units for free and
+		 * `rate` de-syncs their stride; `rate = 0` holds the instance on `phase` under any clock,
+		 * which is also what a caller that never sets RenderJob::time gets.
+		 */
 		[[nodiscard]] static SkinnedPlaybackDesc
 		FromClip(uint32_t clip, float phase = 0.0f, float rate = 1.0f) noexcept
 		{

@@ -74,13 +74,19 @@ TEST_CASE("SceneError on misuse", "[error][scene]")
 		auto badGeom = bgl::GeomHandle();
 
 		REQUIRE_THROWS_AS(
-			view->CreateStaticMeshInstance(badGeom, glm::mat4(1.0f)),
+			view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(badGeom)),
 			bgl::SceneError);
+	}
+
+	SECTION("A desc naming no mesh throws")
+	{
+		REQUIRE_THROWS_AS(scene->AddStaticMeshGeom(bgl::StaticMeshGeomDesc()), bgl::SceneError);
 	}
 
 	SECTION("Valid arguments do not throw")
 	{
-		REQUIRE_NOTHROW(view->CreateStaticMeshInstance(geom, glm::mat4(1.0f)));
+		REQUIRE_NOTHROW(
+			view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom)));
 	}
 }
 
@@ -99,13 +105,14 @@ TEST_CASE("Scene geometry and instance deletion", "[error][scene][delete]")
 
 	SECTION("DeleteMeshInstance keeps the geom usable")
 	{
-		auto inst = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		auto inst = view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 		REQUIRE(inst.IsValid());
 
 		REQUIRE_NOTHROW(view->DeleteMeshInstance(inst));
 
 		// The geom itself was not removed, so it can still be instanced.
-		REQUIRE_NOTHROW(view->CreateStaticMeshInstance(geom, glm::mat4(1.0f)));
+		REQUIRE_NOTHROW(
+			view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom)));
 	}
 
 	SECTION("DeleteMeshInstance on an invalid handle throws")
@@ -115,7 +122,7 @@ TEST_CASE("Scene geometry and instance deletion", "[error][scene][delete]")
 
 	SECTION("Deleting the same instance twice throws")
 	{
-		auto inst = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		auto inst = view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 		REQUIRE_NOTHROW(view->DeleteMeshInstance(inst));
 		REQUIRE_THROWS_AS(view->DeleteMeshInstance(inst), bgl::SceneError);
 	}
@@ -125,7 +132,7 @@ TEST_CASE("Scene geometry and instance deletion", "[error][scene][delete]")
 		// The scene keeps no record of who placed what -- an instance copies the geom's submesh
 		// range by value -- so deleting geometry out from under live instances is a caller mistake
 		// the scene cannot see, not one it guards against. This pins the contract, not a guard.
-		auto inst = view->CreateStaticMeshInstance(geom, glm::mat4(1.0f));
+		auto inst = view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 		REQUIRE_NOTHROW(scene->DeleteGeom(geom));
 
 		// Releasing the orphaned instance afterwards must still be clean: DeleteMeshInstance touches
@@ -156,7 +163,9 @@ TEST_CASE("Scene geometry and instance deletion", "[error][scene][delete]")
 		REQUIRE_NOTHROW(scene->DeleteGeom(geom));
 
 		// The handle is now stale; both reuse and a second delete are rejected.
-		REQUIRE_THROWS_AS(view->CreateStaticMeshInstance(geom, glm::mat4(1.0f)), bgl::SceneError);
+		REQUIRE_THROWS_AS(
+			view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom)),
+			bgl::SceneError);
 		REQUIRE_THROWS_AS(scene->DeleteGeom(geom), bgl::SceneError);
 	}
 }
@@ -182,7 +191,8 @@ TEST_CASE("Capacity is a starting point, not a limit", "[error][scene][capacity]
 		// A cube is six submeshes, so even the first instance overruns a one-instance view.
 		for (int i = 0; i < 4; ++i)
 		{
-			REQUIRE_NOTHROW(view->CreateStaticMeshInstance(geom, glm::mat4(1.0f)));
+			REQUIRE_NOTHROW(
+				view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom)));
 		}
 
 		CHECK(view->GetInstanceCount() > 1);

@@ -311,7 +311,7 @@ TEST_CASE("GPU assertion handler replaces the crash", "[debug][gpu-assert][rende
 	auto view           = gfx->CreateSceneView(scene, 8);
 	auto assertMaterial = bgl::MaterialHandle{ .materialType = bgl::MaterialType::kAssert };
 	auto cube           = scene->AddCubeGeom(assertMaterial);
-	view->CreateStaticMeshInstance(cube, glm::mat4(1.0f));
+	view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(cube));
 
 	auto camera = bgl::Camera();
 	camera

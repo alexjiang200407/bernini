@@ -201,8 +201,8 @@ namespace
 
 		// Laid flat, so the camera just above it sees it recede to the horizon.
 		view->CreateStaticMeshInstance(
-			plane,
-			glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)));
+			bgl::StaticMeshInstanceDesc().SetGeom(plane).SetTransform(
+				glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f))));
 
 		auto job     = bgl::RenderJob();
 		job.view     = view;
@@ -294,7 +294,7 @@ namespace
 
 		auto material = scene->CreatePbrMaterial(desc);
 		auto plane    = scene->AddPlaneGeom(1, 1, planeSize, planeSize, material);
-		view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(plane));
 
 		auto camera = bgl::Camera();
 		camera
@@ -596,7 +596,7 @@ namespace
 									  });
 
 		auto plane = scene->AddPlaneGeom(1, 1, c_StrandPlane, c_StrandPlane, material);
-		view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(plane));
 
 		if (withBackdrop)
 		{
@@ -612,8 +612,8 @@ namespace
 				c_BackdropSize,
 				scene->CreatePbrMaterial(grey));
 			view->CreateStaticMeshInstance(
-				backdrop,
-				glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, c_BackdropZ)));
+				bgl::StaticMeshInstanceDesc().SetGeom(backdrop).SetTransform(
+					glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, c_BackdropZ))));
 		}
 
 		auto camera = bgl::Camera();

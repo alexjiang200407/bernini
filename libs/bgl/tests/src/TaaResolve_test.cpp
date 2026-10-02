@@ -72,8 +72,11 @@ namespace
 	{
 		auto plane = scene->AddPlaneGeom(1, 1, c_QuadScale * 2.0f, c_QuadScale * 2.0f);
 		view->CreateStaticMeshInstance(
-			plane,
-			glm::rotate(glm::mat4(1.0f), glm::radians(c_QuadYaw), glm::vec3(0.0f, 0.0f, 1.0f)));
+			bgl::StaticMeshInstanceDesc().SetGeom(plane).SetTransform(
+				glm::rotate(
+					glm::mat4(1.0f),
+					glm::radians(c_QuadYaw),
+					glm::vec3(0.0f, 0.0f, 1.0f))));
 	}
 
 	// Abutting slats in two mid greys: fine detail at moderate contrast, which is what actual scene
@@ -126,8 +129,9 @@ namespace
 		{
 			const float x = startX + static_cast<float>(i) * slatWidth;
 			view->CreateStaticMeshInstance(
-				slats[i % 2],
-				glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, 0.0f)));
+				bgl::StaticMeshInstanceDesc()
+					.SetGeom(slats[i % 2])
+					.SetTransform(glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, 0.0f))));
 		}
 	}
 
@@ -359,9 +363,12 @@ namespace
 
 		auto quad = scene->AddPlaneGeom(1, 1, c_ParallaxQuadSize, c_ParallaxQuadSize);
 		view->CreateStaticMeshInstance(
-			quad,
-			glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, c_ParallaxQuadZ)) *
-				glm::rotate(glm::mat4(1.0f), glm::radians(c_QuadYaw), glm::vec3(0.0f, 0.0f, 1.0f)));
+			bgl::StaticMeshInstanceDesc().SetGeom(quad).SetTransform(
+				glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, c_ParallaxQuadZ)) *
+				glm::rotate(
+					glm::mat4(1.0f),
+					glm::radians(c_QuadYaw),
+					glm::vec3(0.0f, 0.0f, 1.0f))));
 	}
 
 	// Converges at the pan's start, then arrives at x = 0 exactly as RenderPan's pan does -- so the
@@ -463,7 +470,7 @@ namespace
 	AddAnimatedQuadOverBackdrop(
 		const bgl::SceneRef&            scene,
 		const bgl::SceneViewRef&        view,
-		const bgl::SkinnedInstanceDesc& desc,
+		const bgl::SkinnedPlaybackDesc& playback,
 		const glm::mat4&                transform)
 	{
 		bgl::test::ApplyEnvironment(scene.Get(), view.Get());
@@ -474,12 +481,14 @@ namespace
 			c_BackdropSize,
 			c_BackdropSize,
 			scene->CreatePbrMaterial(Grey(c_BackdropGrey)));
-		view->CreateStaticMeshInstance(backdrop, glm::mat4(1.0f));
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(backdrop));
 
 		const auto quad = bgl::test::skinned_synth::AddSlidingQuadGeom(
 			*scene,
 			scene->CreatePbrMaterial(Grey(c_AnimQuadGrey)));
-		view->CreateSkinnedMeshInstance(quad, transform, desc);
+		view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc().SetGeom(quad).SetTransform(transform).SetPlayback(
+				playback));
 	}
 
 	void
@@ -488,7 +497,7 @@ namespace
 		AddAnimatedQuadOverBackdrop(
 			scene,
 			view,
-			{ bgl::test::skinned_synth::c_LoopClip, 0.0f, 1.0f },
+			bgl::SkinnedPlaybackDesc::FromClip(bgl::test::skinned_synth::c_LoopClip),
 			AnimatedQuadTransform());
 	}
 
@@ -502,7 +511,10 @@ namespace
 		AddAnimatedQuadOverBackdrop(
 			scene,
 			view,
-			{ bgl::test::skinned_synth::c_LoopClip, c_ArrivedPhase, 0.0f },
+			bgl::SkinnedPlaybackDesc::FromClip(
+				bgl::test::skinned_synth::c_LoopClip,
+				c_ArrivedPhase,
+				0.0f),
 			AnimatedQuadTransform());
 	}
 
@@ -564,7 +576,7 @@ namespace
 		AddAnimatedQuadOverBackdrop(
 			scene,
 			view,
-			{ bgl::test::skinned_synth::c_ClampClip, 0.0f, 1.0f },
+			bgl::SkinnedPlaybackDesc::FromClip(bgl::test::skinned_synth::c_ClampClip),
 			LeapQuadTransform());
 	}
 
@@ -576,7 +588,7 @@ namespace
 		AddAnimatedQuadOverBackdrop(
 			scene,
 			view,
-			{ bgl::test::skinned_synth::c_ClampClip, 1.0f, 0.0f },
+			bgl::SkinnedPlaybackDesc::FromClip(bgl::test::skinned_synth::c_ClampClip, 1.0f, 0.0f),
 			LeapQuadTransform());
 	}
 
@@ -2146,8 +2158,8 @@ TEST_CASE(
 			0.15f);
 		auto quad = scene->AddPlaneGeom(1, 1, 6.0f, 6.0f, scene->CreatePbrMaterial(Grey(0.2f)));
 		(void)view->CreateStaticMeshInstance(
-			quad,
-			glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, c_ParallaxQuadZ)));
+			bgl::StaticMeshInstanceDesc().SetGeom(quad).SetTransform(
+				glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, c_ParallaxQuadZ))));
 	};
 	auto moving = [](int frame) { return CameraAt(frame < c_ConvergeFrames ? -6.0f : 0.0f); };
 	const std::string moved = "assets/golden/taa_rapid_disocclusion.got.png";

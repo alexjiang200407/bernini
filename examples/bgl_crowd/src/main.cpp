@@ -10,6 +10,7 @@
 #include <bgl/types/DirectionalLightDesc.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/Viewport.h>
 #include <bgpu/GpuContext.h>
 #include <chrono>
@@ -202,9 +203,11 @@ namespace
 		const auto ground = scene->CreatePbrMaterial(
 			{ .baseColorFactor = glm::vec4(0.35f, 0.45f, 0.3f, 1.0f), .roughnessFactor = 0.9f });
 		view->CreateStaticMeshInstance(
-			scene->AddCubeGeom(ground),
-			glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.05f, 0.0f)) *
-				glm::scale(glm::mat4(1.0f), glm::vec3(60.0f * scale, 0.05f, 60.0f * scale)));
+			bgl::StaticMeshInstanceDesc()
+				.SetGeom(scene->AddCubeGeom(ground))
+				.SetTransform(
+					glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.05f, 0.0f)) *
+					glm::scale(glm::mat4(1.0f), glm::vec3(60.0f * scale, 0.05f, 60.0f * scale))));
 
 		// One pool of boxes per type, as many as the type's agents: a split or a merge keeps a type's
 		// count, so each frame hands a type's agents to its pool in readback order.
@@ -222,7 +225,8 @@ namespace
 			const auto geom   = scene->AddCubeGeom(scene->CreatePbrMaterial(
 				{ .baseColorFactor = colors[type], .roughnessFactor = 0.6f }));
 			for (uint32_t i = 0; i < counts[type]; ++i)
-				pools[type].push_back(view->CreateStaticMeshInstance(geom, parked));
+				pools[type].push_back(view->CreateStaticMeshInstance(
+					bgl::StaticMeshInstanceDesc().SetGeom(geom).SetTransform(parked)));
 		}
 
 		auto camera = bgl::Camera();

@@ -39,6 +39,7 @@
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/glm.h>
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/WindDesc.h>
 #include <cmath>
 #include <cstdint>
@@ -882,8 +883,11 @@ GrassEditorWindow::BuildPreview()
 			// The patch lies in XY facing +Z, as a plane does, so it is laid flat on its back.
 			m_Instance = context.assets.CreateInstance(
 				view,
-				m_Patch,
-				glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)));
+				bgl::StaticMeshInstanceDesc().SetGeom(m_Patch).SetTransform(
+					glm::rotate(
+						glm::mat4(1.0f),
+						glm::radians(-90.0f),
+						glm::vec3(1.0f, 0.0f, 0.0f))));
 
 			// When something else already held this look the patch shares it as drawn, so the edit
 			// is put on it; and a look that could not be created answers false.

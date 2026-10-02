@@ -86,8 +86,8 @@ namespace
 		const float pitch = facing.backFacing ? (-55.0f + 180.0f) : -55.0f;
 
 		view->CreateStaticMeshInstance(
-			plane,
-			glm::rotate(glm::mat4(1.0f), glm::radians(pitch), glm::vec3(1.0f, 0.0f, 0.0f)));
+			bgl::StaticMeshInstanceDesc().SetGeom(plane).SetTransform(
+				glm::rotate(glm::mat4(1.0f), glm::radians(pitch), glm::vec3(1.0f, 0.0f, 0.0f))));
 
 		if (facing.occluded)
 		{
@@ -101,8 +101,8 @@ namespace
 			// corner (12 * sin 55 / 2 = 4.9).
 			auto wall = scene->AddPlaneGeom(1, 1, 60.0f, 60.0f, scene->CreatePbrMaterial(wallDesc));
 			view->CreateStaticMeshInstance(
-				wall,
-				glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -8.0f)));
+				bgl::StaticMeshInstanceDesc().SetGeom(wall).SetTransform(
+					glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -8.0f))));
 		}
 
 		auto camera = bgl::Camera();

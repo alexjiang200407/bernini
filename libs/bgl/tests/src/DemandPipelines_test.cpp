@@ -126,7 +126,8 @@ TEST_CASE("Bucket pipelines are built on demand, and only on demand", "[pipeline
 
 	const auto opaque = scene->CreatePbrMaterial(opaqueDesc);
 	const auto plane  = scene->AddPlaneGeom(1, 1, 4.0f, 4.0f, opaque);
-	const auto placed = view->CreateStaticMeshInstance(plane, glm::mat4(1.0f));
+	const auto placed =
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(plane));
 	(void)placed;
 
 	gfx->DrawFrame(target, job);
@@ -184,8 +185,8 @@ TEST_CASE("Bucket pipelines are built on demand, and only on demand", "[pipeline
 		const auto material = scene->CreatePbrMaterial(desc);
 		const auto geom     = scene->AddPlaneGeom(1, 1, 1.0f, 1.0f, material);
 		(void)view->CreateStaticMeshInstance(
-			geom,
-			glm::translate(glm::mat4(1.0f), glm::vec3(static_cast<float>(i), 0.0f, 0.0f)));
+			bgl::StaticMeshInstanceDesc().SetGeom(geom).SetTransform(
+				glm::translate(glm::mat4(1.0f), glm::vec3(static_cast<float>(i), 0.0f, 0.0f))));
 	}
 
 	gfx->DrawFrame(target, job);

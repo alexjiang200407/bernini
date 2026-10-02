@@ -260,7 +260,9 @@ TEST_CASE("A toon surface draws its base colour flat", "[surface][render][toon]"
 
 	const auto sphere = [&](MaterialHandle material) {
 		const auto geom = scene->AddSphereGeom(24, 24, 3.5f, material);
-		return [geom](ISceneView& view) { view.CreateStaticMeshInstance(geom, glm::mat4(1.0f)); };
+		return [geom](ISceneView& view) {
+			view.CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
+		};
 	};
 
 	const auto* emptyPng = "assets/golden/toon_empty.got.png";
@@ -331,12 +333,16 @@ TEST_CASE("A toon surface draws its base colour flat", "[surface][render][toon]"
 
 		shoot([](ISceneView&) {}, QuadCamera(), quadEmptyPng);
 		shoot(
-			[&](ISceneView& view) { view.CreateStaticMeshInstance(still, glm::mat4(1.0f)); },
+			[&](ISceneView& view) {
+				view.CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(still));
+			},
 			QuadCamera(),
 			staticPng);
 		shoot(
 			[&](ISceneView& view) {
-				view.CreateSkinnedMeshInstance(skinned, glm::mat4(1.0f), { 0, 0.0f, 0.0f });
+				view.CreateSkinnedMeshInstance(
+					bgl::SkinnedMeshInstanceDesc().SetGeom(skinned).SetPlayback(
+						bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 			},
 			QuadCamera(),
 			skinnedPng);

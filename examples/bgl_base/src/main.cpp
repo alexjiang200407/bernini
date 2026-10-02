@@ -6,6 +6,7 @@
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SkyboxDesc.h>  // IWYU pragma: keep
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgpu/GpuContext.h>
 #include <cstdint>
 #include <filesystem>
@@ -175,7 +176,9 @@ main(int argc, char** argv)
 				continue;
 
 			const auto world = worldMatrix(n);
-			assets.CreateInstance(view, geoms[node.mesh], world);
+			assets.CreateInstance(
+				view,
+				bgl::StaticMeshInstanceDesc().SetGeom(geoms[node.mesh]).SetTransform(world));
 
 			const auto& meshEntry = model.meshes[node.mesh];
 			for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
