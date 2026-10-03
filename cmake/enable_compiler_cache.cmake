@@ -53,7 +53,7 @@ macro(_bernini_emulate_precompiled_headers)
     endfunction()
 endmacro()
 
-function(_bernini_write_cache_wrapper ccache sloppiness out_var)
+function(_bernini_write_cache_wrapper ccache sloppiness basedir out_var)
     set(cache_dir "${CMAKE_BINARY_DIR}/compiler-cache")
     file(MAKE_DIRECTORY "${cache_dir}")
 
@@ -76,14 +76,14 @@ function(_bernini_write_cache_wrapper ccache sloppiness out_var)
             "@echo off\r\n"
             "set CCACHE_SLOPPINESS=${sloppiness}\r\n"
             "set CCACHE_COMPILERCHECK=content\r\n"
-            "set CCACHE_BASEDIR=${BERNINI_ROOT}\r\n"
+            "set CCACHE_BASEDIR=${basedir}\r\n"
             "\"${ccache}\" %*\r\n")
     else()
         set(wrapper "${cache_dir}/ccache-wrapper-${basedir_key}.sh")
         file(WRITE "${wrapper}"
             "#!/bin/sh\n"
             "CCACHE_SLOPPINESS=${sloppiness}\n"
-            "CCACHE_BASEDIR='${BERNINI_ROOT}'\n"
+            "CCACHE_BASEDIR='${basedir}'\n"
             "export CCACHE_SLOPPINESS CCACHE_BASEDIR\n"
             "exec '${ccache}' \"$@\"\n")
         file(CHMOD "${wrapper}" PERMISSIONS
@@ -117,6 +117,7 @@ function(enable_compiler_cache)
     # honour a launcher. Refused unless the build opted in, because every target here carries a PCH
     # and ccache can return a wrong object for one; opting in removes the PCHs rather than the risk.
     set(sloppiness "pch_defines,time_macros")
+    set(basedir "${BERNINI_ROOT}")
     if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         if (NOT BERNINI_MSVC_COMPILER_CACHE)
             message(STATUS "Compiler cache: skipped -- MSVC precompiled headers can hit wrongly "
@@ -124,7 +125,12 @@ function(enable_compiler_cache)
             return()
         endif()
 
+        # No base_dir either: it rewrites the absolute /FI paths to relative ones, which cl.exe
+        # resolves from the source file's directory and which /Wall /WX then fails on (C4464) in
+        # the preprocessing run ccache makes, so every compile came back uncacheable. Absolute paths
+        # key the entry on where the checkout is, which for CI is the same every run.
         set(sloppiness "")
+        set(basedir "")
         _bernini_emulate_precompiled_headers()
 
         foreach(lang C CXX)
@@ -140,7 +146,7 @@ function(enable_compiler_cache)
         set(CMAKE_CXX_FLAGS "${flags}" PARENT_SCOPE)
     endif()
 
-    _bernini_write_cache_wrapper("${BERNINI_CCACHE_PROGRAM}" "${sloppiness}" wrapper)
+    _bernini_write_cache_wrapper("${BERNINI_CCACHE_PROGRAM}" "${sloppiness}" "${basedir}" wrapper)
 
     set(CMAKE_C_COMPILER_LAUNCHER   "${wrapper}" PARENT_SCOPE)
     set(CMAKE_CXX_COMPILER_LAUNCHER "${wrapper}" PARENT_SCOPE)
