@@ -14,10 +14,46 @@
 # The settings ride in a generated wrapper rather than in the environment, because this build is run
 # by scripts/build.py, by ninja directly and by an IDE, and a variable exported by only one of those
 # would leave the others missing every time.
+#
+# MSVC is the exception, and opt-in. ccache's MSVC precompiled-header support has a reported false
+# hit -- a wrong object returned rather than a miss -- so a cache there is only sound if no compile
+# it sees uses a PCH. Sources here depend on what their PCHs bring in, so the PCHs cannot simply be
+# switched off: BERNINI_MSVC_COMPILER_CACHE instead replaces `target_precompile_headers` with a
+# force-include (/FI) of the same headers, in the same order, which is what a PCH is to the
+# translation unit without the binary. Every compile ccache sees is then an ordinary one, hashed on
+# its preprocessed text. /Zi becomes /Z7 because a /Zi object names a PDB the compiler writes as a
+# side effect, which no cache can replay. A developer's build keeps its real PCHs and its PDBs; the
+# cache is for builds that compile everything from nothing, which is what CI does on every run.
 
 option(BERNINI_COMPILER_CACHE "Compile through ccache when it is installed" ON)
 
-function(_bernini_write_cache_wrapper ccache out_var)
+if (DEFINED ENV{BERNINI_MSVC_COMPILER_CACHE})
+    set(_bernini_msvc_cache_default "$ENV{BERNINI_MSVC_COMPILER_CACHE}")
+else()
+    set(_bernini_msvc_cache_default OFF)
+endif()
+option(BERNINI_MSVC_COMPILER_CACHE
+    "Compile through ccache under MSVC, with precompiled headers off and /Z7 debug info"
+    ${_bernini_msvc_cache_default})
+
+# Defining a function named after a command replaces it for every later caller, which is the point:
+# the targets say target_precompile_headers and get a force-include instead.
+macro(_bernini_emulate_precompiled_headers)
+    function(target_precompile_headers target)
+        set(scope PRIVATE)
+        foreach(arg IN LISTS ARGN)
+            if (arg MATCHES "^(PUBLIC|PRIVATE|INTERFACE)$")
+                set(scope "${arg}")
+            elseif (arg STREQUAL "REUSE_FROM")
+                message(FATAL_ERROR "REUSE_FROM needs a real PCH, which BERNINI_MSVC_COMPILER_CACHE removes")
+            else()
+                target_compile_options(${target} ${scope} "$<$<COMPILE_LANGUAGE:CXX>:/FI${arg}>")
+            endif()
+        endforeach()
+    endfunction()
+endmacro()
+
+function(_bernini_write_cache_wrapper ccache sloppiness basedir out_var)
     set(cache_dir "${CMAKE_BINARY_DIR}/compiler-cache")
     file(MAKE_DIRECTORY "${cache_dir}")
 
@@ -38,15 +74,16 @@ function(_bernini_write_cache_wrapper ccache out_var)
         set(wrapper "${cache_dir}/ccache-wrapper-${basedir_key}.bat")
         file(WRITE "${wrapper}"
             "@echo off\r\n"
-            "set CCACHE_SLOPPINESS=pch_defines,time_macros\r\n"
-            "set CCACHE_BASEDIR=${BERNINI_ROOT}\r\n"
+            "set CCACHE_SLOPPINESS=${sloppiness}\r\n"
+            "set CCACHE_COMPILERCHECK=content\r\n"
+            "set CCACHE_BASEDIR=${basedir}\r\n"
             "\"${ccache}\" %*\r\n")
     else()
         set(wrapper "${cache_dir}/ccache-wrapper-${basedir_key}.sh")
         file(WRITE "${wrapper}"
             "#!/bin/sh\n"
-            "CCACHE_SLOPPINESS=pch_defines,time_macros\n"
-            "CCACHE_BASEDIR='${BERNINI_ROOT}'\n"
+            "CCACHE_SLOPPINESS=${sloppiness}\n"
+            "CCACHE_BASEDIR='${basedir}'\n"
             "export CCACHE_SLOPPINESS CCACHE_BASEDIR\n"
             "exec '${ccache}' \"$@\"\n")
         file(CHMOD "${wrapper}" PERMISSIONS
@@ -70,23 +107,46 @@ function(enable_compiler_cache)
         return()
     endif()
 
-    # MSVC is refused on the compiler, not on the generator: the Ninja presets drive cl.exe and do
-    # honour a launcher, so a generator check alone would let ccache in front of it. ccache's
-    # support for MSVC precompiled headers is an open issue with a reported *false hit* -- a wrong
-    # object returned rather than a miss -- and every target here carries a PCH, so there is no
-    # configuration in this tree where that would be safe. A wrong object is worse than a slow build.
-    if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-        message(STATUS "Compiler cache: skipped -- ccache and MSVC precompiled headers can hit wrongly")
-        return()
-    endif()
-
     find_program(BERNINI_CCACHE_PROGRAM ccache)
     if (NOT BERNINI_CCACHE_PROGRAM)
         message(STATUS "Compiler cache: ccache not found -- compiling uncached (`just init` installs it)")
         return()
     endif()
 
-    _bernini_write_cache_wrapper("${BERNINI_CCACHE_PROGRAM}" wrapper)
+    # MSVC is decided on the compiler, not on the generator: the Ninja presets drive cl.exe and do
+    # honour a launcher. Refused unless the build opted in, because every target here carries a PCH
+    # and ccache can return a wrong object for one; opting in removes the PCHs rather than the risk.
+    set(sloppiness "pch_defines,time_macros")
+    set(basedir "${BERNINI_ROOT}")
+    if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        if (NOT BERNINI_MSVC_COMPILER_CACHE)
+            message(STATUS "Compiler cache: skipped -- MSVC precompiled headers can hit wrongly "
+                           "(-DBERNINI_MSVC_COMPILER_CACHE=ON builds without them, and caches)")
+            return()
+        endif()
+
+        # No base_dir either: it rewrites the absolute /FI paths to relative ones, which cl.exe
+        # resolves from the source file's directory and which /Wall /WX then fails on (C4464) in
+        # the preprocessing run ccache makes, so every compile came back uncacheable. Absolute paths
+        # key the entry on where the checkout is, which for CI is the same every run.
+        set(sloppiness "")
+        set(basedir "")
+        _bernini_emulate_precompiled_headers()
+
+        foreach(lang C CXX)
+            foreach(config DEBUG RELWITHDEBINFO)
+                string(REGEX REPLACE "/Z[iI]" "/Z7" flags "${CMAKE_${lang}_FLAGS_${config}}")
+                set(CMAKE_${lang}_FLAGS_${config} "${flags}" PARENT_SCOPE)
+            endforeach()
+        endforeach()
+
+        # ccache refuses a command compiling several files, and /MP is how cl.exe is told it may.
+        # Ninja already runs one compile per file in parallel, so /MP adds nothing but the refusal.
+        string(REGEX REPLACE " */MP[0-9]*" "" flags "${CMAKE_CXX_FLAGS}")
+        set(CMAKE_CXX_FLAGS "${flags}" PARENT_SCOPE)
+    endif()
+
+    _bernini_write_cache_wrapper("${BERNINI_CCACHE_PROGRAM}" "${sloppiness}" "${basedir}" wrapper)
 
     set(CMAKE_C_COMPILER_LAUNCHER   "${wrapper}" PARENT_SCOPE)
     set(CMAKE_CXX_COMPILER_LAUNCHER "${wrapper}" PARENT_SCOPE)

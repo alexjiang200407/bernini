@@ -20,7 +20,6 @@ function(enable_strict_compiler)
                 # --- WARNING LEVELS & ERROR PROMOTION ---
                 /Wall          # Enable absolutely ALL warnings
                 /WX            # Treat all warnings as errors
-                /MP            # Multiprocess compilation (keeps build times fast)
                 
                 # --- SPECIFIC CODE QUALITY ENFORCEMENT ---
                 /permissive-   # Turn on strict ISO C++ standards compliance mode
@@ -48,6 +47,11 @@ function(enable_strict_compiler)
                 
                 /EHsc
             )
+            # ccache refuses a command that compiles several files, and /MP is how cl.exe is told
+            # it may; Ninja already compiles one file per command in parallel.
+            if(NOT BERNINI_MSVC_COMPILER_CACHE)
+                target_compile_options(${TARGET_NAME} PRIVATE /MP)  # Multiprocess compilation
+            endif()
             message(STATUS "Strict compiler flags (MSVC) enabled for target: ${TARGET_NAME}")
         elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
             target_compile_options(${TARGET_NAME} PRIVATE

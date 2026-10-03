@@ -72,6 +72,7 @@ Everything else has a host-derived default and is only worth naming to change it
 | `BERNINI_EDITOR_SDK` | Shared assetlib/gamelib and the build-tree editor plugin package. Defaults on only for a top-level editor build with Qt and a renderer; embedded, editor-free and renderer-free builds stay static. Implies `BERNINI_SHARED_RENDERER`. |
 | `BERNINI_SHARED_RENDERER` | `bgl`, and with it `bgpu` and `core_process`, as shared libraries. `OFF`: a game is one binary. See [core_process.md](core_process.md#linkage). |
 | `BERNINI_COMPILER_CACHE` | ccache in front of the compiler when one is installed. `ON`. |
+| `BERNINI_MSVC_COMPILER_CACHE` | ccache under MSVC, which force-includes the PCH headers instead of precompiling them and uses `/Z7`. `OFF`; defaults from the environment variable of the same name. See [build_performance.md](build_performance.md#ccache). |
 | `BUILD_TESTS`, `BERNINI_BUILD_EXAMPLES`, `BUILD_COVERAGE` | **Forced off when the engine is not the top-level project**, whatever the consumer set. See below. |
 
 The defaults apply whether or not the engine is the top of the build. A vcpkg port configures this
