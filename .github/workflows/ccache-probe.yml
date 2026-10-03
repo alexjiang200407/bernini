@@ -87,14 +87,5 @@ jobs:
         env:
           CCACHE_LOGFILE: ${{ runner.temp }}\ccache.log
         run: |
-          python scripts/build.py core --preset windows-ninja-msvc-dx12-debug
-          python -c "
-          import re,os,collections
-          pids=collections.defaultdict(list)
-          for l in open(os.environ['CCACHE_LOGFILE'],errors='replace'):
-              m=re.match(r'\[[^ ]+ (\d+) *\] ',l)
-              if m: pids[m.group(1)].append(l.rstrip()[:700])
-          bad=[v for v in pids.values() if any('preprocessor_error' in x for x in v)]
-          print('failing:',len(bad))
-          for x in bad[0]: print(x)
-          "
+          python scripts/build.py --configure --preset windows-ninja-msvc-dx12-debug
+          cd scripts; python _probe.py
