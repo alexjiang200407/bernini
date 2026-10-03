@@ -21,8 +21,8 @@ auto blocks = crowd_render::CrowdInstanceBlocks(
         .SetCrowd(crowd)          // created with CrowdDesc::renderRingTicks
         .SetGraphics(graphics)    // on the crowd's GPU context
         .SetView(view)
-        .AddType(crowd_render::AgentTypeMeshDesc().SetGeom(infantry).SetCapacity(4000).SetModel(lift))
-        .AddType(crowd_render::AgentTypeMeshDesc().SetGeom(cavalry).SetCapacity(500).SetModel(lift)));
+        .AddType(crowd_render::AgentTypeMeshDesc().AddGeom(infantry).SetCapacity(4000).SetModel(lift))
+        .AddType(crowd_render::AgentTypeMeshDesc().AddGeom(cavalry).SetCapacity(500).SetModel(lift)));
 
 // every frame
 blocks.PrepareFrame(accumulator / tickSeconds);
@@ -35,6 +35,11 @@ blocks.FinishFrame();
   the run are hidden. A block draws and culls every one of its `capacity` placements each frame,
   live or not, so `AgentTypeMeshDesc::capacity` is the most agents of that type the game holds at
   once: the crowd's `maxAgents` when it is left 0, and agents past it go undrawn.
+- **A type is a list of geoms, and may be skinned.** `AgentTypeMeshDesc::geoms` is what draws an
+  agent: a character cooked as several meshes on one rig is several geoms. A skinned type names a
+  `playback` every agent plays and a `phaseSpreadSeconds` its agents are spread over, each by its
+  `RenderAgent::id`, so an agent keeps its phase across a split, a merge or a destroy. Declared: a
+  type of one static geom is all that is drawn yet.
 - **The frame draws between the last two completed ticks.** `PrepareFrame(alpha)` points every
   block at the latest completed tick `c`, `alpha` of the way from `c − 1` ("Fix Your Timestep"),
   so the crowd is drawn about a tick late (≈33 ms at the default tick). It also inserts a wait on

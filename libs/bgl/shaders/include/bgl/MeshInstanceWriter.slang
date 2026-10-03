@@ -18,6 +18,22 @@ public interface IMeshInstanceBlock
 };
 
 /**
+ * A skinned geom's block as its writer sees it: what every block offers, and how far ahead of the
+ * clock each slot plays the record the block shares (MeshInstanceBlockDesc::playback).
+ */
+public interface ISkinnedMeshInstanceBlock : IMeshInstanceBlock
+{
+    /**
+     * Plays `slot`'s animation `seconds` ahead of the view's clock, kept until set again.
+     *
+     * The pose a frame reprojects from is evaluated on the offset the slot holds now, so give a slot
+     * the offset of whatever it draws this frame, and never change that thing's offset while it
+     * lives: a new value is a jump in the pose that no motion vector describes.
+     */
+    void SetPlaybackOffset(uint slot, float seconds);
+};
+
+/**
  * What a caller's instance writer conforms to: parameters the caller sets per block from the CPU,
  * and a function the renderer calls once per slot, every frame, before the cull. `Write` places
  * or hides `slot`, every call: a slot left alone repeats whatever it was last given, motion included.
@@ -32,4 +48,15 @@ public interface IMeshInstanceWriter
     associatedtype Params;
 
     static void Write<B : IMeshInstanceBlock>(B block, Params params, uint slot);
+};
+
+/**
+ * IMeshInstanceWriter for a skinned geom's blocks (MeshInstanceWriterDesc::geomType): the same
+ * contract, over a block that also takes each slot's playback offset.
+ */
+public interface ISkinnedMeshInstanceWriter
+{
+    associatedtype Params;
+
+    static void Write<B : ISkinnedMeshInstanceBlock>(B block, Params params, uint slot);
 };
