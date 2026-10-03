@@ -8,7 +8,7 @@
  * agent across them, such as an animation phase. Ids are distinct among the agents alive at once
  * until the crowd has spawned 2^32. Generated into the public <crowdlib/RenderAgent.h>, so its
  * layout must agree on every backend: two float2s and four uints, 32 bytes on both, which is what
- * `reserved` is for.
+ * `pad` is for.
  */
 public struct RenderAgent
 {
@@ -17,7 +17,7 @@ public struct RenderAgent
     public uint source;
     public uint type;
     public uint id;
-    public uint reserved;
+    public uint pad;
 };
 
 // RenderAgent::source for an agent the previous tick did not have.

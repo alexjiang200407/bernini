@@ -92,7 +92,7 @@ TEST_CASE("The crowd's GPU records survive a buffer at their stride", "[crowd][i
 	                                       .source   = crowd::c_RenderSpawned,
 	                                       .type     = 1,
 	                                       .id       = 123456789u,
-	                                       .reserved = 0 } });
+	                                       .pad      = 0 } });
 	CHECK(records[0].source == crowd::c_RenderSpawned);
 	CHECK(records[0].type == 1);
 	CHECK(records[0].id == 123456789u);

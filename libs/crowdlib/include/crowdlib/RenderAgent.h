@@ -13,7 +13,7 @@ namespace crowd
 		uint32_t source;
 		uint32_t type;
 		uint32_t id;
-		uint32_t reserved;
+		uint32_t pad;
 	};
 
 	static_assert(sizeof(RenderAgent) == 32);
@@ -22,6 +22,6 @@ namespace crowd
 	static_assert(offsetof(RenderAgent, source) == 16);
 	static_assert(offsetof(RenderAgent, type) == 20);
 	static_assert(offsetof(RenderAgent, id) == 24);
-	static_assert(offsetof(RenderAgent, reserved) == 28);
+	static_assert(offsetof(RenderAgent, pad) == 28);
 
 }

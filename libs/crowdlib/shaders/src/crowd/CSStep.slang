@@ -111,7 +111,7 @@ void main(uint3 id: SV_DispatchThreadID)
         record.source = spawned ? c_RenderSpawned : range.sourceFirstRecord + offset;
         record.type = group.agentType;
         record.id = agent.id;
-        record.reserved = 0u;
+        record.pad = 0u;
         gUniforms.renderRing[renderFirst + group.firstRecord + agent.slot] = record;
     }
 }
