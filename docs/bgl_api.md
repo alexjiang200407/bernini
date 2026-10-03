@@ -401,13 +401,13 @@ flowchart TD
   with. Only the toon character model reads it, on `face` pixels; no other model sees it. One per
   character, shared by every placement and instance block that takes it
   (`ISceneView::SetToonShadingRig`, `MeshInstanceBlockDesc::toonShadingRig`).
-  bgl resolves no bone name: `headBone` is an index into the taking placement's rig, filled in by
+  bgl resolves no bone name: `headBoneIndex` is an index into the taking placement's rig, filled in by
   whoever loaded the skeleton, and an empty one makes the placement's own transform the head's
   frame. Head space is +X across the face — the axis a mirrored edit flips — +Y up and +Z out of
   the face. The bounds are listed on `AddToonShadingRig`, and a refused desc writes nothing.
   `DeleteToonShadingRig` refuses while any placement or block of any view holds the rig. Which
   rigged placements are evaluated is chosen on the GPU each frame: the visible ones whose projected
-  head is larger than `fadeEndPixels`, into a per-view pool of `c_ToonShadingRigPoolCapacity`; past
+  head is larger than `fadeEndPixels`, into a per-view pool of `cToonShadingRigPoolCapacity`; past
   the pool, or farther, a placement shades cel only.
 
 ### ISceneView

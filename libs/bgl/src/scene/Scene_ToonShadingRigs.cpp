@@ -3,7 +3,6 @@
 #include <bgl/IScene.h>
 #include <bgl/glm.h>
 #include <bgl/idl/ToonShadingRig.h>
-#include <bgl/idl/ToonShadingRigBlock.h>
 #include <bgl/types/ToonShadingRigDesc.h>
 #include <bgl/types/ToonShadingRigHandle.h>
 #include <cmath>
@@ -21,8 +20,6 @@ namespace bgl
 {
 	namespace
 	{
-		static_assert(c_MaxToonShadingRigSlots == idl::cMaxToonShadingRigSlots);
-		static_assert(c_ToonShadingRigPoolCapacity == idl::cToonShadingRigPoolCapacity);
 
 		constexpr float c_HalfPi = std::numbers::pi_v<float> / 2.0f;
 
@@ -104,14 +101,14 @@ namespace bgl
 			for (size_t e = 0; e < desc.edits.size(); ++e)
 			{
 				const ToonShadingRigEditDesc& edit = desc.edits[e];
-				if (edit.keys.empty() || edit.keys.size() > c_MaxToonShadingRigKeysPerEdit)
+				if (edit.keys.empty() || edit.keys.size() > cMaxToonShadingRigKeysPerEdit)
 				{
 					Refuse(
 						std::format(
 							"edit {} has {} keys, outside [1, {}]",
 							e,
 							edit.keys.size(),
-							c_MaxToonShadingRigKeysPerEdit));
+							cMaxToonShadingRigKeysPerEdit));
 				}
 				if (!std::isfinite(edit.keySharpness) || edit.keySharpness <= 0.0f)
 				{
@@ -123,13 +120,13 @@ namespace bgl
 				}
 				slots += edit.mirrored ? 2u : 1u;
 			}
-			if (slots > c_MaxToonShadingRigSlots)
+			if (slots > cMaxToonShadingRigSlots)
 			{
 				Refuse(
 					std::format(
 						"the edits take {} slots, more than the {} one rig may",
 						slots,
-						c_MaxToonShadingRigSlots));
+						cMaxToonShadingRigSlots));
 			}
 
 			if (!std::isfinite(desc.headRadius) || desc.headRadius <= 0.0f)
@@ -164,10 +161,11 @@ namespace bgl
 				Refuse("the face light's azimuthFadeAmount must be in [0, 1]");
 			}
 
-			if (desc.headBone == idl::cNoHeadBone)
+			if (desc.headBoneIndex == idl::cNoHeadBone)
 			{
 				Refuse(
-					"headBone is the no-bone sentinel; leave it empty for the placement's frame");
+					"headBoneIndex is the no-bone sentinel; leave it empty for the placement's "
+					"frame");
 			}
 
 			if (!IsInvertibleAffine(desc.headToBone))
@@ -196,7 +194,7 @@ namespace bgl
 			const core::slot_handle entry = m_ToonShadingRigs.Add(record);
 
 			ToonShadingRigMeta& meta = m_ToonShadingRigs.MetaAt(entry.index);
-			meta.headBone            = desc.headBone;
+			meta.headBoneIndex       = desc.headBoneIndex;
 			meta.useCount            = 0;
 			return ToonShadingRigHandle{ entry };
 		}

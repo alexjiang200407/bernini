@@ -1,10 +1,7 @@
 import Range;
+import ToonShadingRigLimits;
 
-// Slots one rig evaluates: an edit takes one, a mirrored edit two. bgl::c_MaxToonShadingRigSlots is the
-// same number.
-public static const uint cMaxToonShadingRigSlots = 8;
-
-// ToonShadingRig::headBone on a rig whose head is the placement's own frame.
+// ToonShadingRig::headBoneIndex on a rig whose head is the placement's own frame.
 public static const uint cNoHeadBone = 0xFFFFFFFF;
 
 // ToonShadingRigEdit::flags. The sign locks are derived on upload from the keys' gains: an edit whose
@@ -40,7 +37,7 @@ public struct ToonShadingRig
     // matrix.
     public float4 headToBone[3];
 
-    public uint headBone;
+    public uint headBoneIndex;
     public uint editCount;
     // Edits plus mirrored twins: what the evaluated block holds.
     public uint slotCount;
@@ -57,9 +54,7 @@ public struct ToonShadingRig
     public float azimuthFadeAmount;
 
     public Range<ToonShadingRigKey> keys;
-    public uint pad0;
-    public uint pad1;
-    public uint pad2;
+    public uint pad[3];
 
     public ToonShadingRigEdit edits[cMaxToonShadingRigSlots];
 };

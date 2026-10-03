@@ -34,7 +34,7 @@ namespace bgl
 		// ISceneView::SetToonShadingRig checks a placement's, and held by the block until it is
 		// deleted. Which placements are evaluated is chosen on the GPU each frame -- the visible ones
 		// whose projected head is larger than the rig's `fadeEndPixels`, into a per-view pool of
-		// c_ToonShadingRigPoolCapacity -- and the rest shade cel only. See ToonShadingRigDesc.
+		// cToonShadingRigPoolCapacity -- and the rest shade cel only. See ToonShadingRigDesc.
 		ToonShadingRigHandle toonShadingRig;
 
 		template <typename Self>

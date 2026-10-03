@@ -196,7 +196,7 @@ namespace bgl
 	 */
 	struct ToonShadingRigMeta
 	{
-		std::optional<uint32_t> headBone;
+		std::optional<uint32_t> headBoneIndex;
 
 		// Placements across every view that hold the rig. DeleteToonShadingRig refuses while it is
 		// nonzero.

@@ -234,13 +234,13 @@ TEST_CASE("AddToonShadingRig refuses a rig no pass could evaluate", "[toonshadin
 		{ "more slots than a rig holds",
 		  [](bgl::ToonShadingRigDesc& d) {
 			  const bgl::ToonShadingRigEditDesc single = d.edits[1];
-			  d.edits.resize(bgl::c_MaxToonShadingRigSlots, single);
+			  d.edits.resize(bgl::cMaxToonShadingRigSlots, single);
 		  } },
 		{ "an edit with no keys", [](bgl::ToonShadingRigDesc& d) { d.edits[1].keys.clear(); } },
 		{ "more keys than an edit may hold",
 		  [](bgl::ToonShadingRigDesc& d) {
 			  const bgl::ToonShadingRigKeyDesc front = d.edits[1].keys[0];
-			  d.edits[1].keys.assign(bgl::c_MaxToonShadingRigKeysPerEdit + 1, front);
+			  d.edits[1].keys.assign(bgl::cMaxToonShadingRigKeysPerEdit + 1, front);
 		  } },
 		{ "a zero key sharpness",
 		  [](bgl::ToonShadingRigDesc& d) { d.edits[0].keySharpness         = 0.0f; } },
@@ -290,7 +290,7 @@ TEST_CASE("AddToonShadingRig refuses a rig no pass could evaluate", "[toonshadin
 		{ "a singular head transform",
 		  [](bgl::ToonShadingRigDesc& d) { d.headToBone[1]               = glm::vec4(0.0f); } },
 		{ "the no-bone sentinel as a head bone",
-		  [](bgl::ToonShadingRigDesc& d) { d.headBone = bgl::idl::cNoHeadBone; } },
+		  [](bgl::ToonShadingRigDesc& d) { d.headBoneIndex = bgl::idl::cNoHeadBone; } },
 		{ "a NaN head transform", [nan](bgl::ToonShadingRigDesc& d) { d.headToBone[3][0] = nan; } },
 	};
 
@@ -304,13 +304,13 @@ TEST_CASE("AddToonShadingRig refuses a rig no pass could evaluate", "[toonshadin
 
 	auto                             longest = ValidRig();
 	const bgl::ToonShadingRigKeyDesc front   = longest.edits[1].keys[0];
-	longest.edits[1].keys.assign(bgl::c_MaxToonShadingRigKeysPerEdit, front);
+	longest.edits[1].keys.assign(bgl::cMaxToonShadingRigKeysPerEdit, front);
 	CHECK_NOTHROW(scene->AddToonShadingRig(longest));
 
 	// Exactly the eight slots a rig holds is not refused: four mirrored edits.
 	auto                              full     = ValidRig();
 	const bgl::ToonShadingRigEditDesc mirrored = full.edits[0];
-	full.edits.assign(bgl::c_MaxToonShadingRigSlots / 2, mirrored);
+	full.edits.assign(bgl::cMaxToonShadingRigSlots / 2, mirrored);
 	CHECK_NOTHROW(scene->AddToonShadingRig(full));
 }
 
@@ -400,8 +400,10 @@ TEST_CASE(
 	const auto skinned = AddSkinnedPlacement(*scene, *view);
 
 	const bgl::ToonShadingRigHandle ownFrame = scene->AddToonShadingRig(ValidRig());
-	const bgl::ToonShadingRigHandle boneZero = scene->AddToonShadingRig(ValidRig().SetHeadBone(0u));
-	const bgl::ToonShadingRigHandle pastRig  = scene->AddToonShadingRig(ValidRig().SetHeadBone(1u));
+	const bgl::ToonShadingRigHandle boneZero =
+		scene->AddToonShadingRig(ValidRig().SetHeadBoneIndex(0u));
+	const bgl::ToonShadingRigHandle pastRig =
+		scene->AddToonShadingRig(ValidRig().SetHeadBoneIndex(1u));
 
 	CHECK_NOTHROW(view->SetToonShadingRig(placed, ownFrame));
 	CHECK_NOTHROW(view->SetToonShadingRig(skinned, ownFrame));
@@ -474,8 +476,10 @@ TEST_CASE(
 
 	const bgl::ToonShadingRigHandle dead = scene->AddToonShadingRig(ValidRig());
 	scene->DeleteToonShadingRig(dead);
-	const bgl::ToonShadingRigHandle boneZero = scene->AddToonShadingRig(ValidRig().SetHeadBone(0u));
-	const bgl::ToonShadingRigHandle pastRig  = scene->AddToonShadingRig(ValidRig().SetHeadBone(1u));
+	const bgl::ToonShadingRigHandle boneZero =
+		scene->AddToonShadingRig(ValidRig().SetHeadBoneIndex(0u));
+	const bgl::ToonShadingRigHandle pastRig =
+		scene->AddToonShadingRig(ValidRig().SetHeadBoneIndex(1u));
 
 	const auto block = [](const bgl::GeomHandle geom, const bgl::ToonShadingRigHandle rig) {
 		return bgl::MeshInstanceBlockDesc()
@@ -496,7 +500,7 @@ TEST_CASE(
 	// names the bone.
 	CHECK_THROWS_WITH(
 		view->CreateMeshInstanceBlock(block(quad, pastRig)),
-		Catch::Matchers::ContainsSubstring("head bone 1"));
+		Catch::Matchers::ContainsSubstring("headBoneIndex 1"));
 
 	// A refused block holds nothing.
 	CHECK_NOTHROW(scene->DeleteToonShadingRig(boneZero));
@@ -526,7 +530,7 @@ TEST_CASE("AddToonShadingRig packs what the evaluation pass reads", "[toonshadin
 
 	const auto desc =
 		bgl::ToonShadingRigDesc()
-			.SetHeadBone(4u)
+			.SetHeadBoneIndex(4u)
 			.SetHeadToBone(headToBone)
 			.SetEdits(
 				{ bgl::ToonShadingRigEditDesc()
@@ -543,7 +547,7 @@ TEST_CASE("AddToonShadingRig packs what the evaluation pass reads", "[toonshadin
 
 	CHECK(record.editCount == 4);
 	CHECK(record.slotCount == 5);
-	CHECK(record.headBone == 4);
+	CHECK(record.headBoneIndex == 4);
 	CHECK(record.keys.Null());
 	REQUIRE(packed.keys.size() == 8);
 
@@ -581,7 +585,7 @@ TEST_CASE("AddToonShadingRig packs what the evaluation pass reads", "[toonshadin
 	CHECK(record.headToBone[2] == glm::vec4(0.0f, 0.0f, 1.0f, 3.0f));
 
 	CHECK(
-		bgl::PackToonShadingRig(bgl::ToonShadingRigDesc()).record.headBone ==
+		bgl::PackToonShadingRig(bgl::ToonShadingRigDesc()).record.headBoneIndex ==
 		bgl::idl::cNoHeadBone);
 }
 
@@ -607,15 +611,15 @@ TEST_CASE(
 	static_assert(sizeof(bgl::idl::ToonShadingRigKey) == 64);
 	static_assert(sizeof(bgl::idl::ToonShadingRigSlot) == 96);
 	static_assert(
-		sizeof(bgl::idl::ToonShadingRigBlock) == 80 + bgl::idl::cMaxToonShadingRigSlots * 96,
+		sizeof(bgl::idl::ToonShadingRigBlock) == 80 + bgl::cMaxToonShadingRigSlots * 96,
 		"a block is its header and its slots, unpadded");
 
-	constexpr uint32_t c_Last = bgl::idl::cMaxToonShadingRigSlots - 1;
+	constexpr uint32_t c_Last = bgl::cMaxToonShadingRigSlots - 1;
 
 	// Every field distinct, so a read at a neighbour's offset is a wrong value, not a coincidence.
 	auto rig                       = bgl::idl::ToonShadingRig();
 	rig.headToBone[2]              = glm::vec4(1.0f, 2.0f, 3.0f, 4.0f);
-	rig.headBone                   = 5;
+	rig.headBoneIndex              = 5;
 	rig.editCount                  = 6;
 	rig.slotCount                  = 7;
 	rig.headRadius                 = 0.125f;

@@ -92,6 +92,7 @@ set(IDL_PUBLIC_CPP_SOURCES
     MeshInstanceFlag.slang
     LodLevel.slang
     OverlayVertex.slang
+    ToonShadingRigLimits.slang
 )
 
 # The C++ mirror follows the backend's own rules; see IDL_CPP_OUT_DIR above.

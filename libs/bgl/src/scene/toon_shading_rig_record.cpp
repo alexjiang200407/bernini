@@ -68,7 +68,7 @@ namespace bgl
 		record.headToBone[1] = rows[1];
 		record.headToBone[2] = rows[2];
 
-		record.headBone          = desc.headBone.value_or(idl::cNoHeadBone);
+		record.headBoneIndex     = desc.headBoneIndex.value_or(idl::cNoHeadBone);
 		record.editCount         = static_cast<uint32_t>(desc.edits.size());
 		record.slotCount         = slots;
 		record.headRadius        = desc.headRadius;

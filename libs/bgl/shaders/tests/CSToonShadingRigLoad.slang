@@ -1,5 +1,6 @@
 import idl.ToonShadingRig;
 import idl.ToonShadingRigBlock;
+import idl.ToonShadingRigLimits;
 import lib.types.ComputeBuffer;
 import lib.types.RawBuffer;
 
@@ -23,7 +24,7 @@ void main()
 {
     let rig = gUniforms.records.Load<ToonShadingRig>(gUniforms.rigOffset);
     gUniforms.outValues[0] = rig.headToBone[2];
-    gUniforms.outValues[1] = float4(float(rig.headBone), float(rig.editCount), float(rig.slotCount), rig.headRadius);
+    gUniforms.outValues[1] = float4(float(rig.headBoneIndex), float(rig.editCount), float(rig.slotCount), rig.headRadius);
     gUniforms.outValues[2] = float4(rig.fadeStartPixels, rig.fadeEndPixels, rig.minElevation, rig.maxElevation);
     gUniforms.outValues[3] = float4(rig.maxAzimuth, rig.azimuthFadeStart, rig.azimuthFadeEnd, rig.azimuthFadeAmount);
 

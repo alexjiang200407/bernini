@@ -259,14 +259,14 @@ namespace bgl
 		 * Adds a face's toon shading rig, which any placement of any view over this scene may then take
 		 * with ISceneView::SetToonShadingRig. See ToonShadingRigDesc.
 		 *
-		 * bgl resolves no bone name: `desc.headBone` is an index into the rig of whichever placement
+		 * bgl resolves no bone name: `desc.headBoneIndex` is an index into the rig of whichever placement
 		 * takes it, checked there.
 		 *
 		 * Every key of every edit is weighed for every placement holding the rig, every frame, so an
-		 * edit holds at most c_MaxToonShadingRigKeysPerEdit.
+		 * edit holds at most cMaxToonShadingRigKeysPerEdit.
 		 *
-		 * @throws SceneError if the edits take more than c_MaxToonShadingRigSlots slots; an edit has no
-		 *         keys, more than c_MaxToonShadingRigKeysPerEdit, or a `keySharpness` that is not finite
+		 * @throws SceneError if the edits take more than cMaxToonShadingRigSlots slots; an edit has no
+		 *         keys, more than cMaxToonShadingRigKeysPerEdit, or a `keySharpness` that is not finite
 		 *         and positive; a key's light is not finite and nonzero or its squared length
 		 *         overflows, its position is not finite, its size is not finite and
 		 *         positive, its radius is negative, its anisotropy is outside [0, 1), its sharpness
@@ -275,7 +275,7 @@ namespace bgl
 		 *         0 <= fadeEndPixels < fadeStartPixels; the face light's elevations are not
 		 *         -pi/2 <= minElevation <= maxElevation <= pi/2, its `maxAzimuth` is outside [0, pi],
 		 *         its fade does not start before it ends or its amount is outside [0, 1];
-		 *         `headBone` is 0xFFFFFFFF, which the GPU record reserves for "no bone"; or
+		 *         `headBoneIndex` is 0xFFFFFFFF, which the GPU record reserves for "no bone"; or
 		 *         `headToBone` is not a finite, invertible affine matrix. Nothing is written unless
 		 *         all of it passes.
 		 */

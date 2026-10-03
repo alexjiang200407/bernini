@@ -1,4 +1,5 @@
 #pragma once
+#include <bgl/ToonShadingRigLimits.h>  // IWYU pragma: export
 #include <bgl/glm.h>
 #include <cstdint>
 #include <numbers>
@@ -8,21 +9,6 @@
 
 namespace bgl
 {
-	/** Slots one rig may evaluate: an edit takes one, a mirrored edit two. */
-	constexpr uint32_t c_MaxToonShadingRigSlots = 8;
-
-	/**
-	 * Keys one edit may hold. Every key is weighed for every rigged placement every frame, so this
-	 * bounds the evaluation's per-placement cost.
-	 */
-	constexpr uint32_t c_MaxToonShadingRigKeysPerEdit = 32;
-
-	/**
-	 * Rigged placements one view evaluates a frame: the size of its pool of evaluated blocks. Placements
-	 * that are visible and large enough on screen take it, up to this many; the rest shade cel only.
-	 */
-	constexpr uint32_t c_ToonShadingRigPoolCapacity = 1024;
-
 	/**
 	 * One key of a toon-shading-rig edit: the edit's shape when the light comes from `light`. Between
 	 * keys an edit is a normalized blend of them, weighted by how near each key's light is to the
@@ -165,7 +151,7 @@ namespace bgl
 	 */
 	struct ToonShadingRigEditDesc
 	{
-		// At least one, at most c_MaxToonShadingRigKeysPerEdit.
+		// At least one, at most cMaxToonShadingRigKeysPerEdit.
 		std::vector<ToonShadingRigKeyDesc> keys;
 
 		// How fast a key's weight falls off as the light turns away from it: the spherical
@@ -284,20 +270,20 @@ namespace bgl
 	 *
 	 * Which rigged placements are evaluated is chosen on the GPU each frame: only those visible and
 	 * whose projected head is larger than `fadeEndPixels`, into a per-view pool of
-	 * c_ToonShadingRigPoolCapacity. Past the pool's capacity, or farther, a placement shades cel only.
+	 * cToonShadingRigPoolCapacity. Past the pool's capacity, or farther, a placement shades cel only.
 	 */
 	struct ToonShadingRigDesc
 	{
 		// The bone whose pose carries the head, an index into the placement's rig. Empty: the
 		// placement's own transform is the head's frame, as on a static mesh.
-		std::optional<uint32_t> headBone;
+		std::optional<uint32_t> headBoneIndex;
 
 		// Head space to the bone's model space or, with no bone, to the placement's. Affine.
 		glm::mat4 headToBone = glm::mat4(1.0f);
 
 		FaceLightDesc faceLight;
 
-		// At most c_MaxToonShadingRigSlots slots between them.
+		// At most cMaxToonShadingRigSlots slots between them.
 		std::vector<ToonShadingRigEditDesc> edits;
 
 		// World units, times the placement's uniform scale: what the head's projected size is
@@ -311,9 +297,9 @@ namespace bgl
 
 		template <typename Self>
 		Self&&
-		SetHeadBone(this Self&& self, std::optional<uint32_t> value) noexcept
+		SetHeadBoneIndex(this Self&& self, std::optional<uint32_t> value) noexcept
 		{
-			self.headBone = value;
+			self.headBoneIndex = value;
 			return std::forward<Self>(self);
 		}
 

@@ -1,8 +1,5 @@
 import ToonShadingRig;
-
-// Blocks in one view's pool: the rigged placements evaluated a frame, chosen on the GPU from those
-// visible and large enough on screen. bgl::c_ToonShadingRigPoolCapacity is the same number.
-public static const uint cToonShadingRigPoolCapacity = 1024;
+import ToonShadingRigLimits;
 
 // One evaluated edit: its keys blended for this frame's light, with the frame it is measured in
 // built. Head space.
@@ -28,9 +25,7 @@ public struct ToonShadingRigBlock
     public float4 faceLight;
 
     public uint slotCount;
-    public uint pad0;
-    public uint pad1;
-    public uint pad2;
+    public uint pad[3];
 
     public ToonShadingRigSlot slots[cMaxToonShadingRigSlots];
 };

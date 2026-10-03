@@ -1145,7 +1145,7 @@ namespace bgl
 			throw SceneError(
 				std::format("{}: the toon shading rig is null, or already deleted", caller));
 		}
-		if (!rigMeta->headBone.has_value())
+		if (!rigMeta->headBoneIndex.has_value())
 		{
 			return;
 		}
@@ -1154,17 +1154,17 @@ namespace bgl
 		{
 			throw SceneError(
 				std::format(
-					"{}: a rig with a head bone needs a skinned geom that is alive",
+					"{}: a rig with a headBoneIndex needs a skinned geom that is alive",
 					caller));
 		}
 		const uint32_t boneCount = m_SceneRaw->GetGeomSkinnedInfo(geom.handle.index).boneCount;
-		if (*rigMeta->headBone >= boneCount)
+		if (*rigMeta->headBoneIndex >= boneCount)
 		{
 			throw SceneError(
 				std::format(
-					"{}: head bone {} is not in the geom's rig of {} bones",
+					"{}: headBoneIndex {} is not in the geom's rig of {} bones",
 					caller,
-					*rigMeta->headBone,
+					*rigMeta->headBoneIndex,
 					boneCount));
 		}
 	}
