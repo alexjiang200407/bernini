@@ -28,6 +28,7 @@ import lib.forward.common;
 import lib.forward.mesh_stage;
 import lib.forward.SkinnedData;
 import lib.geom.vertexdecode;
+import lib.math.transform;
 import lib.types.ComputeBuffer;
 import lib.data.SubmeshInstance;
 
@@ -115,12 +116,12 @@ public SkinnedPose ResolveSkinnedPose(MeshletContext ctx, InstancedPayload paylo
         let dominant = skinnedData.dominantFrames[payload.instance.meshInstance.GetOffset()];
         let start = rig.boneAnimTable.GetStart();
         let stride = rig.boneCount * cFloat4sPerBone;
-        pose.base = start + dominant.lower * stride;
-        pose.upperBase = start + dominant.upper * stride;
-        pose.weight = dominant.weight;
-        pose.prevBase = start + dominant.prevLower * stride;
-        pose.prevUpperBase = start + dominant.prevUpper * stride;
-        pose.prevWeight = dominant.prevWeight;
+        pose.base = start + dominant.lowerFrame * stride;
+        pose.upperBase = start + dominant.upperFrame * stride;
+        pose.weight = dominant.upperWeight;
+        pose.prevBase = start + dominant.prevLowerFrame * stride;
+        pose.prevUpperBase = start + dominant.prevUpperFrame * stride;
+        pose.prevWeight = dominant.prevUpperWeight;
 
         return pose;
     }
@@ -180,7 +181,7 @@ public ForwardVSOut SkinnedVertex(MeshletContext ctx, SkinnedPose pose, SubmeshI
     // neither source can answer it differently, and its joints name no bone to assert against.
     if (dot(vertex.weights, float4(1.0, 1.0, 1.0, 1.0)) <= 0.0)
     {
-        skin = float4x4(float4(1.0, 0.0, 0.0, 0.0), float4(0.0, 1.0, 0.0, 0.0), float4(0.0, 0.0, 1.0, 0.0), float4(0.0, 0.0, 0.0, 1.0));
+        skin = IdentityTransform();
         prevSkin = skin;
     }
     else

@@ -81,7 +81,7 @@ public void SolveTwoBone(float3 root, float3 mid, float3 tip, float3 target, out
     float3 axis = cross(toTip, toMid);
     if (length(axis) < 1e-6)
     {
-        rootDelta = float4x4(float4(1, 0, 0, 0), float4(0, 1, 0, 0), float4(0, 0, 1, 0), float4(0, 0, 0, 1));
+        rootDelta = IdentityTransform();
         midDelta = rootDelta;
         return;
     }
@@ -104,7 +104,7 @@ public void SolveTwoBone(float3 root, float3 mid, float3 tip, float3 target, out
     let to = normalize(target - root);
     float3 aimAxis = cross(from, to);
 
-    float4x4 aim = float4x4(float4(1, 0, 0, 0), float4(0, 1, 0, 0), float4(0, 0, 1, 0), float4(0, 0, 0, 1));
+    float4x4 aim = IdentityTransform();
     if (length(aimAxis) > 1e-6)
     {
         aim = RotationAbout(root, normalize(aimAxis), acos(clamp(dot(from, to), -1.0, 1.0)));

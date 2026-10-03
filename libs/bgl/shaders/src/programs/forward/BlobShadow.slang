@@ -155,6 +155,16 @@ void FootVolumeCorners(BlobShadow blob, MeshInstance mesh, float3 heelPos, float
     }
 }
 
+// A heel and ball from two table sole slots (TableSoleSlot), blended as the skin is and placed by
+// the placement's transform: model space and unplanted, since the table has no IK.
+void PlaceTableSole(MeshInstance mesh, uint lower, uint upper, float upperWeight, out float3 heel, out float3 ball)
+{
+    let tables = gBlobShadowData.boneAnimTables;
+    let model = mesh.Matrix();
+    heel = TransformPoint(model, lerp(tables[lower].xyz, tables[upper].xyz, upperWeight));
+    ball = TransformPoint(model, lerp(tables[lower + 1].xyz, tables[upper + 1].xyz, upperWeight));
+}
+
 // Where `leg`'s heel and ball stand this frame, world space, from whichever pose the placement draws.
 // A hero palette ends with one sole per leg of its rig, after the poses at `time` and `prevTime`,
 // placed and planted by the pose pass. A table placement reads its rig's table soles at the frame its
@@ -168,11 +178,7 @@ void TableSole(MeshInstance mesh, Rig rig, Clip clip, float frames, uint leg, ou
     uint upper;
     float weight;
     TableSoleSlots(rig, clip, frames, leg, lower, upper, weight);
-
-    let tables = gBlobShadowData.boneAnimTables;
-    let model = mesh.Matrix();
-    heel = TransformPoint(model, lerp(tables[lower].xyz, tables[upper].xyz, weight));
-    ball = TransformPoint(model, lerp(tables[lower + 1].xyz, tables[upper + 1].xyz, weight));
+    PlaceTableSole(mesh, lower, upper, weight, heel, ball);
 }
 
 // The palette slots of `leg`'s heel and ball in a pose slice from `base`: after the poses at
@@ -210,12 +216,14 @@ void FootSole(uint placement, MeshInstance mesh, uint leg, out float3 heel, out 
         }
 
         let dominant = gBlobShadowData.dominantFrames[placement];
-        let tables = gBlobShadowData.boneAnimTables;
-        let lower = rig.tableSoles.GetStart() + (dominant.lower * rig.legs.count + leg) * cFloat4sPerSole;
-        let upper = rig.tableSoles.GetStart() + (dominant.upper * rig.legs.count + leg) * cFloat4sPerSole;
-        let model = mesh.Matrix();
-        heel = TransformPoint(model, lerp(tables[lower].xyz, tables[upper].xyz, dominant.weight));
-        ball = TransformPoint(model, lerp(tables[lower + 1].xyz, tables[upper + 1].xyz, dominant.weight));
+        PlaceTableSole(
+            mesh,
+            TableSoleSlot(rig, dominant.lowerFrame, leg),
+            TableSoleSlot(rig, dominant.upperFrame, leg),
+            dominant.upperWeight,
+            heel,
+            ball
+        );
         return;
     }
 

@@ -14,7 +14,9 @@ struct Uniforms
     ComputeBuffer<uint> requests;
     ComputeBuffer<InstanceLod> lodCurrent;
 
-    uint budget;
+    // The most placements drawn per instance a frame (ChoosePoses' maxPosed): grants are what it
+    // leaves once this frame's are counted.
+    uint maxPosed;
 };
 
 ConstantBuffer<Uniforms> gUniforms;
@@ -24,8 +26,8 @@ ConstantBuffer<Uniforms> gUniforms;
 void main(uint threadIdx: SV_DispatchThreadID)
 {
     let requested = gUniforms.pool[0].requested.load();
-    let posed = min(gUniforms.pool[0].posed.load(), gUniforms.budget);
-    let slack = gUniforms.budget - posed;
+    let posed = min(gUniforms.pool[0].posed.load(), gUniforms.maxPosed);
+    let slack = gUniforms.maxPosed - posed;
 
     if (threadIdx >= requested || threadIdx >= slack)
     {

@@ -71,9 +71,13 @@ struct Uniforms
     float time;
     float prevTime;
 
-    // Where the pool's block of the palette arena starts, and how many pose-list entries there are.
+    // Where the pool's block of the palette arena starts.
     uint poolStart;
-    uint budget;
+
+    // The most placements drawn per instance this frame: the pose list's length, which is
+    // CullView::poseBudget clamped to the view's automatic placements. An entry past it draws from
+    // the table.
+    uint maxPosed;
 };
 
 ConstantBuffer<Uniforms> gUniforms;
@@ -161,7 +165,7 @@ float IKScale(InstanceLod word)
 
 // The global frames of the rig's clip set the record's heaviest entry falls between at `time`, and
 // how far between them.
-void DominantAt(SkinnedAutoState state, Rig rig, float time, out uint lower, out uint upper, out float weight)
+void DominantAt(SkinnedAutoState state, Rig rig, float time, out uint lowerFrame, out uint upperFrame, out float upperWeight)
 {
     BlendTables tables;
     tables.nodes = gUniforms.blendNodeBuffer;
@@ -174,9 +178,9 @@ void DominantAt(SkinnedAutoState state, Rig rig, float time, out uint lower, out
 
     uint f0;
     uint f1;
-    ClipFrameIndices(clip, resolved.frames[entry], f0, f1, weight);
-    lower = clip.firstFrame + f0;
-    upper = clip.firstFrame + f1;
+    ClipFrameIndices(clip, resolved.frames[entry], f0, f1, upperWeight);
+    lowerFrame = clip.firstFrame + f0;
+    upperFrame = clip.firstFrame + f1;
 }
 
 [shader("compute")]
@@ -215,8 +219,8 @@ void main(uint threadIdx: SV_DispatchThreadID)
     let rig = gUniforms.rigs.Get(state.rig);
 
     DominantFrames dominant;
-    DominantAt(state, rig, gUniforms.time, dominant.lower, dominant.upper, dominant.weight);
-    DominantAt(state, rig, gUniforms.prevTime, dominant.prevLower, dominant.prevUpper, dominant.prevWeight);
+    DominantAt(state, rig, gUniforms.time, dominant.lowerFrame, dominant.upperFrame, dominant.upperWeight);
+    DominantAt(state, rig, gUniforms.prevTime, dominant.prevLowerFrame, dominant.prevUpperFrame, dominant.prevUpperWeight);
     gUniforms.dominantFrames[placement] = dominant;
 
     let incumbent = !previous.Unset() && previous.DrawsPerInstance();
@@ -245,12 +249,12 @@ void main(uint threadIdx: SV_DispatchThreadID)
         // The grants keep the placements posed within the budget, and the pool is sized to it.
         // Past either is only a budget lowered under placements that already held the right: they
         // draw from the table, and the counters overrun, which every reader clamps.
-        if (entry < gUniforms.budget && offset + slice <= gUniforms.pool[0].capacity)
+        if (entry < gUniforms.maxPosed && offset + slice <= gUniforms.pool[0].capacity)
         {
             pose.palette.offsetStart = gUniforms.poolStart + offset;
 
             AutoPosedInstance posed;
-            posed.mesh = placement;
+            posed.meshInstanceIndex = placement;
             posed.footIK = state.footIK;
             posed.palette = pose.palette;
             posed.ikScale = IKScale(word);

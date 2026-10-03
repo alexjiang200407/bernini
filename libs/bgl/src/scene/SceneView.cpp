@@ -1304,9 +1304,9 @@ namespace bgl
 			const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
 			if (meta.geomType == GeomType::kSkinnedMesh && meta.animState != 0 && meta.palette)
 			{
-				auto& entry  = list.emplace_back();
-				entry.mesh   = meshIndex;
-				entry.footIK = meta.footIK;
+				auto& entry             = list.emplace_back();
+				entry.meshInstanceIndex = meshIndex;
+				entry.footIK            = meta.footIK;
 			}
 		}
 
@@ -1343,8 +1343,9 @@ namespace bgl
 		}
 
 		// No frame poses more than the budget, nor more placements than there are.
-		const auto budget = std::min(m_LodSelection.poseBudget, static_cast<uint32_t>(list.size()));
-		const auto capacity = budget * maxSlice;
+		const auto maxPosed =
+			std::min(m_LodSelection.poseBudget, static_cast<uint32_t>(list.size()));
+		const auto capacity = maxPosed * maxSlice;
 
 		if (m_PosePoolBlock)
 		{
@@ -1356,7 +1357,7 @@ namespace bgl
 			m_PosePoolBlock = m_Palettes.Allocate(capacity);
 		}
 
-		m_AutoPose.Assign(list, budget, capacity > 0 ? m_PosePoolBlock.index : 0u, capacity);
+		m_AutoPose.Assign(list, maxPosed, capacity > 0 ? m_PosePoolBlock.index : 0u, capacity);
 		m_AutoDirty = false;
 	}
 

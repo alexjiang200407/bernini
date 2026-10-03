@@ -50,13 +50,13 @@ namespace bgl
 
 		/**
 		 * Replaces the list of automatic placements (MeshInstance entries) and the pool they are
-		 * posed from: `budget` entries of the pose list, and `capacity` float4s of the palette arena
+		 * posed from: `maxPosed` entries of the pose list, and `capacity` float4s of the palette arena
 		 * from `poolStart`.
 		 */
 		void
 		Assign(
 			std::span<const uint32_t> placements,
-			uint32_t                  budget,
+			uint32_t                  maxPosed,
 			uint32_t                  poolStart,
 			uint32_t                  capacity);
 
@@ -76,9 +76,9 @@ namespace bgl
 
 		/** The most placements one frame can pose: the pose list's length, and the pose dispatch's. */
 		[[nodiscard]] uint32_t
-		GetBudget() const noexcept
+		GetMaxPosed() const noexcept
 		{
-			return m_Budget;
+			return m_MaxPosed;
 		}
 
 		[[nodiscard]] uint32_t
@@ -117,7 +117,7 @@ namespace bgl
 		bgpu::ComputeBuffer          m_Requests;
 
 		uint32_t m_PlacementCount = 0;
-		uint32_t m_Budget         = 0;
+		uint32_t m_MaxPosed       = 0;
 		uint32_t m_PoolStart      = 0;
 		uint32_t m_Capacity       = 0;
 	};

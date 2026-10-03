@@ -68,8 +68,10 @@ void main()
         float4(float(rig.boneAnimTable.GetStart()), float(rig.tableSoles.GetStart()), float(blob.leg), float(pose.palette.GetStart()));
 
     let posed = gUniforms.records.Load<AutoPosedInstance>(gUniforms.posedOffset);
-    gUniforms.outValues[10] = float4(float(posed.mesh), float(posed.footIK.GetStart()), float(posed.palette.GetStart()), posed.ikScale);
+    gUniforms.outValues[10] =
+        float4(float(posed.meshInstanceIndex), float(posed.footIK.GetStart()), float(posed.palette.GetStart()), posed.ikScale);
 
     let dominant = gUniforms.records.Load<DominantFrames>(gUniforms.framesOffset);
-    gUniforms.outValues[11] = float4(float(dominant.lower), dominant.weight, float(dominant.prevUpper), dominant.prevWeight);
+    gUniforms.outValues[11] =
+        float4(float(dominant.lowerFrame), dominant.upperWeight, float(dominant.prevUpperFrame), dominant.prevUpperWeight);
 }

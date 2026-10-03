@@ -9,11 +9,14 @@
 // Indexed by the placement's MeshInstance entry and rewritten every cull.
 public struct DominantFrames
 {
-    public uint lower;
-    public uint upper;
-    public float weight;
+    // Global frame indices into the rig's bone anim table and its soles, and the blend toward the
+    // upper of the two, at `time`.
+    public uint lowerFrame;
+    public uint upperFrame;
+    public float upperWeight;
 
-    public uint prevLower;
-    public uint prevUpper;
-    public float prevWeight;
+    // The same at `prevTime`.
+    public uint prevLowerFrame;
+    public uint prevUpperFrame;
+    public float prevUpperWeight;
 };

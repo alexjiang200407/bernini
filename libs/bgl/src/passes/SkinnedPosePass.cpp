@@ -57,7 +57,7 @@ namespace bgl
 		core::ensure(view != nullptr, "SkinnedPosePass requires a bgl::SceneView");
 
 		const uint32_t posed     = view->GetPosedInstanceCount();
-		const uint32_t automatic = view->GetAutoPose().GetBudget();
+		const uint32_t automatic = view->GetAutoPose().GetMaxPosed();
 		if (posed == 0 && automatic == 0)
 		{
 			return;
@@ -82,7 +82,7 @@ namespace bgl
 		uniforms["posedCount"]        = posed;
 		uniforms["autoPosed"]         = ctx.GetBuffer(c_AutoPosedName);
 		uniforms["pool"]              = ctx.GetBuffer(c_PosePoolName);
-		uniforms["budget"]            = automatic;
+		uniforms["maxPosed"]          = automatic;
 
 		const Scene*           scene  = view->GetScene()->As<Scene>();
 		const GroundPlaneDesc& ground = scene->GetGround();

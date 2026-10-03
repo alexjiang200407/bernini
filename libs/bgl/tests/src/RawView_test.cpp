@@ -139,18 +139,18 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	pose.palette.offsetStart = 23;
 
 	auto posed                = bgl::idl::AutoPosedInstance();
-	posed.mesh                = 31;
+	posed.meshInstanceIndex   = 31;
 	posed.footIK.offsetStart  = 32;
 	posed.palette.offsetStart = 33;
 	posed.ikScale             = 0.25f;
 
-	auto dominant       = bgl::idl::DominantFrames();
-	dominant.lower      = 41;
-	dominant.upper      = 42;
-	dominant.weight     = 0.5f;
-	dominant.prevLower  = 43;
-	dominant.prevUpper  = 44;
-	dominant.prevWeight = 0.25f;
+	auto dominant            = bgl::idl::DominantFrames();
+	dominant.lowerFrame      = 41;
+	dominant.upperFrame      = 42;
+	dominant.upperWeight     = 0.5f;
+	dominant.prevLowerFrame  = 43;
+	dominant.prevUpperFrame  = 44;
+	dominant.prevUpperWeight = 0.25f;
 
 	const auto vertexVec4 = glm::vec4(11.0f, 12.0f, 13.0f, 14.0f);
 	const auto vertexVec3 = glm::vec3(21.0f, 22.0f, 23.0f);
@@ -295,15 +295,15 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	CHECK(got[9].z == Catch::Approx(static_cast<float>(blob.leg)));
 	CHECK(got[9].w == Catch::Approx(static_cast<float>(pose.palette.offsetStart)));
 
-	CHECK(got[10].x == Catch::Approx(static_cast<float>(posed.mesh)));
+	CHECK(got[10].x == Catch::Approx(static_cast<float>(posed.meshInstanceIndex)));
 	CHECK(got[10].y == Catch::Approx(static_cast<float>(posed.footIK.offsetStart)));
 	CHECK(got[10].z == Catch::Approx(static_cast<float>(posed.palette.offsetStart)));
 	CHECK(got[10].w == Catch::Approx(posed.ikScale));
 
-	CHECK(got[11].x == Catch::Approx(static_cast<float>(dominant.lower)));
-	CHECK(got[11].y == Catch::Approx(dominant.weight));
-	CHECK(got[11].z == Catch::Approx(static_cast<float>(dominant.prevUpper)));
-	CHECK(got[11].w == Catch::Approx(dominant.prevWeight));
+	CHECK(got[11].x == Catch::Approx(static_cast<float>(dominant.lowerFrame)));
+	CHECK(got[11].y == Catch::Approx(dominant.upperWeight));
+	CHECK(got[11].z == Catch::Approx(static_cast<float>(dominant.prevUpperFrame)));
+	CHECK(got[11].w == Catch::Approx(dominant.prevUpperWeight));
 
 	CHECK(got[5].x == Catch::Approx(vertexVec4.x).margin(c_Margin));
 	CHECK(got[5].y == Catch::Approx(vertexVec4.y).margin(c_Margin));

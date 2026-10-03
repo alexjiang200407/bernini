@@ -11,7 +11,7 @@ import Range;
 // scope in, out of its reach.
 public struct AutoPosedInstance
 {
-    public uint mesh;
+    public uint meshInstanceIndex;
 
     // One FootIKLeg per leg of the rig, in leg order; null on a rig that authored no legs.
     public Range<FootIKLeg> footIK;

@@ -6,6 +6,7 @@ import idl.SkinnedBone;
 import idl.SkinnedLegChain;
 import lib.anim.pose_walk;
 import lib.anim.soles;
+import lib.math.transform;
 import lib.types.ComputeBuffer;
 import lib.types.EntryBuffer;
 import lib.types.PoseTables;
@@ -91,10 +92,8 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
     // them by its own transform. Frame-major, legs.count a frame.
     if (!rig.tableSoles.Null())
     {
-        let identity =
-            float4x4(float4(1.0, 0.0, 0.0, 0.0), float4(0.0, 1.0, 0.0, 0.0), float4(0.0, 0.0, 1.0, 0.0), float4(0.0, 0.0, 0.0, 1.0));
         let firstSoleSlot = rig.tableSoles.GetStart() + groupIdx * rig.legs.count * cFloat4sPerSole;
-        WriteSoles(tables, gUniforms.legBuffer, rig, identity, base, firstSoleSlot, localIdx);
+        WriteSoles(tables, gUniforms.legBuffer, rig, IdentityTransform(), base, firstSoleSlot, localIdx);
     }
 
     FoldInverseBind(tables, rig, base, localIdx);

@@ -240,7 +240,7 @@ namespace bgl
 		choose["requests"]          = ctx.GetBuffer(c_PoseRequestsName);
 		choose["placementCount"]    = pose.GetPlacementCount();
 		choose["poolStart"]         = pose.GetPoolStart();
-		choose["budget"]            = pose.GetBudget();
+		choose["maxPosed"]          = pose.GetMaxPosed();
 		choose["time"]              = draw.clock.time;
 		choose["prevTime"]          = draw.clock.prevTime;
 		choose["dominantFrames"]    = ctx.GetBuffer(c_DominantFramesName);
@@ -275,7 +275,7 @@ namespace bgl
 		grant["pool"]         = ctx.GetBuffer(c_PosePoolName);
 		grant["requests"]     = ctx.GetBuffer(c_PoseRequestsName);
 		grant["lodCurrent"]   = ctx.GetBuffer(c_InstanceLodName);
-		grant["budget"]       = pose.GetBudget();
+		grant["maxPosed"]     = pose.GetMaxPosed();
 
 		computeState.kernel = &m_GrantPoses;
 		cmdList->SetComputeState(computeState);

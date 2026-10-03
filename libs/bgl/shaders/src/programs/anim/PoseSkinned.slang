@@ -85,10 +85,11 @@ struct Uniforms
     uint posedCount;
 
     // Set for the dispatch over the automatic placements the camera's cull drew per instance: the
-    // list it wrote and the pool whose counter says how long that list is, clamped to the budget the
-    // list was sized to. The dispatch covers the budget, so the groups past the count return.
+    // list it wrote and the pool whose counter says how long that list is, clamped to `maxPosed`, the
+    // length the list was sized to. The dispatch covers `maxPosed` groups, so the ones past the count
+    // return.
     uint automatic;
-    uint budget;
+    uint maxPosed;
     ComputeBuffer<AutoPosedInstance> autoPosed;
     ComputeBuffer<PosePool> pool;
 
@@ -567,13 +568,13 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
     // none of it.
     if (gUniforms.automatic != 0)
     {
-        if (groupIdx >= min(gUniforms.pool[0].posed.load(), gUniforms.budget))
+        if (groupIdx >= min(gUniforms.pool[0].posed.load(), gUniforms.maxPosed))
         {
             return;
         }
 
         let entry = gUniforms.autoPosed[groupIdx];
-        let mesh = gUniforms.meshBuffer.Get(entry.mesh);
+        let mesh = gUniforms.meshBuffer.Get(entry.meshInstanceIndex);
         let state = gUniforms.playbackBuffer.LoadRecordAs<SkinnedAutoState>(mesh.playback);
         PoseRecord(
             tables, gUniforms.rigs.Get(state.rig), state.slots, mesh, entry.footIK, entry.ikScale, entry.palette.GetStart(), localIdx
@@ -587,7 +588,7 @@ void main(uint groupIdx: SV_GroupID, uint localIdx: SV_GroupIndex)
     }
 
     let entry = gUniforms.posedInstances[groupIdx];
-    let mesh = gUniforms.meshBuffer.Get(entry.mesh);
+    let mesh = gUniforms.meshBuffer.Get(entry.meshInstanceIndex);
     let state = gUniforms.playbackBuffer.LoadRecordAs<SkinnedState>(mesh.playback);
     PoseRecord(tables, gUniforms.rigs.Get(state.rig), state.slots, mesh, entry.footIK, 1.0, state.palette.GetStart(), localIdx);
 }

@@ -61,19 +61,19 @@ namespace bgl
 	void
 	AutoPoseState::Assign(
 		std::span<const uint32_t> placements,
-		uint32_t                  budget,
+		uint32_t                  maxPosed,
 		uint32_t                  poolStart,
 		uint32_t                  capacity)
 	{
 		m_Placements.Assign(placements);
 		m_PlacementCount = static_cast<uint32_t>(placements.size());
-		m_Budget         = budget;
+		m_MaxPosed       = maxPosed;
 		m_PoolStart      = poolStart;
 		m_Capacity       = capacity;
 
-		if (budget > m_Posed.GetDesc().initialCount)
+		if (maxPosed > m_Posed.GetDesc().initialCount)
 		{
-			m_Posed.Resize(budget);
+			m_Posed.Resize(maxPosed);
 		}
 		if (m_PlacementCount > m_Requests.GetDesc().initialCount)
 		{
