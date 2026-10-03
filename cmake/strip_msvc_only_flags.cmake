@@ -16,12 +16,21 @@ function(strip_msvc_only_interface_flags)
             continue()
         endif()
 
+        # A list splits a generator expression at every ';' inside it -- spdlog's
+        # $<$<CXX_COMPILER_ID:MSVC>:/wd4251;/wd4275> arrives as two elements, the second
+        # starting with '/' -- so only a '/'-flag outside every open $< is bare.
         set(FILTERED "")
+        set(GENEX_DEPTH 0)
         foreach(OPT ${OPTS})
-            if(OPT MATCHES "^/")
+            if(GENEX_DEPTH EQUAL 0 AND OPT MATCHES "^/")
                 continue()
             endif()
             list(APPEND FILTERED "${OPT}")
+            string(REGEX MATCHALL "\\$<" OPENS "${OPT}")
+            string(REGEX MATCHALL ">" CLOSES "${OPT}")
+            list(LENGTH OPENS OPEN_COUNT)
+            list(LENGTH CLOSES CLOSE_COUNT)
+            math(EXPR GENEX_DEPTH "${GENEX_DEPTH} + ${OPEN_COUNT} - ${CLOSE_COUNT}")
         endforeach()
 
         set_target_properties(${TARGET_NAME} PROPERTIES INTERFACE_COMPILE_OPTIONS "${FILTERED}")
