@@ -32,6 +32,13 @@ public struct MeshInstance
     // placement, so a bit takes effect in all of them at once.
     public uint flags;
 
+    // Seconds its playback record is evaluated ahead of the view's clock, at `time` and at
+    // `prevTime` alike, so a pose stays a function of the record and the clock. Zero from every CPU
+    // spawn. An instance block's writer sets it (ISkinnedMeshInstanceBlock::SetPlaybackOffset), which is
+    // how placements sharing one record play it out of step. A record read at an offset is past any
+    // ramp that starts "now", so a block's record is written once and never rewritten.
+    public float playbackOffset;
+
     // The placement as one affine matrix, the implied fourth row filled in.
     public float4x4 Matrix() { return float4x4(transform[0], transform[1], transform[2], float4(0.0, 0.0, 0.0, 1.0)); }
 

@@ -250,7 +250,7 @@ namespace
 			{
 				handoffDesc.AddType(
 					crowd_render::AgentTypeMeshDesc()
-						.SetGeom(geom)
+						.AddGeom(geom)
 						.SetCapacity(counts[type])
 						.SetModel(
 							glm::translate(

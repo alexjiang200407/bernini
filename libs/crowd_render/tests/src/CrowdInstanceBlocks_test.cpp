@@ -14,6 +14,8 @@
 #include <bgpu/GpuContext.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <crowd_render/CrowdInstanceBlocks.h>
 #include <crowdlib/AgentType.h>
 #include <crowdlib/CrowdDesc.h>
@@ -66,7 +68,7 @@ namespace
 			    .SetCrowd(std::move(crowd))
 			    .SetGraphics(graphics)
 			    .SetView(view)
-			    .AddType(crowd_render::AgentTypeMeshDesc().SetGeom(box));
+			    .AddType(crowd_render::AgentTypeMeshDesc().AddGeom(box));
 		}
 	};
 }
@@ -85,6 +87,19 @@ TEST_CASE("CrowdInstanceBlocks refuses what it cannot draw", "[crowd_render]")
 	auto noTypes  = f.Desc(f.CreateCrowd(5));
 	noTypes.types = {};
 	CHECK_THROWS_AS(crowd_render::CrowdInstanceBlocks(noTypes), std::runtime_error);
+
+	auto noGeom           = f.Desc(f.CreateCrowd(5));
+	noGeom.types[0].geoms = {};
+	CHECK_THROWS_WITH(
+		crowd_render::CrowdInstanceBlocks(noGeom),
+		Catch::Matchers::ContainsSubstring("names no geom"));
+
+	// The contract's refusal, until a block is made per geom.
+	auto twoGeoms = f.Desc(f.CreateCrowd(5));
+	twoGeoms.types[0].AddGeom(f.box);
+	CHECK_THROWS_WITH(
+		crowd_render::CrowdInstanceBlocks(twoGeoms),
+		Catch::Matchers::ContainsSubstring("not drawn yet"));
 
 	auto blocks = crowd_render::CrowdInstanceBlocks(f.Desc(f.CreateCrowd(5)));
 	CHECK_THROWS_AS(blocks.PrepareFrame(-0.1f), std::runtime_error);

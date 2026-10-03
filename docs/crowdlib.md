@@ -130,7 +130,12 @@ each refuses; what follows is why it is shaped as it is.
   `CrowdPlan`'s, so the suite checks two implementations, not one twice.
 * **A render ring for a reader on another queue.** With `CrowdDesc::renderRingTicks`, every tick
   also has a slot of `maxAgents` `RenderAgent` records (`<crowdlib/RenderAgent.h>`): position,
-  facing, the agent's record in the tick before (`source`, or `c_RenderSpawned`) and its type. The
+  facing, the agent's record in the tick before (`source`, or `c_RenderSpawned`), its type and its
+  `id`. An agent's index, slot and record all move when its group is split, merged or closed up, so
+  `id` is the one thing a reader can derive from that stays with the agent, an animation phase for
+  one: a spawned `AgentRange` carries its first agent's and the kernel counts up from it, every copy
+  carries its own, and the record publishes it. The plan does not hand them out yet, so every id
+  reads 0. The
   ring is one buffer for the crowd's life (`GetRenderRing`), which a renderer imports once;
   `GetRenderTick(t)` says where tick `t`'s records are and the queue point that wrote them, from its
   `Step` until the ring is stepped past it. A tick's records are grouped by agent type, in

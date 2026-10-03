@@ -14,4 +14,7 @@ public struct Agent
     // The agent's row in the tick's Group table.
     public uint group;
     public uint slot;
+
+    // Given at spawn and carried by every copy since: what RenderAgent::id publishes.
+    public uint id;
 };
