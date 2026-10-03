@@ -4,11 +4,19 @@ import ToonShadingRigLimits;
 // ToonShadingRig::headBoneIndex on a rig whose head is the placement's own frame.
 public static const uint cNoHeadBone = 0xFFFFFFFF;
 
-// ToonShadingRigEdit::flags. The sign locks are derived on upload from the keys' gains: an edit whose
-// gains are all of one sign keeps it between keys, so a blend never turns a shadow into a light.
-public static const uint cToonShadingRigEditMirrored = 0x1;
-public static const uint cToonShadingRigEditShadeOnly = 0x2;
-public static const uint cToonShadingRigEditLightOnly = 0x4;
+// One bit of ToonShadingRigEdit::flags. A zeroed word is an edit drawn once whose blend may take
+// either sign.
+public enum ToonShadingRigEditFlag : uint32_t
+{
+    // The edit has a twin evaluated with head-space X flipped.
+    kMirrored = 1,
+
+    // Sign locks, derived on upload from the keys' gains: an edit whose gains are all of one sign
+    // keeps it between keys, so a blend never turns a shadow into a light. At most one is set.
+    kShadeOnly = 2,
+    kLightOnly = 4,
+}
+;
 
 // One key of an edit, head space: bgl::ToonShadingRigKeyDesc packed four floats to a row.
 public struct ToonShadingRigKey
@@ -27,6 +35,8 @@ public struct ToonShadingRigEdit
     public uint keyCount;
     public float keySharpness;
     public uint flags;
+
+    public bool Has(ToonShadingRigEditFlag flag) { return (flags & uint(flag)) != 0u; }
 };
 
 // A face's toon shading rig as the evaluation pass reads it: bgl::ToonShadingRigDesc, flattened. One per

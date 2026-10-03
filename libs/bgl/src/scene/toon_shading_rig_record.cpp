@@ -4,6 +4,7 @@
 #include <bgl/types/ToonShadingRigDesc.h>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 
 namespace bgl
 {
@@ -22,11 +23,11 @@ namespace bgl
 			}
 			if (anyShade && !anyLight)
 			{
-				return idl::cToonShadingRigEditShadeOnly;
+				return std::to_underlying(idl::ToonShadingRigEditFlag::kShadeOnly);
 			}
 			if (anyLight && !anyShade)
 			{
-				return idl::cToonShadingRigEditLightOnly;
+				return std::to_underlying(idl::ToonShadingRigEditFlag::kLightOnly);
 			}
 			return 0u;
 		}
@@ -48,7 +49,9 @@ namespace bgl
 			entry.firstKey                 = static_cast<uint32_t>(packed.keys.size());
 			entry.keyCount                 = static_cast<uint32_t>(edit.keys.size());
 			entry.keySharpness             = edit.keySharpness;
-			entry.flags = SignLock(edit) | (edit.mirrored ? idl::cToonShadingRigEditMirrored : 0u);
+			entry.flags =
+				SignLock(edit) |
+				(edit.mirrored ? std::to_underlying(idl::ToonShadingRigEditFlag::kMirrored) : 0u);
 
 			for (const ToonShadingRigKeyDesc& key : edit.keys)
 			{

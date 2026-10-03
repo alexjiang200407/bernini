@@ -30,7 +30,12 @@ void main()
 
     let last = rig.edits[cMaxToonShadingRigSlots - 1];
     gUniforms.outValues[4] = float4(float(rig.keys.GetStart()), float(last.firstKey), float(last.keyCount), last.keySharpness);
-    gUniforms.outValues[5] = float4(float(last.flags), 0.0, 0.0, 0.0);
+    gUniforms.outValues[5] = float4(
+        float(last.flags),
+        last.Has(ToonShadingRigEditFlag::kMirrored) ? 1.0 : 0.0,
+        last.Has(ToonShadingRigEditFlag::kShadeOnly) ? 1.0 : 0.0,
+        last.Has(ToonShadingRigEditFlag::kLightOnly) ? 1.0 : 0.0
+    );
 
     let key = gUniforms.records.Load<ToonShadingRigKey>(gUniforms.keyOffset);
     gUniforms.outValues[6] = key.lightAndGain;

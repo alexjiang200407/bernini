@@ -554,8 +554,9 @@ TEST_CASE("AddToonShadingRig packs what the evaluation pass reads", "[toonshadin
 	const std::array<uint32_t, 4> firstKeys = { 0, 2, 5, 7 };
 	const std::array<uint32_t, 4> keyCounts = { 2, 3, 2, 1 };
 	const std::array<uint32_t, 4> flags     = {
-		bgl::idl::cToonShadingRigEditShadeOnly | bgl::idl::cToonShadingRigEditMirrored,
-		bgl::idl::cToonShadingRigEditLightOnly,
+		std::to_underlying(bgl::idl::ToonShadingRigEditFlag::kShadeOnly) |
+			std::to_underlying(bgl::idl::ToonShadingRigEditFlag::kMirrored),
+		std::to_underlying(bgl::idl::ToonShadingRigEditFlag::kLightOnly),
 		0u,
 		0u,
 	};
@@ -635,8 +636,8 @@ TEST_CASE(
 	rig.edits[c_Last].firstKey     = 10;
 	rig.edits[c_Last].keyCount     = 11;
 	rig.edits[c_Last].keySharpness = 12.5f;
-	rig.edits[c_Last].flags =
-		bgl::idl::cToonShadingRigEditMirrored | bgl::idl::cToonShadingRigEditShadeOnly;
+	rig.edits[c_Last].flags = std::to_underlying(bgl::idl::ToonShadingRigEditFlag::kMirrored) |
+	                          std::to_underlying(bgl::idl::ToonShadingRigEditFlag::kShadeOnly);
 
 	auto key                    = bgl::idl::ToonShadingRigKey();
 	key.lightAndGain            = glm::vec4(0.0f, 0.6f, 0.8f, -0.5f);
@@ -683,6 +684,9 @@ TEST_CASE(
 		glm::vec4(rig.maxAzimuth, rig.azimuthFadeStart, rig.azimuthFadeEnd, rig.azimuthFadeAmount));
 	same(got[4], glm::vec4(9.0f, 10.0f, 11.0f, 12.5f));
 	CHECK(got[5].x == Catch::Approx(static_cast<float>(rig.edits[c_Last].flags)));
+	CHECK(got[5].y == 1.0f);
+	CHECK(got[5].z == 1.0f);
+	CHECK(got[5].w == 0.0f);
 	same(got[6], key.lightAndGain);
 	same(got[7], key.rotationRadiusSmoothing);
 	same(got[8], block.headFromWorld[1]);
