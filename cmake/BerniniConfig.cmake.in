@@ -68,6 +68,15 @@ function(bernini_stage_runtime target)
         get_target_property(_ktx_type KTX::ktx TYPE)
         if (_ktx_type STREQUAL "SHARED_LIBRARY")
             list(APPEND _private_dlls "$<TARGET_FILE:KTX::ktx>")
+            # The Release libktx loads the Release zstd.dll beside it, which a Debug consumer's own
+            # runtime DLLs (zstdd.dll) do not provide.
+            get_target_property(_ktx_dll KTX::ktx IMPORTED_LOCATION_RELEASE)
+            if (_ktx_dll)
+                get_filename_component(_ktx_bin "${_ktx_dll}" DIRECTORY)
+                if (EXISTS "${_ktx_bin}/zstd.dll")
+                    list(APPEND _private_dlls "${_ktx_bin}/zstd.dll")
+                endif()
+            endif()
         endif()
 
         list(APPEND _commands
