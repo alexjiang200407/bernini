@@ -1,6 +1,7 @@
 #pragma once
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/InstanceDesc.h>
+#include <bgl/types/ToonShadingRigHandle.h>
 #include <cstdint>
 #include <utility>
 
@@ -29,6 +30,13 @@ namespace bgl
 		// the previous frame's time. Not read for a static geom.
 		SkinnedPlaybackDesc playback;
 
+		// The toon shading rig every placement of the block shares, or null. Checked as
+		// ISceneView::SetToonShadingRig checks a placement's, and held by the block until it is
+		// deleted. Which placements are evaluated is chosen on the GPU each frame -- the visible ones
+		// whose projected head is larger than the rig's `fadeEndPixels`, into a per-view pool of
+		// c_ToonShadingRigPoolCapacity -- and the rest shade cel only. See ToonShadingRigDesc.
+		ToonShadingRigHandle toonShadingRig;
+
 		template <typename Self>
 		Self&&
 		SetGeom(this Self&& self, GeomHandle geom) noexcept
@@ -50,6 +58,14 @@ namespace bgl
 		SetPlayback(this Self&& self, const SkinnedPlaybackDesc& playback) noexcept
 		{
 			self.playback = playback;
+			return std::forward<Self>(self);
+		}
+
+		template <typename Self>
+		Self&&
+		SetToonShadingRig(this Self&& self, ToonShadingRigHandle rig) noexcept
+		{
+			self.toonShadingRig = rig;
 			return std::forward<Self>(self);
 		}
 	};

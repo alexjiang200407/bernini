@@ -1,6 +1,7 @@
 #pragma once
 #include <bgl/IMeshInstanceWriter.h>
 #include <bgl/types/GeomHandle.h>
+#include <bgl/types/ToonShadingRigHandle.h>
 #include <bgpu/buffer/EntryBuffer.h>
 #include <bgpu/pipeline/ComputeKernel.h>
 #include <cstdint>
@@ -32,5 +33,8 @@ namespace bgl
 		// The writer's pipeline with a constant buffer of the block's own, so two blocks sharing a
 		// writer keep their parameters apart. Empty while `writer` is.
 		bgpu::ComputeKernel kernel;
+
+		// Shared by every placement of the block, which holds one use of it until it is deleted.
+		ToonShadingRigHandle toonShadingRig;
 	};
 }

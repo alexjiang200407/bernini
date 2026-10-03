@@ -395,6 +395,20 @@ flowchart TD
   a look is shared by every geom bound to it, so an update reaches all of them next frame and moves
   the temporal epoch. There is no getter: the caller holds the desc it wrote. The desc's ranges
   are listed on `CreateGrass`; an update refused for one writes nothing. `DeleteGrass` refuses while a live geom binds the look: delete the geoms first.
+* **`AddToonShadingRig(desc)` / `DeleteToonShadingRig(rig)`** — a face's toon shading rig (`ToonShadingRigDesc`):
+  shadow and light edits on a toon character's face, each keyed on the light's direction in head
+  space and blended between its keys as the light moves, and the remapped light the face shades
+  with. Only the toon character model reads it, on `face` pixels; no other model sees it. One per
+  character, shared by every placement and instance block that takes it
+  (`ISceneView::SetToonShadingRig`, `MeshInstanceBlockDesc::toonShadingRig`).
+  bgl resolves no bone name: `headBone` is an index into the taking placement's rig, filled in by
+  whoever loaded the skeleton, and an empty one makes the placement's own transform the head's
+  frame. Head space is +X across the face — the axis a mirrored edit flips — +Y up and +Z out of
+  the face. The bounds are listed on `AddToonShadingRig`, and a refused desc writes nothing.
+  `DeleteToonShadingRig` refuses while any placement or block of any view holds the rig. Which
+  rigged placements are evaluated is chosen on the GPU each frame: the visible ones whose projected
+  head is larger than `fadeEndPixels`, into a per-view pool of `c_ToonShadingRigPoolCapacity`; past
+  the pool, or farther, a placement shades cel only.
 
 ### ISceneView
 
@@ -410,6 +424,8 @@ flowchart TD
   placement, and every one is hidden until its writer places it; a capacity of N costs N slots in
   the cull whether the writer shows them or not. The geom's grass is not grown on them. Each frame
   the `Write Instance Blocks` pass runs every block's writer first (docs/passes.md).
+  `desc.toonShadingRig` gives every placement of the block one toon shading rig, checked as
+  `SetToonShadingRig` checks a placement's and held by the block until it is deleted.
 * **`SetBlockWriter(block, writer)` / `GetBlockParams(block)`** — binds a writer compiled by
   the same `IGraphics`, for the block's kind of geom, and gives the block its own copy of the writer's `Params`, written by name
   like any constant buffer and kept across frames. Rebinding starts from zeros; null unbinds, and
@@ -473,6 +489,14 @@ flowchart TD
   or `fadeHeight`, or an `intensity` outside `[0, 1]` — the same bounds on `feet` — and on `feet`
   wherever `HasLegs` is false. A crowd instance's feet are its rig's table soles, unplanted. `Get`
   returns empty for a placement carrying none.
+* **`SetToonShadingRig(instance, rig)` / `ClearToonShadingRig(instance)` / `GetToonShadingRig(instance)`** — the
+  placement's toon shading rig, drawn on the pixels of its toon character surfaces that are face
+  (`ToonCharacterSurface::face`, [Game-defined surfaces](game_defined_surfaces.md) § Toon surfaces)
+  and faded out by the head's projected size. The placement holds a use of the rig until it is
+  cleared or replaced, the placement is deleted or the view is destroyed. @throws on an invalid
+  handle, a null or deleted rig, and a rig naming a head bone on a placement that is not skinned,
+  whose geom is gone, or whose rig has no such bone. `Get` returns a null handle for a placement
+  holding none.
 * **`SetEnvironmentMap(desc)`** — @pre irradiance and prefilter are cube maps. Takes
   `EnvironmentMapDesc` by const reference but the struct is move-only, so build it in place at the
   call site. Replaces any previous environment wholesale.

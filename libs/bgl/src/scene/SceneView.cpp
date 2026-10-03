@@ -40,6 +40,7 @@
 #include <bgl/types/RigHandle.h>
 #include <bgl/types/SkyboxDesc.h>
 #include <bgl/types/TextureAssetHandle.h>
+#include <bgl/types/ToonShadingRigHandle.h>
 #include <bgpu/idl/RawArena.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Texture.h>
@@ -267,7 +268,25 @@ namespace bgl
 		m_TransparentSort.Resize(padded);
 	}
 
-	SceneView::~SceneView() noexcept { spdlog::trace("~SceneView"); }
+	SceneView::~SceneView() noexcept
+	{
+		spdlog::trace("~SceneView");
+
+		for (uint32_t meshIndex = 0; meshIndex < m_MeshBuffer.Capacity(); ++meshIndex)
+		{
+			if (m_MeshBuffer.IsIndexValid(meshIndex))
+			{
+				m_SceneRaw->ReleaseToonShadingRig(m_MeshBuffer.MetaAt(meshIndex).toonShadingRig);
+			}
+		}
+		for (uint32_t index = 0; index < m_InstanceBlocks.capacity(); ++index)
+		{
+			if (m_InstanceBlocks.allocated(index))
+			{
+				m_SceneRaw->ReleaseToonShadingRig(m_InstanceBlocks[index].toonShadingRig);
+			}
+		}
+	}
 
 	ViewMatrices
 	SceneView::AdvanceCamera(uint64_t frameCounter, const ViewMatrices& current) noexcept
@@ -1097,6 +1116,85 @@ namespace bgl
 		return m_MeshBuffer.MetaAt(instance.handle.index).blobShadow;
 	}
 
+	void
+	SceneView::SetToonShadingRig(MeshInstanceHandle instance, ToonShadingRigHandle rig)
+	{
+		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
+		{
+			throw SceneError(
+				"MeshInstanceHandle passed to SetToonShadingRig is invalid or already removed");
+		}
+
+		MeshMeta& meta = m_MeshBuffer.MetaAt(instance.handle.index);
+		RequireToonShadingRigFits(rig, meta.geom, "SetToonShadingRig");
+
+		m_SceneRaw->AcquireToonShadingRig(rig);
+		m_SceneRaw->ReleaseToonShadingRig(meta.toonShadingRig);
+		meta.toonShadingRig = rig;
+	}
+
+	void
+	SceneView::RequireToonShadingRigFits(
+		const ToonShadingRigHandle rig,
+		const GeomHandle           geom,
+		const std::string_view     caller) const
+	{
+		const ToonShadingRigMeta* rigMeta = m_SceneRaw->FindToonShadingRig(rig);
+		if (rigMeta == nullptr)
+		{
+			throw SceneError(
+				std::format("{}: the toon shading rig is null, or already deleted", caller));
+		}
+		if (!rigMeta->headBone.has_value())
+		{
+			return;
+		}
+
+		if (geom.geomType != GeomType::kSkinnedMesh || !m_SceneRaw->IsGeomAlive(geom))
+		{
+			throw SceneError(
+				std::format(
+					"{}: a rig with a head bone needs a skinned geom that is alive",
+					caller));
+		}
+		const uint32_t boneCount = m_SceneRaw->GetGeomSkinnedInfo(geom.handle.index).boneCount;
+		if (*rigMeta->headBone >= boneCount)
+		{
+			throw SceneError(
+				std::format(
+					"{}: head bone {} is not in the geom's rig of {} bones",
+					caller,
+					*rigMeta->headBone,
+					boneCount));
+		}
+	}
+
+	void
+	SceneView::ClearToonShadingRig(MeshInstanceHandle instance)
+	{
+		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
+		{
+			throw SceneError(
+				"MeshInstanceHandle passed to ClearToonShadingRig is invalid or already removed");
+		}
+
+		MeshMeta& meta = m_MeshBuffer.MetaAt(instance.handle.index);
+		m_SceneRaw->ReleaseToonShadingRig(meta.toonShadingRig);
+		meta.toonShadingRig = ToonShadingRigHandle();
+	}
+
+	ToonShadingRigHandle
+	SceneView::GetToonShadingRig(MeshInstanceHandle instance) const
+	{
+		if (!instance.IsValid() || !m_MeshBuffer.IsValid(instance.handle))
+		{
+			throw SceneError(
+				"MeshInstanceHandle passed to GetToonShadingRig is invalid or already removed");
+		}
+
+		return m_MeshBuffer.MetaAt(instance.handle.index).toonShadingRig;
+	}
+
 	MeshInstanceHandle
 	SceneView::WritePlacement(GeomHandle geom, glm::mat4 transform, uint32_t animState)
 	{
@@ -1214,6 +1312,7 @@ namespace bgl
 		{
 			m_BlobShadowsDirty = true;
 		}
+		m_SceneRaw->ReleaseToonShadingRig(meta.toonShadingRig);
 		if (!m_SceneRaw->GetGeomGrass(meta.geom).empty())
 		{
 			m_GrassDirty = true;
@@ -1715,6 +1814,10 @@ namespace bgl
 					c_MaxMeshInstanceBlockCapacity,
 					desc.capacity));
 		}
+		if (desc.toonShadingRig.IsValid())
+		{
+			RequireToonShadingRigFits(desc.toonShadingRig, desc.geom, "CreateMeshInstanceBlock");
+		}
 		if (skinned)
 		{
 			throw SceneError(
@@ -1775,6 +1878,11 @@ namespace bgl
 			block.geom               = desc.geom;
 			block.capacity           = desc.capacity;
 			block.range              = *range;
+			block.toonShadingRig     = desc.toonShadingRig;
+			if (desc.toonShadingRig.IsValid())
+			{
+				m_SceneRaw->AcquireToonShadingRig(desc.toonShadingRig);
+			}
 
 			++m_TemporalEpoch;
 			return MeshInstanceBlockHandle{ handle };
@@ -1814,6 +1922,7 @@ namespace bgl
 
 		MeshInstanceBlock& record = m_InstanceBlocks[block.handle.index];
 		ReleaseBlockRange(record.range);
+		m_SceneRaw->ReleaseToonShadingRig(record.toonShadingRig);
 
 		record = MeshInstanceBlock();
 		m_InstanceBlocks.release_slot(block.handle);
