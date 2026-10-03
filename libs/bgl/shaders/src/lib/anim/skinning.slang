@@ -20,6 +20,29 @@ public void TableFrameSlots(Rig rig, Clip clip, float frames, out uint lower, ou
     upper = rig.boneAnimTable.GetStart() + (clip.firstFrame + f1) * stride;
 }
 
+// The table sole slot of one leg at a global frame of the rig's clip set -- the heel, with the ball
+// after it. The soles are frame-major beside the table (Rig.tableSoles).
+//
+// @pre the rig has table soles and `leg` is below its leg count.
+public uint TableSoleSlot(Rig rig, uint globalFrame, uint leg)
+{
+    return rig.tableSoles.GetStart() + (globalFrame * rig.legs.count + leg) * cFloat4sPerSole;
+}
+
+// The two table sole slots a fractional frame of `clip` spans for one leg, and how far between them
+// it sits.
+//
+// @pre the rig has table soles and `leg` is below its leg count.
+public void TableSoleSlots(Rig rig, Clip clip, float frames, uint leg, out uint lower, out uint upper, out float weight)
+{
+    uint f0;
+    uint f1;
+    ClipFrameIndices(clip, frames, f0, f1, weight);
+
+    lower = TableSoleSlot(rig, clip.firstFrame + f0, leg);
+    upper = TableSoleSlot(rig, clip.firstFrame + f1, leg);
+}
+
 // Linear blend skinning: the weighted sum of the influencing bones' matrices, applied once rather
 // than per attribute, so position, normal and tangent all follow the same blend.
 //

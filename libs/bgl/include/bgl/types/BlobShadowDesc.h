@@ -53,8 +53,8 @@ namespace bgl
 		// of it below the caster, where the disc fades over it instead of cutting on and off.
 		float casterLift = 0.0f;
 
-		// A shadow under each foot as well as the disc. Only a placement ISceneView::HasFootIK holds
-		// may carry one: a crowd instance has no pose of its own to find a foot in.
+		// A shadow under each foot as well as the disc. Only a placement ISceneView::HasLegs holds
+		// may carry one. On the table source the feet are its rig's, unplanted.
 		std::optional<FootShadowDesc> feet;
 	};
 }

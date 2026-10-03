@@ -8,6 +8,6 @@ import Range;
 // pose pass is its only reader, and this list is that pass's own input.
 public struct PosedInstance
 {
-    public uint mesh;
+    public uint meshInstanceIndex;
     public Range<FootIKLeg> footIK;
 };

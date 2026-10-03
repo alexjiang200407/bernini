@@ -44,6 +44,9 @@ Bare, it renders `assets/Data`'s apples — the one project `copy_assets` stages
 | `--patch-size`, `--patch-spacing` | twice the look's fade end, 0.25 | the patch's side and the distance between its clumps, in metres |
 | `--distance` | 10 | how far from the patch's centre its camera stands, in metres, at eye height |
 | `--wind` | 0, calm | the patch's wind: steady and gust strength both, in [0, 1] |
+| `--crowd`, `--crowd-columns` | 0, 6 | copies of the model in rows of that many, receding from the camera; 0 places it once |
+| `--source` | `per-instance`, or `auto` for a crowd | the pose source a skinned mesh is spawned on: `per-instance`, `table` or `auto` |
+| `--pose-budget`, `--pose-pixels` | `LodSelectionDesc`'s | the view's choice for `auto`: units posed per instance at once, and the size on screen below which a one-level mesh draws from its table |
 
 What it prints, in order: the mesh and whether it is skinned; for a skinned mesh the clip table with
 `>` on the one playing — run once without `--clip` to learn the names; `lit` or `unlit`; one line
@@ -111,8 +114,30 @@ far run shows the field thinning to nothing; its `Forward Grass 0` row is what t
   directory whenever there is one. Without it such a material is refused at load, naming the
   surface.
 
+## Looking at a crowd
+
+`--crowd N` lays the model out N times in rows of `--crowd-columns`, receding along -Z and spaced by
+the playing clip's pose — not the whole clip set's, whose travelling clips would space units by how
+far they walk. Each unit plays the clip a golden-ratio fraction of a cycle after the one before, so
+neighbours never step together. The camera stands at the near end looking down the rows: the front
+row fills much of the frame and the back one a few pixels, which is the range `PoseSource::kAuto`
+chooses across ([Skinned Meshes](skinning.md)). A crowd spawns on `auto` unless `--source` says
+otherwise, so one comparison is three runs:
+
+```bash
+for s in auto per-instance table; do
+	just run bgl_ai_viewer -- --project "<project>/Data" --import Authored/Meshes/Rabbit.bimport \
+		--clip Walk_In_Place --crowd 60 --source $s --frames 150 --warmup 30 --out-dir "<dir>/$s"
+done
+```
+
+`Pose Skinned 0` is what posing costs on each source, `Choose Poses 0` what choosing costs, and
+`Forward Skinned 0` what drawing does; interleave the runs and read several, since a debug Metal
+clock is still ramping on the first. A mesh with levels swaps at level 0 whatever `--pose-pixels`
+says; `--pose-budget 0` keeps every `auto` unit on its table.
+
 ## What it does not do
 
-No window and no input; one mesh, or one grass look, and one clip per run — no blend spaces, no crossfades; no
+No window and no input; one mesh, or one grass look, or one crowd of one mesh, and one clip per run — no blend spaces, no crossfades; no
 golden-image comparison. A *wrong* frame is diagnosed with [Graphics Debug](gfx_debug.md); this
 only shows you the frame.

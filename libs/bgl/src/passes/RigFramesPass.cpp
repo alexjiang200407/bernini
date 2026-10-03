@@ -49,6 +49,7 @@ namespace bgl
 				.AddBufferRead("scene.skinnedBoneBuffer", bgpu::BarrierSyncFlag::kComputeShader)
 				.AddBufferRead("scene.clipBuffer", bgpu::BarrierSyncFlag::kComputeShader)
 				.AddBufferRead("scene.boneSampleBuffer", bgpu::BarrierSyncFlag::kComputeShader)
+				.AddBufferRead("scene.skinnedLegBuffer", bgpu::BarrierSyncFlag::kComputeShader)
 				.AddBufferReadWrite("scene.boneAnimTables", bgpu::BarrierSyncFlag::kComputeShader)
 				.SetExec([draw, this](const PassContext& ctx) { Execute(ctx, draw); }));
 	}
@@ -72,6 +73,7 @@ namespace bgl
 		uniforms["boneBuffer"]     = ctx.GetBuffer("scene.skinnedBoneBuffer");
 		uniforms["clipBuffer"]     = ctx.GetBuffer("scene.clipBuffer");
 		uniforms["sampleBuffer"]   = ctx.GetBuffer("scene.boneSampleBuffer");
+		uniforms["legBuffer"]      = ctx.GetBuffer("scene.skinnedLegBuffer");
 		uniforms["boneAnimTables"] = ctx.GetBuffer("scene.boneAnimTables");
 
 		auto computeState   = bgpu::ComputeState();

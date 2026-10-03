@@ -1473,15 +1473,49 @@ TEST_CASE("a playback spawn names its source", "[skinned][footik][contract]")
 			bgl::SceneError);
 	}
 
-	SECTION("the automatic source is refused until a pass draws it")
+	SECTION("the automatic source holds the record and the foot IK, and no palette")
 	{
-		CHECK_THROWS_AS(
-			view->CreateSkinnedMeshInstance(
-				bgl::SkinnedMeshInstanceDesc()
-					.SetGeom(legScene.geom)
-					.SetPlayback(playback)
-					.SetSource(bgl::PoseSource::kAuto)),
-			bgl::SceneError);
+		auto* viewRaw = view->As<bgl::SceneView>();
+		REQUIRE(viewRaw != nullptr);
+
+		const auto blended = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(legScene.geom)
+				.SetPlayback(playback)
+				.SetSource(bgl::PoseSource::kAuto));
+
+		const auto single = view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(legScene.geom)
+				.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0))
+				.SetSource(bgl::PoseSource::kAuto));
+
+		for (const auto instance : { blended, single })
+		{
+			const bgl::MeshMeta& meta = viewRaw->GetMeshBuffer().MetaAt(instance.handle.index);
+			CHECK(meta.automatic);
+			CHECK_FALSE(meta.palette);
+			CHECK(meta.footIK);
+
+			CHECK(view->HasFootIK(instance));
+			CHECK(view->HasLegs(instance));
+			CHECK_NOTHROW(view->SetFootIK(instance, bgl::FootIKDesc::Constant(0.5f, 0.5f)));
+			CHECK(view->GetFootIK(instance).leg[0].position.from == 0.5f);
+
+			CHECK_NOTHROW(view->SetSkinnedPlayback(
+				instance,
+				bgl::SkinnedPlaybackDesc::FromClip(0, 1.0f, 0.0f)));
+			CHECK(view->GetSkinnedPlayback(instance).slot[0].phase == 1.0f);
+		}
+
+		// The table is reserved at spawn, as a crowd instance's is: far away it draws from it.
+		auto* scene = legScene.scene->As<bgl::Scene>();
+		REQUIRE(scene != nullptr);
+		const auto rig = scene->GetGeomSkinnedInfo(legScene.geom.handle.index).record;
+		CHECK(scene->GetRigBuffer()[rig].boneAnimTable.offsetStart != 0u);
+
+		view->DeleteMeshInstance(blended);
+		CHECK_FALSE(view->HasFootIK(blended));
 	}
 }
 

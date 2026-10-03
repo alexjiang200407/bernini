@@ -14,7 +14,7 @@ namespace editor
 	bool
 	RewritesPlayback(const bgl::PoseSource source) noexcept
 	{
-		return source == bgl::PoseSource::kPerInstance;
+		return source == bgl::PoseSource::kPerInstance || source == bgl::PoseSource::kAuto;
 	}
 
 	uint32_t

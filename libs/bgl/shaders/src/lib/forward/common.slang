@@ -2,6 +2,15 @@ import idl.Constants;
 import lib.data.SubmeshInstance;
 import lib.math.motion_vector;
 
+// One bit of InstancedPayload.flags. A zeroed word is an entry's default draw, so every bit names an
+// exception to it.
+public enum InstancedDrawFlag : uint
+{
+    // This entry of an automatic placement draws from its rig's table rather than from the pose-pool
+    // slice the cull cut for it. Never set on another placement.
+    kPoseFromTable = 1,
+}
+
 public struct InstancedPayload
 {
     public SubmeshInstance instance;
@@ -10,6 +19,14 @@ public struct InstancedPayload
     // (DissolveVSOut.lodDissolve).
     public uint submeshEntry;
     public float lodDissolve;
+
+    // InstancedDrawFlag bits: what this entry draws, as opposed to what its placement is.
+    public uint flags;
+}
+
+public bool HasInstancedDrawFlag(InstancedPayload payload, InstancedDrawFlag flag)
+{
+    return (payload.flags & uint(flag)) != 0u;
 }
 
 // Survivor groups one CulledPayload::survivorMask word holds, a bit each.

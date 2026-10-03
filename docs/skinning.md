@@ -132,11 +132,41 @@ not obvious from a signature. The headers linked below are the source of truth.
   from different sources in the same frame, and a unit changes tier by respawning rather than by
   being re-uploaded.
 
-  A third value, `kAuto`, is declared with what it will draw from — a `SkinnedAutoState` record,
-  the `InstanceLod` word's source and grant bits, a per-view `PosePool` and a placement's
-  `InstancePose` slice, the rig's `tableSoles` — and both spawns refuse it until the passes that
-  read them exist. A whole playback record cannot be spawned on `kBoneAnimTable`: the
-  `SkinnedMeshInstanceDesc` spawn refuses it.
+  A third, `kAuto`, holds a `SkinnedAutoState`: the hero record's rig and weighted slots and its
+  foot-IK record, and no palette. It reserves the rig's table at spawn, as a crowd instance does,
+  and drawn from the table it plays the entry its slots lean on most — resolved by
+  `lib/anim/resolve_slots.slang` exactly as the pose pass resolves them, then `DominantEntry`, at
+  `time` and again at `prevTime`, so a dominance that changes between the two reprojects through
+  the pose each clock drew. The camera's cull resolves it once per placement into `DominantFrames`
+  (the two global frames and the blend between them, at each clock), which the mesh stage and the
+  blob pass read. Resolved per mesh-shader group instead, 60 table-drawn Rabbits cost 1.75 ms of
+  skinned forward where the same 60 on the plain table source cost 0.70 ms in the same session;
+  resolved once, a later session measured 0.57-0.58 ms for each (`bgl_ai_viewer --crowd 60`, debug
+  Metal). A blend space's heavier member counts as an entry of its own. The
+  playback and foot-IK calls reach it as they reach a hero.
+
+  **Which source it draws is the camera's cull's, every frame** ([Passes](passes.md) § Compact
+  Instances, *Choose Poses*). Large on screen — at level 0 on a mesh with levels, at
+  `LodSelectionDesc::posePixels` on one without — and holding the right, it is posed per instance
+  into a slice of the view's pose pool and drawn like a hero; otherwise it draws from the table.
+  The source rides the level-of-detail word: a table bit beside each of its two levels, so the mesh
+  stage reads an entry's source where it reads its level. The right is the budget's: a placement
+  holds it if it drew per instance last frame or was granted it, and the grants are what
+  `poseBudget` leaves, handed out a frame ahead — so the count never exceeds the budget and the units
+  already posed keep their place. A pose is a function of the clock alone, so the pool holds nothing
+  across frames: it is a block of the view's palette arena sized to the budget times the largest
+  automatic rig's slice, re-cut every frame.
+
+  **A change of source dissolves**, through the same word and over the same `fadeSeconds` a change
+  of level does: where the swap is at level 0 both change in one dissolve, and where only the source
+  changes the word dissolves between one level on two sources. The per-instance entry is posed for
+  as long as either end of the dissolve draws it. Its foot IK is scaled by how far the dissolve has
+  come toward it — rising on the way in, falling on the way out — so the feet reach the unplanted
+  pose the table holds as the table takes over. And a placement drawn per instance holds there while
+  one of its own crossfades is in flight: the table holds one clip, and mid-ramp is where two
+  crossfading clips differ most, so it dissolves out after the ramp rather than onto a clip it is
+  halfway out of. A blend space's parameter ramp is no crossfade, and does not hold it; the
+  stride-length difference between its blend and its heavier member is what the dissolve hides.
 
   **The source is the kind of playback record the placement holds**, and nowhere else. A hero
   instance gets an `idl::SkinnedState` — the rig, its weighted slots and a palette — and a crowd one
@@ -279,10 +309,11 @@ not obvious from a signature. The headers linked below are the source of truth.
 
 ## In the editor
 
-The Animation panel previews a rig through **either** pose source, chosen by a "Preview As"
+The Animation panel previews a rig through **any** pose source, chosen by a "Preview As"
 selector (`AnimationEditorWindow`'s `m_TierSelector`). It names `bgl::PoseSource` directly rather
-than mirroring it into an editor enum, so the two entries are the two values and there is no mapping
-to keep in agreement beyond the one below.
+than mirroring it into an editor enum, so the three entries are the three values and there is no
+mapping to keep in agreement beyond the one below. The automatic one rewrites its playback as the
+per-instance one does, since it holds the same slots.
 
 * **Switching sources respawns; it does not re-load.** Both draw one upload, so the panel destroys
   its animated instances and creates them again against the same geoms — the same destroy-and-recreate
@@ -366,8 +397,8 @@ to keep in agreement beyond the one below.
   pinned by `[blobshadow]`). Beside it a **Foot shadows**
   checkbox (off by default) adds `BlobShadowDesc::feet`, sized by `editor::FootShadowForBounds` — a
   tenth of the body's width across, faded a fifth of its height up — and independent of the disc, so
-  either may be on alone. Only an instance `HasFootIK` holds takes them: a crowd-tier preview or a rig
-  without an avatar keeps the disc. It lives in the group's body rather than beside
+  either may be on alone. Only an instance `HasLegs` holds takes them, on any source: a rig without
+  an avatar keeps the disc. It lives in the group's body rather than beside
   it because the disc lands on the floor the group draws: without the floor there is nothing in
   the picture to receive it. Per instance like the IK record, so unlike the slope it needs no
   undoing on hide. Nothing else in the scene should stand on a slope this panel set while
@@ -742,9 +773,13 @@ its palette slice, after the two poses: each leg's heel and ball, world space, a
 stands them. `PoseSkinned` writes them in the model-space window, after the plant and whether or not
 the scene plants at all, measured by the same `HeelAndBall` the plant measures its contact with — so
 the shadow `BlobShadowDesc::feet` casts lies under the foot the frame draws, whatever put it there.
-Only the hero tier has them, for the reason only the hero tier plants: a crowd instance has no pose
-of its own, so `SetBlobShadow` refuses `feet` on one and it keeps its body disc. See
-[Passes](passes.md) § Blob shadows for what the decal does with them.
+A crowd instance has no pose of its own, so its soles are its rig's: `PoseRigFrames` writes each
+frame's heel and ball into the table's slice after its matrices (`Rig.tableSoles`, frame-major, a
+leg's two points a frame), by the same `WriteSoles` and in the same window — model space, and
+unplanted, since one table stands no particular unit on any ground. The blob pass reads the two
+frames the clip has reached, blends them as the skin does, and places them by the instance's
+transform. So `feet` asks only that the rig authored legs (`ISceneView::HasLegs`), on either source.
+See [Passes](passes.md) § Blob shadows for what the decal does with them.
 
 ### What the cook derives
 

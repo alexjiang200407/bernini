@@ -1,9 +1,13 @@
+#include "gfx/GraphicsBase.h"
+#include "scene/SceneView.h"
 #include "util/GoldenImage.h"
+#include "util/PaletteReadback.h"
 #include "util/TestEnvironment.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include "util/VelocityReadback.h"
 #include "util/VertexPacking.h"
+#include "util/util.h"
 #include <algorithm>
 #include <array>
 #include <assetlib_structs/Animation.h>
@@ -15,10 +19,17 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/idl/AutoPosedInstance.h>
+#include <bgl/idl/InstanceLod.h>
+#include <bgl/idl/InstancePose.h>
+#include <bgl/idl/PosePool.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/InstanceDesc.h>
 #include <bgl/types/LayerType.h>
+#include <bgl/types/LodSelectionDesc.h>
 #include <bgl/types/MaterialHandle.h>
+#include <bgl/types/SkinnedMeshGeomDesc.h>
+#include <bgl/types/SkinnedMeshInstanceDesc.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -27,6 +38,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <format>
+#include <optional>
 #include <ratio>
 #include <span>
 #include <string>
@@ -1058,6 +1070,619 @@ TEST_CASE("an instance on its rig's table draws what the pose pass draws", "[ski
 // A blend's cheapest invariant, seen on screen: a clip weighted against itself is that clip, so
 // two slots of one clip must draw what one slot does. Within the golden tolerance rather than to
 // the bit -- a renormalized sum can differ from its input by an ulp.
+TEST_CASE(
+	"an automatic instance drawn from its rig's table draws its heaviest slot",
+	"[skinned][auto][render]")
+{
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
+
+	auto gfx = bgl::test::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 8;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 4096;
+	sceneDesc.initialIndices              = 64;
+	sceneDesc.initialPbrMaterials         = 4;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 4);
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	const std::array<bgl::MaterialHandle, 1> materials = { { scene->CreatePbrMaterial(
+		bgl::PbrMaterialDesc()) } };
+	const auto                               stripMesh = MakeSkinnedStrip();
+	const auto                               geom      = scene->AddSkinnedMeshGeom(
+		bgl::SkinnedMeshGeomDesc()
+			.SetMesh(&stripMesh)
+			.SetMaterials(materials)
+			.SetRig(scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()))
+			.SetPosedBounds(c_StripPosedBounds));
+	REQUIRE(geom.IsValid());
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = StripCamera();
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+	const auto shoot = [&](bgl::MeshInstanceHandle instance, const char* png) {
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, png);
+		view->DeleteMeshInstance(instance);
+	};
+
+	// The swing clip at two held frames, weighted unequally: the table can hold one of them, and
+	// it must be the one the blend leans on.
+	const auto blendOf = [](float heavy, float light) {
+		auto playback              = bgl::SkinnedPlaybackDesc();
+		playback.slot[0].nodeIndex = 0;
+		playback.slot[0].phase     = heavy;
+		playback.slot[0].rate      = 0.0f;
+		playback.slot[0].weight0   = 0.7f;
+		playback.slot[0].weight1   = 0.7f;
+		playback.slot[1].nodeIndex = 0;
+		playback.slot[1].phase     = light;
+		playback.slot[1].rate      = 0.0f;
+		playback.slot[1].weight0   = 0.3f;
+		playback.slot[1].weight1   = 0.3f;
+		return playback;
+	};
+
+	const auto* autoPng  = "assets/golden/pose_source_auto.got.png";
+	const auto* tablePng = "assets/golden/pose_source_auto_table.got.png";
+
+	for (const float heavy : { 0.0f, 1.0f })
+	{
+		CAPTURE(heavy);
+		shoot(
+			view->CreateSkinnedMeshInstance(
+				bgl::SkinnedMeshInstanceDesc()
+					.SetGeom(geom)
+					.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0, heavy, 0.0f))
+					.SetSource(bgl::PoseSource::kBoneAnimTable)),
+			tablePng);
+
+		shoot(
+			view->CreateSkinnedMeshInstance(
+				bgl::SkinnedMeshInstanceDesc()
+					.SetGeom(geom)
+					.SetPlayback(blendOf(heavy, 1.0f - heavy))
+					.SetSource(bgl::PoseSource::kAuto)),
+			autoPng);
+
+		CHECK(bgl::test::FrameDelta(autoPng, tablePng, 0, 0, int(c_Width), int(c_Height)) < 1e-6f);
+	}
+}
+
+namespace
+{
+	/** A device, a strip rig on one view, and a job that draws it -- the automatic cases' setup. */
+	struct AutoStrip
+	{
+		bgl::GraphicsRef     gfx;
+		bgl::RenderTargetRef target;
+		bgl::SceneRef        scene;
+		bgl::SceneViewRef    view;
+		bgl::GeomHandle      geom;
+		bgl::RenderJob       job;
+	};
+
+	/**
+	 * `levels` gives the strip a second level -- the same submesh again, drawn once the strip spans
+	 * fewer than 20 pixels -- so the swap at level 0 is exercised where a mesh carries one.
+	 */
+	AutoStrip
+	MakeAutoStrip(bool levels = false)
+	{
+		auto opts                        = bgl::test::GraphicsSetup();
+		opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+		opts.gpuContext.enableDebugLayer = true;
+
+		auto strip = AutoStrip();
+		strip.gfx  = bgl::test::CreateGraphics(opts);
+		REQUIRE(strip.gfx != nullptr);
+
+		auto targetDesc     = bgl::RenderTargetDesc();
+		targetDesc.width    = static_cast<int>(c_Width);
+		targetDesc.height   = static_cast<int>(c_Height);
+		targetDesc.headless = true;
+		strip.target        = strip.gfx->CreateRenderTarget(targetDesc);
+
+		auto sceneDesc                        = bgl::SceneDesc();
+		sceneDesc.initialGeom                 = 4;
+		sceneDesc.initialMeshlets             = 8;
+		sceneDesc.initialSubmeshes            = 4;
+		sceneDesc.initialVertexBufferByteSize = 4096;
+		sceneDesc.initialIndices              = 64;
+		sceneDesc.initialPbrMaterials         = 4;
+
+		strip.scene = strip.gfx->CreateScene(sceneDesc);
+		strip.view  = strip.gfx->CreateSceneView(strip.scene, 8);
+		bgl::test::ApplyEnvironment(strip.scene.Get(), strip.view.Get());
+
+		const std::array<bgl::MaterialHandle, 1> materials = { { strip.scene->CreatePbrMaterial(
+			bgl::PbrMaterialDesc()) } };
+		auto                                     stripMesh = MakeSkinnedStrip();
+		if (levels)
+		{
+			stripMesh.submeshes.push_back(stripMesh.submeshes.front());
+			stripMesh.meshes.front().lodCount = 2;
+			stripMesh.lods                    = { { 20.0f }, { 0.0f } };
+		}
+		strip.geom = strip.scene->AddSkinnedMeshGeom(
+			bgl::SkinnedMeshGeomDesc()
+				.SetMesh(&stripMesh)
+				.SetMaterials(materials)
+				.SetRig(strip.scene->AddRig(MakeTwoBoneRig(), MakeSwingClip()))
+				.SetPosedBounds(c_StripPosedBounds));
+		REQUIRE(strip.geom.IsValid());
+
+		strip.job.view   = strip.view;
+		strip.job.camera = StripCamera();
+		strip.job.viewport =
+			bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+		return strip;
+	}
+
+	// The swing clip at its two held frames, weighted unequally, so a blend of them draws neither:
+	// the table can hold only the heavier one, and per instance draws the blend.
+	bgl::SkinnedPlaybackDesc
+	UnequalBlend()
+	{
+		auto playback              = bgl::SkinnedPlaybackDesc();
+		playback.slot[0].nodeIndex = 0;
+		playback.slot[0].phase     = 0.0f;
+		playback.slot[0].rate      = 0.0f;
+		playback.slot[0].weight0   = 0.7f;
+		playback.slot[0].weight1   = 0.7f;
+		playback.slot[1].nodeIndex = 0;
+		playback.slot[1].phase     = 1.0f;
+		playback.slot[1].rate      = 0.0f;
+		playback.slot[1].weight0   = 0.3f;
+		playback.slot[1].weight1   = 0.3f;
+		return playback;
+	}
+
+	bgl::idl::PosePool
+	ReadPool(const AutoStrip& strip)
+	{
+		auto* view = strip.view->As<bgl::SceneView>();
+		return bgl::test::ReadBuffer<bgl::idl::PosePool>(
+			strip.gfx->As<bgl::GraphicsBase>(),
+			view->GetAutoPose().GetPoolBuffer(),
+			1)[0];
+	}
+
+	/** No dissolve, so a change of source shows on the frame it happens. */
+	bgl::LodSelectionDesc
+	PoseSelection(
+		float                          pixels,
+		uint32_t                       budget = bgl::LodSelectionDesc().poseBudget,
+		std::optional<bgl::PoseSource> force  = std::nullopt)
+	{
+		auto selection            = bgl::LodSelectionDesc();
+		selection.fadeSeconds     = 0.0f;
+		selection.posePixels      = pixels;
+		selection.poseBudget      = budget;
+		selection.forcePoseSource = force;
+		return selection;
+	}
+
+	/** The level-of-detail word the camera's cull wrote for `instance` on the last frame drawn. */
+	bgl::InstanceLodState
+	ReadWord(const AutoStrip& strip, bgl::MeshInstanceHandle instance)
+	{
+		auto*      view  = strip.view->As<bgl::SceneView>();
+		const auto words = bgl::test::ReadBuffer<bgl::idl::InstanceLod>(
+			strip.gfx->As<bgl::GraphicsBase>(),
+			view->GetCullState(0).GetInstanceLod().GetBufferHandle(),
+			view->GetMeshBuffer().Capacity());
+		return bgl::UnpackInstanceLod(words[instance.handle.index]);
+	}
+
+	/** The automatic pose list's first entry, as the camera's cull wrote it on the last frame. */
+	bgl::idl::AutoPosedInstance
+	ReadFirstPosed(const AutoStrip& strip)
+	{
+		auto* view = strip.view->As<bgl::SceneView>();
+		return bgl::test::ReadBuffer<bgl::idl::AutoPosedInstance>(
+			strip.gfx->As<bgl::GraphicsBase>(),
+			view->GetAutoPose().GetPosedBuffer(),
+			1)[0];
+	}
+
+	/** The placements a pose slice was cut for this frame, of the `handles` asked about. */
+	std::vector<uint32_t>
+	PosedPlacements(const AutoStrip& strip, std::span<const bgl::MeshInstanceHandle> handles)
+	{
+		auto*      view   = strip.view->As<bgl::SceneView>();
+		const auto slices = bgl::test::ReadBuffer<bgl::idl::InstancePose>(
+			strip.gfx->As<bgl::GraphicsBase>(),
+			view->GetAutoPose().GetInstancePoseBuffer(),
+			view->GetMeshBuffer().Capacity());
+
+		auto posed = std::vector<uint32_t>();
+		for (const auto handle : handles)
+		{
+			if (slices[handle.handle.index].palette.offsetStart != 0u)
+			{
+				posed.push_back(handle.handle.index);
+			}
+		}
+		return posed;
+	}
+}
+
+TEST_CASE(
+	"an automatic instance is posed per instance once it is granted, and from its table when small",
+	"[skinned][auto][render]")
+{
+	AutoStrip strip = MakeAutoStrip();
+
+	const auto* autoPng  = "assets/golden/auto_choice.got.png";
+	const auto* heroPng  = "assets/golden/auto_choice_hero.got.png";
+	const auto* tablePng = "assets/golden/auto_choice_table.got.png";
+
+	const auto spawn = [&](bgl::PoseSource source) {
+		return strip.view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(strip.geom)
+				.SetPlayback(UnequalBlend())
+				.SetSource(source));
+	};
+
+	// What each source alone draws: the blend posed per instance, and the heavier clip read from the
+	// table. They must differ, or nothing below can tell the two apart.
+	{
+		const auto hero = spawn(bgl::PoseSource::kPerInstance);
+		strip.gfx->DrawFrame(strip.target, strip.job);
+		strip.gfx->ScreenshotPng(strip.target, heroPng);
+		strip.view->DeleteMeshInstance(hero);
+
+		const auto table = strip.view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(strip.geom)
+				.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f))
+				.SetSource(bgl::PoseSource::kBoneAnimTable));
+		strip.gfx->DrawFrame(strip.target, strip.job);
+		strip.gfx->ScreenshotPng(strip.target, tablePng);
+		strip.view->DeleteMeshInstance(table);
+	}
+	REQUIRE(bgl::test::FrameDelta(heroPng, tablePng, 0, 0, int(c_Width), int(c_Height)) > 1e-4f);
+
+	const auto drawTwiceFirstFromTable = [&](const bgl::LodSelectionDesc& selection) {
+		strip.view->SetLodSelection(selection);
+		const auto instance = spawn(bgl::PoseSource::kAuto);
+		strip.gfx->DrawFrame(strip.target, strip.job);
+		strip.gfx->ScreenshotPng(strip.target, autoPng);
+		const bool firstFromTable =
+			bgl::test::FrameDelta(autoPng, tablePng, 0, 0, int(c_Width), int(c_Height)) < 1e-6f;
+		strip.gfx->DrawFrame(strip.target, strip.job);
+		strip.gfx->ScreenshotPng(strip.target, autoPng);
+		strip.view->DeleteMeshInstance(instance);
+		return firstFromTable;
+	};
+	const auto drew = [&](const char* png) {
+		return bgl::test::FrameDelta(autoPng, png, 0, 0, int(c_Width), int(c_Height)) < 1e-6f;
+	};
+
+	SECTION("large on screen: the table first, while the grant comes through, then the blend")
+	{
+		CHECK(drawTwiceFirstFromTable(PoseSelection(1.0f)));
+		CHECK(drew(heroPng));
+	}
+
+	SECTION("small on screen: the table, frame after frame")
+	{
+		CHECK(drawTwiceFirstFromTable(PoseSelection(1e6f)));
+		CHECK(drew(tablePng));
+	}
+
+	SECTION("a forced source overrules the size")
+	{
+		CHECK(drawTwiceFirstFromTable(PoseSelection(1e6f, 256, bgl::PoseSource::kPerInstance)));
+		CHECK(drew(heroPng));
+
+		CHECK(drawTwiceFirstFromTable(PoseSelection(1.0f, 256, bgl::PoseSource::kBoneAnimTable)));
+		CHECK(drew(tablePng));
+	}
+
+	SECTION("a budget of zero poses nothing")
+	{
+		CHECK(drawTwiceFirstFromTable(PoseSelection(1.0f, 0)));
+		CHECK(drew(tablePng));
+	}
+}
+
+TEST_CASE(
+	"the pose budget bounds the automatic instances posed, and keeps the ones it posed",
+	"[skinned][auto][render]")
+{
+	AutoStrip strip = MakeAutoStrip();
+	strip.view->SetLodSelection(PoseSelection(1.0f, 2));
+
+	auto units = std::vector<bgl::MeshInstanceHandle>();
+	for (int i = 0; i < 6; ++i)
+	{
+		units.push_back(strip.view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(strip.geom)
+				.SetPlayback(UnequalBlend())
+				.SetSource(bgl::PoseSource::kAuto)));
+	}
+
+	// The first frame no unit holds the right, so every one asks and the budget is granted.
+	strip.gfx->DrawFrame(strip.target, strip.job);
+	bgl::idl::PosePool pool = ReadPool(strip);
+	CHECK(pool.posed == 0u);
+	CHECK(pool.requested == 6u);
+
+	// The two granted are posed; the other four ask again and find nothing left.
+	strip.gfx->DrawFrame(strip.target, strip.job);
+	pool = ReadPool(strip);
+	CHECK(pool.posed == 2u);
+	CHECK(pool.requested == 4u);
+	const std::vector<uint32_t> posed = PosedPlacements(strip, units);
+	CHECK(posed.size() == 2u);
+
+	// And they keep it, whoever else asks.
+	for (int frame = 0; frame < 3; ++frame)
+	{
+		strip.gfx->DrawFrame(strip.target, strip.job);
+		CHECK(ReadPool(strip).posed == 2u);
+		CHECK(PosedPlacements(strip, units) == posed);
+	}
+
+	SECTION("a budget lowered under them poses no more than it allows")
+	{
+		// The first frame under it, both incumbents ask for a slice and the second finds the list
+		// full; from then on one holds the right and nothing is granted, so exactly one is posed.
+		strip.view->SetLodSelection(PoseSelection(1.0f, 1));
+		for (int frame = 0; frame < 3; ++frame)
+		{
+			strip.gfx->DrawFrame(strip.target, strip.job);
+			CHECK(PosedPlacements(strip, units).size() == 1u);
+		}
+	}
+
+	SECTION("a unit deleted frees its place for one that asked")
+	{
+		strip.view->DeleteMeshInstance(units[posed[0] == units[0].handle.index ? 0 : 1]);
+		for (int frame = 0; frame < 3; ++frame)
+		{
+			strip.gfx->DrawFrame(strip.target, strip.job);
+		}
+		CHECK(ReadPool(strip).posed == 2u);
+	}
+}
+
+TEST_CASE(
+	"a change of source dissolves on one level, and foot IK follows the dissolve",
+	"[skinned][auto][render]")
+{
+	AutoStrip strip = MakeAutoStrip();
+
+	// A second's dissolve stepped a quarter at a time, so each frame lands on a known fade.
+	auto selection        = PoseSelection(1.0f);
+	selection.fadeSeconds = 1.0f;
+	strip.view->SetLodSelection(selection);
+
+	const auto instance = strip.view->CreateSkinnedMeshInstance(
+		bgl::SkinnedMeshInstanceDesc()
+			.SetGeom(strip.geom)
+			.SetPlayback(UnequalBlend())
+			.SetSource(bgl::PoseSource::kAuto));
+
+	float      time = 0.0f;
+	const auto draw = [&] {
+		strip.job.time = time;
+		strip.gfx->DrawFrame(strip.target, strip.job);
+		time += 0.25f;
+	};
+
+	// Asks, from the table, with nothing to dissolve out of.
+	draw();
+	bgl::InstanceLodState word = ReadWord(strip, instance);
+	REQUIRE(word.level.has_value());
+	CHECK(word.fromTable);
+	CHECK_FALSE(word.outgoing.has_value());
+	CHECK(word.granted);
+
+	// Granted: the per-instance entry comes in over the table's, on the strip's one level, and the
+	// feet reach as far as the dissolve has.
+	draw();
+	word = ReadWord(strip, instance);
+	CHECK_FALSE(word.fromTable);
+	REQUIRE(word.outgoing.has_value());
+	CHECK(*word.outgoing == *word.level);
+	CHECK(word.outgoingFromTable);
+	CHECK(word.fade == Catch::Approx(0.25f).margin(1e-3f));
+	CHECK(ReadFirstPosed(strip).ikScale == Catch::Approx(0.25f).margin(1e-3f));
+
+	draw();
+	draw();
+	draw();
+	word = ReadWord(strip, instance);
+	CHECK_FALSE(word.outgoing.has_value());
+	CHECK(ReadFirstPosed(strip).ikScale == 1.0f);
+
+	// Small on screen again: out to the table, still posed while the per-instance entry fades out,
+	// its feet giving way as it goes.
+	selection.posePixels = 1e6f;
+	strip.view->SetLodSelection(selection);
+	draw();
+	word = ReadWord(strip, instance);
+	CHECK(word.fromTable);
+	REQUIRE(word.outgoing.has_value());
+	CHECK_FALSE(word.outgoingFromTable);
+	CHECK(ReadPool(strip).posed == 1u);
+	CHECK(ReadFirstPosed(strip).ikScale == Catch::Approx(0.75f).margin(1e-3f));
+
+	for (int frame = 0; frame < 4; ++frame)
+	{
+		draw();
+	}
+	word = ReadWord(strip, instance);
+	CHECK(word.fromTable);
+	CHECK_FALSE(word.outgoing.has_value());
+	CHECK(ReadPool(strip).posed == 0u);
+}
+
+TEST_CASE(
+	"on a mesh with levels the source swaps where level 0 ends, in the level's own dissolve",
+	"[skinned][auto][render]")
+{
+	AutoStrip strip = MakeAutoStrip(true);
+
+	// A second's dissolve a quarter at a time. pixelScale moves the strip across its 20-pixel floor
+	// without moving it on screen: 1 leaves it at level 0, and a scale nothing spans puts it at 1.
+	auto selection        = bgl::LodSelectionDesc();
+	selection.fadeSeconds = 1.0f;
+	strip.view->SetLodSelection(selection);
+
+	const auto instance = strip.view->CreateSkinnedMeshInstance(
+		bgl::SkinnedMeshInstanceDesc()
+			.SetGeom(strip.geom)
+			.SetPlayback(UnequalBlend())
+			.SetSource(bgl::PoseSource::kAuto));
+
+	float      time = 0.0f;
+	const auto draw = [&] {
+		strip.job.time = time;
+		strip.gfx->DrawFrame(strip.target, strip.job);
+		time += 0.25f;
+	};
+
+	// At level 0 it wants the per-instance pose, asks, is granted, and dissolves in on one level.
+	for (int frame = 0; frame < 7; ++frame)
+	{
+		draw();
+	}
+	bgl::InstanceLodState word = ReadWord(strip, instance);
+	REQUIRE(word.level.has_value());
+	CHECK(*word.level == bgl::LodLevel::kLod0);
+	CHECK_FALSE(word.fromTable);
+	CHECK_FALSE(word.outgoing.has_value());
+
+	// Past the floor: one dissolve out of level 0 drawn per instance, into level 1 from the table,
+	// with the outgoing entry still posed.
+	selection.pixelScale = 1e6f;
+	strip.view->SetLodSelection(selection);
+	draw();
+	word = ReadWord(strip, instance);
+	REQUIRE(word.level.has_value());
+	CHECK(*word.level == bgl::LodLevel::kLod1);
+	CHECK(word.fromTable);
+	REQUIRE(word.outgoing.has_value());
+	CHECK(*word.outgoing == bgl::LodLevel::kLod0);
+	CHECK_FALSE(word.outgoingFromTable);
+	CHECK(word.fade == Catch::Approx(0.25f).margin(1e-3f));
+	CHECK(ReadPool(strip).posed == 1u);
+	CHECK(ReadFirstPosed(strip).ikScale == Catch::Approx(0.75f).margin(1e-3f));
+
+	for (int frame = 0; frame < 4; ++frame)
+	{
+		draw();
+	}
+	word = ReadWord(strip, instance);
+	CHECK(*word.level == bgl::LodLevel::kLod1);
+	CHECK(word.fromTable);
+	CHECK_FALSE(word.outgoing.has_value());
+	CHECK(ReadPool(strip).posed == 0u);
+}
+
+TEST_CASE(
+	"a placement spawned into a freed slot holds no right its slot's last occupant held",
+	"[skinned][auto][render]")
+{
+	AutoStrip strip = MakeAutoStrip();
+	strip.view->SetLodSelection(PoseSelection(1.0f));
+
+	const auto spawn = [&] {
+		return strip.view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(strip.geom)
+				.SetPlayback(UnequalBlend())
+				.SetSource(bgl::PoseSource::kAuto));
+	};
+
+	const auto first = spawn();
+	strip.gfx->DrawFrame(strip.target, strip.job);
+	strip.gfx->DrawFrame(strip.target, strip.job);
+	REQUIRE(ReadPool(strip).posed == 1u);
+	REQUIRE_FALSE(ReadWord(strip, first).fromTable);
+
+	strip.view->DeleteMeshInstance(first);
+	const auto second = spawn();
+	REQUIRE(second.handle.index == first.handle.index);
+
+	// Its first frame it has no right, so it asks and draws from its table -- its slot's word,
+	// left per instance by the unit before it, must not pass for one.
+	strip.gfx->DrawFrame(strip.target, strip.job);
+	const auto pool = ReadPool(strip);
+	CHECK(pool.posed == 0u);
+	CHECK(pool.requested == 1u);
+	CHECK(ReadWord(strip, second).fromTable);
+}
+
+TEST_CASE(
+	"an automatic instance mid-crossfade holds its pose until the ramp ends",
+	"[skinned][auto][render]")
+{
+	AutoStrip strip     = MakeAutoStrip();
+	auto      selection = PoseSelection(1.0f);
+	strip.view->SetLodSelection(selection);
+
+	// Slot 0 fading out and slot 1 in, from one second to three.
+	auto crossfade              = UnequalBlend();
+	crossfade.slot[0].weight0   = 1.0f;
+	crossfade.slot[0].weight1   = 0.0f;
+	crossfade.slot[0].rampStart = 1.0f;
+	crossfade.slot[0].rampEnd   = 3.0f;
+	crossfade.slot[1].weight0   = 0.0f;
+	crossfade.slot[1].weight1   = 1.0f;
+	crossfade.slot[1].rampStart = 1.0f;
+	crossfade.slot[1].rampEnd   = 3.0f;
+
+	const auto instance = strip.view->CreateSkinnedMeshInstance(
+		bgl::SkinnedMeshInstanceDesc()
+			.SetGeom(strip.geom)
+			.SetPlayback(crossfade)
+			.SetSource(bgl::PoseSource::kAuto));
+
+	const auto drawAt = [&](float time) {
+		strip.job.time = time;
+		strip.gfx->DrawFrame(strip.target, strip.job);
+		return ReadWord(strip, instance);
+	};
+
+	drawAt(0.0f);
+	CHECK_FALSE(drawAt(0.5f).fromTable);
+
+	// Far, now: before the ramp it goes to the table at once.
+	selection.posePixels = 1e6f;
+	strip.view->SetLodSelection(selection);
+
+	SECTION("before the crossfade starts it leaves") { CHECK(drawAt(0.75f).fromTable); }
+
+	SECTION("inside it, it holds, and leaves once the ramp has ended")
+	{
+		CHECK_FALSE(drawAt(1.5f).fromTable);
+		CHECK_FALSE(drawAt(2.5f).fromTable);
+		CHECK(drawAt(3.0f).fromTable);
+	}
+}
+
 TEST_CASE("a clip blended with itself draws what the clip draws", "[skinned][render]")
 {
 	auto opts                        = bgl::test::GraphicsSetup();

@@ -456,7 +456,7 @@ flowchart TD
   ground casts from ground level, so everything growing around it is above the cast point and takes
   nothing; `BlobShadowDesc::casterLift` raises that point above the clutter, and the disc fades
   over it instead of cutting on and off at every silhouette. `BlobShadowDesc::feet` adds a shadow
-  under each foot of a hero whose rig authored legs: a capsule lying on the sole from heel to ball,
+  under each foot of a skinned placement whose rig authored legs: a capsule lying on the sole from heel to ball,
   cast straight down from the pose the frame draws and fading with that foot's own height, so a
   planted foot is dark and a lifted one fades out (`FootShadowDesc`). Its `maxReceiverRise` lets a
   receiver sit that far above the sole without moving where the fade is measured from — a planted
@@ -465,8 +465,8 @@ flowchart TD
   temporal epoch — a decal appearing is a rebind, not motion — and `DeleteMeshInstance` takes the
   shadow with the placement. @throws on an invalid handle, a non-positive or non-finite `radius`
   or `fadeHeight`, or an `intensity` outside `[0, 1]` — the same bounds on `feet` — and on `feet`
-  wherever `HasFootIK` is false: a crowd instance has no pose of its own to find a foot in, so it
-  draws the body disc alone. `Get` returns empty for a placement carrying none.
+  wherever `HasLegs` is false. A crowd instance's feet are its rig's table soles, unplanted. `Get`
+  returns empty for a placement carrying none.
 * **`SetEnvironmentMap(desc)`** — @pre irradiance and prefilter are cube maps. Takes
   `EnvironmentMapDesc` by const reference but the struct is move-only, so build it in place at the
   call site. Replaces any previous environment wholesale.
@@ -487,9 +487,10 @@ flowchart TD
   `fadeSeconds` finite and non-negative, `forceLevel` below `LodLevel::kCount`, `posePixels`
   finite and positive, `forcePoseSource` not `kAuto`. How the view chooses each placement's level
   of detail: every authored threshold scaled by `pixelScale`, one level forced on every placement
-  that has it, and how long a change dissolves over (0 is a hard swap). Its pose fields --
-  `poseBudget`, `posePixels`, `forcePoseSource` -- are kept and resolved into the cull view for
-  `PoseSource::kAuto`, which no pass draws yet ([Skinned Meshes](skinning.md)). Per view, and
+  that has it, and how long a change dissolves over (0 is a hard swap). Its pose fields choose
+  between the two sources of each `PoseSource::kAuto` placement: at most `poseBudget` posed per
+  instance at once, those as large on screen as level 0 -- or `posePixels`, on a mesh with one level
+  -- and `forcePoseSource` overruling the size ([Skinned Meshes](skinning.md)). Per view, and
   **not** an epoch change: the cull reads it as it selects, so a new selection arrives through
   the same dissolve a change of size does. The choice is never read back: a tool
   that says which level a placement draws runs the same size test on the CPU,

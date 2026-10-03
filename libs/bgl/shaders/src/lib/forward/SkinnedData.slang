@@ -1,4 +1,6 @@
 import idl.Clip;
+import idl.DominantFrames;
+import idl.InstancePose;
 import idl.Rig;
 import lib.types.ComputeBuffer;
 import lib.types.EntryBuffer;
@@ -22,4 +24,12 @@ public struct SkinnedData
     // Only the crowd path reads it: deriving a frame from {clip, phase, rate} and the clock is what
     // SkinnedPosePass already did for an instance posed per frame.
     public RangeBuffer<Clip> clipBuffer;
+
+    // An automatic placement's table pose this frame, by MeshInstance entry: the frames its dominant
+    // entry falls between, which the camera's cull resolved once for every stage that draws it.
+    public ComputeBuffer<DominantFrames> dominantFrames;
+
+    // An automatic placement's pose-pool slice this frame, by MeshInstance entry; null when no entry
+    // of it draws per instance. Written by the camera's cull.
+    public ComputeBuffer<InstancePose> instancePose;
 };

@@ -7,6 +7,7 @@
 #include <bgl/idl/DrawBucket.h>
 #include <bgl/idl/InstanceLod.h>
 #include <bgl/idl/InstanceVisibility.h>
+#include <bgpu/cmd/CommandList.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <cstdint>
 #include <format>
@@ -84,6 +85,47 @@ namespace bgl
 			for (bgpu::ComputeBuffer& words : m_InstanceLod) words.Resize(placements);
 			m_LodNeedsClear = true;
 		}
+	}
+
+	void
+	CullState::ClearFresh(bgpu::ICommandList* cmdList)
+	{
+		// One write per run of consecutive slots rather than per slot: a spawn fills slots in order,
+		// so a crowd placed at once is a handful of runs however many placements it holds.
+		std::ranges::sort(m_FreshPlacements);
+		const auto unique = std::ranges::unique(m_FreshPlacements);
+		m_FreshPlacements.erase(unique.begin(), unique.end());
+
+		const uint32_t capacity = m_InstanceLod[0].GetDesc().initialCount;
+		const auto     zeros    = std::vector<idl::InstanceLod>(m_FreshPlacements.size());
+
+		for (size_t first = 0; first < m_FreshPlacements.size();)
+		{
+			size_t last = first + 1;
+			while (last < m_FreshPlacements.size() &&
+			       m_FreshPlacements[last] == m_FreshPlacements[last - 1] + 1)
+			{
+				++last;
+			}
+
+			const uint32_t start = m_FreshPlacements[first];
+			const uint32_t count = std::min<uint32_t>(
+				static_cast<uint32_t>(last - first),
+				capacity > start ? capacity - start : 0u);
+			for (bgpu::ComputeBuffer& words : m_InstanceLod)
+			{
+				if (count > 0)
+				{
+					cmdList->WriteBuffer(
+						words.GetBufferHandle(),
+						zeros.data(),
+						size_t(start) * sizeof(idl::InstanceLod),
+						size_t(count) * sizeof(idl::InstanceLod));
+				}
+			}
+			first = last;
+		}
+		m_FreshPlacements.clear();
 	}
 
 	void

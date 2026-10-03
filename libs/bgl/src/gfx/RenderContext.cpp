@@ -911,21 +911,26 @@ namespace bgl
 		// First: every pass below reads a placement, and a block's are written here.
 		m_WriteInstanceBlocks.AttachToFrameGraph(m_FrameGraph, draw);
 
-		// A palette is per instance, not per frustum, so posing runs once for the view rather than once
-		// per cull -- and it must be attached under the view's namespace, where its output buffer was
-		// imported. Under a cull namespace the write would resolve to a name nothing imported, which
-		// makes the pass no longer a root and culls it.
 		// Before the pose pass and the forward pass, both of which may read a table filled here.
 		m_RigFrames.AttachToFrameGraph(m_FrameGraph, draw);
-		m_SkinnedPose.AttachToFrameGraph(m_FrameGraph, draw);
 
-		// The skybox above names only globals; everything below reads cull outputs.
+		// The skybox above names only globals; the cull below writes cull outputs.
 		m_FrameGraph.SetResourceNamespace(view->GetCullNamespace(draw.cullIdx));
 
 		// Cull first (a sub-pass of CompactInstances writes the visibility word), then the transparent
 		// sort, which reads it.
 		m_CompactInstances.AttachToFrameGraph(m_FrameGraph, draw);
 		m_TransparentSort.AttachToFrameGraph(m_FrameGraph, draw);
+
+		// After the cull, which decides which automatic placements are posed, and before anything
+		// draws a palette. A palette is per instance, not per frustum, so posing runs once for the
+		// view -- and it must be attached under the view's namespace, where its output buffer was
+		// imported. Under a cull namespace the write would resolve to a name nothing imported, which
+		// makes the pass no longer a root and culls it.
+		m_FrameGraph.SetResourceNamespace(view->GetResourceNamespace());
+		m_SkinnedPose.AttachToFrameGraph(m_FrameGraph, draw);
+		m_FrameGraph.SetResourceNamespace(view->GetCullNamespace(draw.cullIdx));
+
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kWorld);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kGrass);
 		// The depth holds the world and its grass alone here: the seam an HZB build belongs at.

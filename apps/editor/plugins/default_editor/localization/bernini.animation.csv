@@ -23,8 +23,9 @@ no_mesh_open,No mesh open
 no_spaces_note,Playing one clip. Choose what to fade to. The open set holds no blend spaces -- author one in the Blend Space Editor to fade onto it.
 preview_as_label,Preview As
 speed_suffix,x
+tier_auto,Automatic
 tier_crowd,Crowd
-tier_selector_tooltip,"Skinned poses the rig every frame, per instance; Crowd reads a pose the rig posed once and shares. The two draw the same picture -- this is how the crowd path gets exercised, not something to look for on screen."
+tier_selector_tooltip,"Skinned poses the rig every frame, per instance; Crowd reads a pose the rig posed once and shares. The two draw the same picture -- this is how the crowd path gets exercised, not something to look for on screen. Automatic is per instance near the camera and the shared table far from it, chosen by its size on screen."
 tier_skinned,Skinned
 time_readout,{0:.2f}s
 time_readout_frame,{0:.2f}s / frame {1:.1f}

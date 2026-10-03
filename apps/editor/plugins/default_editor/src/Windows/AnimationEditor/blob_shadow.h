@@ -27,15 +27,15 @@ namespace editor
 
 	/**
 	 * What one previewed instance wears for the panel's two switches, or empty for nothing at all.
-	 * The feet go only where `hasFootIK` -- SetBlobShadow refuses them anywhere else, so a
-	 * crowd-tier preview or a rig without an avatar keeps the disc -- and a disc switched off
-	 * under feet that are on is kept at zero intensity, which is how the feet are asked for alone.
+	 * The feet go only where `hasLegs` -- SetBlobShadow refuses them anywhere else, so a rig
+	 * without an avatar keeps the disc -- and a disc switched off under feet that are on is kept at
+	 * zero intensity, which is how the feet are asked for alone.
 	 */
 	[[nodiscard]] std::optional<bgl::BlobShadowDesc>
 	PreviewBlobShadow(
 		bool                       disc,
 		bool                       feet,
-		bool                       hasFootIK,
+		bool                       hasLegs,
 		const bgl::BlobShadowDesc& discDesc,
 		const bgl::FootShadowDesc& footDesc) noexcept;
 }

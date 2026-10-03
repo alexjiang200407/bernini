@@ -1,4 +1,5 @@
 #include "gfx/GraphicsBase.h"
+#include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "util/GoldenImage.h"
 #include "util/PaletteReadback.h"
@@ -32,6 +33,7 @@
 #include <bgl/types/Viewport.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -211,6 +213,7 @@ namespace
 		bgl::SceneRef           scene;
 		bgl::SceneViewRef       view;
 		bgl::GeomHandle         geom;
+		bgl::RigHandle          rig;
 		bgl::MeshInstanceHandle ground;
 	};
 
@@ -262,6 +265,7 @@ namespace
 		const bgl::RigHandle rig =
 			result.scene->AddRig(MakeTwoLegRig(), MakeStance(rightLift), legs);
 		REQUIRE(rig.IsValid());
+		result.rig = rig;
 
 		const auto triangle = MakeSkinnedTriangle();
 		result.geom         = result.scene->AddSkinnedMeshGeom(
@@ -336,6 +340,36 @@ TEST_CASE(
 		CheckNear(soles[3], where + glm::vec3(c_Stance, c_Lift, c_FootLength));
 	}
 
+	SECTION(
+		"a crowd instance's table holds the soles model space and unplanted, wherever it stands")
+	{
+		const FootScene feet = MakeFootScene(c_Lift, true);
+		feet.view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(feet.geom)
+				.SetTransform(glm::translate(glm::mat4(1.0f), where))
+				.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f))
+				.SetSource(bgl::PoseSource::kBoneAnimTable));
+
+		auto target = feet.gfx->CreateRenderTarget(targetDesc);
+		job.view    = feet.view;
+		feet.gfx->DrawFrame(target, job);
+
+		auto* scene = feet.scene->As<bgl::Scene>();
+		REQUIRE(scene != nullptr);
+		const uint32_t first = scene->GetRigBuffer()[feet.rig.handle].tableSoles.offsetStart;
+		REQUIRE(first != 0u);
+
+		// Global frame 0, where the stance clip begins. The scene plants, and the table does not: a
+		// shared pose stands no particular unit on any ground.
+		const std::vector<glm::vec4> rows =
+			bgl::test::ReadBoneAnimTables(feet.gfx->As<bgl::GraphicsBase>(), scene);
+		CheckNear(rows[first + 0], glm::vec3(-c_Stance, 0.0f, 0.0f));
+		CheckNear(rows[first + 1], glm::vec3(-c_Stance, 0.0f, c_FootLength));
+		CheckNear(rows[first + 2], glm::vec3(c_Stance, c_Lift, 0.0f));
+		CheckNear(rows[first + 3], glm::vec3(c_Stance, c_Lift, c_FootLength));
+	}
+
 	SECTION("planted, the sole is read after the plant put the foot down")
 	{
 		const FootScene feet     = MakeFootScene(c_Lift, true);
@@ -369,10 +403,21 @@ TEST_CASE(
 	// A tenth up under a fade height of three tenths: the lifted foot's shadow is at two thirds.
 	constexpr float c_Lift = 0.1f;
 
+	// Unplanted, so every source draws the same pose: the table's soles must cast what the palette's
+	// do, and an automatic placement's -- read from its table, then from its pose slice once granted --
+	// what both do.
+	const bgl::PoseSource source = GENERATE(
+		bgl::PoseSource::kPerInstance,
+		bgl::PoseSource::kBoneAnimTable,
+		bgl::PoseSource::kAuto);
+	CAPTURE(source);
+
 	const FootScene feet     = MakeFootScene(c_Lift, false);
 	const auto      instance = feet.view->CreateSkinnedMeshInstance(
-		bgl::SkinnedMeshInstanceDesc().SetGeom(feet.geom).SetPlayback(
-			bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
+		bgl::SkinnedMeshInstanceDesc()
+			.SetGeom(feet.geom)
+			.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f))
+			.SetSource(source));
 
 	auto targetDesc     = bgl::RenderTargetDesc();
 	targetDesc.width    = static_cast<int>(c_Width);
@@ -478,7 +523,9 @@ TEST_CASE(
 	}
 }
 
-TEST_CASE("only a hero whose rig authored legs may cast foot shadows", "[blobshadow][skinned]")
+TEST_CASE(
+	"only a skinned placement whose rig authored legs may cast foot shadows",
+	"[blobshadow][skinned]")
 {
 	const FootScene feet = MakeFootScene(0.0f, false);
 
@@ -502,14 +549,24 @@ TEST_CASE("only a hero whose rig authored legs may cast foot shadows", "[blobsha
 		CHECK(stored->feet->maxReceiverRise == 0.05f);
 	}
 
-	SECTION("a crowd instance, a static placement and a rig without legs are refused")
+	SECTION("a crowd instance on a rig with legs takes them too, its soles read from the table")
 	{
 		const auto crowd = feet.view->CreateSkinnedMeshInstance(
 			bgl::SkinnedMeshInstanceDesc()
 				.SetGeom(feet.geom)
 				.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0))
 				.SetSource(bgl::PoseSource::kBoneAnimTable));
-		CHECK_THROWS_AS(feet.view->SetBlobShadow(crowd, desc), bgl::SceneError);
+		CHECK_NOTHROW(feet.view->SetBlobShadow(crowd, desc));
+		CHECK(feet.view->GetBlobShadow(crowd)->feet.has_value());
+	}
+
+	SECTION("a static placement and a rig without legs are refused")
+	{
+		const auto crowd = feet.view->CreateSkinnedMeshInstance(
+			bgl::SkinnedMeshInstanceDesc()
+				.SetGeom(feet.geom)
+				.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(0))
+				.SetSource(bgl::PoseSource::kBoneAnimTable));
 		CHECK_THROWS_AS(feet.view->SetBlobShadow(feet.ground, desc), bgl::SceneError);
 
 		const bgl::RigHandle legless =

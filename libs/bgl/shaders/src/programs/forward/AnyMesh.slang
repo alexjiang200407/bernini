@@ -57,7 +57,7 @@ void MSMain(
     }
     else
     {
-        let pose = ResolveSkinnedPose(ctx);
+        let pose = ResolveSkinnedPose(ctx, payload);
 
         for (uint v = gtid; v < ctx.meshlet.vertexCount; v += cMeshGroupSize)
         {

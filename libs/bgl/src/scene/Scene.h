@@ -175,7 +175,8 @@ namespace bgl
 		// than a misrender.
 		uint32_t useCount = 0;
 
-		// The rig's slice of the scene's bone anim table arena, null until something asks for one.
+		// The rig's slice of the scene's bone anim table arena -- its matrices, then its soles -- null
+		// until something asks for one.
 		// Held here as well as on the GPU record because freeing it needs the allocator's handle.
 		core::multi_slot_handle boneAnimTable;
 

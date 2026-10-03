@@ -158,7 +158,11 @@ and portability.
     - [ ] Constraints: no additive layers, no look-at, no IK, no per-unit bone-level variation; hit
       reactions must be full-body baked clips. The table is the rig's and no instance may write it,
       which is what forecloses all of them.
-    - [ ] Tier boundary policy — anything needing those features must sit on the per-instance source.
+    - [x] Tier boundary policy — anything needing those features must sit on the per-instance source.
+      `PoseSource::kAuto` is the policy: per instance while large on screen and within the view's
+      budget, the table otherwise, chosen by the camera's cull and dissolved between, holding a pose
+      mid-crossfade and fading its foot IK as it goes; table units keep unplanted foot shadows
+      ([docs/skinning.md](docs/skinning.md)). What a far unit still costs is § LODs' last items.
     - [ ] Editor viewport playback — crowd instances placed and playing in the level viewport, which
       needs a clock.
   - [ ] Skinned Meshes & Animation — hero tier and the near-distance tier of rank and file
@@ -189,9 +193,9 @@ and portability.
       sole input to a pose, and a record is rewritten only on an event: a rewrite that leaves what it
       says about `prevTime` alone reprojects exactly, which gamelib's `CrossfadeTo` and
       `RetargetParameter` are what keep. See [docs/anim_blend.md](docs/anim_blend.md).
-    - [ ] Animation preview + playback at different LODs, including the pose-source swap.
-      The editor's Animation panel previews either source and switches between them by respawning;
-      the runtime LOD swap is what remains.
+    - [x] Animation preview + playback at different LODs, including the pose-source swap.
+      The editor's Animation panel previews any source, the automatic one included, and the runtime
+      swap is the automatic source's.
     - [ ] Bone mask — small per-bone weight array, needed by additive flinch on the skinned tier.
   - [ ] State Machine — flat tables, tiny per-unit interpreter, ticked for all units regardless of
     tier and regardless of visibility.
@@ -339,10 +343,12 @@ and portability.
   - [ ] Editor LOD generator for static and skinned.
   - [ ] LOD selection on **projected screen size**, not distance, with thresholds authored in pixels.
   - [ ] True Euclidean distance to camera, not view-space Z, or panning makes edge units pop.
-  - [ ] **Role and distance are separate axes** — drive the pose-source switch from screen size with a
-    top-K budget so near units are posed per instance regardless of rank.
-  - [ ] Hysteresis (~10–20% gap) against per-unit stored LOD, especially at the pose-source boundary.
-  - [ ] Dithered LOD crossfade resolved by TAA; also the mechanism for the pose-source swap.
+  - [x] **Role and distance are separate axes** — drive the pose-source switch from screen size with a
+    top-K budget so near units are posed per instance regardless of rank. **Amended:** the budget is
+    granted a frame ahead with incumbents first, not ranked by size each frame — the count never
+    exceeds it and posed units keep their place, without a sort per frame (`LodSelectionDesc`).
+  - [x] Hysteresis (~10–20% gap) against per-unit stored LOD, especially at the pose-source boundary.
+  - [x] Dithered LOD crossfade resolved by TAA; also the mechanism for the pose-source swap.
   - [ ] Per-tier compaction → indirect args; fixed `maxPerLOD` regions hold until submesh-mask
     variation multiplies the draw bucket count.
   - [ ] Separate mesh LOD and animation LOD tables driven from the same screen-size value.
@@ -350,6 +356,15 @@ and portability.
   - [ ] Compute skinning bandwidth — measure palette writes, palette reads, bone anim table fetches,
     and the permanent corpse palette read before optimising ALU.
   - [ ] Test motion vectors across LODs, both pose sources, corpses, mounts, and both transitions.
+  - [ ] **A table unit reads twice what a palette one does per vertex** — 4 influences x 2 frames x 2
+    clocks, ~768 B against ~384 B — so the table's measured win is ~13% and an upper bound
+    (docs/skinning.md). Cheapest first: one frame instead of the two-frame lerp past level 1 (halves
+    the reads; check slow clips for stutter with `bgl_ai_viewer --crowd`); two influences on the
+    coarsest level, at cook; impostors past the last level.
+  - [ ] **A rig's table is sized by its whole clip set** (`frames x bones x 48 B`: ~9 MiB for a 60-bone
+    crowd rig, 68 MiB for the reference character): fill it with only the clips crowd units play, and sample it at
+    15 Hz since it already lerps between frames. Rotation compression (§ Animation) and per-LOD bone
+    subsets shrink it further.
 - [ ] Light and Shadow
   - [ ] Async Compute — the queue exists, for the crowd simulation (§ Crowd Simulation & Pathfinding,
     `crowdlib`); moving a renderer pass onto one is what is left.
