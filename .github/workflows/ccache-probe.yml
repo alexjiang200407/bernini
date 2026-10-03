@@ -87,6 +87,6 @@ jobs:
         env:
           CCACHE_LOGFILE: ${{ runner.temp }}\ccache.log
         run: |
-          python scripts/build.py core --preset windows-ninja-msvc-dx12-debug
+          python scripts/build.py core_process --preset windows-ninja-msvc-dx12-debug
           ccache --show-stats -vv
-          Select-String -Path $env:CCACHE_LOGFILE -Pattern "Failed|nsupported|ncacheable|Result:|Unknown|not supported" | Select-Object -First 40 | ForEach-Object { $_.Line }
+          Select-String -Path $env:CCACHE_LOGFILE -Pattern "Failed|Running|Command line|Preprocessing|preprocessor|rror|stderr" | Select-Object -First 25 | ForEach-Object { $_.Line }
