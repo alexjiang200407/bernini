@@ -97,9 +97,10 @@ editor.
 
 **The function names are not namespaced either, and nothing here fixes that.** CMake functions are
 global, so `compile_shader`, `copy_to_target`, `assign_folder`, `enable_coverage`,
-`enable_strict_compiler`, `target_force_include`, `slang_entry_points`, `slang_stage_profile` and
-`strip_msvc_only_interface_flags` all land in the consumer's namespace when `cmake/` is included —
-`bernini_collect_executables` is the only one that reads as ours. A consumer that defines its own
+`enable_strict_compiler`, `target_force_include`, `slang_entry_points`, `slang_stage_profile`,
+`strip_msvc_only_interface_flags` and `deploy_qt_runtime` all land in the consumer's namespace when
+`cmake/` is included — `bernini_collect_executables` is the only one that reads as ours, and the
+`bernini_qt_deploy` Ninja job pool the last one declares is prefixed for the same reason. A consumer that defines its own
 `compile_shader()` silently redefines the engine's, or is redefined by it, depending on which
 `add_subdirectory` ran last. Renaming them is a change to every call site in the tree and has not
 been made; until it is, a consuming project should prefix its own CMake functions.

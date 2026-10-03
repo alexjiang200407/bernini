@@ -62,9 +62,4 @@ if(BERNINI_EDITOR_SDK)
     add_dependencies(editor_plugin_tests editor_plugin_sample)
 endif()
 enable_coverage(editor_plugin_tests)
-if(WIN32)
-    add_custom_command(TARGET editor_plugin_tests POST_BUILD
-        COMMAND Qt6::windeployqt --no-translations --no-compiler-runtime
-            "$<TARGET_FILE:editor_plugin_tests>"
-        VERBATIM)
-endif()
+deploy_qt_runtime(editor_plugin_tests)

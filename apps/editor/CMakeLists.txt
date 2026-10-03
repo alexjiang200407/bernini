@@ -144,16 +144,7 @@ set_target_properties(editor PROPERTIES
 	VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 )
 
-if(WIN32)
-	add_custom_command(TARGET editor POST_BUILD
-		COMMAND Qt6::windeployqt
-			--no-translations
-			--no-compiler-runtime
-			"$<TARGET_FILE:editor>"
-		VERBATIM
-		COMMENT "windeployqt: copying Qt runtime next to editor.exe"
-	)
-endif()
+deploy_qt_runtime(editor)
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/config.json")
 	set(_editor_config_src "${CMAKE_CURRENT_SOURCE_DIR}/config.json")

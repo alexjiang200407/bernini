@@ -28,6 +28,7 @@ include(${BERNINI_ROOT}/cmake/enable_coverage.cmake)
 include(${BERNINI_ROOT}/cmake/enable_compiler_cache.cmake)
 include(${BERNINI_ROOT}/cmake/assign_folder.cmake)
 include(${BERNINI_ROOT}/cmake/strip_msvc_only_flags.cmake)
+include(${BERNINI_ROOT}/cmake/deploy_qt_runtime.cmake)
 
 # --- What a preset would otherwise have decided ------------------------------
 #

@@ -74,19 +74,9 @@ enable_coverage(editor_tests)
 # runtime output dir they run from.
 add_dependencies(editor_tests copy_assets editor_stage_localization)
 
-if(WIN32)
-	# editor.exe's windeployqt does not know about Qt6Test.dll, so ask for the test binary's own
-	# runtime. Same output directory, so this mostly no-ops on what editor already deployed.
-	add_custom_command(TARGET editor_tests POST_BUILD
-		COMMAND Qt6::windeployqt
-			--no-translations
-			--no-compiler-runtime
-			"$<TARGET_FILE:editor_tests>"
-		VERBATIM
-		COMMENT "windeployqt: copying Qt runtime next to editor_tests.exe"
-	)
-
-endif()
+# editor.exe's windeployqt does not know about Qt6Test.dll, so ask for the test binary's own
+# runtime. Same output directory, so this mostly no-ops on what editor already deployed.
+deploy_qt_runtime(editor_tests)
 
 # The suite defaults itself to `offscreen` so its widgets never take focus, and main.cpp only does
 # so when told the plugin is reachable -- naming a platform Qt cannot load aborts with a modal error
