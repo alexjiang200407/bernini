@@ -101,7 +101,7 @@ public SkinnedPose ResolveSkinnedPose(MeshletContext ctx, InstancedPayload paylo
 
         // Drawn per instance this frame: the slice the cull cut and the pose pass filled, laid out as
         // a hero's palette.
-        if (payload.poseFromTable == 0u)
+        if (!HasInstancedDrawFlag(payload, InstancedDrawFlag.kPoseFromTable))
         {
             let slice = skinnedData.instancePose[payload.instance.meshInstance.GetOffset()].palette;
             return PalettePose(rig, slice.GetStart());

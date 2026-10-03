@@ -94,7 +94,7 @@ public struct LodDraw
     public uint submeshEntry;
     public float dissolve;
 
-    // An automatic placement's source for this entry; see InstancedPayload.poseFromTable.
+    // An automatic placement's source for this entry; see InstancedDrawFlag.kPoseFromTable.
     public bool fromTable;
 };
 
@@ -138,7 +138,7 @@ public uint ResolveDispatch(uint gid, out InstancedPayload payload)
     payload.instance = instance;
     payload.submeshEntry = lod.submeshEntry;
     payload.lodDissolve = lod.dissolve;
-    payload.poseFromTable = lod.fromTable ? 1u : 0u;
+    payload.flags = lod.fromTable ? uint(InstancedDrawFlag.kPoseFromTable) : 0u;
 
     return submesh.GetMeshletCount();
 }
