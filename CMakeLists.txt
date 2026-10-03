@@ -233,6 +233,10 @@ endif()
 # Qt is not a vcpkg dependency, so an embedded build would look for one the consumer never asked
 # for and occasionally find it.
 if (PROJECT_IS_TOP_LEVEL)
+    # Every Qt executable's POST_BUILD windeployqt copies into the one runtime directory, and two at
+    # once fail on the same DLL. A link step runs its POST_BUILD, so a pool of one serializes them
+    # under Ninja; other generators ignore it.
+    set_property(GLOBAL APPEND PROPERTY JOB_POOLS windeployqt=1)
     if (Qt6_FOUND AND TARGET bgl)
         add_subdirectory(apps/editor)
     elseif (NOT Qt6_FOUND)

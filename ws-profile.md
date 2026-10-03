@@ -260,6 +260,71 @@ Name the command, not the need: *"`just run bgl_tests -- "[taa]" --gpu-validatio
 Windows"*. Otherwise state the negative with its reason. A red Windows build reproduces with
 `just build --preset windows-ninja-msvc-dx12-debug`.
 
+**Platform checks.** The workspace's `platform-check` skill runs § Windows or § macOS below on that
+platform, over a branch pushed from the other machine.
+
 **Eyes.** Anything whose result is a picture or a gesture — editor UI, a pass's output, a material,
 the frame loop's feel. An editor change leaves at least one; say what *right* looks like.
 `bgl_ai_viewer` (`docs/ai_viewer.md`) is how an agent looks first.
+
+## Windows
+
+The engine's half of the workspace's `platform-check` on Windows, run in the worktree on the
+Windows machine: the build, every suite once, and `bgl_tests` only under GPU-based validation,
+sharded. The tool and how to read what it reports are [docs/gfx_debug.md](docs/gfx_debug.md) § 5.
+Every test runs once. After a fix, rerun the cases that failed, by name, never their file or suite.
+
+1. **Build both at once**, in the background: `just build` (the configured preset, clang Ninja
+   debug) and `just build bgl_tests --preset windows-clang-dx12-gbv` (release with tests, for
+   validation). Never build while anything runs from a `bin/` directory.
+2. **Run.** First the GPU suites, plainly, without `bgl_tests`:
+   `just test --no-build bgpu crowd gamelib editor_tests`. Then all of these together, in the
+   background:
+
+   ```bash
+   out="build/gbv/$(date +%Y%m%d-%H%M)"
+   dbg=$(dirname "$(just exes --target bgl_tests | tail -1)")
+   debug_only=$(grep -ln "^#if defined(BERNINI_GPU_DEBUG)" libs/bgl/tests/src/*_test.cpp \
+   	| xargs -n1 basename | sed 's/\.cpp$//; s/.*/[#&]/' | paste -sd,)
+   bash scripts/gbv_shards.sh build/ninja-clang-gbv/bin "$out/release"
+   bash scripts/gbv_shards.sh "$dbg" "$out/debug" "$debug_only"
+   just test --no-build assetlib core editor_plugin scripts      # CPU only
+   ```
+
+   Check `just test --list` first. A suite that links `bgpu`, `bgl`, `gamelib`, `crowdlib` or the
+   editor uses the GPU and runs plainly (`crowd` names both `crowdlib_tests` and
+   `crowd_render_tests`). Every other suite goes in the CPU list.
+3. **Watch** both `events.log` files with one Monitor (`tail -n +1 -F … | grep --line-buffered -E
+   "^(FAIL|GBV|CRASH|DONE)"`, `timeout_ms` 1800000, re-armed on expiry). Every line is a problem
+   or a `DONE`. Triage each line as it arrives, but build nothing until every run from that `bin/`
+   has finished. Never turn off synchronized command-queue validation to speed a run up.
+4. **Fix**, then `just format` the changed files and `just tidy --changed`. Update the doc the fix
+   contradicts, `docs/known_issues.md` first, with an entry for a hang or validation bug that cost
+   real time. Rerun a validation finding under `--gpu-validation` from the build it came from, and
+   rerun an intermittent one several times. If a fix reaches shared code, such as a renderer pass or
+   a library seam, say so before running more.
+
+Delete `build/gbv/` and the `bin/.gbv-shard*` link directories once the result is reported.
+
+## macOS
+
+The engine's half of the workspace's `platform-check` on the mac, run in the worktree: the build,
+every suite once, and `bgl_tests` only under Metal API and shader validation
+([libs/bgl/CLAUDE.md](libs/bgl/CLAUDE.md) § bgl_tests). Every test runs once. After a fix, rerun the
+cases that failed, by name.
+
+1. **Build:** `just build` (the configured preset, `macos-clang-metal-debug`).
+2. **Run** every suite but `bgl_tests` with `just test --no-build assetlib bgpu core crowd editor
+   gamelib scripts`, checking `just test --list` for a suite that list misses. Then run `bgl_tests`
+   alone and validated: `METAL_DEVICE_WRAPPER_TYPE=1 MTL_SHADER_VALIDATION=1 just run bgl_tests
+   --no-build`. `--gpu-validation` does nothing on Metal, and `ShaderCache_test` skips itself under
+   validation. It runs as one process, unsharded, and no Metal time is recorded yet, so judge
+   progress by its output rather than the clock.
+3. **Read the logs** beside each executable, `bgpu.log` and the newest crash log, before calling a
+   suite green. No Metal baseline is recorded yet. Of the expected lines `docs/gfx_debug.md` § 5
+   lists, the deliberate ones on any backend are: `GPU assertion(s) fired` from `DebugAssert_test`,
+   the bloom-chain allocation from `Bloom_test`, and the draw-bucket ceiling from
+   `DrawBucketTable_test`. Any other `[error]` is a finding: triage it, and record a line that turns
+   out to be expected in `docs/gfx_debug.md` § 6.
+4. **Fix**, then `just format` the changed files and `just tidy --changed`. Update the doc the fix
+   contradicts, `docs/known_issues.md` first.

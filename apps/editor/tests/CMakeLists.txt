@@ -85,6 +85,7 @@ if(WIN32)
 		VERBATIM
 		COMMENT "windeployqt: copying Qt runtime next to editor_tests.exe"
 	)
+	set_property(TARGET editor_tests PROPERTY JOB_POOL_LINK windeployqt)
 
 endif()
 

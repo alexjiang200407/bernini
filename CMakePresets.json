@@ -229,6 +229,17 @@
       }
     },
     {
+      "name": "windows-clang-dx12-gbv",
+      "displayName": "Windows Clang Release ninja - DirectX 12, tests, for GPU-based validation",
+      "binaryDir": "${sourceDir}/build/ninja-clang-gbv",
+      "inherits": [
+        "windows-clang-dx12-release"
+      ],
+      "cacheVariables": {
+        "BUILD_TESTS": "ON"
+      }
+    },
+    {
       "name": "macos-clang-metal-debug",
       "displayName": "macOS Clang Debug ninja - Metal",
       "binaryDir": "${sourceDir}/build/macos-metal-debug",
@@ -313,6 +324,10 @@
     {
       "name": "windows-clang-dx12-release",
       "configurePreset": "windows-clang-dx12-release"
+    },
+    {
+      "name": "windows-clang-dx12-gbv",
+      "configurePreset": "windows-clang-dx12-gbv"
     },
     {
       "name": "macos-clang-metal-debug",
