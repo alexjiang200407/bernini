@@ -178,13 +178,21 @@ working directory through DWARF, and disabling directory hashing to force those 
 cached object's debug info pointing at a different worktree. The within-checkout win needs none of
 that and is the one this is for.
 
-Two configurations get no cache, and say so at configure time rather than pretending. Visual Studio
-and Xcode ignore compiler launchers entirely. **MSVC is refused on the compiler rather than the
-generator**, because the `windows-ninja-msvc-*` presets drive `cl.exe` through Ninja, which *does*
-honour a launcher — ccache's support for MSVC precompiled headers is an open issue with a reported
-false *hit*, a wrong object returned rather than a miss, and every target here carries a PCH. There
-is no configuration in this tree where that would be safe, so clang gets the cache and MSVC does
-not.
+Two configurations get no cache by default, and say so at configure time rather than pretending.
+Visual Studio and Xcode ignore compiler launchers entirely. **MSVC is refused on the compiler rather
+than the generator**, because the `windows-ninja-msvc-*` presets drive `cl.exe` through Ninja, which
+*does* honour a launcher — ccache's support for MSVC precompiled headers is an open issue with a
+reported false *hit*, a wrong object returned rather than a miss, and every target here carries a PCH.
+
+**`BERNINI_MSVC_COMPILER_CACHE=ON` (or that environment variable) is the way in, and it removes the
+hazard instead of trusting ccache around it:** precompiled headers are off for the whole build
+(`CMAKE_DISABLE_PRECOMPILE_HEADERS`), so no compile ccache sees uses one; `/Zi` becomes `/Z7`,
+because a `/Zi` object names a PDB the compiler writes as a side effect and no cache can replay
+that; `/MP` is dropped, which ccache refuses and Ninja makes redundant; and the compiler is keyed by
+its content rather than its mtime. It is off by default — a developer's build keeps its PCHs and is
+faster uncached than without them — and Windows CI turns it on, since CI compiles every file from
+nothing on every run. `scripts/verify_compiler_cache.py` is the proof CI runs: it has the cache serve
+a seeded sample of objects and compares each byte for byte with a fresh compile.
 
 ## The shared job budget
 
