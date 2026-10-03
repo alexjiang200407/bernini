@@ -67,4 +67,5 @@ if(WIN32)
         COMMAND Qt6::windeployqt --no-translations --no-compiler-runtime
             "$<TARGET_FILE:editor_plugin_tests>"
         VERBATIM)
+    set_property(TARGET editor_plugin_tests PROPERTY JOB_POOL_LINK windeployqt)
 endif()

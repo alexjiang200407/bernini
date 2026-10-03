@@ -153,6 +153,7 @@ if(WIN32)
 		VERBATIM
 		COMMENT "windeployqt: copying Qt runtime next to editor.exe"
 	)
+	set_property(TARGET editor PROPERTY JOB_POOL_LINK windeployqt)
 endif()
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/config.json")
