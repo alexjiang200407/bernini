@@ -17,11 +17,13 @@
 #
 # MSVC is the exception, and opt-in. ccache's MSVC precompiled-header support has a reported false
 # hit -- a wrong object returned rather than a miss -- so a cache there is only sound if no compile
-# it sees uses a PCH. BERNINI_MSVC_COMPILER_CACHE therefore turns the PCHs off for the whole build
-# (CMAKE_DISABLE_PRECOMPILE_HEADERS) rather than trusting ccache to tell them apart, and swaps /Zi
-# for /Z7 because a /Zi object names a PDB the compiler writes as a side effect, which no cache can
-# replay. A developer's build keeps its PCHs and its PDBs; the cache is for builds that compile
-# everything from nothing, which is what CI does on every run.
+# it sees uses a PCH. Sources here depend on what their PCHs bring in, so the PCHs cannot simply be
+# switched off: BERNINI_MSVC_COMPILER_CACHE instead replaces `target_precompile_headers` with a
+# force-include (/FI) of the same headers, in the same order, which is what a PCH is to the
+# translation unit without the binary. Every compile ccache sees is then an ordinary one, hashed on
+# its preprocessed text. /Zi becomes /Z7 because a /Zi object names a PDB the compiler writes as a
+# side effect, which no cache can replay. A developer's build keeps its real PCHs and its PDBs; the
+# cache is for builds that compile everything from nothing, which is what CI does on every run.
 
 option(BERNINI_COMPILER_CACHE "Compile through ccache when it is installed" ON)
 
@@ -33,6 +35,23 @@ endif()
 option(BERNINI_MSVC_COMPILER_CACHE
     "Compile through ccache under MSVC, with precompiled headers off and /Z7 debug info"
     ${_bernini_msvc_cache_default})
+
+# Defining a function named after a command replaces it for every later caller, which is the point:
+# the targets say target_precompile_headers and get a force-include instead.
+macro(_bernini_emulate_precompiled_headers)
+    function(target_precompile_headers target)
+        set(scope PRIVATE)
+        foreach(arg IN LISTS ARGN)
+            if (arg MATCHES "^(PUBLIC|PRIVATE|INTERFACE)$")
+                set(scope "${arg}")
+            elseif (arg STREQUAL "REUSE_FROM")
+                message(FATAL_ERROR "REUSE_FROM needs a real PCH, which BERNINI_MSVC_COMPILER_CACHE removes")
+            else()
+                target_compile_options(${target} ${scope} "$<$<COMPILE_LANGUAGE:CXX>:/FI${arg}>")
+            endif()
+        endforeach()
+    endfunction()
+endmacro()
 
 function(_bernini_write_cache_wrapper ccache sloppiness out_var)
     set(cache_dir "${CMAKE_BINARY_DIR}/compiler-cache")
@@ -106,7 +125,7 @@ function(enable_compiler_cache)
         endif()
 
         set(sloppiness "")
-        set(CMAKE_DISABLE_PRECOMPILE_HEADERS ON PARENT_SCOPE)
+        _bernini_emulate_precompiled_headers()
 
         foreach(lang C CXX)
             foreach(config DEBUG RELWITHDEBINFO)
