@@ -388,12 +388,18 @@ namespace bgl
 		GetLodSelection() const noexcept = 0;
 
 		/**
-		 * Reserves `desc.capacity` placements of one static geom that a GPU kernel places every
+		 * Reserves `desc.capacity` placements of one geom that a GPU kernel places every
 		 * frame -- see SetBlockWriter -- and the CPU never writes again: a crowd, or mesh
 		 * particles. Its placements have no handles, so nothing here moves, flags or deletes one
 		 * alone. Every placement starts hidden, and a block with no writer stays hidden. The geom's
 		 * grass is not grown on them: grass is laid out on the CPU, which never sees where a writer
 		 * put a placement.
+		 *
+		 * A skinned geom's placements are on PoseSource::kAuto and share one playback record,
+		 * `desc.playback`: each is posed per instance or drawn from its rig's table as the view's
+		 * LodSelectionDesc chooses, a hidden one taking no pose, and plays the record ahead of the
+		 * clock by the offset its writer gives it. They are reached by no playback, foot-IK,
+		 * blob-shadow or selection call, which all take a placement's handle.
 		 *
 		 * Moves the temporal epoch once, as one placement's creation does. Nothing the writer does
 		 * moves it: a placement it shows or hides writes its own motion.
@@ -401,8 +407,10 @@ namespace bgl
 		 * Like a placement, the block names its geom and does not own it: deleting the geom first
 		 * leaves the block reading whatever record takes its slot.
 		 *
-		 * @throws SceneError if `desc.geom` is not a live kStaticMesh geom, or `desc.capacity` is 0 or
-		 *         past c_MaxMeshInstanceBlockCapacity.
+		 * @throws SceneError if `desc.geom` is not a live static or skinned geom, `desc.capacity` is 0
+		 *         or past c_MaxMeshInstanceBlockCapacity, or a skinned geom's `desc.playback` is one
+		 *         CreateSkinnedMeshInstance refuses. A skinned geom is refused whole until its
+		 *         placements are drawn.
 		 */
 		virtual MeshInstanceBlockHandle
 		CreateMeshInstanceBlock(const MeshInstanceBlockDesc& desc) = 0;

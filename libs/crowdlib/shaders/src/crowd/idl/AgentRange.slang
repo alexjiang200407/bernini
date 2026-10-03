@@ -15,4 +15,8 @@ public struct AgentRange
 
     // The render record of the agent at sourceFirstAgent in the previous tick, or c_SpawnSource.
     public uint sourceFirstRecord;
+
+    // The id a spawned range's first agent takes, the rest counting up from it. Not read for a
+    // range that copies: its agents carry theirs.
+    public uint firstId;
 };

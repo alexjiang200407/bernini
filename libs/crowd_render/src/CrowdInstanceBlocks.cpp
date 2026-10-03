@@ -10,6 +10,7 @@
 #include <crowdlib/CrowdDesc.h>
 #include <crowdlib/ICrowd.h>
 #include <crowdlib/RenderTick.h>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <utility>
@@ -38,6 +39,18 @@ namespace crowd_render
 					desc.types.size(),
 					typeCount);
 			}
+			for (size_t type = 0; type < desc.types.size(); ++type)
+			{
+				if (desc.types[type].geoms.empty())
+					core::throw_runtime_error("agent type {} names no geom", type);
+				if (desc.types[type].geoms.size() > 1)
+				{
+					core::throw_runtime_error(
+						"agent type {} names {} geoms, and a type of several is not drawn yet",
+						type,
+						desc.types[type].geoms.size());
+				}
+			}
 			return desc;
 		}
 	}
@@ -57,7 +70,8 @@ namespace crowd_render
 			{
 				const auto block = view.CreateMeshInstanceBlock(
 					bgl::MeshInstanceBlockDesc()
-						.SetGeom(m_Desc.types[type].geom)
+						.SetGeom(m_Desc.types[type].geoms.front())
+						.SetPlayback(m_Desc.types[type].playback)
 						.SetCapacity(
 							m_Desc.types[type].capacity != 0 ? m_Desc.types[type].capacity :
 															   m_Desc.crowd->GetDesc().maxAgents));

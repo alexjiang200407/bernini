@@ -396,8 +396,11 @@ flowchart TD
 ### ISceneView
 
 * **`CreateMeshInstanceBlock(desc)` / `DeleteMeshInstanceBlock(block)`** — a run of placements of one
-  static geom with no handles of their own: a GPU kernel places them every frame and the CPU never
-  writes them. Creation and deletion move the temporal epoch once each, however many slots; what the
+  geom with no handles of their own: a GPU kernel places them every frame and the CPU never
+  writes them. A skinned geom's are on `PoseSource::kAuto` and share one playback record,
+  `desc.playback`, each playing it ahead of the clock by the offset its writer gives it
+  (`IMeshInstanceBlock::SetPlaybackOffset`) -- declared, and refused whole until those placements
+  are drawn. Creation and deletion move the temporal epoch once each, however many slots; what the
   writer does moves nothing, since every slot it places writes its own previous transform. Like a
   placement, a block names its geom and does not own it. Its slots are a block-aligned run of the
   view's instance buffer, each culled, drawn and re-resolved on a material change like any

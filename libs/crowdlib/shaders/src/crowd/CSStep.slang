@@ -50,6 +50,7 @@ Agent LayOut(uint index, AgentRange range, Group group)
         agent.position = SlotPosition(group, agent.slot);
         agent.velocity = float2(0.0f);
         agent.facing = group.front;
+        agent.id = range.firstId + offset;
     }
     else
     {
@@ -109,6 +110,8 @@ void main(uint3 id: SV_DispatchThreadID)
         let spawned = range.sourceFirstAgent == c_SpawnSource;
         record.source = spawned ? c_RenderSpawned : range.sourceFirstRecord + offset;
         record.type = group.agentType;
+        record.id = agent.id;
+        record.reserved = 0u;
         gUniforms.renderRing[renderFirst + group.firstRecord + agent.slot] = record;
     }
 }

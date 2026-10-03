@@ -9,6 +9,7 @@
 #include "idl/TickParams.h"
 #include <catch2/catch_test_macros.hpp>
 #include <core/glm.h>
+#include <crowdlib/RenderAgent.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -44,19 +45,23 @@ TEST_CASE("The crowd's GPU records survive a buffer at their stride", "[crowd][i
 		  .velocity = glm::vec2(-0.5f, 0.25f),
 		  .facing   = glm::vec2(0.0f, 1.0f),
 		  .group    = 3,
-		  .slot     = 17 },
+		  .slot     = 17,
+		  .id       = 4000000000u },
 		{ .position = glm::vec2(-4.0f, 8.0f),
 		  .velocity = glm::vec2(0.0f),
 		  .facing   = glm::vec2(1.0f, 0.0f),
 		  .group    = 0,
-		  .slot     = 0 },
+		  .slot     = 0,
+		  .id       = 1 },
 	};
 	const auto back = RoundTrip(agents);
 	CHECK(back[0].position == agents[0].position);
 	CHECK(back[0].velocity == agents[0].velocity);
 	CHECK(back[0].slot == 17);
+	CHECK(back[0].id == 4000000000u);
 	CHECK(back[1].facing == agents[1].facing);
 	CHECK(back[1].group == 0);
+	CHECK(back[1].id == 1);
 
 	const auto groups = RoundTrip(
 		std::vector<crowd::idl::Group>{ { .goal       = glm::vec2(5.0f),
@@ -75,9 +80,22 @@ TEST_CASE("The crowd's GPU records survive a buffer at their stride", "[crowd][i
 	                                           .sourceFirstAgent = crowd::idl::c_SpawnSource,
 	                                           .agentCount       = 9,
 	                                           .group            = 2,
-	                                           .firstSlot        = 3 } });
+	                                           .firstSlot        = 3,
+	                                           .firstId          = 77 } });
 	CHECK(ranges[0].sourceFirstAgent == crowd::idl::c_SpawnSource);
 	CHECK(ranges[0].firstSlot == 3);
+	CHECK(ranges[0].firstId == 77);
+
+	const auto records = RoundTrip(
+		std::vector<crowd::RenderAgent>{ { .position = glm::vec2(3.0f, -2.0f),
+	                                       .facing   = glm::vec2(0.0f, -1.0f),
+	                                       .source   = crowd::c_RenderSpawned,
+	                                       .type     = 1,
+	                                       .id       = 123456789u,
+	                                       .reserved = 0 } });
+	CHECK(records[0].source == crowd::c_RenderSpawned);
+	CHECK(records[0].type == 1);
+	CHECK(records[0].id == 123456789u);
 
 	const auto sums = RoundTrip(
 		std::vector<crowd::idl::GroupSum>{ { .meanPosition = glm::vec2(-1.0f, 1.0f),

@@ -26,4 +26,6 @@ public struct MeshInstanceBufferBlock : IMeshInstanceBlock
     }
 
     public void Hide(uint slot) { meshes[first + slot].flags |= uint(MeshInstanceFlag.kHidden); }
+
+    public void SetPlaybackOffset(uint slot, float seconds) { meshes[first + slot].playbackOffset = seconds; }
 };

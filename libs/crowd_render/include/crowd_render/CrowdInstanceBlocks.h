@@ -5,6 +5,7 @@
 #include <bgl/ISceneView.h>
 #include <bgl/glm.h>
 #include <bgl/types/GeomHandle.h>
+#include <bgl/types/InstanceDesc.h>
 #include <bgl/types/MeshInstanceBlockHandle.h>
 #include <crowdlib/ICrowd.h>
 #include <cstdint>
@@ -13,24 +14,54 @@
 
 namespace crowd_render
 {
-	/** How one agent type is drawn: a static geom, posed in the agent's frame by `model`. */
+	/**
+	 * How one agent type is drawn: its geoms, placed in the agent's frame by `model`. All static, or
+	 * all skinned to one rig -- a character cooked as several meshes is several geoms -- in which
+	 * case every agent plays `playback`, each from a phase of its own.
+	 */
 	struct AgentTypeMeshDesc
 	{
-		bgl::GeomHandle geom;
+		// One block each, all placed alike. To the renderer each is a placement of its own.
+		std::vector<bgl::GeomHandle> geoms;
 
-		// The geom's placement in the agent's frame: +z its facing, y up, the origin on the ground
+		// The geoms' placement in the agent's frame: +z its facing, y up, the origin on the ground
 		// where the agent stands.
 		glm::mat4 model = glm::mat4(1.0f);
 
-		// The most agents of this type the crowd holds at once, which is what its block draws and
-		// culls every frame; 0 is the crowd's maxAgents. Agents past it are not drawn.
+		// The most agents of this type the crowd holds at once, which is what each of its blocks
+		// draws and culls every frame; 0 is the crowd's maxAgents. Agents past it are not drawn.
 		uint32_t capacity = 0;
+
+		// What every agent of a skinned type plays, as bgl::MeshInstanceBlockDesc::playback takes
+		// it. Not read for static geoms.
+		bgl::SkinnedPlaybackDesc playback;
+
+		// Seconds the type's agents are spread over, each ahead of the clock by a share of it that
+		// its crowd::RenderAgent::id fixes for its life: a looping clip's cycle puts every agent at
+		// a phase of its own. 0 plays them in step.
+		float phaseSpreadSeconds = 0.0f;
 
 		template <typename Self>
 		Self&&
-		SetGeom(this Self&& self, bgl::GeomHandle geom) noexcept
+		AddGeom(this Self&& self, bgl::GeomHandle geom)
 		{
-			self.geom = geom;
+			self.geoms.push_back(geom);
+			return std::forward<Self>(self);
+		}
+
+		template <typename Self>
+		Self&&
+		SetPlayback(this Self&& self, const bgl::SkinnedPlaybackDesc& playback) noexcept
+		{
+			self.playback = playback;
+			return std::forward<Self>(self);
+		}
+
+		template <typename Self>
+		Self&&
+		SetPhaseSpreadSeconds(this Self&& self, float seconds) noexcept
+		{
+			self.phaseSpreadSeconds = seconds;
 			return std::forward<Self>(self);
 		}
 
@@ -53,7 +84,7 @@ namespace crowd_render
 
 	/**
 	 * A crowd drawn in one view: the crowd, which must have a render ring, the renderer on the same
-	 * GPU context, and a mesh for each of the crowd's agent types, in CrowdDesc::agentTypes order.
+	 * GPU context, and what draws each of the crowd's agent types, in CrowdDesc::agentTypes order.
 	 */
 	struct CrowdInstanceBlocksDesc
 	{
@@ -114,8 +145,9 @@ namespace crowd_render
 		/**
 		 * Imports the crowd's ring, compiles the writer once and creates a block per agent type.
 		 *
-		 * @throws std::runtime_error if a ref is null, the crowd has no render ring, or there is
-		 *         not one mesh per agent type; the renderer's errors as CreateMeshInstanceBlock and
+		 * @throws std::runtime_error if a ref is null, the crowd has no render ring, there is not
+		 *         one desc per agent type, or a type names no geom -- or, until a block per geom is
+		 *         made, more than one; the renderer's errors as CreateMeshInstanceBlock and
 		 *         ImportBuffer throw them.
 		 */
 		explicit CrowdInstanceBlocks(CrowdInstanceBlocksDesc desc);

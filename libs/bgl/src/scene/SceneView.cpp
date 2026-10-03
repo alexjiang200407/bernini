@@ -1695,9 +1695,17 @@ namespace bgl
 	MeshInstanceBlockHandle
 	SceneView::CreateMeshInstanceBlock(const MeshInstanceBlockDesc& desc)
 	{
-		if (desc.geom.geomType != GeomType::kStaticMesh || !m_SceneRaw->IsGeomAlive(desc.geom))
+		const bool skinned = desc.geom.geomType == GeomType::kSkinnedMesh;
+		if (skinned)
 		{
-			throw SceneError("CreateMeshInstanceBlock: the geom is not a live static mesh");
+			const Scene::AnimGeomInfo rig =
+				RequireSkinnedGeom(*m_SceneRaw, desc.geom, "CreateMeshInstanceBlock");
+			ValidatePlayback(desc.playback, rig.nodeCount, "CreateMeshInstanceBlock");
+		}
+		else if (desc.geom.geomType != GeomType::kStaticMesh || !m_SceneRaw->IsGeomAlive(desc.geom))
+		{
+			throw SceneError(
+				"CreateMeshInstanceBlock: the geom is not a live static or skinned mesh");
 		}
 		if (desc.capacity == 0 || desc.capacity > c_MaxMeshInstanceBlockCapacity)
 		{
@@ -1706,6 +1714,11 @@ namespace bgl
 					"CreateMeshInstanceBlock: a block holds 1 to {} placements, not {}",
 					c_MaxMeshInstanceBlockCapacity,
 					desc.capacity));
+		}
+		if (skinned)
+		{
+			throw SceneError(
+				"CreateMeshInstanceBlock: a skinned geom's placements are not drawn yet");
 		}
 
 		auto range = std::optional<bgpu::EntryRange>();

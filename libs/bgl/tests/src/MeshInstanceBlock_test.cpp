@@ -1,5 +1,6 @@
 #include "gfx/GraphicsBase.h"
 #include "scene/SceneView.h"
+#include "util/SkinnedSynth.h"
 #include "util/TestEnvironment.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
@@ -14,6 +15,7 @@
 #include <bgl/glm.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/GeomHandle.h>
+#include <bgl/types/InstanceDesc.h>
 #include <bgl/types/MeshInstanceBlockDesc.h>
 #include <bgl/types/MeshInstanceBlockHandle.h>
 #include <bgl/types/MeshInstanceWriterDesc.h>
@@ -123,6 +125,40 @@ TEST_CASE("An instance block refuses what it cannot place", "[instance_block]")
 				bgl::MeshInstanceBlockDesc().SetGeom(cube).SetCapacity(
 					bgl::c_MaxMeshInstanceBlockCapacity + 1)),
 			bgl::SceneError);
+	}
+
+	SECTION("a skinned geom whose playback no skinned placement could hold")
+	{
+		const auto quad = bgl::test::skinned_synth::AddSlidingQuadGeom(
+			*scene,
+			scene->CreatePbrMaterial(bgl::PbrMaterialDesc()));
+
+		// The default record weights no slot, and the quad's rig holds two clips and no space.
+		CHECK_THROWS_WITH(
+			view->CreateMeshInstanceBlock(
+				bgl::MeshInstanceBlockDesc().SetGeom(quad).SetCapacity(4)),
+			Catch::Matchers::ContainsSubstring("carries no weight in any slot"));
+		CHECK_THROWS_WITH(
+			view->CreateMeshInstanceBlock(
+				bgl::MeshInstanceBlockDesc().SetGeom(quad).SetCapacity(4).SetPlayback(
+					bgl::SkinnedPlaybackDesc::FromClip(2))),
+			Catch::Matchers::ContainsSubstring("names node 2"));
+	}
+
+	SECTION("a skinned geom, until its placements are drawn")
+	{
+		// The contract's refusal: the desc is checked whole, and then nothing is reserved.
+		const auto quad = bgl::test::skinned_synth::AddSlidingQuadGeom(
+			*scene,
+			scene->CreatePbrMaterial(bgl::PbrMaterialDesc()));
+		const uint32_t baseline = view->GetInstanceCount();
+
+		CHECK_THROWS_WITH(
+			view->CreateMeshInstanceBlock(
+				bgl::MeshInstanceBlockDesc().SetGeom(quad).SetCapacity(4).SetPlayback(
+					bgl::SkinnedPlaybackDesc::FromClip(bgl::test::skinned_synth::c_LoopClip))),
+			Catch::Matchers::ContainsSubstring("not drawn yet"));
+		CHECK(view->GetInstanceCount() == baseline);
 	}
 
 	SECTION("a block already deleted, or one never made")
@@ -276,35 +312,48 @@ TEST_CASE("A block's parameters exist while it has a writer, and are its own", "
 TEST_CASE("A writer places a block through the contract alone", "[instance_block][compute]")
 {
 	// The probe runs against a fake IMeshInstanceBlock that records each slot, so what is checked is
-	// the contract's meaning -- which slots a writer places, where, and which it hides -- and not
-	// the renderer's block, which only a drawn frame can show.
+	// the contract's meaning -- which slots a writer places, where, which it hides, and the playback
+	// offset it gives each -- and not the renderer's block, which only a drawn frame can show: that
+	// a placement stores the offset, and that a pose is evaluated ahead by it.
 	auto  gfx    = bgl::test::CreateGraphics(HeadlessOptions());
 	auto  base   = gfx->As<bgl::GraphicsBase>();
 	auto  rm     = base->GetResourceManagerCpy();
 	auto* device = base->GetDevice();
 
-	constexpr uint32_t c_Capacity = 8;
-	constexpr uint32_t c_Shown    = 5;
+	constexpr uint32_t c_Capacity   = 8;
+	constexpr uint32_t c_Shown      = 5;
+	constexpr float    c_OffsetStep = 0.25f;
 
 	auto slots = rm->CreateComputeBuffer(
 		bgpu::ComputeBufferDesc()
 			.SetElement<glm::vec4>()
 			.SetInitialCount(c_Capacity)
 			.SetDebugName("Recorded Slots"));
+	auto offsets = rm->CreateComputeBuffer(
+		bgpu::ComputeBufferDesc()
+			.SetElement<float>()
+			.SetInitialCount(c_Capacity)
+			.SetDebugName("Recorded Offsets"));
 
 	auto kernel = device->CreateComputeKernel(
 		bgpu::ComputePipelineDesc()
 			.SetShader(device->CreateShader("CSRecordingInstanceBlock"))
 			.SetDebugName("CSRecordingInstanceBlock"));
 
-	kernel["gUniforms"]["block"]["slots"]    = slots;
-	kernel["gUniforms"]["block"]["capacity"] = c_Capacity;
-	kernel["gUniforms"]["params"]["origin"]  = glm::vec3(10.0f, 2.0f, -3.0f);
-	kernel["gUniforms"]["params"]["shown"]   = c_Shown;
+	kernel["gUniforms"]["block"]["slots"]       = slots;
+	kernel["gUniforms"]["block"]["offsets"]     = offsets;
+	kernel["gUniforms"]["block"]["capacity"]    = c_Capacity;
+	kernel["gUniforms"]["params"]["origin"]     = glm::vec3(10.0f, 2.0f, -3.0f);
+	kernel["gUniforms"]["params"]["shown"]      = c_Shown;
+	kernel["gUniforms"]["params"]["offsetStep"] = c_OffsetStep;
 
 	auto readbackDesc     = bgpu::ReadbackBufferDesc();
 	readbackDesc.byteSize = c_Capacity * sizeof(glm::vec4);
 	auto readback         = rm->CreateReadbackBuffer(readbackDesc);
+
+	auto offsetReadbackDesc     = bgpu::ReadbackBufferDesc();
+	offsetReadbackDesc.byteSize = c_Capacity * sizeof(float);
+	auto offsetReadback         = rm->CreateReadbackBuffer(offsetReadbackDesc);
 
 	auto listDesc = bgpu::CommandListDesc();
 	listDesc.type = bgpu::QueueType::kCompute;
@@ -327,6 +376,14 @@ TEST_CASE("A writer places a block through the contract alone", "[instance_block
 			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
 			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 	list->CopyBufferToReadback(readback, slots);
+	list->Barrier(
+		offsets,
+		bgpu::BufferBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
+	list->CopyBufferToReadback(offsetReadback, offsets);
 	list->Close();
 	queue->WaitForFenceCPUBlocking(queue->ExecuteCommandList(list));
 
@@ -346,7 +403,20 @@ TEST_CASE("A writer places a block through the contract alone", "[instance_block
 	}
 	rm->UnmapReadback(readback);
 
+	// A placed slot holds the offset its writer gave it. A hidden one was given none and keeps
+	// whatever it held, so nothing is asked of it.
+	const auto* recordedOffsets = static_cast<const float*>(rm->MapReadback(offsetReadback));
+	REQUIRE(recordedOffsets != nullptr);
+	for (uint32_t slot = 0; slot < c_Shown; ++slot)
+	{
+		INFO("slot " << slot);
+		CHECK(recordedOffsets[slot] == static_cast<float>(slot) * c_OffsetStep);
+	}
+	rm->UnmapReadback(offsetReadback);
+
+	rm->DestroyReadbackBuffer(offsetReadback, false);
 	rm->DestroyReadbackBuffer(readback, false);
+	rm->DestroyBuffer(offsets, false);
 	rm->DestroyBuffer(slots, false);
 }
 
@@ -487,6 +557,7 @@ TEST_CASE(
 	{
 		const bgl::idl::MeshInstance& mesh = meshes.AtIndex(range.first + slot);
 		CHECK(bgl::MeshInstanceFlags(mesh.flags).any(bgl::MeshInstanceFlag::kHidden));
+		CHECK(mesh.playbackOffset == 0.0f);
 	}
 
 	// Neither neighbour landed in the block's two upload blocks.

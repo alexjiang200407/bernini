@@ -15,6 +15,17 @@ public interface IMeshInstanceBlock
 
     /** Culls `slot` this frame, before anything reads its transform. */
     void Hide(uint slot);
+
+    /**
+     * Plays `slot`'s animation `seconds` ahead of the view's clock, kept until set again: a block of
+     * a skinned geom shares one playback record (MeshInstanceBlockDesc::playback), and this is what
+     * a slot plays of it. Nothing reads it on a static geom's block.
+     *
+     * The pose a frame reprojects from is evaluated on the offset the slot holds now, so give a slot
+     * the offset of whatever it draws this frame, and never change that thing's offset while it
+     * lives: a new value is a jump in the pose that no motion vector describes.
+     */
+    void SetPlaybackOffset(uint slot, float seconds);
 };
 
 /**

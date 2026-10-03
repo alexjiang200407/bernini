@@ -3,10 +3,11 @@ import lib.types.ComputeBuffer;
 import MeshInstanceWriterProbe;
 
 // A fake behind IMeshInstanceBlock: one float4 per slot, the placed translation with w = 1, or w = -1
-// for a hidden slot.
+// for a hidden slot, and one float per slot, the playback offset it was last given.
 struct RecordingBlock : IMeshInstanceBlock
 {
     ComputeBuffer<float4> slots;
+    ComputeBuffer<float> offsets;
     uint capacity;
 
     uint Capacity() { return capacity; }
@@ -17,6 +18,8 @@ struct RecordingBlock : IMeshInstanceBlock
     }
 
     void Hide(uint slot) { slots[slot] = float4(0.0, 0.0, 0.0, -1.0); }
+
+    void SetPlaybackOffset(uint slot, float seconds) { offsets[slot] = seconds; }
 };
 
 struct Uniforms
