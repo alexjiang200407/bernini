@@ -501,8 +501,10 @@ just build --config Release                 # multi-config generators
 
 ## Compilers
 
-The MSVC presets use the Visual Studio generator; the clang presets
-(`windows-clang-dx12-{debug,release}`) use the Ninja generator. `build.py`
+The `windows-vs*-msvc-*` presets use the Visual Studio generator, `windows-ninja-msvc-*` Ninja and
+cl, and the clang presets (`windows-clang-dx12-{debug,release,gbv}`) Ninja and clang. CI compiles
+with MSVC; a Windows machine builds locally with clang (`windows-clang-dx12-debug`, the preset the
+workspace's `ws init` records). `build.py`
 resolves the clang/clang++ pair and ninja to absolute paths, preferring what
 `config.json` records, then the "C++ Clang tools for Windows" (LLVM) component
 and bundled Ninja from the Visual Studio install, and falling back to whatever is

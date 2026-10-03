@@ -290,6 +290,70 @@ system in §1: one is a D3D12 API validator, the other is your shaders reporting
 Examples and tests typically enable both `enableDebugLayer` and `enableGPUValidationLayer`; the
 editor reads them from its config.
 
+### Every case under validation — `scripts/gbv_shards.sh`
+
+`bgl_tests --gpu-validation` runs every case validated, which takes about 35 minutes serially. So
+`scripts/gbv_shards.sh <bin-dir> <out-dir> [spec]` runs it in shards (`GBV_SHARDS`, default 4), all
+at once. Each shard runs a hard-linked `bgl_tests.exe` from a directory of its own, because
+`bgpu.log` and crash logs resolve beside the executable. Its header documents the outputs: one
+`.out` and one `.bgpu.log` per shard, `summary.txt` (the seed and each shard's time), `slowest.txt`,
+and `events.log`. `events.log` holds only problems (`FAIL`, `GBV`, `CRASH`) and a final `DONE`, so it
+is what to watch.
+
+Validation runs from a **release** build of `bgl_tests` (`windows-clang-dx12-gbv`), because GPU-based
+validation patches every shader and a debug shader has more to patch: `Capture_test` takes 44 s in
+debug against 7 s in release. A file wrapped in `#if defined(BERNINI_GPU_DEBUG)` has no cases in
+release, so those files run validated from the debug build, as a spec of `[#<file>]` tags. With 4
+shards the release run took 18 minutes on 06e99bd9. A TDR in one process resets the adapter under
+all of them, so nothing else may use the GPU while the shards run.
+
+**A clean run is worth something only if validation was reporting.** If a run is suspiciously fast
+or quiet, plant a canary. In `CullInstances_test`, bind `visibility.GetBufferHandle()` to
+`cull["gUniforms"]["cullView"]`, which puts a writable buffer where the shader reads a read-only
+one. Run `[#CullInstances_test]` alone, expect `Descriptor type doesn't match` in exactly one
+shard, then revert.
+
+**Expected, not bugs:** a shard's `rc=4` (every case skipped itself; `ShaderCache_test` does under
+validation), `GPU assertion(s) fired` from `DebugAssert_test`, `RTV pool exhausted` and `Bloom chain
+... could not be allocated` from `Bloom_test` and `QueueSync_test`, `Draw bucket ceiling (3)
+reached` from `DrawBucketTable_test`, and the known `[hashedalpha]` failures and `Metal-tuned bound
+not met on D3D12` warnings.
+
+**A case that is slow under validation** is usually re-rendering one pass many times. Validation
+needs one case per distinct pass, configuration or resource lifetime. Read `slowest.txt` and call
+`bgl::test::SkipUnderGpuValidation()` first in each redundant case, as `TaaResolve_test` does. Keep
+every case that creates or destroys resources mid-run, because those catch teardown-order bugs.
+
+#### Reading what it reports
+
+- **Which case.** A `FAIL` line names the shard's last *completed* case. To find the case that was
+  running, list the shard's cases with its own arguments plus `--list-tests` (`-# --order rand
+  --rng-seed <seed> --shard-count N --shard-index i`) and take the next one. Then run it alone from
+  `bin/`: `./bgl_tests.exe "<case>" --gpu-validation`. Catch2 splits a spec at commas, so write `*`
+  in place of a comma in the name.
+- **A TDR (`DXGI_ERROR_DEVICE_HUNG`, `RemoveDevice`) kills every shard.** The culprit is the shard
+  whose `.bgpu.log` shows the earliest removal, and the other shards' failures are collateral. To
+  find the pass, temporarily make `FrameGraph::Execute` submit and wait after each pass and print
+  its name with a timestamp. Once the device is removed, fence waits return at once, so every "ok"
+  printed after the removal time is a lie. Then look for a group barrier after a `return`, or a loop
+  whose trip count is read from payload memory ([known_issues.md](known_issues.md)).
+- **Bisect a shader without rebuilding.** Slang compiles from `bin/shaders/src` at run time, so edit
+  that copy and rerun the one case. The next build overwrites it, so put the real fix in `libs/`.
+- **`Descriptor type doesn't match shader register type`** (UAV in heap, SRV in shader): a read-only
+  Slang view (`UploadBuffer`, `EntryBuffer`, `RangeBuffer`, a `StructuredBuffer.Handle`) is bound to
+  a `ComputeBuffer`. Bind what the renderer binds there.
+- **`heap index out of bounds ... [4294967295]`**: an invalid handle reached a shader. `SetIfValid`
+  checks that the uniform exists, not that the handle is valid. Usually a test harness built its
+  own `DrawData` and missed a field that `RenderContext` fills.
+- **`Uninitialized descriptor ... Heap Index [0]`**: a uniform handle that nothing assigned. Slot 0
+  is the reserved unbound sentinel ([uniforms.md](uniforms.md)).
+- **The messages name no shader.** Name the PSOs from each shader's `GetDesc().debugName`
+  (`m_PipelineState->SetName`) in `MeshletPipeline_d3d12.cpp` and `ComputePipeline_d3d12.cpp`, and
+  revert afterwards.
+- **A suite fails without validation.** Check whether it depends on time or order before calling it
+  flaky. One case failed only when the build was over an hour old, and another only when the GPU
+  kept up with the CPU.
+
 ---
 
 ## 6. Metal validation & frame capture

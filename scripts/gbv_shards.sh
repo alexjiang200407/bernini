@@ -7,7 +7,7 @@
 # directory stays <bin-dir>, where assets/, shaders/ and shadercache/ resolve.
 #
 # Usage: gbv_shards.sh <bin-dir> <out-dir> [catch2 test spec]
-#   <bin-dir>  the build's runtime dir: build/gbv-release/bin, or the debug bin for the debug-only files
+#   <bin-dir>  the build's runtime dir: build/ninja-clang-gbv/bin, or the debug bin for the debug-only files
 #   <out-dir>  shard<N>.out, shard<N>.bgpu.log, summary.txt, slowest.txt and events.log land here
 #   spec       optional, one argument; commas are OR: "[#CullInstances_test],[#DebugAssert_test]"
 #   GBV_SHARDS shard count (default 4)   GBV_SEED  rng seed (default random; in summary.txt)
