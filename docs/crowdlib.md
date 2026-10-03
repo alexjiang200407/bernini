@@ -133,9 +133,10 @@ each refuses; what follows is why it is shaped as it is.
   facing, the agent's record in the tick before (`source`, or `c_RenderSpawned`), its type and its
   `id`. An agent's index, slot and record all move when its group is split, merged or closed up, so
   `id` is the one thing a reader can derive from that stays with the agent, an animation phase for
-  one: a spawned `AgentRange` carries its first agent's and the kernel counts up from it, every copy
-  carries its own, and the record publishes it. The plan does not hand them out yet, so every id
-  reads 0. The
+  one: `CrowdPlan` hands each spawned `AgentRange` the next ids in a row from one counter, so a
+  tick's spawns cost a counter step per range and the same commands give the same ids; the kernel
+  counts up from the range's first, every copy carries its own, and the record publishes it. Ids
+  are distinct among the agents alive at once until the crowd has spawned 2^32. The
   ring is one buffer for the crowd's life (`GetRenderRing`), which a renderer imports once;
   `GetRenderTick(t)` says where tick `t`'s records are and the queue point that wrote them, from its
   `Step` until the ring is stepped past it. A tick's records are grouped by agent type, in
@@ -178,7 +179,9 @@ and refusing to empty a group or mix types, `Step` refused past `maxTicksInFligh
 readback refused unless asked for and holding every agent in its slot on its group's first tick.
 `[formation]` pins `SlotPosition`'s layout, and `[idl]` the records' round trip through a buffer.
 `[crowdplan]`: each command's layout — a spawn, a split's rear, a merge's append, a destroy's
-close-up — and a randomized run of commands against a model that follows every agent by identity.
+close-up — a randomized run of commands against a model that follows every agent by identity, and
+the ids spawns take. `[render_ring]` also checks every record's id against its source's, distinct
+among the tick's agents and new for a spawn.
 `[movement]`, on the GPU through the debug readback: a group walks to new orders and stands in its
 slots, at its group's speed and facing its way, never past `maxSpeed`; inertia keeps its share of a
 turned velocity; a standing group faces its front; a split, a merge and a destroy move no agent
