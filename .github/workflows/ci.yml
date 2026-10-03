@@ -59,7 +59,30 @@ jobs:
       # absent, so apps/editor is skipped (CMakeLists.txt find_package(Qt6 QUIET)).
       # build.py locates vcvars via vswhere when config.json is absent, as it is here.
       - name: Build
-        run: python scripts/build.py --preset windows-ninja-msvc-dx12-debug
+        shell: bash
+        run: python scripts/build.py --preset windows-ninja-msvc-dx12-debug 2>&1 | tee build.log
+
+      # A port the feed lacks -- a new vcpkg.json entry, or an ABI hash the image moved -- is built
+      # from source by this run and costs minutes, silently. Name it, so the slow run explains itself.
+      - name: Report vcpkg's binary feed
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          restored=$(grep -oE 'Restored [0-9]+ package' build.log | grep -oE '[0-9]+' | head -1 || true)
+          built=$(grep -E '^Building [^ ]+:x64-windows@' build.log | sed -E 's/^Building ([^@]+)@.*/\1/' || true)
+          {
+            echo "### vcpkg binary feed"
+            echo "Restored from the feed: ${restored:-0}"
+            if [ -n "$built" ]; then
+              echo "Built from source: $(echo "$built" | wc -l)"
+              echo "$built" | sed 's/^/- /'
+            else
+              echo "Built from source: 0"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$built" ]; then
+            echo "::warning title=vcpkg built ports from source::$(echo "$built" | paste -sd, -) missing from the feed; this run is slow, the next one will reuse them"
+          fi
 
       # A game consuming the build above rather than compiling the engine into its own: the package
       # links, the runtime DLLs stage beside it, and the executable starts. One translation unit.
