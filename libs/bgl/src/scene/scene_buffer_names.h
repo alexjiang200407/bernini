@@ -43,6 +43,10 @@ namespace bgl
 	constexpr std::string_view c_GrassChunkBufferName = "scene.grassChunkBuffer"sv;
 	constexpr std::string_view c_GrassClumpBufferName = "scene.grassClumpBuffer"sv;
 
+	// One ToonShadingRig per AddToonShadingRig, and the keys its edits blend, a range each rig owns.
+	constexpr std::string_view c_ToonShadingRigBufferName    = "scene.toonShadingRigBuffer"sv;
+	constexpr std::string_view c_ToonShadingRigKeyBufferName = "scene.toonShadingRigKeyBuffer"sv;
+
 	constexpr std::string_view c_InstanceBufferName     = "scene.instanceBuffer"sv;
 	constexpr std::string_view c_MeshInstanceBufferName = "scene.meshInstanceBuffer"sv;
 	// One arena for every animated placement's playback record, of either tier.

@@ -75,6 +75,8 @@ set(IDL_CPP_SOURCES
     AutoPosedInstance.slang
     DominantFrames.slang
     PlaybackType.slang
+    ToonShadingRig.slang
+    ToonShadingRigBlock.slang
 )
 
 # Public engine API: namespace `bgl`, emitted into include/bgl. MaterialType is named by a public
@@ -90,6 +92,7 @@ set(IDL_PUBLIC_CPP_SOURCES
     MeshInstanceFlag.slang
     LodLevel.slang
     OverlayVertex.slang
+    ToonShadingRigLimits.slang
 )
 
 # The C++ mirror follows the backend's own rules; see IDL_CPP_OUT_DIR above.

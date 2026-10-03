@@ -36,6 +36,7 @@
 #include <bgl/types/MeshInstanceHandle.h>
 #include <bgl/types/SkinnedMeshInstanceDesc.h>
 #include <bgl/types/SkyboxDesc.h>
+#include <bgl/types/ToonShadingRigHandle.h>
 #include <bgl/types/WindDesc.h>
 #include <bgpu/buffer/EntryBuffer.h>
 #include <bgpu/buffer/PackedBuffer.h>
@@ -122,6 +123,9 @@ namespace bgl
 		// The blob shadow SetBlobShadow last wrote, or empty. The dense list the forward pass
 		// draws is rebuilt from these, exactly as the pose list is from the palettes.
 		std::optional<BlobShadowDesc> blobShadow;
+
+		// The rig SetToonShadingRig last gave the placement, or null; the placement holds a use of it.
+		ToonShadingRigHandle toonShadingRig;
 	};
 
 	/**
@@ -200,6 +204,15 @@ namespace bgl
 
 		[[nodiscard]] std::optional<BlobShadowDesc>
 		GetBlobShadow(MeshInstanceHandle instance) const override;
+
+		void
+		SetToonShadingRig(MeshInstanceHandle instance, ToonShadingRigHandle rig) override;
+
+		void
+		ClearToonShadingRig(MeshInstanceHandle instance) override;
+
+		[[nodiscard]] ToonShadingRigHandle
+		GetToonShadingRig(MeshInstanceHandle instance) const override;
 
 		void
 		SetSubmeshMaterialOverride(
@@ -680,6 +693,16 @@ namespace bgl
 		/** Erases the submesh instances of a block's placements and releases its range. */
 		void
 		ReleaseBlockRange(const bgpu::EntryRange& range);
+
+		/**
+		 * Refuses `rig` for a placement or block of `geom`: a dead rig, or one naming a head bone
+		 * that `geom` is not a live skinned geom to carry.
+		 */
+		void
+		RequireToonShadingRigFits(
+			ToonShadingRigHandle rig,
+			GeomHandle           geom,
+			std::string_view     caller) const;
 
 		SceneRef                                m_Scene;
 		Scene*                                  m_SceneRaw = nullptr;

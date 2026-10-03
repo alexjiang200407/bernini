@@ -35,6 +35,7 @@
 #include <bgl/idl/SkinnedBone.h>
 #include <bgl/idl/SkinnedLegChain.h>
 #include <bgl/idl/Submesh.h>
+#include <bgl/idl/ToonShadingRig.h>
 #include <bgl/types/FootPlantDesc.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/GrassDesc.h>
@@ -47,6 +48,8 @@
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <bgl/types/TextureAssetHandle.h>
+#include <bgl/types/ToonShadingRigDesc.h>
+#include <bgl/types/ToonShadingRigHandle.h>
 #include <bgpu/buffer/ComputeBuffer.h>
 #include <bgpu/buffer/EntryBuffer.h>
 #include <bgpu/buffer/PackedBuffer.h>
@@ -183,6 +186,21 @@ namespace bgl
 		// Whether that slice holds a filled pose. False while one is allocated but unwritten -- on
 		// the first request, and again after a growth, which discards what the arena held.
 		bool tableFilled = false;
+	};
+
+	/**
+	 * The CPU half of a toon shading rig: what SetToonShadingRig checks a placement against, and the count
+	 * that decides whether the rig may be deleted.
+	 *
+	 * Namespace-scope for the same reason as GeomRecord above.
+	 */
+	struct ToonShadingRigMeta
+	{
+		std::optional<uint32_t> headBoneIndex;
+
+		// Placements across every view that hold the rig. DeleteToonShadingRig refuses while it is
+		// nonzero.
+		uint32_t useCount = 0;
 	};
 
 	class Scene : public core::RefCounter<IScene>
@@ -587,6 +605,27 @@ namespace bgl
 		void
 		DeleteRig(RigHandle rig) override;
 
+		ToonShadingRigHandle
+		AddToonShadingRig(const ToonShadingRigDesc& desc) override;
+
+		void
+		DeleteToonShadingRig(ToonShadingRigHandle rig) override;
+
+		/**
+		 * The live rig `rig` names, or nullptr if the handle is null or already deleted. The
+		 * pointer is into the entry buffer's metadata and is invalidated by the next AddToonShadingRig.
+		 */
+		[[nodiscard]] const ToonShadingRigMeta*
+		FindToonShadingRig(ToonShadingRigHandle rig) const noexcept;
+
+		/** A placement takes a use of `rig`. @pre FindToonShadingRig(rig) is not null. */
+		void
+		AcquireToonShadingRig(ToonShadingRigHandle rig) noexcept;
+
+		/** A placement releases its use of `rig`. A no-op on a null or deleted handle. */
+		void
+		ReleaseToonShadingRig(ToonShadingRigHandle rig) noexcept;
+
 		GeomHandle
 		AddSkinnedMeshGeom(const SkinnedMeshGeomDesc& desc) override;
 
@@ -795,6 +834,10 @@ namespace bgl
 		core::slot_vector<GrassMeta> m_Grass;
 		uint64_t                     m_GrassEpoch = 0;
 
+		// One ToonShadingRig per AddToonShadingRig, and its edits' keys in one range it owns.
+		bgpu::EntryBuffer<idl::ToonShadingRig, ToonShadingRigMeta> m_ToonShadingRigs;
+		bgpu::RangeBuffer<idl::ToonShadingRigKey>                  m_ToonShadingRigKeys;
+
 		bgpu::EntryBuffer<idl::GrassLook>  m_GrassLooks;
 		bgpu::RangeBuffer<idl::GrassChunk> m_GrassChunks;
 		bgpu::RangeBuffer<idl::GrassClump> m_GrassClumps;
@@ -877,6 +920,8 @@ namespace bgl
 			NamedBuffer{ c_GrassLookBufferName, &Scene::m_GrassLooks },
 			NamedBuffer{ c_GrassChunkBufferName, &Scene::m_GrassChunks },
 			NamedBuffer{ c_GrassClumpBufferName, &Scene::m_GrassClumps },
+			NamedBuffer{ c_ToonShadingRigBufferName, &Scene::m_ToonShadingRigs },
+			NamedBuffer{ c_ToonShadingRigKeyBufferName, &Scene::m_ToonShadingRigKeys },
 		};
 
 		static_assert(HasDistinctNames(c_Buffers), "two scene buffers would import under one name");
