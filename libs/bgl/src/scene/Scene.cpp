@@ -116,6 +116,12 @@ namespace bgl
 		std::span<const SurfaceType>            surfaces)
 	try :
 		m_Desc(std::move(desc)), m_Surfaces(surfaces.begin(), surfaces.end()),
+		m_ToonShadingRigs(
+			resourceManager,
+			bgpu::EntryBufferDesc().SetInitialCount(1).SetDebugName("Toon Shading Rig Buffer")),
+		m_ToonShadingRigKeys(
+			resourceManager,
+			bgpu::RangeBufferDesc().SetInitialCount(1).SetDebugName("Toon Shading Rig Key Buffer")),
 		m_GrassLooks(
 			resourceManager,
 			bgpu::EntryBufferDesc().SetInitialCount(1).SetDebugName("Grass Look Buffer")),

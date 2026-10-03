@@ -97,10 +97,19 @@ Each is `ISurfaceSource`'s shape — a parameter struct under the same rules, `C
 PBR. A character surface is not tied to skinned geometry: the model is the material's, not the
 mesh's.
 
-**The look is not designed yet.** Both material halves hold a `baseColor` alone, and both models
-draw it flat: `lib.math.ToonShading`'s `ShadeToonCharacter` and `ShadeToonEnvironment` return it
-as pre-exposure radiance, reading nothing of the light, so exposure and tonemapping still apply
-after it as for every surface.
+**The character's material half is a three-tone cel model.** Over the half-Lambert term
+`0.5 * dot(N, L) + 0.5`, `ToonCharacterSurface` names a lit tone (`baseColor`), a first and a
+second shade (`baseColor` times `firstShade` and `secondShade`), the step below which each shade
+takes over (`baseStep`, `shadeStep`) and the width its edge blends over (`baseFeather`,
+`shadeFeather`); `shadeOffset` is added to the term before the steps — a painted threshold map's
+place — and `face` says how much of the pixel takes its placement's toon shading rig and remapped face
+light (`ISceneView::SetToonShadingRig`, or an instance block's `toonShadingRig`; [bgl API](bgl_api.md)). No other shading model reads a rig. Every field defaults to what a surface
+that says nothing about it means. The environment's half holds a `baseColor` alone.
+
+**The lighting does not read them yet.** Both models draw `baseColor` flat:
+`lib.math.ToonShading`'s `ShadeToonCharacter` and `ShadeToonEnvironment` return it as pre-exposure
+radiance, reading nothing of the light, so exposure and tonemapping still apply after it as for
+every surface.
 
 **A toon surface draws through the lit programs.** Registration binds a toon slot to its model's
 adapter over the game's type — `ToonCharacterLit<G>` or `ToonEnvironmentLit<G>`, in

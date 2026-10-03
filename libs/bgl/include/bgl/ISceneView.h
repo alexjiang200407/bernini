@@ -16,6 +16,7 @@
 #include <bgl/types/MeshInstanceHandle.h>
 #include <bgl/types/SkinnedMeshInstanceDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
+#include <bgl/types/ToonShadingRigHandle.h>
 #include <bgl/types/WindDesc.h>
 #include <bgpu/uniforms/UniformsBase.h>
 #include <core/ref/Ref.h>
@@ -234,6 +235,39 @@ namespace bgl
 		GetBlobShadow(MeshInstanceHandle instance) const = 0;
 
 		/**
+		 * Gives one placement a face's toon shading rig: each frame its edits are evaluated against the
+		 * sun in the placement's head space and drawn on the pixels of its toon character surfaces
+		 * that are face (`ToonCharacterSurface::face`). Faded out by the head's projected size --
+		 * see ToonShadingRigDesc. Replaces any rig the placement holds, releasing its use.
+		 *
+		 * The placement holds a use of the rig until ClearToonShadingRig, a replacing call,
+		 * DeleteMeshInstance or this view's destruction; see IScene::DeleteToonShadingRig.
+		 *
+		 * @throws SceneError if the instance handle is invalid or removed; `rig` is null or deleted;
+		 *         or the rig names a head bone and the placement is not a skinned one whose geom is
+		 *         alive, or the bone is not in its rig.
+		 */
+		virtual void
+		SetToonShadingRig(MeshInstanceHandle instance, ToonShadingRigHandle rig) = 0;
+
+		/**
+		 * Removes the placement's toon shading rig and releases its use. A no-op on a placement that
+		 * holds none.
+		 *
+		 * @throws SceneError if the handle is invalid or already removed.
+		 */
+		virtual void
+		ClearToonShadingRig(MeshInstanceHandle instance) = 0;
+
+		/**
+		 * The rig SetToonShadingRig last gave the placement, or a null handle.
+		 *
+		 * @throws SceneError if the handle is invalid or already removed.
+		 */
+		[[nodiscard]] virtual ToonShadingRigHandle
+		GetToonShadingRig(MeshInstanceHandle instance) const = 0;
+
+		/**
 		 * Overrides the material of one submesh of ONE instance, leaving the geom's default -- and
 		 * every other instance of it -- alone. This is what a cosmetic skin is: one mesh, a different
 		 * material per unit. The renderer groups draws by the *resolved* material, so an opaque
@@ -410,7 +444,8 @@ namespace bgl
 		 *
 		 * @throws SceneError if `desc.geom` is not a live static or skinned geom, `desc.capacity` is 0
 		 *         or past c_MaxMeshInstanceBlockCapacity, or a skinned geom's `desc.playback` is one
-		 *         CreateSkinnedMeshInstance refuses. A skinned geom is refused whole until its
+		 *         CreateSkinnedMeshInstance refuses, or `desc.toonShadingRig` is one SetToonShadingRig
+		 *         would refuse for a placement of the geom. A skinned geom is refused whole until its
 		 *         placements are drawn.
 		 */
 		virtual MeshInstanceBlockHandle

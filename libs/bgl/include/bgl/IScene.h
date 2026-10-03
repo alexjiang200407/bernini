@@ -24,6 +24,8 @@
 #include <bgl/types/StaticMeshGeomDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <bgl/types/TextureAssetHandle.h>
+#include <bgl/types/ToonShadingRigDesc.h>
+#include <bgl/types/ToonShadingRigHandle.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
@@ -252,6 +254,45 @@ namespace bgl
 		 */
 		virtual void
 		DeleteRig(RigHandle rig) = 0;
+
+		/**
+		 * Adds a face's toon shading rig, which any placement of any view over this scene may then take
+		 * with ISceneView::SetToonShadingRig. See ToonShadingRigDesc.
+		 *
+		 * bgl resolves no bone name: `desc.headBoneIndex` is an index into the rig of whichever placement
+		 * takes it, checked there.
+		 *
+		 * Every key of every edit is weighed for every placement holding the rig, every frame, so an
+		 * edit holds at most cMaxToonShadingRigKeysPerEdit.
+		 *
+		 * @throws SceneError if the edits take more than cMaxToonShadingRigSlots slots; an edit has no
+		 *         keys, more than cMaxToonShadingRigKeysPerEdit, or a `keySharpness` that is not finite
+		 *         and positive; a key's light is not finite and nonzero or its squared length
+		 *         overflows, its position is not finite, its size is not finite and
+		 *         positive, its radius is negative, its anisotropy is outside [0, 1), its sharpness
+		 *         or normal smoothing is outside [0, 1], or any of its values is not finite;
+		 *         `headRadius` is not finite and positive; the fade is not
+		 *         0 <= fadeEndPixels < fadeStartPixels; the face light's elevations are not
+		 *         -pi/2 <= minElevation <= maxElevation <= pi/2, its `maxAzimuth` is outside [0, pi],
+		 *         its fade does not start before it ends or its amount is outside [0, 1];
+		 *         `headBoneIndex` is 0xFFFFFFFF, which the GPU record reserves for "no bone"; or
+		 *         `headToBone` is not a finite, invertible affine matrix. Nothing is written unless
+		 *         all of it passes.
+		 */
+		virtual ToonShadingRigHandle
+		AddToonShadingRig(const ToonShadingRigDesc& desc) = 0;
+
+		/**
+		 * Destroys a toon shading rig.
+		 *
+		 * @pre No placement or instance block of any view still holds it. Refused rather than
+		 *      permitted, like DeleteGrass: a placement left naming a freed rig would shade with
+		 *      whichever rig takes its slot next.
+		 * @throws SceneError if the handle is null, already deleted, or still held by a placement or
+		 *         a block.
+		 */
+		virtual void
+		DeleteToonShadingRig(ToonShadingRigHandle rig) = 0;
 
 		/**
 		 * Adds one mesh of a loaded BMesh as skinned geometry against `rig`: the bind-pose submeshes
