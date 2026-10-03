@@ -17,6 +17,7 @@
 #include <bgpu/types/QueueType.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <core/type_traits.h>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -131,7 +132,7 @@ namespace bgl::test
 	 * The first `count` elements of a GPU-written buffer, as `T`. Waits for the device first: the
 	 * copy rides its own queue, which nothing orders against the frame that wrote the buffer.
 	 */
-	template <typename T>
+	template <core::type_traits::trivially_copyable T>
 	std::vector<T>
 	ReadBuffer(bgl::GraphicsBase* gfxBase, bgpu::BufferHandle buffer, uint32_t count)
 	{
