@@ -1,10 +1,10 @@
-import MeshInstanceWriterProbe;
 import RecordingInstanceBlock;
+import SkinnedMeshInstanceWriterProbe;
 
 struct Uniforms
 {
     RecordingBlock block;
-    MeshInstanceWriterProbe.Params params;
+    SkinnedMeshInstanceWriterProbe.Params params;
 };
 
 ConstantBuffer<Uniforms> gUniforms;
@@ -15,5 +15,5 @@ void main(uint slot: SV_DispatchThreadID)
 {
     if (slot >= gUniforms.block.Capacity())
         return;
-    MeshInstanceWriterProbe.Write(gUniforms.block, gUniforms.params, slot);
+    SkinnedMeshInstanceWriterProbe.Write(gUniforms.block, gUniforms.params, slot);
 }

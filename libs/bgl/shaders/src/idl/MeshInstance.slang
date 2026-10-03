@@ -34,7 +34,7 @@ public struct MeshInstance
 
     // Seconds its playback record is evaluated ahead of the view's clock, at `time` and at
     // `prevTime` alike, so a pose stays a function of the record and the clock. Zero from every CPU
-    // spawn. An instance block's writer sets it (IMeshInstanceBlock::SetPlaybackOffset), which is
+    // spawn. An instance block's writer sets it (ISkinnedMeshInstanceBlock::SetPlaybackOffset), which is
     // how placements sharing one record play it out of step. A record read at an offset is past any
     // ramp that starts "now", so a block's record is written once and never rewritten.
     public float playbackOffset;

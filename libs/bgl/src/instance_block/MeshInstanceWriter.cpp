@@ -1,5 +1,6 @@
 #include "instance_block/MeshInstanceWriter.h"
 #include <algorithm>
+#include <bgl/GeomType.h>
 #include <bgl/types/MeshInstanceBlockDesc.h>
 #include <cctype>
 #include <core/math.h>
@@ -20,6 +21,13 @@ namespace bgl
 			return std::ranges::all_of(name, [](char c) {
 				return (std::isalnum(static_cast<unsigned char>(c)) != 0) || c == '_';
 			});
+		}
+
+		std::string_view
+		WriterInterface(GeomType geomType) noexcept
+		{
+			return geomType == GeomType::kSkinnedMesh ? "ISkinnedMeshInstanceWriter" :
+			                                            "IMeshInstanceWriter";
 		}
 	}
 
@@ -45,6 +53,8 @@ namespace bgl
 	{
 		if (!IsIdentifier(desc.slangTypeName) || desc.slangModuleName.empty())
 			return false;
+		if (desc.geomType != GeomType::kStaticMesh && desc.geomType != GeomType::kSkinnedMesh)
+			return false;
 
 		auto rest = std::string_view(desc.slangModuleName);
 		while (true)
@@ -63,7 +73,11 @@ namespace bgl
 	{
 		auto module = desc.slangModuleName;
 		std::ranges::replace(module, '.', '_');
-		return std::format("programs.mesh_instance_writer.{}__{}", module, desc.slangTypeName);
+		return std::format(
+			"programs.mesh_instance_writer.{}.{}__{}",
+			desc.geomType == GeomType::kSkinnedMesh ? "skinned" : "static",
+			module,
+			desc.slangTypeName);
 	}
 
 	std::string
@@ -82,17 +96,25 @@ struct Uniforms
 
 ConstantBuffer<Uniforms> gUniforms;
 
+// Through the interface, not the type: a type with a Write of its own but conforming to the other
+// kind's interface, or to none, is refused here rather than run.
+void Run<W : {3}>(MeshInstanceBufferBlock block, W.Params params, uint slot)
+{{
+    W.Write(block, params, slot);
+}}
+
 [shader("compute")]
 [numthreads({2}, 1, 1)]
 void main(uint slot : SV_DispatchThreadID)
 {{
     if (slot >= gUniforms.block.Capacity())
         return;
-    {1}.Write(gUniforms.block, gUniforms.params, slot);
+    Run<{1}>(gUniforms.block, gUniforms.params, slot);
 }}
 )",
 			desc.slangModuleName,
 			desc.slangTypeName,
-			MeshInstanceWriter::c_GroupSize);
+			MeshInstanceWriter::c_GroupSize,
+			WriterInterface(desc.geomType));
 	}
 }

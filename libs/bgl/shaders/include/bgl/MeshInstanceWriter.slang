@@ -15,11 +15,16 @@ public interface IMeshInstanceBlock
 
     /** Culls `slot` this frame, before anything reads its transform. */
     void Hide(uint slot);
+};
 
+/**
+ * A skinned geom's block as its writer sees it: what every block offers, and how far ahead of the
+ * clock each slot plays the record the block shares (MeshInstanceBlockDesc::playback).
+ */
+public interface ISkinnedMeshInstanceBlock : IMeshInstanceBlock
+{
     /**
-     * Plays `slot`'s animation `seconds` ahead of the view's clock, kept until set again: a block of
-     * a skinned geom shares one playback record (MeshInstanceBlockDesc::playback), and this is what
-     * a slot plays of it. Nothing reads it on a static geom's block.
+     * Plays `slot`'s animation `seconds` ahead of the view's clock, kept until set again.
      *
      * The pose a frame reprojects from is evaluated on the offset the slot holds now, so give a slot
      * the offset of whatever it draws this frame, and never change that thing's offset while it
@@ -43,4 +48,15 @@ public interface IMeshInstanceWriter
     associatedtype Params;
 
     static void Write<B : IMeshInstanceBlock>(B block, Params params, uint slot);
+};
+
+/**
+ * IMeshInstanceWriter for a skinned geom's blocks (MeshInstanceWriterDesc::geomType): the same
+ * contract, over a block that also takes each slot's playback offset.
+ */
+public interface ISkinnedMeshInstanceWriter
+{
+    associatedtype Params;
+
+    static void Write<B : ISkinnedMeshInstanceBlock>(B block, Params params, uint slot);
 };

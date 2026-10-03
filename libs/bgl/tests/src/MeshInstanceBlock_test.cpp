@@ -5,6 +5,7 @@
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include "util/VelocityReadback.h"
+#include <bgl/GeomType.h>
 #include <bgl/IExternalBuffer.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IMeshInstanceWriter.h>
@@ -80,6 +81,11 @@ namespace
 	const auto c_ProbeWriter = bgl::MeshInstanceWriterDesc()
 	                               .SetSlangModuleName("MeshInstanceWriterProbe")
 	                               .SetSlangTypeName("MeshInstanceWriterProbe");
+
+	const auto c_SkinnedProbeWriter = bgl::MeshInstanceWriterDesc()
+	                                      .SetSlangModuleName("SkinnedMeshInstanceWriterProbe")
+	                                      .SetSlangTypeName("SkinnedMeshInstanceWriterProbe")
+	                                      .SetGeomType(bgl::GeomType::kSkinnedMesh);
 
 	// Whether the view's epoch moved since the last call, as the next frame would see it.
 	bool
@@ -213,11 +219,44 @@ TEST_CASE("An instance writer compiles against the contract or is refused", "[in
 {
 	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 
-	SECTION("a conforming type compiles")
+	SECTION("a conforming type compiles, as the kind its desc names")
 	{
 		auto writer = gfx->CreateMeshInstanceWriter(c_ProbeWriter);
 		REQUIRE(writer != nullptr);
 		CHECK(writer->GetDesc().slangTypeName == "MeshInstanceWriterProbe");
+		CHECK(writer->GetDesc().geomType == bgl::GeomType::kStaticMesh);
+
+		auto skinned = gfx->CreateMeshInstanceWriter(c_SkinnedProbeWriter);
+		REQUIRE(skinned != nullptr);
+		CHECK(skinned->GetDesc().geomType == bgl::GeomType::kSkinnedMesh);
+	}
+
+	SECTION("a writer named as the other kind is refused")
+	{
+		CHECK_THROWS_WITH(
+			gfx->CreateMeshInstanceWriter(
+				bgl::MeshInstanceWriterDesc(c_ProbeWriter)
+					.SetGeomType(bgl::GeomType::kSkinnedMesh)),
+			Catch::Matchers::ContainsSubstring("doesn't conform to interface"));
+		CHECK_THROWS_WITH(
+			gfx->CreateMeshInstanceWriter(
+				bgl::MeshInstanceWriterDesc(c_SkinnedProbeWriter)
+					.SetGeomType(bgl::GeomType::kStaticMesh)),
+			Catch::Matchers::ContainsSubstring("doesn't conform to interface"));
+		CHECK_THROWS_AS(
+			gfx->CreateMeshInstanceWriter(
+				bgl::MeshInstanceWriterDesc(c_ProbeWriter).SetGeomType(bgl::GeomType::kInvalid)),
+			bgl::GraphicsError);
+	}
+
+	SECTION("a static writer that sets a playback offset does not compile")
+	{
+		CHECK_THROWS_WITH(
+			gfx->CreateMeshInstanceWriter(
+				bgl::MeshInstanceWriterDesc()
+					.SetSlangModuleName("StaticWriterSettingOffset")
+					.SetSlangTypeName("StaticWriterSettingOffset")),
+			Catch::Matchers::ContainsSubstring("'SetPlaybackOffset' is not a member"));
 	}
 
 	SECTION("a type that is not a writer is refused with the compiler's reason")
@@ -307,117 +346,180 @@ TEST_CASE("A block's parameters exist while it has a writer, and are its own", "
 		auto secondWriter = second->CreateMeshInstanceWriter(c_ProbeWriter);
 		CHECK_THROWS_AS(view->SetBlockWriter(first, secondWriter), bgl::SceneError);
 	}
+
+	SECTION("a skinned writer is refused a static geom's block, which keeps its writer")
+	{
+		CHECK_THROWS_WITH(
+			view->SetBlockWriter(first, gfx->CreateMeshInstanceWriter(c_SkinnedProbeWriter)),
+			Catch::Matchers::ContainsSubstring("writes skinned blocks"));
+		CHECK(view->GetBlockParams(first)["shown"] == 5u);
+	}
+}
+
+namespace
+{
+	// What a recording block holds after one dispatch of a writer: each slot's placed translation
+	// (w = -1 when hidden) and the playback offset it was last given.
+	struct Recorded
+	{
+		std::vector<glm::vec4> slots;
+		std::vector<float>     offsets;
+	};
+
+	/**
+	 * Runs `shader` -- a probe writer over the recording fake -- once over `capacity` slots, with the
+	 * probe's parameters as `setParams` writes them, and reads both buffers back. Every offset starts
+	 * at -1, so a slot no writer gave one is told from one given zero.
+	 */
+	template <typename SetParams>
+	Recorded
+	RunRecordingBlock(
+		bgl::IGraphics& gfx,
+		const char*     shader,
+		uint32_t        capacity,
+		SetParams       setParams)
+	{
+		auto* base   = gfx.As<bgl::GraphicsBase>();
+		auto  rm     = base->GetResourceManagerCpy();
+		auto* device = base->GetDevice();
+
+		auto slots = rm->CreateComputeBuffer(
+			bgpu::ComputeBufferDesc()
+				.SetElement<glm::vec4>()
+				.SetInitialCount(capacity)
+				.SetDebugName("Recorded Slots"));
+		auto offsets = rm->CreateComputeBuffer(
+			bgpu::ComputeBufferDesc().SetElement<float>().SetInitialCount(capacity).SetDebugName(
+				"Recorded Offsets"));
+		const auto unset = std::vector<float>(capacity, -1.0f);
+
+		auto kernel = device->CreateComputeKernel(
+			bgpu::ComputePipelineDesc()
+				.SetShader(device->CreateShader(shader))
+				.SetDebugName(shader));
+		kernel["gUniforms"]["block"]["slots"]    = slots;
+		kernel["gUniforms"]["block"]["offsets"]  = offsets;
+		kernel["gUniforms"]["block"]["capacity"] = capacity;
+		setParams(kernel["gUniforms"]["params"]);
+
+		auto slotsDesc       = bgpu::ReadbackBufferDesc();
+		slotsDesc.byteSize   = capacity * sizeof(glm::vec4);
+		auto slotsReadback   = rm->CreateReadbackBuffer(slotsDesc);
+		auto offsetsDesc     = bgpu::ReadbackBufferDesc();
+		offsetsDesc.byteSize = capacity * sizeof(float);
+		auto offsetsReadback = rm->CreateReadbackBuffer(offsetsDesc);
+
+		auto listDesc = bgpu::CommandListDesc();
+		listDesc.type = bgpu::QueueType::kCompute;
+
+		auto allocator = device->CreateCommandAllocator(bgpu::QueueType::kCompute);
+		auto list      = device->CreateCommandList(listDesc, allocator, rm);
+		auto queue     = device->CreateCommandQueue(bgpu::QueueType::kCompute);
+
+		auto state   = bgpu::ComputeState();
+		state.kernel = &kernel;
+
+		const auto toCopy = bgpu::BufferBarrierDesc()
+		                        .AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+		                        .AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+		                        .AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+		                        .AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource);
+
+		list->Open(queue, allocator);
+		list->WriteBuffer(offsets, unset.data(), 0, unset.size() * sizeof(float));
+		list->Barrier(
+			offsets,
+			bgpu::BufferBarrierDesc()
+				.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+				.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+				.AddSyncAfter(bgpu::BarrierSyncFlag::kComputeShader)
+				.AddAccessAfter(bgpu::BarrierAccessFlag::kUnorderedAccess));
+		list->SetComputeState(state);
+		list->Dispatch(core::div_ceil(capacity, 8u), 1, 1);
+		list->Barrier(slots, toCopy);
+		list->CopyBufferToReadback(slotsReadback, slots);
+		list->Barrier(offsets, toCopy);
+		list->CopyBufferToReadback(offsetsReadback, offsets);
+		list->Close();
+		queue->WaitForFenceCPUBlocking(queue->ExecuteCommandList(list));
+
+		auto        recorded = Recorded();
+		const auto* placed   = static_cast<const glm::vec4*>(rm->MapReadback(slotsReadback));
+		REQUIRE(placed != nullptr);
+		recorded.slots.assign(placed, placed + capacity);
+		rm->UnmapReadback(slotsReadback);
+		const auto* given = static_cast<const float*>(rm->MapReadback(offsetsReadback));
+		REQUIRE(given != nullptr);
+		recorded.offsets.assign(given, given + capacity);
+		rm->UnmapReadback(offsetsReadback);
+
+		rm->DestroyReadbackBuffer(offsetsReadback, false);
+		rm->DestroyReadbackBuffer(slotsReadback, false);
+		rm->DestroyBuffer(offsets, false);
+		rm->DestroyBuffer(slots, false);
+		return recorded;
+	}
+
+	void
+	CheckProbeRow(const Recorded& recorded, uint32_t shown)
+	{
+		for (uint32_t slot = 0; slot < recorded.slots.size(); ++slot)
+		{
+			INFO("slot " << slot);
+			if (slot < shown)
+			{
+				CHECK(
+					recorded.slots[slot] ==
+					glm::vec4(10.0f + static_cast<float>(slot), 2.0f, -3.0f, 1.0f));
+			}
+			else
+			{
+				CHECK(recorded.slots[slot].w == -1.0f);
+			}
+		}
+	}
 }
 
 TEST_CASE("A writer places a block through the contract alone", "[instance_block][compute]")
 {
-	// The probe runs against a fake IMeshInstanceBlock that records each slot, so what is checked is
-	// the contract's meaning -- which slots a writer places, where, which it hides, and the playback
-	// offset it gives each -- and not the renderer's block, which only a drawn frame can show: that
-	// a placement stores the offset, and that a pose is evaluated ahead by it.
-	auto  gfx    = bgl::test::CreateGraphics(HeadlessOptions());
-	auto  base   = gfx->As<bgl::GraphicsBase>();
-	auto  rm     = base->GetResourceManagerCpy();
-	auto* device = base->GetDevice();
+	// The probes run against a fake block that records each slot, so what is checked is the
+	// contract's meaning -- which slots a writer places, where, which it hides, and the offset a
+	// skinned writer gives each -- and not the renderer's block, which only a drawn frame can show.
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
 
-	constexpr uint32_t c_Capacity   = 8;
-	constexpr uint32_t c_Shown      = 5;
-	constexpr float    c_OffsetStep = 0.25f;
+	constexpr uint32_t c_Capacity = 8;
+	constexpr uint32_t c_Shown    = 5;
 
-	auto slots = rm->CreateComputeBuffer(
-		bgpu::ComputeBufferDesc()
-			.SetElement<glm::vec4>()
-			.SetInitialCount(c_Capacity)
-			.SetDebugName("Recorded Slots"));
-	auto offsets = rm->CreateComputeBuffer(
-		bgpu::ComputeBufferDesc()
-			.SetElement<float>()
-			.SetInitialCount(c_Capacity)
-			.SetDebugName("Recorded Offsets"));
-
-	auto kernel = device->CreateComputeKernel(
-		bgpu::ComputePipelineDesc()
-			.SetShader(device->CreateShader("CSRecordingInstanceBlock"))
-			.SetDebugName("CSRecordingInstanceBlock"));
-
-	kernel["gUniforms"]["block"]["slots"]       = slots;
-	kernel["gUniforms"]["block"]["offsets"]     = offsets;
-	kernel["gUniforms"]["block"]["capacity"]    = c_Capacity;
-	kernel["gUniforms"]["params"]["origin"]     = glm::vec3(10.0f, 2.0f, -3.0f);
-	kernel["gUniforms"]["params"]["shown"]      = c_Shown;
-	kernel["gUniforms"]["params"]["offsetStep"] = c_OffsetStep;
-
-	auto readbackDesc     = bgpu::ReadbackBufferDesc();
-	readbackDesc.byteSize = c_Capacity * sizeof(glm::vec4);
-	auto readback         = rm->CreateReadbackBuffer(readbackDesc);
-
-	auto offsetReadbackDesc     = bgpu::ReadbackBufferDesc();
-	offsetReadbackDesc.byteSize = c_Capacity * sizeof(float);
-	auto offsetReadback         = rm->CreateReadbackBuffer(offsetReadbackDesc);
-
-	auto listDesc = bgpu::CommandListDesc();
-	listDesc.type = bgpu::QueueType::kCompute;
-
-	auto allocator = device->CreateCommandAllocator(bgpu::QueueType::kCompute);
-	auto list      = device->CreateCommandList(listDesc, allocator, rm);
-	auto queue     = device->CreateCommandQueue(bgpu::QueueType::kCompute);
-
-	auto state   = bgpu::ComputeState();
-	state.kernel = &kernel;
-
-	list->Open(queue, allocator);
-	list->SetComputeState(state);
-	list->Dispatch(1, 1, 1);
-	list->Barrier(
-		slots,
-		bgpu::BufferBarrierDesc()
-			.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
-			.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
-			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
-	list->CopyBufferToReadback(readback, slots);
-	list->Barrier(
-		offsets,
-		bgpu::BufferBarrierDesc()
-			.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
-			.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
-			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
-	list->CopyBufferToReadback(offsetReadback, offsets);
-	list->Close();
-	queue->WaitForFenceCPUBlocking(queue->ExecuteCommandList(list));
-
-	const auto* recorded = static_cast<const glm::vec4*>(rm->MapReadback(readback));
-	REQUIRE(recorded != nullptr);
-	for (uint32_t slot = 0; slot < c_Capacity; ++slot)
+	SECTION("a static writer places and hides, and gives no slot an offset")
 	{
-		INFO("slot " << slot);
-		if (slot < c_Shown)
+		const Recorded recorded =
+			RunRecordingBlock(*gfx, "CSRecordingInstanceBlock", c_Capacity, [](auto params) {
+				params["origin"] = glm::vec3(10.0f, 2.0f, -3.0f);
+				params["shown"]  = c_Shown;
+			});
+		CheckProbeRow(recorded, c_Shown);
+		for (const float offset : recorded.offsets) CHECK(offset == -1.0f);
+	}
+
+	SECTION("a skinned writer gives each slot it places an offset too")
+	{
+		constexpr float c_OffsetStep = 0.25f;
+
+		const Recorded recorded =
+			RunRecordingBlock(*gfx, "CSRecordingSkinnedInstanceBlock", c_Capacity, [](auto params) {
+				params["origin"]     = glm::vec3(10.0f, 2.0f, -3.0f);
+				params["shown"]      = c_Shown;
+				params["offsetStep"] = c_OffsetStep;
+			});
+		CheckProbeRow(recorded, c_Shown);
+		for (uint32_t slot = 0; slot < c_Capacity; ++slot)
 		{
-			CHECK(recorded[slot] == glm::vec4(10.0f + static_cast<float>(slot), 2.0f, -3.0f, 1.0f));
-		}
-		else
-		{
-			CHECK(recorded[slot].w == -1.0f);
+			INFO("slot " << slot);
+			CHECK(
+				recorded.offsets[slot] ==
+				(slot < c_Shown ? static_cast<float>(slot) * c_OffsetStep : -1.0f));
 		}
 	}
-	rm->UnmapReadback(readback);
-
-	// A placed slot holds the offset its writer gave it. A hidden one was given none and keeps
-	// whatever it held, so nothing is asked of it.
-	const auto* recordedOffsets = static_cast<const float*>(rm->MapReadback(offsetReadback));
-	REQUIRE(recordedOffsets != nullptr);
-	for (uint32_t slot = 0; slot < c_Shown; ++slot)
-	{
-		INFO("slot " << slot);
-		CHECK(recordedOffsets[slot] == static_cast<float>(slot) * c_OffsetStep);
-	}
-	rm->UnmapReadback(offsetReadback);
-
-	rm->DestroyReadbackBuffer(offsetReadback, false);
-	rm->DestroyReadbackBuffer(readback, false);
-	rm->DestroyBuffer(offsets, false);
-	rm->DestroyBuffer(slots, false);
 }
 
 TEST_CASE("Frame waits and the last frame's point are between frames only", "[instance_block]")

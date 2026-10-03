@@ -20,8 +20,6 @@ struct RecordingBlock : IMeshInstanceBlock
     }
 
     void Hide(uint slot) { slots[slot * 4u] = float4(0.0, 0.0, 0.0, -1.0); }
-
-    void SetPlaybackOffset(uint slot, float seconds) {}
 };
 
 struct Uniforms

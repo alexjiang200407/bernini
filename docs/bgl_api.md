@@ -23,7 +23,9 @@ surface written outside the engine conforms to and reads through, and nothing th
 an arena or a draw bucket. `bgl_check_shaders` holds it to the same rule, compiling each module with
 only that tree on the search path; [Slang Shaders](docs/slang_shaders.md) has the three trees. Two
 kinds of client code conform to it: a surface, and an instance writer (`bgl.MeshInstanceWriter`), which
-places a block's slots through `IMeshInstanceBlock` and never learns where the placements live.
+places a block's slots through `IMeshInstanceBlock` and never learns where the placements live. A
+skinned geom's block is `ISkinnedMeshInstanceBlock`, which adds each slot's playback offset, and its
+writer conforms to `ISkinnedMeshInstanceWriter`: a static writer cannot name the offset at all.
 
 **This document is a map, not a mirror.** It captures design choices, topology, and the *non-obvious*
 contracts — not full signatures. The headers are the source of truth, and the doc lists none of
@@ -287,8 +289,9 @@ flowchart TD
   need no bookkeeping.
 * **`CreateMeshInstanceWriter(desc)`** — @pre not between `BeginFrame`/`EndFrame`; `desc.slangModuleName`
   a dotted import name and `desc.slangTypeName` an identifier. Generates a program that calls the type's
-  `Write` once per slot and compiles it at once, so a type that does not conform to
-  `IMeshInstanceWriter` throws `GraphicsError` here with the compiler's diagnostic, not at the first
+  `Write` once per slot, through the interface `desc.geomType` names, and compiles it at once, so a
+  type that does not conform to `IMeshInstanceWriter` (a static geom's) or `ISkinnedMeshInstanceWriter`
+  (a skinned one's) throws `GraphicsError` here with the compiler's diagnostic, not at the first
   frame. The program is registered with `IDevice::AddSourceModule`, which drops the context's Slang
   sessions and moves its source salt: create writers at start-up, before the frames that demand
   pipelines, and the same writers in the same order every run keep the shader cache warm.
@@ -399,7 +402,7 @@ flowchart TD
   geom with no handles of their own: a GPU kernel places them every frame and the CPU never
   writes them. A skinned geom's are on `PoseSource::kAuto` and share one playback record,
   `desc.playback`, each playing it ahead of the clock by the offset its writer gives it
-  (`IMeshInstanceBlock::SetPlaybackOffset`) -- declared, and refused whole until those placements
+  (`ISkinnedMeshInstanceBlock::SetPlaybackOffset`) -- declared, and refused whole until those placements
   are drawn. Creation and deletion move the temporal epoch once each, however many slots; what the
   writer does moves nothing, since every slot it places writes its own previous transform. Like a
   placement, a block names its geom and does not own it. Its slots are a block-aligned run of the
@@ -408,7 +411,7 @@ flowchart TD
   the cull whether the writer shows them or not. The geom's grass is not grown on them. Each frame
   the `Write Instance Blocks` pass runs every block's writer first (docs/passes.md).
 * **`SetBlockWriter(block, writer)` / `GetBlockParams(block)`** — binds a writer compiled by
-  the same `IGraphics` and gives the block its own copy of the writer's `Params`, written by name
+  the same `IGraphics`, for the block's kind of geom, and gives the block its own copy of the writer's `Params`, written by name
   like any constant buffer and kept across frames. Rebinding starts from zeros; null unbinds, and
   a block with no writer draws nothing.
 * **`SetInstanceTransform(instance, transform)` / `GetInstanceTransform(instance)`** — moves a

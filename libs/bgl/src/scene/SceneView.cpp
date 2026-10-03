@@ -1837,8 +1837,17 @@ namespace bgl
 		}
 
 		MeshInstanceBlock& record = m_InstanceBlocks[block.handle.index];
-		record.writer             = std::move(writer);
-		record.kernel             = bgpu::ComputeKernel();
+		if (compiled != nullptr && compiled->GetDesc().geomType != record.geom.geomType)
+		{
+			throw SceneError(
+				std::format(
+					"SetBlockWriter: '{}' writes {} blocks, and this block is of a {} geom",
+					compiled->GetDesc().slangTypeName,
+					compiled->GetDesc().geomType == GeomType::kSkinnedMesh ? "skinned" : "static",
+					record.geom.geomType == GeomType::kSkinnedMesh ? "skinned" : "static"));
+		}
+		record.writer = std::move(writer);
+		record.kernel = bgpu::ComputeKernel();
 		if (compiled != nullptr)
 		{
 			record.kernel.pipeline = compiled->GetKernel().pipeline;

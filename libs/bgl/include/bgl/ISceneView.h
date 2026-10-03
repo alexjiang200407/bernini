@@ -398,7 +398,8 @@ namespace bgl
 		 * A skinned geom's placements are on PoseSource::kAuto and share one playback record,
 		 * `desc.playback`: each is posed per instance or drawn from its rig's table as the view's
 		 * LodSelectionDesc chooses, a hidden one taking no pose, and plays the record ahead of the
-		 * clock by the offset its writer gives it. They are reached by no playback, foot-IK,
+		 * clock by the offset its writer gives it, through ISkinnedMeshInstanceBlock: its writer is
+		 * one compiled for skinned blocks. They are reached by no playback, foot-IK,
 		 * blob-shadow or selection call, which all take a placement's handle.
 		 *
 		 * Moves the temporal epoch once, as one placement's creation does. Nothing the writer does
@@ -428,8 +429,9 @@ namespace bgl
 		 * with null, which hides every placement again. Rebinding replaces the block's parameters
 		 * with a fresh set, every value zero and every handle null.
 		 *
-		 * @throws SceneError if the handle is invalid or removed, or `writer` was created by another
-		 *         IGraphics.
+		 * @throws SceneError if the handle is invalid or removed, `writer` was created by another
+		 *         IGraphics, or it writes the other kind of geom's blocks
+		 *         (MeshInstanceWriterDesc::geomType).
 		 */
 		virtual void
 		SetBlockWriter(MeshInstanceBlockHandle block, MeshInstanceWriterRef writer) = 0;

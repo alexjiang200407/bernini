@@ -24,7 +24,7 @@ namespace bgl
 
 		// What every placement of a skinned geom's block plays, on PoseSource::kAuto: one record
 		// the whole block shares, each placement ahead of the clock by the offset its writer gives
-		// it (IMeshInstanceBlock::SetPlaybackOffset). Fixed for the block's life: a placement ahead
+		// it (ISkinnedMeshInstanceBlock::SetPlaybackOffset). Fixed for the block's life: a placement ahead
 		// of the clock is already past a ramp that starts now, so no rewrite could keep its pose at
 		// the previous frame's time. Not read for a static geom.
 		SkinnedPlaybackDesc playback;

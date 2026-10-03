@@ -2,10 +2,12 @@ import bgl.MeshInstanceWriter;
 import idl.MeshInstance;
 import idl.MeshInstanceFlag;
 
-// An instance block over the view's MeshInstance buffer: slots [first, first + capacity).
+// An instance block over the view's MeshInstance buffer: slots [first, first + capacity). One
+// implementation for both kinds, since a slot's offset lives in its MeshInstance either way; a
+// static writer is handed it through the narrower interface and cannot set one.
 // ScalarDataLayout for the same reason as lib.types.EntryBuffer: the C++ mirror packs MeshInstance
 // tightly, and the default structured layout would pad its nested handles.
-public struct MeshInstanceBufferBlock : IMeshInstanceBlock
+public struct MeshInstanceBufferBlock : ISkinnedMeshInstanceBlock
 {
     public RWStructuredBuffer<MeshInstance, ScalarDataLayout>.Handle meshes;
     public uint first;

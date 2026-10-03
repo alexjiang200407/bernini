@@ -74,7 +74,10 @@ namespace bgl
 	[[nodiscard]] std::string
 	MeshInstanceWriterProgramSource(const MeshInstanceWriterDesc& desc);
 
-	/** Whether `desc.slangModuleName` is a dotted import name and `desc.slangTypeName` an identifier. */
+	/**
+	 * Whether `desc.slangModuleName` is a dotted import name, `desc.slangTypeName` an identifier and
+	 * `desc.geomType` a kind of block a writer places.
+	 */
 	[[nodiscard]] bool
 	IsMeshInstanceWriterDescValid(const MeshInstanceWriterDesc& desc) noexcept;
 }

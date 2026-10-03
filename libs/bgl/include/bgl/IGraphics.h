@@ -266,12 +266,13 @@ namespace bgl
 
 		/**
 		 * Compiles a caller's kernel for instance blocks: `desc.slangTypeName` in `desc.slangModuleName` must conform
-		 * to IMeshInstanceWriter in `bgl.MeshInstanceWriter`. Compiled once, here; a writer used by many
-		 * blocks and views is not compiled again.
+		 * to the interface in `bgl.MeshInstanceWriter` that `desc.geomType` names -- IMeshInstanceWriter
+		 * for a static geom's blocks, ISkinnedMeshInstanceWriter for a skinned one's. Compiled once,
+		 * here; a writer used by many blocks and views is not compiled again.
 		 *
 		 * @throws GraphicsError if called between BeginFrame and EndFrame, if either name is empty,
-		 *         or if the module does not compile against the contract -- the compiler's
-		 *         diagnostics are in the message.
+		 *         `desc.geomType` is neither kind, or the module does not compile against that
+		 *         interface -- the compiler's diagnostics are in the message.
 		 */
 		virtual MeshInstanceWriterRef
 		CreateMeshInstanceWriter(const MeshInstanceWriterDesc& desc) = 0;
