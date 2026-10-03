@@ -1,11 +1,22 @@
 import idl.BlobShadow;
+import idl.Clip;
 import idl.Constants;
+import idl.DominantFrames;
+import idl.InstanceLod;
+import idl.InstancePose;
 import idl.MeshInstance;
+import idl.PlaybackType;
 import idl.Rig;
+import idl.SkinnedAutoState;
 import idl.SkinnedState;
+import idl.SkinnedTableState;
+import lib.anim.clip_playback;
+import lib.anim.skinning;
 import lib.math.box_bounds;
+import lib.math.transform;
 import lib.types.ComputeBuffer;
 import lib.types.EntryBuffer;
+import lib.types.RangeBuffer;
 import lib.types.RawBuffer;
 import lib.types.UploadBuffer;
 
@@ -32,6 +43,20 @@ struct Uniforms
     // A foot's placement's playback record and its rig: where its sole sits in the arena.
     RawBuffer playbackBuffer;
     EntryBuffer<Rig> rigs;
+
+    // A table placement's soles: its rig's table arena, the clip it plays, and the clock that picks
+    // the frame.
+    ComputeBuffer<float4> boneAnimTables;
+    RangeBuffer<Clip> clipBuffer;
+    float time;
+
+    // An automatic placement's table pose: the frames its table soles are read at.
+    ComputeBuffer<DominantFrames> dominantFrames;
+
+    // An automatic placement's source this frame, and its pose-pool slice when it is drawn per
+    // instance: the camera's cull wrote both.
+    ComputeBuffer<InstanceLod> instanceLod;
+    ComputeBuffer<InstancePose> instancePose;
 
     // The scene depth after Forward's world phase, under this frame's viewProj: every receiver,
     // and nothing that is not one.
@@ -130,15 +155,80 @@ void FootVolumeCorners(BlobShadow blob, MeshInstance mesh, float3 heelPos, float
     }
 }
 
-// The palette slot of `leg`'s heel: a hero palette ends with one sole per leg of its rig, after the
-// poses at `time` and `prevTime`.
-//
-// @pre mesh's record is a SkinnedState and its rig authored `leg`.
-uint SoleSlot(MeshInstance mesh, uint leg)
+// A heel and ball from two table sole slots (TableSoleSlot), blended as the skin is and placed by
+// the placement's transform: model space and unplanted, since the table has no IK.
+void PlaceTableSole(MeshInstance mesh, uint lower, uint upper, float upperWeight, out float3 heel, out float3 ball)
 {
+    let tables = gBlobShadowData.boneAnimTables;
+    let model = mesh.Matrix();
+    heel = TransformPoint(model, lerp(tables[lower].xyz, tables[upper].xyz, upperWeight));
+    ball = TransformPoint(model, lerp(tables[lower + 1].xyz, tables[upper + 1].xyz, upperWeight));
+}
+
+// Where `leg`'s heel and ball stand this frame, world space, from whichever pose the placement draws.
+// A hero palette ends with one sole per leg of its rig, after the poses at `time` and `prevTime`,
+// placed and planted by the pose pass. A table placement reads its rig's table soles at the frame its
+// clip has reached -- model space and unplanted, the two frames it falls between blended as the
+// skin is -- and places them by its own transform.
+//
+// @pre mesh's rig authored `leg`.
+void TableSole(MeshInstance mesh, Rig rig, Clip clip, float frames, uint leg, out float3 heel, out float3 ball)
+{
+    uint lower;
+    uint upper;
+    float weight;
+    TableSoleSlots(rig, clip, frames, leg, lower, upper, weight);
+    PlaceTableSole(mesh, lower, upper, weight, heel, ball);
+}
+
+// The palette slots of `leg`'s heel and ball in a pose slice from `base`: after the poses at
+// `time` and `prevTime`, one sole per leg, placed and planted by the pose pass.
+void PaletteSole(Rig rig, uint base, uint leg, out float3 heel, out float3 ball)
+{
+    let slot = base + cFloat4sPerBone * rig.boneCount * 2u + cFloat4sPerSole * leg;
+    heel = gBlobShadowData.palettes[slot].xyz;
+    ball = gBlobShadowData.palettes[slot + 1].xyz;
+}
+
+void FootSole(uint placement, MeshInstance mesh, uint leg, out float3 heel, out float3 ball)
+{
+    let kind = PlaybackType(gBlobShadowData.playbackBuffer.LoadTag(mesh.playback));
+    if (kind == PlaybackType.kSkinnedTable)
+    {
+        let state = gBlobShadowData.playbackBuffer.LoadRecordAs<SkinnedTableState>(mesh.playback);
+        let rig = gBlobShadowData.rigs.Get(state.playback.rig);
+        let clip = gBlobShadowData.clipBuffer.Get(rig.clips, state.playback.clip);
+        TableSole(mesh, rig, clip, ClipFrames(clip, state.playback, gBlobShadowData.time), leg, heel, ball);
+        return;
+    }
+
+    if (kind == PlaybackType.kSkinnedAuto)
+    {
+        let state = gBlobShadowData.playbackBuffer.LoadRecordAs<SkinnedAutoState>(mesh.playback);
+        let rig = gBlobShadowData.rigs.Get(state.rig);
+
+        // The entry the dissolve is heading toward casts: the feet a unit is about to stand on.
+        let word = gBlobShadowData.instanceLod[placement];
+        if (!word.Unset() && !word.FromTable())
+        {
+            PaletteSole(rig, gBlobShadowData.instancePose[placement].palette.GetStart(), leg, heel, ball);
+            return;
+        }
+
+        let dominant = gBlobShadowData.dominantFrames[placement];
+        PlaceTableSole(
+            mesh,
+            TableSoleSlot(rig, dominant.lowerFrame, leg),
+            TableSoleSlot(rig, dominant.upperFrame, leg),
+            dominant.upperWeight,
+            heel,
+            ball
+        );
+        return;
+    }
+
     let state = gBlobShadowData.playbackBuffer.LoadRecordAs<SkinnedState>(mesh.playback);
-    let rig = gBlobShadowData.rigs.Get(state.rig);
-    return state.palette.GetStart() + cFloat4sPerBone * rig.boneCount * 2u + cFloat4sPerSole * leg;
+    PaletteSole(gBlobShadowData.rigs.Get(state.rig), state.palette.GetStart(), leg, heel, ball);
 }
 
 [shader("mesh")]
@@ -155,9 +245,7 @@ void MSMain(uint gid: SV_GroupID, uint gtid: SV_GroupThreadID, OutputVertices<VS
     float3 corners[cBoxCorners];
     if (blob.leg != cBodyDisc)
     {
-        let soleSlot = SoleSlot(mesh, blob.leg);
-        heelPos = gBlobShadowData.palettes[soleSlot].xyz;
-        ballPos = gBlobShadowData.palettes[soleSlot + 1].xyz;
+        FootSole(blob.mesh, mesh, blob.leg, heelPos, ballPos);
         FootVolumeCorners(blob, mesh, heelPos, ballPos, corners);
     }
     else

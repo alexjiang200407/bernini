@@ -19,6 +19,11 @@ public float4x4 AffineInverse(float4x4 m)
     return float4x4(float4(inv[0], it.x), float4(inv[1], it.y), float4(inv[2], it.z), float4(0.0, 0.0, 0.0, 1.0));
 }
 
+public float4x4 IdentityTransform()
+{
+    return float4x4(float4(1.0, 0.0, 0.0, 0.0), float4(0.0, 1.0, 0.0, 0.0), float4(0.0, 0.0, 1.0, 0.0), float4(0.0, 0.0, 0.0, 1.0));
+}
+
 public float3 TransformPoint(float4x4 m, float3 p)
 {
     return mul(m, float4(p, 1.0)).xyz;

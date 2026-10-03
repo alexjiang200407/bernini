@@ -514,7 +514,10 @@ namespace bgl
 			return;
 		}
 
-		const uint32_t float4s = meta->frameCount * meta->boneCount * idl::cFloat4sPerBone;
+		// The soles follow the matrices in the same slice, so one allocation and one free cover both.
+		const uint32_t tableFloat4s = meta->frameCount * meta->boneCount * idl::cFloat4sPerBone;
+		const uint32_t float4s =
+			tableFloat4s + meta->frameCount * meta->legCount * idl::cFloat4sPerSole;
 
 		// Reserving it is what can cost -- a growth reallocates the whole arena on the device. The
 		// posing itself is the GPU's, and no timestamp query exists to measure it from here.
@@ -561,6 +564,10 @@ namespace bgl
 
 		auto record          = m_Rigs[rig.handle];
 		record.boneAnimTable = m_Rigs.MetaAt(rig.handle.index).boneAnimTable;
+		if (meta->legCount > 0)
+		{
+			record.tableSoles.offsetStart = record.boneAnimTable.offsetStart + tableFloat4s;
+		}
 		m_Rigs.Set(rig.handle, record);
 
 		requeueIfGrown();

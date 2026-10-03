@@ -1,5 +1,7 @@
+import idl.AutoPosedInstance;
 import idl.BlobShadow;
 import idl.CullView;
+import idl.DominantFrames;
 import idl.InstancePose;
 import idl.Rig;
 import idl.SkinnedAutoState;
@@ -27,6 +29,8 @@ struct Uniforms
     uint rigOffset;
     uint blobOffset;
     uint poseOffset;
+    uint posedOffset;
+    uint framesOffset;
 };
 
 ConstantBuffer<Uniforms> gUniforms;
@@ -62,4 +66,12 @@ void main()
     let pose = gUniforms.records.Load<InstancePose>(gUniforms.poseOffset);
     gUniforms.outValues[9] =
         float4(float(rig.boneAnimTable.GetStart()), float(rig.tableSoles.GetStart()), float(blob.leg), float(pose.palette.GetStart()));
+
+    let posed = gUniforms.records.Load<AutoPosedInstance>(gUniforms.posedOffset);
+    gUniforms.outValues[10] =
+        float4(float(posed.meshInstanceIndex), float(posed.footIK.GetStart()), float(posed.palette.GetStart()), posed.ikScale);
+
+    let dominant = gUniforms.records.Load<DominantFrames>(gUniforms.framesOffset);
+    gUniforms.outValues[11] =
+        float4(float(dominant.lowerFrame), dominant.upperWeight, float(dominant.prevUpperFrame), dominant.prevUpperWeight);
 }

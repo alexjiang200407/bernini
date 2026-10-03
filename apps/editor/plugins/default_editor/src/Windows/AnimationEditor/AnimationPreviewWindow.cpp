@@ -242,7 +242,7 @@ AnimationPreviewWindow::ApplyBlobShadow(
 	const std::optional<bgl::BlobShadowDesc> desc = editor::PreviewBlobShadow(
 		castsShadow && m_BlobShadow,
 		castsShadow && m_FootShadows,
-		view->HasFootIK(instance),
+		view->HasLegs(instance),
 		m_BlobDesc,
 		m_FootDesc);
 	if (desc)

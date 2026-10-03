@@ -211,7 +211,7 @@ namespace bgl
 		 * @throws SceneError if the handle is invalid or removed, `desc.radius` or
 		 *         `desc.fadeHeight` is not finite and positive, `desc.intensity` is not
 		 *         finite in [0, 1], or `desc.casterLift` is not finite and non-negative; or if
-		 *         `desc.feet` is set on a placement HasFootIK refuses, or holds a field outside
+		 *         `desc.feet` is set on a placement HasLegs refuses, or holds a field outside
 		 *         the same bounds (`maxReceiverRise` as `casterLift`).
 		 */
 		virtual void

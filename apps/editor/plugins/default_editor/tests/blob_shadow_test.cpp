@@ -87,9 +87,9 @@ TEST_CASE("A preview wears feet only where the instance has a pose to find them 
 		CHECK(desc->feet->radius == 0.2f);
 	}
 
-	// SetBlobShadow throws on feet wherever HasFootIK is false -- a crowd-tier preview, a rig
-	// without an avatar -- so the switch must fall back rather than reach it.
-	SECTION("an instance without foot IK keeps the disc and drops the feet")
+	// SetBlobShadow throws on feet wherever HasLegs is false -- a rig without an avatar -- so the
+	// switch must fall back rather than reach it.
+	SECTION("an instance without legs keeps the disc and drops the feet")
 	{
 		const auto desc = editor::PreviewBlobShadow(true, true, false, disc, feet);
 		REQUIRE(desc.has_value());

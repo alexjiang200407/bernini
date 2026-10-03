@@ -79,8 +79,9 @@ namespace bgl
 
 	// The rig tables the skinned vertex evaluation reads, whichever pose source a placement draws
 	// from. They live here beside the geometry tables because every pass built on the tier-branching
-	// geometry stage declares and binds both sets.
-	constexpr std::array<SceneBuffer, 4> c_SkinnedBuffers = {
+	// geometry stage declares and binds both sets. The last two are an automatic placement's this
+	// frame, as the camera's cull chose them.
+	constexpr std::array<SceneBuffer, 6> c_SkinnedBuffers = {
 		{ { c_RigBufferName,
 		    "rigBuffer",
 		    bgpu::BarrierAccessFlag::kShaderResource,
@@ -95,6 +96,14 @@ namespace bgl
 		    bgpu::BarrierSyncFlag::kVertexShader },
 		  { c_ClipBufferName,
 		    "clipBuffer",
+		    bgpu::BarrierAccessFlag::kShaderResource,
+		    bgpu::BarrierSyncFlag::kVertexShader },
+		  { c_DominantFramesName,
+		    "dominantFrames",
+		    bgpu::BarrierAccessFlag::kShaderResource,
+		    bgpu::BarrierSyncFlag::kVertexShader },
+		  { c_InstancePoseName,
+		    "instancePose",
 		    bgpu::BarrierAccessFlag::kShaderResource,
 		    bgpu::BarrierSyncFlag::kVertexShader } }
 	};

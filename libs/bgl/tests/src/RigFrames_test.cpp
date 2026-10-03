@@ -1,6 +1,7 @@
 #include "gfx/GraphicsBase.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include "util/PaletteReadback.h"
 #include "util/TestEnvironment.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
@@ -115,57 +116,6 @@ namespace
 		return set;
 	}
 
-	/** The whole bone anim table arena, as float4 rows. */
-	std::vector<glm::vec4>
-	ReadTables(bgl::GraphicsBase* gfxBase, bgl::Scene* scene)
-	{
-		auto resourceManager = gfxBase->GetResourceManagerCpy();
-		auto device          = gfxBase->GetDevice();
-
-		// This copy rides its own queue, which nothing orders against the frame that filled the
-		// table.
-		gfxBase->WaitIdle();
-
-		auto cmdListDesc = bgpu::CommandListDesc();
-		cmdListDesc.type = bgpu::QueueType::kGraphics;
-
-		auto cmdAllocator = device->CreateCommandAllocator();
-		auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-		auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
-
-		cmdAllocator->ResetAllocator();
-
-		const bgpu::BufferHandle tables = scene->GetBoneAnimTables().GetBufferHandle();
-
-		auto rbDesc      = bgpu::ReadbackBufferDesc();
-		rbDesc.byteSize  = uint64_t(scene->GetBoneAnimTables().Capacity()) * sizeof(glm::vec4);
-		rbDesc.debugName = "Bone Anim Table Readback";
-		auto rb          = resourceManager->CreateReadbackBuffer(rbDesc);
-
-		cmdList->Open(cmdQueue, cmdAllocator);
-
-		auto barrier = bgpu::BufferBarrierDesc();
-		barrier.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
-			.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
-			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
-			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource);
-		cmdList->Barrier(tables, barrier);
-
-		cmdList->CopyBufferToReadback(rb, tables);
-		cmdList->Close();
-
-		auto fence = cmdQueue->ExecuteCommandList(cmdList);
-		cmdQueue->WaitForFenceCPUBlocking(fence);
-
-		const auto* mapped = static_cast<const glm::vec4*>(resourceManager->MapReadback(rb));
-		REQUIRE(mapped != nullptr);
-
-		auto rows = std::vector<glm::vec4>(mapped, mapped + scene->GetBoneAnimTables().Capacity());
-
-		resourceManager->UnmapReadback(rb);
-		return rows;
-	}
-
 	/** `point` skinned by the matrix the three rows at `row` hold. */
 	glm::vec3
 	ApplyRows(std::span<const glm::vec4> rows, size_t row, const glm::vec3& point)
@@ -238,7 +188,7 @@ TEST_CASE("a rig's bone anim table holds every frame of every clip", "[skinned][
 	job.viewport = bgl::Viewport(32.0f, 32.0f);
 	gfx->DrawFrame(target, job);
 
-	const std::vector<glm::vec4> rows = ReadTables(gfxBase, scene);
+	const std::vector<glm::vec4> rows = bgl::test::ReadBoneAnimTables(gfxBase, scene);
 
 	const uint32_t base = scene->GetRigBuffer()[rig.handle].boneAnimTable.offsetStart;
 	REQUIRE(base != 0);
@@ -386,7 +336,7 @@ TEST_CASE("a growth of the arena leaves every filled table intact", "[skinned][r
 
 	gfx->DrawFrame(target, job);
 
-	const std::vector<glm::vec4> rows = ReadTables(gfxBase, scene);
+	const std::vector<glm::vec4> rows = bgl::test::ReadBoneAnimTables(gfxBase, scene);
 
 	// The first rig kept its offset -- allocations survive a growth -- and its pose is back.
 	CHECK(scene->GetRigBuffer()[first.handle].boneAnimTable.offsetStart == firstBase);

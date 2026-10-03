@@ -1,6 +1,7 @@
 #pragma once
 #include "gfx/DrawBucketTable.h"
 #include "instance_block/MeshInstanceBlock.h"
+#include "scene/AutoPoseState.h"
 #include "scene/BonePaletteBuffer.h"
 #include "scene/CullState.h"
 #include "scene/NamedBuffer.h"
@@ -33,6 +34,7 @@
 #include <bgl/types/MeshInstanceBlockDesc.h>
 #include <bgl/types/MeshInstanceBlockHandle.h>
 #include <bgl/types/MeshInstanceHandle.h>
+#include <bgl/types/SkinnedMeshInstanceDesc.h>
 #include <bgl/types/SkyboxDesc.h>
 #include <bgl/types/WindDesc.h>
 #include <bgpu/buffer/EntryBuffer.h>
@@ -106,9 +108,13 @@ namespace bgl
 		// table instead -- and that absence is what the pose pass and the mesh shader branch on.
 		core::multi_slot_handle palette;
 
-		// kPerInstance only, and only on a rig that authored legs: the instance's FootIKLegs in the
-		// view's arena, one per leg, freed with it. What the pose list carries beside the mesh.
+		// kPerInstance or kAuto only, and only on a rig that authored legs: the instance's FootIKLegs
+		// in the view's arena, one per leg, freed with it. What the pose list carries beside the mesh.
 		core::multi_slot_handle footIK;
+
+		// kAuto: the record is a SkinnedAutoState, which owns no palette -- the cull cuts one from the
+		// view's pose pool on a frame it draws the placement per instance.
+		bool automatic = false;
 		// kSkinnedMesh only: how many nodes the record's slots may name, which is what a rewrite is
 		// checked against. Fixed for the instance's life -- a rig's tables never change under it.
 		uint32_t nodeCount = 0;
@@ -299,6 +305,13 @@ namespace bgl
 		GetPosedInstanceCount() const noexcept
 		{
 			return m_PosedInstances.Size();
+		}
+
+		/** The automatic placements' list, pose slices and pool, as the camera's cull reads them. */
+		[[nodiscard]] const AutoPoseState&
+		GetAutoPose() const noexcept
+		{
+			return m_AutoPose;
 		}
 
 		/**
@@ -591,6 +604,22 @@ namespace bgl
 			const SkinnedPlaybackDesc& desc);
 
 		/**
+		 * A kAuto placement of `desc`: the rig's table reserved, a foot-IK record on a rig with legs,
+		 * and a SkinnedAutoState holding both. @pre `desc` validated against the rig.
+		 */
+		MeshInstanceHandle
+		PlaceAutomatic(
+			GeomHandle                 geom,
+			glm::mat4                  transform,
+			core::slot_handle          rig,
+			uint32_t                   nodeCount,
+			uint32_t                   legCount,
+			const SkinnedPlaybackDesc& desc);
+
+		/** One FootIKLeg per leg at weight one, or null on a rig without legs. */
+		core::multi_slot_handle
+		AddDefaultFootIK(uint32_t legCount);
+		/**
 		 * The placement of a record already in the arena, with everything rolled back if writing it
 		 * throws. `palette` and `footIK` are null for a record that owns neither.
 		 */
@@ -610,6 +639,14 @@ namespace bgl
 		/** PosedMetaFor, narrowed to a placement whose rig authored legs and so owns a foot-IK record. */
 		[[nodiscard]] const MeshMeta&
 		FootIKMetaFor(MeshInstanceHandle instance, std::string_view what) const;
+
+		/** The legs `meta`'s rig authored; zero for a static placement or one whose geom is gone. */
+		[[nodiscard]] uint32_t
+		LegCountOf(const MeshMeta& meta) const noexcept;
+
+		/** Rebuilds the automatic placement list and re-reserves the pose pool it is posed from. */
+		void
+		RebuildAutoList();
 
 		/**
 		 * Re-resolves every non-overridden instance against the Scene's current defaults, rewriting
@@ -705,6 +742,14 @@ namespace bgl
 
 		// Per view, not per frustum: only the camera sorts transparents.
 		TransparentSortState m_TransparentSort;
+
+		// Per view, and chosen by the camera's cull alone: an automatic placement is posed once
+		// whatever else culls it. The pool its slices are cut from is a block of m_Palettes, sized to
+		// the budget times the largest automatic rig's slice; m_AutoDirty rebuilds both, on the
+		// authoring-time bargain m_PosedDirty keeps.
+		AutoPoseState           m_AutoPose;
+		core::multi_slot_handle m_PosePoolBlock;
+		bool                    m_AutoDirty = false;
 
 		// The dense indices of the selected submesh instances. Any Erase on m_InstanceBuffer can
 		// move a dense index, so a deletion staleness-marks the list exactly like a selection

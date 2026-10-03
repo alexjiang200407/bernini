@@ -357,8 +357,8 @@ public:
 	/**
 	 * Whether the rig's feet each stand in a shadow of their own (editor::FootShadowForBounds),
 	 * which follows the pose where the disc cannot. Independent of the disc: either may be on
-	 * alone. Only an instance ISceneView::HasFootIK holds takes them -- a crowd-tier preview or a
-	 * rig without an avatar keeps the disc alone. A rebind, like SetBlobShadow.
+	 * alone. Only an instance ISceneView::HasLegs holds takes them -- a rig without an avatar keeps
+	 * the disc alone. A rebind, like SetBlobShadow.
 	 */
 	void
 	SetFootShadows(bool enabled);

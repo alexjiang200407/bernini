@@ -46,10 +46,10 @@ flowchart TD
         IMP["Scene / SceneView import their buffers"] --> SKY["Skybox (only if the view has one)"]
         SKY --> PB["Write Instance Blocks (only when an instance block has a writer; one dispatch per block)"]
         PB --> RIG["Pose Rig Frames (only when a rig wants its bone anim table)"]
-        RIG --> POSE["Pose Skinned (one workgroup per skinned instance)"]
-        POSE --> TS["Transparent Sort (3 sub-passes)"]
-        TS --> CI["Compact Instances (3 sub-passes)"]
-        CI --> FWW["Forward World (indirect dispatch per static-tier bucket)"]
+        RIG --> CI["Compact Instances (3 sub-passes, a 4th ahead of the cull with automatic placements)"]
+        CI --> TS["Transparent Sort (3 sub-passes)"]
+        TS --> POSE["Pose Skinned (one workgroup per skinned instance)"]
+        POSE --> FWW["Forward World (indirect dispatch per static-tier bucket)"]
         FWW --> GRS["Forward Grass (only when a drawn geom has grass; one dispatch per grass bucket)"]
         GRS --> BLOB["Blob Shadows (only when the view has a disc; reads the depth as it stands)"]
         BLOB --> FWS["Forward Skinned (indirect dispatch per skinned-tier bucket)"]
@@ -435,7 +435,27 @@ them could draw in one frame. Raising the ceiling is the one constant, up to 102
 and the asserts hold at any value), because the scan is a single thread group of `cMaxDrawBuckets`
 threads; past 1024 that scan has to be replaced first.
 
-It adds **four sub-passes**:
+It adds **four sub-passes**, and on the camera's frustum of a view with automatic placements a
+fifth ahead of the cull:
+
+0. **Choose Poses** (`ChoosePoses` then `GrantPoses`, one thread per automatic placement) — chooses
+   each `PoseSource::kAuto` placement's level as the cull would, then which source each entry it draws
+   takes, and writes that word itself: per placement rather than per submesh instance, so every
+   submesh draws one choice and the pose-pool slice is cut once. A placement draws per instance while
+   it wants to (visible, and as large on screen as level 0, or `posePixels` on a mesh with one level,
+   held by `cLodHysteresis`) and holds the right — it drew per instance last frame, or was granted it.
+   One with an entry drawn per instance takes the next slice of the view's pool (`scene.posePool`,
+   `scene.instancePose`) and an entry of the automatic pose list (`scene.autoPosed`); one that wants
+   the right and lacks it asks (`scene.poseRequests`), and `GrantPoses`, after a barrier inside the
+   pass, grants the first `poseBudget − posed` of them for next frame as a bit of the word. So no
+   frame poses more than the budget, and a placement holding the right keeps it. Past the budget —
+   only a budget lowered under placements already posed — a placement draws from its table. A change
+   of source dissolves like a change of level, on one level when only the source changes; a placement
+   posed per instance holds there while one of its crossfades is in flight; and its list entry's
+   `ikScale` follows the dissolve toward or away from its table. Only the camera's cull chooses: a
+   second frustum's cull of the view reads automatic placements' words from its own state, which no
+   Choose Poses writes, so culling one against a shadow cascade needs the camera's words carried
+   into it first.
 
 1. **Clear** — zeroes `drawBucketPrefixSumBuffer` and `cull.stats`, uploads this draw's `CullView` into
    `cull.view`, and seeds every lane's `compactDispatchArgs` entry to `{ 0, 1, 1 }` (a group count of 0 with
@@ -555,6 +575,9 @@ history buffer — and it holds because time is the sole input to a pose: a reco
 old one gave reprojects exactly. A rewrite that does not — a slot dropped rather than ramped down —
 reprojects through a pose nothing drew, which is the caller's to avoid.
 
+* **After the cull, and before anything draws a palette.** The cull reads no palette — it bounds a
+  skinned placement by its baked box — so posing after it costs nothing, and it is where the cull's
+  choices are known.
 * **Attached under the view's namespace, not a cull namespace.** A palette is per instance, not per
   frustum, so it is posed once however many frustums the view is culled against. It also has to be:
   the graph decides a pass is a root by whether it writes an *imported* resource, and a name resolved
@@ -566,9 +589,13 @@ reprojects through a pose nothing drew, which is the caller's to avoid.
   `scene.skinnedLegBuffer`, `scene.plantWeightBuffer`, `scene.footIKBuffer`.
 * **Out:** `scene.bonePalettes`, the view's `BonePaletteBuffer`, soles included — GPU-only storage with a CPU-side offset
   allocator, because a `RangeBuffer` would re-upload its stale CPU mirror over what this wrote.
-* **Skipped** when the view places no skinned instance — and an instance drawing from its rig's bone
-  anim table is not one of them. The dense list is built from instances that own a palette, which is
-  what this pass writes into; a table instance owns none and is posed by `Pose Rig Frames` once.
+* **Twice, for two lists.** The CPU-built dense list of instances that own a palette, and the
+  automatic pose list the camera's cull wrote (`scene.autoPosed`): an automatic placement drawn per
+  instance this frame, the pool slice it was cut, and an IK scale its dissolve sets. The second
+  dispatch covers the budget, since only the GPU knows how many were posed, and the groups past the
+  count in `scene.posePool` return at once — `bgpu` has no compute indirect dispatch.
+* **Skipped** when the view places no instance owning a palette and no automatic one. A table
+  instance owns none and is posed by `Pose Rig Frames` once.
 
 ### Write Instance Blocks — [passes/WriteInstanceBlocksPass.{h,cpp}](libs/bgl/src/passes/WriteInstanceBlocksPass.cpp)
 
@@ -591,8 +618,10 @@ reprojects through a pose nothing drew, which is the caller's to avoid.
 * **What it is:** the bone anim table's producer. One dispatch per rig that has been given a table
   and not yet posed into it, one workgroup per frame of that rig's clip set, running the same walk
   `Pose Skinned` runs ([pose_walk.slang](libs/bgl/shaders/src/lib/anim/pose_walk.slang) is shared by both).
-  A crowd instance then reads a pose rather than computing one.
-* **In:** `scene.rigBuffer`, `scene.skinnedBoneBuffer`, `scene.clipBuffer`, `scene.boneSampleBuffer`.
+  A crowd instance then reads a pose rather than computing one. On a rig with legs it also writes
+  each frame's soles after the table's matrices, model space and unplanted, for foot shadows.
+* **In:** `scene.rigBuffer`, `scene.skinnedBoneBuffer`, `scene.clipBuffer`, `scene.boneSampleBuffer`,
+  `scene.skinnedLegBuffer`.
 * **Out:** `scene.boneAnimTables`, the scene's table arena — a `BonePaletteBuffer` like the view's
   palette, and GPU-only for the same reason.
 * **Ordered before `Pose Skinned` and the forward pass**, either of which may read a table this
@@ -794,17 +823,20 @@ own receiver — though the facing test bounds it: an underside faces down and i
 remains is any upward-facing surface of the caster below its own origin.
 
 A foot's entry casts from its sole rather than from the origin: the heel and the ball, world space,
-which [Pose Skinned](#pose-skinned) wrote at the end of the hero's palette slice. An entry names its
-leg, not a slot: the mesh stage finds the slice through the placement's playback record and rig and
-reads the two once per group, off the palette arena the pass declares for them,
+which [Pose Skinned](#pose-skinned) wrote at the end of the hero's palette slice — or, for a crowd
+instance, which [Pose Rig Frames](#pose-rig-frames) wrote beside its rig's table, model space, at
+the two frames its clip has reached, blended and placed by the instance's transform. An entry names
+its leg, not a slot: the mesh stage finds the soles through the placement's playback record and rig
+and reads the two once per group,
 and hands them to the pixel stage, which casts from the point of that segment nearest the receiver
 across the ground, so a heel raised off a planted toe fades while the toe stays dark. Its lift only
 lets a receiver rise that far above the sole; the fade is measured from the sole itself, because a
 planted sole is at street level and a lifted cast point would pre-fade exactly the foot that should
 be darkest.
 
-* **In:** `scene.blobShadows`, the mesh-instance buffer, the palette arena (the soles), the
-  playback records and rigs (where a foot's sole is), and `depth` as a shader resource.
+* **In:** `scene.blobShadows`, the mesh-instance buffer, the palette arena and the table arena
+  (the soles), the playback records, rigs and clips (where a foot's sole is), and `depth` as a
+  shader resource.
 * **Out:** scene colour (blended).
 * **Skipped** when the view has no disc.
 

@@ -25,6 +25,7 @@
 #include <bgl/idl/PlaybackType.h>
 #include <bgl/idl/PosedInstance.h>
 #include <bgl/idl/Ramp.h>
+#include <bgl/idl/SkinnedAutoState.h>
 #include <bgl/idl/SkinnedState.h>
 #include <bgl/idl/SkinnedTableState.h>
 #include <bgl/types/BlobShadowDesc.h>
@@ -211,6 +212,7 @@ namespace bgl
 			m_ResourceManager,
 			bgpu::UploadBufferDesc().SetInitialCount(1).SetDebugName("Grass Chunk Refs")),
 		m_TransparentSort(m_ResourceManager, PaddedInstances(m_InitialInstances)),
+		m_AutoPose(m_ResourceManager, 1),
 		// The outline binds it as the mesh stage's compactedInstances, which is a ComputeBuffer.
 		m_CurrentSelectedInstances(
 			m_ResourceManager,
@@ -568,17 +570,6 @@ namespace bgl
 			return slot;
 		}
 
-		/** Refuses PoseSource::kAuto, which is declared and not yet drawn by any pass. */
-		void
-		RefuseUndrawnSource(PoseSource source, const char* what)
-		{
-			if (source == PoseSource::kAuto)
-			{
-				throw SceneError(
-					std::format("{}: PoseSource::kAuto is declared and not yet drawn", what));
-			}
-		}
-
 		/** The live kSkinnedMesh geom `geom` names in `scene`, or a SceneError naming `what`. */
 		Scene::AnimGeomInfo
 		RequireSkinnedGeom(const Scene& scene, GeomHandle geom, const char* what)
@@ -686,7 +677,6 @@ namespace bgl
 	{
 		const Scene::AnimGeomInfo rig =
 			RequireSkinnedGeom(*m_SceneRaw, desc.geom, "CreateSkinnedMeshInstance");
-		RefuseUndrawnSource(desc.source, "CreateSkinnedMeshInstance");
 		ValidatePlayback(desc.playback, rig.nodeCount, "CreateSkinnedMeshInstance");
 
 		if (desc.source == PoseSource::kBoneAnimTable)
@@ -701,6 +691,18 @@ namespace bgl
 				clip.phase,
 				clip.rate);
 		}
+		// An automatic placement holds the hero's record with no palette of its own: the cull cuts one
+		// from the view's pose pool on a frame it draws the placement per instance.
+		if (desc.source == PoseSource::kAuto)
+		{
+			return PlaceAutomatic(
+				desc.geom,
+				desc.transform,
+				rig.record,
+				rig.nodeCount,
+				rig.legCount,
+				desc.playback);
+		}
 
 		return PlacePosed(
 			desc.geom,
@@ -710,6 +712,71 @@ namespace bgl
 			rig.nodeCount,
 			rig.legCount,
 			desc.playback);
+	}
+
+	core::multi_slot_handle
+	SceneView::AddDefaultFootIK(uint32_t legCount)
+	{
+		if (legCount == 0)
+		{
+			return core::multi_slot_handle();
+		}
+
+		// Weight one on every leg, so an instance nobody writes plants as the baked weights say.
+		const idl::FootIKLeg one = ToRecord(FootIKLegDesc());
+
+		auto defaults = core::static_vector<idl::FootIKLeg, c_MaxLegsPerRig>();
+		for (uint32_t leg = 0; leg < legCount; ++leg)
+		{
+			defaults.push_back(one);
+		}
+		return m_FootIK.Add(std::span(defaults.data(), defaults.size()));
+	}
+
+	MeshInstanceHandle
+	SceneView::PlaceAutomatic(
+		GeomHandle                 geom,
+		glm::mat4                  transform,
+		core::slot_handle          rig,
+		uint32_t                   nodeCount,
+		uint32_t                   legCount,
+		const SkinnedPlaybackDesc& desc)
+	{
+		// Far from the camera it draws its dominant slot from the table, so the table is asked for
+		// at spawn as a crowd instance's is.
+		m_SceneRaw->RequestBoneAnimTable(RigHandle{ rig });
+
+		const core::multi_slot_handle footIK = AddDefaultFootIK(legCount);
+
+		auto record = bgpu::idl::RawEntry();
+		try
+		{
+			auto state = idl::SkinnedAutoState();
+			state.rig  = rig;
+			for (size_t s = 0; s < desc.slot.size(); ++s)
+			{
+				state.slots[s] = ToRecord(desc.slot[s]);
+			}
+			state.footIK = footIK;
+
+			record = m_Playback.AddRecord(
+				idl::PlaybackType::kSkinnedAuto,
+				std::as_bytes(std::span(&state, 1)));
+		}
+		catch (...)
+		{
+			if (footIK)
+			{
+				m_FootIK.Erase(footIK);
+			}
+			throw;
+		}
+
+		const MeshInstanceHandle instance =
+			PlaceRecord(geom, transform, record, core::multi_slot_handle(), footIK, nodeCount);
+		m_MeshBuffer.MetaAt(instance.handle.index).automatic = true;
+		m_AutoDirty                                          = true;
+		return instance;
 	}
 
 	MeshInstanceHandle
@@ -732,19 +799,7 @@ namespace bgl
 		auto record = bgpu::idl::RawEntry();
 		try
 		{
-			// Weight one on every leg, so an instance nobody writes plants as the baked weights
-			// say.
-			if (legCount > 0)
-			{
-				const idl::FootIKLeg one = ToRecord(FootIKLegDesc());
-
-				auto defaults = core::static_vector<idl::FootIKLeg, c_MaxLegsPerRig>();
-				for (uint32_t leg = 0; leg < legCount; ++leg)
-				{
-					defaults.push_back(one);
-				}
-				footIK = m_FootIK.Add(std::span(defaults.data(), defaults.size()));
-			}
+			footIK = AddDefaultFootIK(legCount);
 
 			auto state = idl::SkinnedState();
 			state.rig  = rig;
@@ -788,6 +843,7 @@ namespace bgl
 			meta.palette   = palette;
 			meta.footIK    = footIK;
 			meta.nodeCount = nodeCount;
+			meta.automatic = false;
 
 			m_PosedDirty = true;
 			return instance;
@@ -819,13 +875,14 @@ namespace bgl
 
 		const MeshMeta& meta = m_MeshBuffer.MetaAt(instance.handle.index);
 
-		// A palette is what the per-instance source owns and the shared one does not, so its
-		// absence is the crowd record -- which holds one clip and no slots to rewrite.
-		if (meta.geomType != GeomType::kSkinnedMesh || !meta.palette)
+		// The crowd record is the one that owns neither a palette nor slots: one clip, nothing to
+		// rewrite.
+		if (meta.geomType != GeomType::kSkinnedMesh || (!meta.palette && !meta.automatic))
 		{
 			throw SceneError(
 				std::format(
-					"{}: the placement is not a skinned instance on the per-instance source",
+					"{}: the placement is not a skinned instance on the per-instance or automatic "
+					"source",
 					what));
 		}
 		return meta;
@@ -851,15 +908,24 @@ namespace bgl
 
 		// Same offset, same kind, same palette: only the slots move, so nothing that names this
 		// record -- the placement, the pose list -- has to be touched.
-		auto state = m_Playback.GetPayloadAt<idl::SkinnedState>(meta.animState);
-		for (size_t s = 0; s < desc.slot.size(); ++s)
+		const auto rewrite = [&]<typename State>() {
+			auto state = m_Playback.GetPayloadAt<State>(meta.animState);
+			for (size_t s = 0; s < desc.slot.size(); ++s)
+			{
+				state.slots[s] = ToRecord(desc.slot[s]);
+			}
+			m_Playback.SetRecordPayload(
+				bgpu::idl::RawEntry{ meta.animState },
+				std::as_bytes(std::span(&state, 1)));
+		};
+		if (meta.automatic)
 		{
-			state.slots[s] = ToRecord(desc.slot[s]);
+			rewrite.template operator()<idl::SkinnedAutoState>();
 		}
-
-		m_Playback.SetRecordPayload(
-			bgpu::idl::RawEntry{ meta.animState },
-			std::as_bytes(std::span(&state, 1)));
+		else
+		{
+			rewrite.template operator()<idl::SkinnedState>();
+		}
 	}
 
 	SkinnedPlaybackDesc
@@ -867,14 +933,17 @@ namespace bgl
 	{
 		const MeshMeta& meta = PosedMetaFor(instance, "GetSkinnedPlayback");
 
-		const auto state = m_Playback.GetPayloadAt<idl::SkinnedState>(meta.animState);
-
-		auto desc = SkinnedPlaybackDesc();
-		for (size_t s = 0; s < desc.slot.size(); ++s)
-		{
-			desc.slot[s] = FromRecord(state.slots[s]);
-		}
-		return desc;
+		const auto read = [&](const auto& state) {
+			auto desc = SkinnedPlaybackDesc();
+			for (size_t s = 0; s < desc.slot.size(); ++s)
+			{
+				desc.slot[s] = FromRecord(state.slots[s]);
+			}
+			return desc;
+		};
+		return meta.automatic ?
+		           read(m_Playback.GetPayloadAt<idl::SkinnedAutoState>(meta.animState)) :
+		           read(m_Playback.GetPayloadAt<idl::SkinnedState>(meta.animState));
 	}
 
 	void
@@ -893,6 +962,16 @@ namespace bgl
 		}
 	}
 
+	uint32_t
+	SceneView::LegCountOf(const MeshMeta& meta) const noexcept
+	{
+		if (meta.geomType != GeomType::kSkinnedMesh || !m_SceneRaw->IsGeomAlive(meta.geom))
+		{
+			return 0;
+		}
+		return m_SceneRaw->GetGeomSkinnedInfo(meta.geom.handle.index).legCount;
+	}
+
 	bool
 	SceneView::HasLegs(MeshInstanceHandle instance) const noexcept
 	{
@@ -900,9 +979,7 @@ namespace bgl
 		{
 			return false;
 		}
-		const MeshMeta& meta = m_MeshBuffer.MetaAt(instance.handle.index);
-		return meta.geomType == GeomType::kSkinnedMesh && m_SceneRaw->IsGeomAlive(meta.geom) &&
-		       m_SceneRaw->GetGeomSkinnedInfo(meta.geom.handle.index).legCount > 0;
+		return LegCountOf(m_MeshBuffer.MetaAt(instance.handle.index)) > 0;
 	}
 
 	bool
@@ -913,7 +990,8 @@ namespace bgl
 			return false;
 		}
 		const MeshMeta& meta = m_MeshBuffer.MetaAt(instance.handle.index);
-		return meta.geomType == GeomType::kSkinnedMesh && meta.palette && meta.footIK;
+		return meta.geomType == GeomType::kSkinnedMesh && (meta.palette || meta.automatic) &&
+		       meta.footIK;
 	}
 
 	FootIKDesc
@@ -956,12 +1034,10 @@ namespace bgl
 
 		if (desc.feet.has_value())
 		{
-			if (!HasFootIK(instance))
+			if (!HasLegs(instance))
 			{
 				throw SceneError(
-					"BlobShadowDesc::feet needs a skinned placement on the per-instance source "
-					"whose "
-					"rig authored legs");
+					"BlobShadowDesc::feet needs a skinned placement whose rig authored legs");
 			}
 			if (!std::isfinite(desc.feet->radius) || desc.feet->radius <= 0.0f)
 			{
@@ -1043,6 +1119,10 @@ namespace bgl
 			mesh.playback = bgpu::idl::RawEntry{ animState };
 
 			auto meshHandle = m_MeshBuffer.Add(mesh);
+			for (CullState& cullState : m_CullStates)
+			{
+				cullState.MarkFresh(meshHandle.index);
+			}
 
 			auto& meta       = m_MeshBuffer.MetaAt(meshHandle.index);
 			meta.geomType    = geom.geomType;
@@ -1126,6 +1206,7 @@ namespace bgl
 					m_FootIK.Erase(meta.footIK);
 				}
 				m_PosedDirty = true;
+				m_AutoDirty  = m_AutoDirty || meta.automatic;
 			}
 		}
 
@@ -1223,14 +1304,61 @@ namespace bgl
 			const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
 			if (meta.geomType == GeomType::kSkinnedMesh && meta.animState != 0 && meta.palette)
 			{
-				auto& entry  = list.emplace_back();
-				entry.mesh   = meshIndex;
-				entry.footIK = meta.footIK;
+				auto& entry             = list.emplace_back();
+				entry.meshInstanceIndex = meshIndex;
+				entry.footIK            = meta.footIK;
 			}
 		}
 
 		m_PosedInstances.Assign(list);
 		m_PosedDirty = false;
+	}
+
+	void
+	SceneView::RebuildAutoList()
+	{
+		auto     list     = std::vector<uint32_t>();
+		uint32_t maxSlice = 0;
+
+		for (uint32_t meshIndex = 0; meshIndex < m_MeshBuffer.Capacity(); ++meshIndex)
+		{
+			if (!m_MeshBuffer.IsIndexValid(meshIndex))
+			{
+				continue;
+			}
+
+			const MeshMeta& meta = m_MeshBuffer.MetaAt(meshIndex);
+			if (!meta.automatic || !m_SceneRaw->IsGeomAlive(meta.geom))
+			{
+				continue;
+			}
+
+			list.push_back(meshIndex);
+
+			// A hero palette's layout: two poses, then a sole per leg.
+			const Scene::AnimGeomInfo rig = m_SceneRaw->GetGeomSkinnedInfo(meta.geom.handle.index);
+			maxSlice                      = std::max(
+				maxSlice,
+				idl::cFloat4sPerBone * rig.boneCount * 2 + idl::cFloat4sPerSole * rig.legCount);
+		}
+
+		// No frame poses more than the budget, nor more placements than there are.
+		const auto maxPosed =
+			std::min(m_LodSelection.poseBudget, static_cast<uint32_t>(list.size()));
+		const auto capacity = maxPosed * maxSlice;
+
+		if (m_PosePoolBlock)
+		{
+			m_Palettes.Free(m_PosePoolBlock);
+			m_PosePoolBlock = core::multi_slot_handle();
+		}
+		if (capacity > 0)
+		{
+			m_PosePoolBlock = m_Palettes.Allocate(capacity);
+		}
+
+		m_AutoPose.Assign(list, maxPosed, capacity > 0 ? m_PosePoolBlock.index : 0u, capacity);
+		m_AutoDirty = false;
 	}
 
 	void
@@ -1328,7 +1456,7 @@ namespace bgl
 
 			if (desc.feet.has_value() && desc.feet->intensity > 0.0f)
 			{
-				for (uint32_t leg = 0; leg < meta.footIK.count; ++leg)
+				for (uint32_t leg = 0; leg < LegCountOf(meta); ++leg)
 				{
 					auto& entry      = list.emplace_back();
 					entry.mesh       = meshIndex;
@@ -1557,6 +1685,10 @@ namespace bgl
 					cMaxMeshLods));
 		}
 
+		if (desc.poseBudget != m_LodSelection.poseBudget)
+		{
+			m_AutoDirty = true;
+		}
 		m_LodSelection = desc;
 	}
 
@@ -1843,6 +1975,12 @@ namespace bgl
 			RebuildPosedList();
 		}
 		m_PosedInstances.Update(cmdList);
+
+		if (m_AutoDirty)
+		{
+			RebuildAutoList();
+		}
+		m_AutoPose.Update(cmdList);
 		m_Palettes.Update(cmdList);
 
 		if (m_BlobShadowsDirty)
@@ -1935,6 +2073,15 @@ namespace bgl
 			auto posed = std::string(c_PosedInstancesName);
 			fg.ImportBuffer(posed, m_PosedInstances.GetBufferHandle());
 			resourceNames.push_back(std::move(posed));
+
+			// Rebuilt before the palette handle below is read: re-reserving the pool can grow the
+			// arena, and growth mints a new handle.
+			if (m_AutoDirty)
+			{
+				RebuildAutoList();
+			}
+			m_AutoPose.Resize(m_MeshBuffer.Capacity());
+			m_AutoPose.ImportResources(fg, resourceNames);
 
 			auto palettes = std::string(c_BonePaletteName);
 			fg.ImportBuffer(palettes, m_Palettes.GetBufferHandle());

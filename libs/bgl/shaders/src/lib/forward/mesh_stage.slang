@@ -93,6 +93,9 @@ public struct LodDraw
 {
     public uint submeshEntry;
     public float dissolve;
+
+    // An automatic placement's source for this entry; see InstancedDrawFlag.kPoseFromTable.
+    public bool fromTable;
 };
 
 public LodDraw ResolveLod(uint compacted, SubmeshInstance instance, Geom geom)
@@ -100,6 +103,7 @@ public LodDraw ResolveLod(uint compacted, SubmeshInstance instance, Geom geom)
     LodDraw draw;
     draw.submeshEntry = geom.submeshes.EntryLod0(instance.submeshIndex);
     draw.dissolve = 1.0;
+    draw.fromTable = false;
     let word = expansionData.instanceLod[instance.meshInstance.GetOffset()];
     if (word.Unset())
     {
@@ -108,6 +112,7 @@ public LodDraw ResolveLod(uint compacted, SubmeshInstance instance, Geom geom)
 
     let outgoing = (compacted & cOutgoingDrawBit) != 0u;
     let level = outgoing ? uint(word.OutgoingLevel()) : uint(word.Level());
+    draw.fromTable = outgoing ? word.OutgoingFromTable() : word.FromTable();
 
     // The draw-nothing tier has no geometry; an entry reaching it is the transparent list's, which
     // swaps without a dissolve, and draws the coarsest level while it leaves.
@@ -133,6 +138,7 @@ public uint ResolveDispatch(uint gid, out InstancedPayload payload)
     payload.instance = instance;
     payload.submeshEntry = lod.submeshEntry;
     payload.lodDissolve = lod.dissolve;
+    payload.flags = lod.fromTable ? uint(InstancedDrawFlag.kPoseFromTable) : 0u;
 
     return submesh.GetMeshletCount();
 }
