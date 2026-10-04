@@ -89,8 +89,8 @@ public float ToonShadingRigSlotOffset(ToonShadingRigSlot slot, float3 p, float3 
 /**
  * The toon character model on a placement whose toon shading rig was evaluated this draw: a face
  * pixel (`surface.face`) is lit by the rig's face light instead of the sun, and its terminator moved
- * by every edit, both by as much as it is face and the edits by the rig's fade. A pixel that is no
- * face shades exactly as ShadeToonCharacter.
+ * by every edit, both by as much as it is face times the rig's fade. A pixel that is no face shades
+ * exactly as ShadeToonCharacter.
  *
  * @param normal   World space, unit, facing the viewer.
  * @param worldPos The pixel's world position.
@@ -104,7 +104,10 @@ public float4 ShadeToonCharacterFace<
         return ShadeToonCharacter(surface, light, normal);
     }
 
-    let toLight = normalize(lerp(-light.SunDirection(), rig.faceLight.xyz, face));
+    // The rig's fade weighs the face light as it weighs the edits, so a head crossing the fade's
+    // end, or leaving the pool, comes back to the sun without a step.
+    let weight = face * rig.faceLight.w;
+    let toLight = normalize(lerp(-light.SunDirection(), rig.faceLight.xyz, weight));
 
     let headFromWorld = float4x4(rig.headFromWorld[0], rig.headFromWorld[1], rig.headFromWorld[2], float4(0.0, 0.0, 0.0, 1.0));
     let headPos = mul(headFromWorld, float4(worldPos, 1.0)).xyz;
@@ -117,7 +120,7 @@ public float4 ShadeToonCharacterFace<
         let mirror = slot.radiusSmoothingMirror.z > 0.5 ? float3(-1.0, 1.0, 1.0) : float3(1.0, 1.0, 1.0);
         offset += ToonShadingRigSlotOffset(slot, headPos * mirror, headNormal * mirror);
     }
-    offset *= face * rig.faceLight.w;
+    offset *= weight;
 
     let halfLambert = 0.5 * dot(normal, toLight) + 0.5 + surface.shadeOffset + offset;
     return ToonCel(surface, halfLambert, light.SunRadiance());

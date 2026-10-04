@@ -452,3 +452,35 @@ TEST_CASE(
 	CHECK(pushes >= 3);
 	CHECK(got[5].x == 0.0f);
 }
+
+TEST_CASE("The face light fades with the edits, back to the sun", "[toonshadingrig][render][toon]")
+{
+	World world;
+
+	// A sun behind the cheek, which the remap swings round to the front: a face it lights fully is
+	// lit, and one the raw sun lights is in shade.
+	const glm::vec3 behindRight = glm::vec3(1.0f, 0.0f, -0.5f);
+	auto            rig         = Rig({});
+	rig.SetFaceLight(bgl::FaceLightDesc().SetMaxAzimuth(0.3f));
+
+	const auto face = world.Face(1.0f);
+
+	const auto* plain  = "assets/golden/toon_rig_fade_plain.got.png";
+	const auto* whole  = "assets/golden/toon_rig_fade_whole.got.png";
+	const auto* barely = "assets/golden/toon_rig_fade_barely.got.png";
+	world.Shoot(face, std::nullopt, behindRight, plain);
+	CHECK(world.Shoot(face, rig, behindRight, whole) == 1u);
+
+	// The head spans about 156 pixels: just past a fade that ends at 150 and starts at 750, a
+	// hundredth of the way in.
+	auto faint = rig;
+	faint.SetFadeStartPixels(750.0f).SetFadeEndPixels(150.0f);
+	CHECK(world.Shoot(face, faint, behindRight, barely) == 1u);
+
+	const auto middle = [](const char* a, const char* b) {
+		return bgl::test::FrameDelta(a, b, 150, 100, 100, 100);
+	};
+	// A hundredth of the swing moves the terminator a pixel or so, not the face into the light.
+	CHECK(middle(plain, whole) > 1e-3f);
+	CHECK(middle(plain, barely) < 0.05f * middle(plain, whole));
+}

@@ -78,8 +78,10 @@ programs then shade through `GameToon*Program`, which loads the block from the v
 [Game-defined surfaces](game_defined_surfaces.md) § Toon surfaces with two changes on a pixel that
 is `face`, each by as much as it is:
 
-- **The light** is the block's face light rather than the sun, blended toward it by `face`.
-- **The terminator** moves by the sum of every slot's push, times `face` and the block's fade. The
+- **The light** is the block's face light rather than the sun, blended toward it by `face` times
+  the block's fade, so a head crossing the fade's end, or dropping out of the pool, returns to the
+  sun without a step.
+- **The terminator** moves by the sum of every slot's push, times the same weight. The
   pixel goes into head space through `headFromWorld`, its normal through the same rotation, both
   with X flipped on a mirrored slot. A slot's push (`ToonShadingRigSlotOffset`) is the Shading Rig's
   shape: the direction from the pixel to the edit, projected azimuthally about the edit's axis and
