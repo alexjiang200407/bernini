@@ -40,8 +40,8 @@ namespace crowd_render
 		float                lastAlpha);
 
 	/**
-	 * Writes CrowdInstanceWriter's Params for agent type `type`, posed by `model`. A type the frame
-	 * has no run for draws nothing.
+	 * Writes a crowd writer's CrowdWriterParams for agent type `type`, posed by `model` and, on a
+	 * skinned type, spread over `phaseSpreadSeconds`. A type the frame has no run for draws nothing.
 	 */
 	void
 	WriteWriterParams(
@@ -49,5 +49,6 @@ namespace crowd_render
 		const WriterFrame&           frame,
 		bgpu::BufferHandle           ring,
 		uint32_t                     type,
-		const glm::mat4&             model);
+		const glm::mat4&             model,
+		float                        phaseSpreadSeconds = 0.0f);
 }

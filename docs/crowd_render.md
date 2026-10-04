@@ -30,16 +30,20 @@ graphics->DrawFrame(target, job);
 blocks.FinishFrame();
 ```
 
-- **One block per agent type**, of the type's geom. Slot `i` of a type's block is record `i` of the
-  type's run in the drawn tick (the crowd groups each tick's records by type), and the slots past
+- **One block per geom of an agent type**, all placed alike. Slot `i` of a type's blocks is record
+  `i` of the type's run in the drawn tick (the crowd groups each tick's records by type), and the slots past
   the run are hidden. A block draws and culls every one of its `capacity` placements each frame,
   live or not, so `AgentTypeMeshDesc::capacity` is the most agents of that type the game holds at
   once: the crowd's `maxAgents` when it is left 0, and agents past it go undrawn.
 - **A type is a list of geoms, and may be skinned.** `AgentTypeMeshDesc::geoms` is what draws an
-  agent: a character cooked as several meshes on one rig is several geoms. A skinned type names a
-  `playback` every agent plays and a `phaseSpreadSeconds` its agents are spread over, each by its
-  `RenderAgent::id`, so an agent keeps its phase across a split, a merge or a destroy. Declared: a
-  type of one static geom is all that is drawn yet.
+  agent: a character cooked as several meshes is several geoms, all static or all skinned. A
+  skinned type's blocks are the renderer's skinned blocks, on the automatic pose source, sharing
+  the type's `playback`; each agent plays it ahead of the clock by its `RenderAgent::id`'s share of
+  `phaseSpreadSeconds` -- the id times the golden ratio's fraction of 2^32, wrapped -- so neighbours
+  never step together and an agent keeps its phase across a split, a merge or a destroy. A
+  looping clip's cycle is the spread that uses every phase; 0 plays the type in step. Each geom is
+  a placement of its own to the renderer, so a character's meshes are posed apart when near, as
+  the same character spawned from the CPU is.
 - **The frame draws between the last two completed ticks.** `PrepareFrame(alpha)` points every
   block at the latest completed tick `c`, `alpha` of the way from `c − 1` ("Fix Your Timestep"),
   so the crowd is drawn about a tick late (≈33 ms at the default tick). It also inserts a wait on
@@ -58,9 +62,10 @@ blocks.FinishFrame();
   overwriting the tick. Without the releases the crowd stops stepping once its ring is full, which
   is also what happens when the view stops being drawn.
 
-The writer is `crowd_render.CrowdInstanceWriter`
-(`libs/crowd_render/shaders/src/crowd_render/CrowdInstanceWriter.slang`), compiled once by
-`IGraphics::CreateMeshInstanceWriter`. A type's mesh stands in the agent's frame: +z its facing, y
+The writers are `CrowdInstanceWriter` and `SkinnedCrowdInstanceWriter` in
+`crowd_render.CrowdInstanceWriter` (`libs/crowd_render/shaders/src/crowd_render/CrowdInstanceWriter.slang`),
+sharing their placement code and one `CrowdWriterParams`; each is compiled once by
+`IGraphics::CreateMeshInstanceWriter`, and only when some type is of its kind. A type's mesh stands in the agent's frame: +z its facing, y
 up, the origin on the ground where it stands. `AgentTypeMeshDesc::model` is the geom's placement in
 that frame.
 
@@ -73,10 +78,12 @@ for as long as a frame may still read it.
 
 ## Tests
 
-`libs/crowd_render/tests`. `CrowdInstanceWriter_test.cpp` runs the writer against a recording
-`IMeshInstanceBlock` (`tests/shaders/CSRecordCrowdInstances.slang`), with the parameters the
-library plans (`src/WriterFrame.h`), over a GPU crowd's real ring. It checks that every agent's
-prevTransform is where the previous frame placed it across a split, a destroy, a merge and a
-spawn, and that a frame between ticks places each agent `alpha` of the way.
-`CrowdInstanceBlocks_test.cpp` drives the class against a real renderer: what it refuses, and that
-frames bracketed by it keep the crowd stepping past its ring.
+`libs/crowd_render/tests`. `CrowdInstanceWriter_test.cpp` runs both writers against a recording
+block (`tests/shaders/RecordingCrowdBlock.slang`), with the parameters the library plans
+(`src/WriterFrame.h`), over a GPU crowd's real ring. It checks that every agent's prevTransform is
+where the previous frame placed it across a split, a destroy, a merge and a spawn, that a frame
+between ticks places each agent `alpha` of the way, that the static writer gives no offset, and
+that the skinned one gives each agent its id's share of the spread for its life, no two
+neighbours alike. `CrowdInstanceBlocks_test.cpp` drives the class against a real renderer: what it
+refuses, a block per geom, and that frames bracketed by it keep the crowd stepping past its ring.
+A skinned crowd drawn by the real renderer is `bgl_crowd`'s (`--project`, `--import`).

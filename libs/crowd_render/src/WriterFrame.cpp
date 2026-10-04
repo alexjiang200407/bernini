@@ -72,7 +72,8 @@ namespace crowd_render
 		const WriterFrame&           frame,
 		bgpu::BufferHandle           ring,
 		uint32_t                     type,
-		const glm::mat4&             model)
+		const glm::mat4&             model,
+		float                        phaseSpreadSeconds)
 	{
 		params["ring"] = ring;
 		WriteRecords(params["current"], frame.current);
@@ -85,5 +86,6 @@ namespace crowd_render
 		params["run"]["firstRecordIndex"] = run.firstRecordIndex;
 		params["run"]["count"]            = run.count;
 		params["model"]                   = model;
+		params["phaseSpreadSeconds"]      = phaseSpreadSeconds;
 	}
 }
