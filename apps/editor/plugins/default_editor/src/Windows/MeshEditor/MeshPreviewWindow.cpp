@@ -422,11 +422,13 @@ void
 MeshPreviewWindow::SetSubmeshMaterial(uint32_t submeshIndex, bgl::MaterialHandle material)
 {
 	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
+		m_SubmeshToon.resize(m_SubmeshRefs.size(), false);
+		if (submeshIndex < m_SubmeshToon.size())
+			m_SubmeshToon[submeshIndex] =
+				material.IsValid() && editor::IsToonMaterial(context.graphics, material);
+
 		if (!material.IsValid() || submeshIndex >= m_SubmeshRefs.size())
 			return;
-
-		m_SubmeshToon.resize(m_SubmeshRefs.size(), false);
-		m_SubmeshToon[submeshIndex] = editor::IsToonMaterial(context.graphics, material);
 
 		const SubmeshRef& ref = m_SubmeshRefs[submeshIndex];
 		if (ref.geomIndex >= m_Geoms.size() || !m_Geoms[ref.geomIndex].IsValid())

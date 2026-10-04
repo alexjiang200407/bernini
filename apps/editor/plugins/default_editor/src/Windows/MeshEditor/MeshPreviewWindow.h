@@ -303,10 +303,7 @@ private:
 	std::optional<uint32_t>       m_LastLod;
 	std::vector<InstanceRef>      m_Instances;
 	std::vector<SubmeshRef>       m_SubmeshRefs;
-
-	// Per submesh, whether the material it shows is a toon model's: any one makes the viewport end
-	// in Standard tone mapping (IEditorViewport::SetShowsToonContent).
-	std::vector<bool>     m_SubmeshToon;
+	std::vector<bool>     m_SubmeshToon;  // per submesh, whether its material is a toon model's
 	bgl::MaterialHandle   m_DefaultMaterial;
 	QStringList           m_SubmeshNames;
 	QStringList           m_SubmeshMaterialPaths;
