@@ -23,7 +23,8 @@ namespace crowd_example
 		// The box the playing clip's poses fill, placed by `world`: what the agent is scaled to.
 		assetlib::Bounds bounds;
 
-		uint32_t clip = 0;
+		// Into the rig's clip table.
+		uint32_t clipIndex = 0;
 
 		// One cycle of the clip at rate 1: the spread that gives every agent a phase of its own.
 		float cycleSeconds = 0.0f;

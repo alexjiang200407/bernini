@@ -85,13 +85,13 @@ namespace crowd_example
 		if (agent.geoms.empty())
 			core::throw_runtime_error("{} cooks no skinned mesh", documentKey);
 
-		agent.clip         = headless::FindClip(clips, clipName);
-		agent.cycleSeconds = clips[agent.clip].duration;
+		agent.clipIndex    = headless::FindClip(clips, clipName);
+		agent.cycleSeconds = clips[agent.clipIndex].duration;
 
 		// Scaled to the playing clip's poses alone: a clip set whose clips travel would otherwise
 		// size the agent by how far it walks.
 		auto playing  = animations;
-		playing.clips = { animations.clips.at(agent.clip) };
+		playing.clips = { animations.clips.at(agent.clipIndex) };
 		playing.posedBoxes.clear();
 		agent.bounds = headless::EmptyBounds();
 		for (const uint32_t meshIndex : meshes)

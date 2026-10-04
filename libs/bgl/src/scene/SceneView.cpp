@@ -774,7 +774,7 @@ namespace bgl
 		return instance;
 	}
 
-	SceneView::AutoRecord
+	AutoRecord
 	SceneView::AddAutoRecord(
 		core::slot_handle          rig,
 		uint32_t                   legCount,
@@ -1901,8 +1901,7 @@ namespace bgl
 			block.capacity           = desc.capacity;
 			block.range              = *range;
 			block.toonShadingRig     = desc.toonShadingRig;
-			block.playback           = shared.record;
-			block.footIK             = shared.footIK;
+			block.shared             = shared;
 			if (desc.toonShadingRig.IsValid())
 			{
 				m_SceneRaw->AcquireToonShadingRig(desc.toonShadingRig);
@@ -1967,9 +1966,7 @@ namespace bgl
 		}
 
 		MeshInstanceBlock& record = m_InstanceBlocks[block.handle.index];
-		ReleaseBlockRange(
-			record.range,
-			AutoRecord{ .record = record.playback, .footIK = record.footIK });
+		ReleaseBlockRange(record.range, record.shared);
 		m_SceneRaw->ReleaseToonShadingRig(record.toonShadingRig);
 
 		record = MeshInstanceBlock();

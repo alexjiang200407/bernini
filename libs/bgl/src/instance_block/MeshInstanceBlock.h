@@ -1,11 +1,10 @@
 #pragma once
+#include "types/AutoRecord.h"
 #include <bgl/IMeshInstanceWriter.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/ToonShadingRigHandle.h>
 #include <bgpu/buffer/EntryBuffer.h>
-#include <bgpu/idl/RawEntry.h>
 #include <bgpu/pipeline/ComputeKernel.h>
-#include <core/containers/multi_slot_handle.h>
 #include <cstdint>
 
 namespace bgl
@@ -32,10 +31,9 @@ namespace bgl
 		// Its run of the view's MeshInstance buffer: slot i is element range.first + i.
 		bgpu::EntryRange range;
 
-		// A skinned block's one kAuto playback record and its foot-IK record, which every slot's
-		// MeshInstance names and none owns; both null on a static block.
-		bgpu::idl::RawEntry     playback;
-		core::multi_slot_handle footIK;
+		// A skinned block's one kAuto record and foot-IK record, which every slot's MeshInstance
+		// names and none owns; both null on a static block.
+		AutoRecord shared;
 
 		// The writer's pipeline with a constant buffer of the block's own, so two blocks sharing a
 		// writer keep their parameters apart. Empty while `writer` is.

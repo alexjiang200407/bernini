@@ -258,7 +258,7 @@ namespace
 				"every agent is {}, {} geom(s), looping clip {} over {:.2f} s\n",
 				opts.importKey,
 				character->geoms.size(),
-				character->clip,
+				character->clipIndex,
 				character->cycleSeconds);
 		}
 
@@ -295,15 +295,16 @@ namespace
 				// Standing on the ground at the type's height, whatever the character's own scale.
 				const float height = character->bounds.max.y - character->bounds.min.y;
 				const float fit    = sizes[type].y / height;
-				auto mesh = crowd_render::AgentTypeMeshDesc()
-				                .SetCapacity(counts[type])
-				                .SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(character->clip))
-				                .SetPhaseSpreadSeconds(character->cycleSeconds)
-				                .SetModel(
-									glm::translate(
-										glm::mat4(1.0f),
-										glm::vec3(0.0f, -character->bounds.min.y * fit, 0.0f)) *
-									glm::scale(glm::mat4(1.0f), glm::vec3(fit)) * character->world);
+				auto        mesh =
+					crowd_render::AgentTypeMeshDesc()
+						.SetCapacity(counts[type])
+						.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(character->clipIndex))
+						.SetPhaseSpreadSeconds(character->cycleSeconds)
+						.SetModel(
+							glm::translate(
+								glm::mat4(1.0f),
+								glm::vec3(0.0f, -character->bounds.min.y * fit, 0.0f)) *
+							glm::scale(glm::mat4(1.0f), glm::vec3(fit)) * character->world);
 				for (const bgl::GeomHandle skinned : character->geoms) mesh.AddGeom(skinned);
 				handoffDesc.AddType(std::move(mesh));
 				continue;

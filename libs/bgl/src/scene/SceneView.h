@@ -7,6 +7,7 @@
 #include "scene/NamedBuffer.h"
 #include "scene/TransparentSortState.h"
 #include "scene/scene_buffer_names.h"
+#include "types/AutoRecord.h"
 #include "types/DrawBucketMask.h"
 #include "types/EnvironmentMap.h"
 #include "types/SubmeshInstance.h"
@@ -632,13 +633,6 @@ namespace bgl
 		/** One FootIKLeg per leg at weight one, or null on a rig without legs. */
 		core::multi_slot_handle
 		AddDefaultFootIK(uint32_t legCount);
-
-		/** A kAuto record in the arena and the foot-IK record it names, made together. */
-		struct AutoRecord
-		{
-			bgpu::idl::RawEntry     record;
-			core::multi_slot_handle footIK;
-		};
 
 		/**
 		 * The rig's table reserved, a foot-IK record on a rig with legs, and a SkinnedAutoState
