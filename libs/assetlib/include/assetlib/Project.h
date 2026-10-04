@@ -2,8 +2,10 @@
 #include <assetlib/AssetKindRegistry.h>
 #include <assetlib/AssetStore.h>
 #include <core/err/util.h>
+#include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -11,6 +13,17 @@
 
 namespace assetlib
 {
+	/**
+	 * The display curve a project's look is authored for, which its renders end in: AgX, a filmic
+	 * curve, or Standard, the exposed colour as it is -- what a toon game wants. `.bproj` key
+	 * `toneMapping`, "agx" or "standard".
+	 */
+	enum class ToneMapping : uint8_t
+	{
+		kAgX,
+		kStandard,
+	};
+
 	class Project
 	{
 	public:
@@ -84,6 +97,20 @@ namespace assetlib
 			return m_PluginIds;
 		}
 
+		/** The curve the project's renders end in; AgX for a `.bproj` that names none. */
+		[[nodiscard]] ToneMapping
+		GetToneMapping() const noexcept
+		{
+			return m_ToneMapping;
+		}
+
+		/** Sets the curve for the next Save. */
+		void
+		SetToneMapping(ToneMapping toneMapping) noexcept
+		{
+			m_ToneMapping = toneMapping;
+		}
+
 		std::filesystem::path
 		GetDataDirectory() const noexcept
 		{
@@ -147,5 +174,9 @@ namespace assetlib
 		std::vector<std::string> m_PluginIds;
 		std::filesystem::path    m_ProjectFile;
 		int                      m_FormatVersion = c_FormatVersion;
+		ToneMapping              m_ToneMapping   = ToneMapping::kAgX;
+
+		// The keys the file held that this version does not know, written back by Save as read.
+		nlohmann::json m_UnknownKeys = nlohmann::json::object();
 	};
 }

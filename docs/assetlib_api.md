@@ -289,6 +289,15 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
   and each has its `LoadRegen*` door. Grass geometry is part of the mesh; sidecar look bindings
   resolve through `LoadRegenMesh`, whose `unboundBindings` makes `migrate` and `pack` fail.
 
+### Project
+
+* **The `.bproj`** is an authored text document like the rest: written canonically (sorted keys, tab
+  indent, a trailing newline), and a key this version does not know survives a save. Its keys are
+  `name`, `version`, `dataDirectory`, `plugins` ([Editor plugins](editor_plugins.md)) and
+  `toneMapping` -- `"agx"` or `"standard"`, the display curve the project's look is authored for
+  and its renders end in (`Project::GetToneMapping`; bgl's `IRenderTarget::SetToneMapping`).
+  Absent, it is AgX; any other value refuses the file. A toon game is authored for Standard.
+
 ### Reference graph
 * **`AssetRefGraph::Scan`** — `@throws` if a *referrer* cannot be read, deliberately: an edge we
   cannot see is an edge we would delete through. The one exception is stale geometry no import

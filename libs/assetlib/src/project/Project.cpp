@@ -1,4 +1,6 @@
+#include "io/json_doc.h"
 #include <algorithm>
+#include <array>
 #include <assetlib/AssetKindRegistry.h>
 #include <assetlib/Project.h>
 #include <assetlib/project_layout.h>
@@ -8,6 +10,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <ios>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <string>
@@ -24,8 +27,18 @@ namespace assetlib
 		{
 			std::string              name;
 			std::vector<std::string> plugins;
-			int                      version = 1;
+			int                      version     = 1;
+			ToneMapping              toneMapping = ToneMapping::kAgX;
+			nlohmann::json           unknown     = nlohmann::json::object();
 		};
+
+		constexpr std::string_view c_ToneMappingKey = "toneMapping";
+
+		[[nodiscard]] std::string_view
+		toneMappingName(const ToneMapping toneMapping) noexcept
+		{
+			return toneMapping == ToneMapping::kStandard ? "standard" : "agx";
+		}
 
 		ProjectMetadata
 		readMetadata(const std::filesystem::path& projectFile, const int currentVersion)
@@ -42,6 +55,26 @@ namespace assetlib
 				metadata.name    = json.value("name", projectFile.stem().string());
 				metadata.version = json.value("version", currentVersion);
 				metadata.plugins = json.value("plugins", std::vector<std::string>());
+
+				if (const auto it = json.find(c_ToneMappingKey); it != json.end())
+				{
+					const std::string value = it->is_string() ? it->get<std::string>() : "";
+					if (value == "agx")
+						metadata.toneMapping = ToneMapping::kAgX;
+					else if (value == "standard")
+						metadata.toneMapping = ToneMapping::kStandard;
+					else
+						core::throw_runtime_error(
+							"Malformed project file: '{}' is {}, not \"agx\" or \"standard\"",
+							c_ToneMappingKey,
+							it->dump());
+				}
+
+				constexpr std::array<std::string_view, 5> c_KnownKeys = {
+					{ "name", "version", "dataDirectory", "plugins", c_ToneMappingKey }
+				};
+				for (const std::string_view known : c_KnownKeys) json.erase(std::string(known));
+				metadata.unknown = std::move(json);
 				return metadata;
 			}
 			catch (const nlohmann::json::exception& e)
@@ -110,6 +143,8 @@ namespace assetlib
 		project.m_Name          = metadata.name;
 		project.m_PluginIds     = metadata.plugins;
 		project.m_FormatVersion = metadata.version;
+		project.m_ToneMapping   = metadata.toneMapping;
+		project.m_UnknownKeys   = metadata.unknown;
 		if (registry != nullptr)
 			project.m_Registry = std::move(registry);
 
@@ -150,18 +185,18 @@ namespace assetlib
 	void
 	Project::Save() const
 	{
-		const nlohmann::json json = {
-			{ "name", m_Name },
-			{ "version", m_FormatVersion },
-			{ "dataDirectory", c_DataDirectoryName },
-			{ "plugins", m_PluginIds },
-		};
+		nlohmann::json json                 = m_UnknownKeys;
+		json["name"]                        = m_Name;
+		json["version"]                     = m_FormatVersion;
+		json["dataDirectory"]               = c_DataDirectoryName;
+		json["plugins"]                     = m_PluginIds;
+		json[std::string(c_ToneMappingKey)] = std::string(toneMappingName(m_ToneMapping));
 
-		std::ofstream stream(m_ProjectFile);
+		std::ofstream stream(m_ProjectFile, std::ios::binary);
 		if (!stream)
 			core::throw_runtime_error("Cannot write project file: {}", m_ProjectFile.string());
 
-		stream << json.dump(4);
+		stream << doc::canonicalDump(json);
 	}
 
 	void
