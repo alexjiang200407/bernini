@@ -1,6 +1,7 @@
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 
 #include "Render/Renderer.h"
+#include "util/toon_light.h"
 #include <algorithm>
 #include <cmath>
 #include <core/glm.h>
@@ -243,9 +244,11 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 		return target;
 	});
 	m_SceneView    = m_Desc.renderer->Invoke([&] {
-		return m_Desc.renderer->GetGraphics()->CreateSceneView(
+		auto view = m_Desc.renderer->GetGraphics()->CreateSceneView(
 			m_Desc.renderer->GetScene(),
 			m_Desc.initialInstances);
+		view->SetToonDirectionalLight(editor::DefaultToonLight());
+		return view;
 	});
 
 	m_DrawWidth  = m_Width;

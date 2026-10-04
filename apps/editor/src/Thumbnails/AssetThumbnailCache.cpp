@@ -1,5 +1,6 @@
 #include "Thumbnails/AssetThumbnailCache.h"
 #include "util/editor_language.h"
+#include "util/toon_light.h"
 #include <algorithm>
 #include <assetlib/bmesh.h>
 #include <core/err/util.h>
@@ -282,6 +283,7 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 			m_SceneView    = m_Desc.renderer->GetGraphics()->CreateSceneView(
 				m_Desc.renderer->GetScene(),
 				m_Desc.initialInstances);
+			m_SceneView->SetToonDirectionalLight(editor::DefaultToonLight());
 		}
 		catch (const std::exception& e)
 		{
