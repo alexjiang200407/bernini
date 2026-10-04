@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <assetlib/bmesh.h>
 #include <bgl/IRenderTarget.h>
+#include <bit>
 #include <core/err/util.h>
 #include <editor_sdk/mesh_load.h>
 #include <editor_sdk/toon_content.h>
@@ -146,6 +147,15 @@ namespace
 
 	using CookedMeshes = std::unordered_map<uint32_t, bgl::PreparedStaticMesh>;
 
+	// QThreadPool starts the highest priority first. A smaller file is a cheaper read, so a folder's
+	// light tiles do not wait behind its heaviest; by power of two, so reads of a size keep their order.
+	int
+	ReadPriority(const QString& path)
+	{
+		const qint64 bytes = std::max<qint64>(QFileInfo(path).size(), 0);
+		return -static_cast<int>(std::bit_width(static_cast<uint64_t>(bytes)));
+	}
+
 	/**
 	 * Reads an asset, decodes the textures it needs and cooks its geometry -- everything about a
 	 * thumbnail that does not touch the GPU, which is everything expensive except the uploads and
@@ -261,9 +271,8 @@ namespace
 AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* parent) :
 	StampedPixmapCache(c_BudgetKb, parent), m_Desc(std::move(desc))
 {
-	// Reading a .bmesh is I/O plus a parse; two at a time keeps the explorer responsive without
-	// queueing up more decoded meshes than the GPU drain can retire.
-	m_Pool.setMaxThreadCount(2);
+	// The reads are the bound, not the GPU: a shot retires milliseconds after its read lands.
+	m_Pool.setMaxThreadCount(4);
 
 	// At most one capture is ever awaiting its downscale; see PumpQueue.
 	m_ScalePool.setMaxThreadCount(1);
@@ -674,14 +683,17 @@ AssetThumbnailCache::Request(const QString& path)
 						RejectDescribed(path, stamp, QString::fromUtf8(error.what()));
 						return;
 					}
-					m_Pool.start(new LoadTask(
-						QString::fromStdWString(geometryPath.wstring()),
-						material ? materialKey : geometry,
-						material,
-						materialKey,
-						DataRoot(),
-						m_Desc.dimension * c_TextureSupersample,
-						std::move(sink)));
+					const QString read = QString::fromStdWString(geometryPath.wstring());
+					m_Pool.start(
+						new LoadTask(
+							read,
+							material ? materialKey : geometry,
+							material,
+							materialKey,
+							DataRoot(),
+							m_Desc.dimension * c_TextureSupersample,
+							std::move(sink)),
+						ReadPriority(read));
 				},
 				Qt::QueuedConnection);
 		}));
@@ -734,14 +746,16 @@ AssetThumbnailCache::Request(const QString& path)
 			Qt::QueuedConnection);
 	};
 
-	m_Pool.start(new LoadTask(
-		path,
-		ToRelative(path),
-		material,
-		{},
-		DataRoot(),
-		m_Desc.dimension * c_TextureSupersample,
-		std::move(sink)));
+	m_Pool.start(
+		new LoadTask(
+			path,
+			ToRelative(path),
+			material,
+			{},
+			DataRoot(),
+			m_Desc.dimension * c_TextureSupersample,
+			std::move(sink)),
+		ReadPriority(path));
 }
 
 void
