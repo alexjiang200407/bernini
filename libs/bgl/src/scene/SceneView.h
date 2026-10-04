@@ -5,6 +5,7 @@
 #include "scene/BonePaletteBuffer.h"
 #include "scene/CullState.h"
 #include "scene/NamedBuffer.h"
+#include "scene/ToonShadingRigState.h"
 #include "scene/TransparentSortState.h"
 #include "scene/scene_buffer_names.h"
 #include "types/DrawBucketMask.h"
@@ -325,6 +326,13 @@ namespace bgl
 		GetAutoPose() const noexcept
 		{
 			return m_AutoPose;
+		}
+
+		/** The rigged placement ranges and the pool their evaluated blocks are written into. */
+		[[nodiscard]] const ToonShadingRigState&
+		GetToonShadingRigs() const noexcept
+		{
+			return m_ToonShadingRigs;
 		}
 
 		/**
@@ -661,6 +669,11 @@ namespace bgl
 		void
 		RebuildAutoList();
 
+		// Re-derives the toon shading rig ranges from the live placements and blocks. O(placements +
+		// blocks), and only after a rig changed hands.
+		void
+		RebuildToonShadingRigList();
+
 		/**
 		 * Re-resolves every non-overridden instance against the Scene's current defaults, rewriting
 		 * only those that changed. O(instances), but only runs after a SetSubmeshMaterial -- an
@@ -773,6 +786,11 @@ namespace bgl
 		AutoPoseState           m_AutoPose;
 		core::multi_slot_handle m_PosePoolBlock;
 		bool                    m_AutoDirty = false;
+
+		// Per view: the ranges of placements holding a toon shading rig, rebuilt whenever a rig is
+		// set or cleared or its holder deleted -- the authoring-time bargain m_PosedDirty keeps.
+		ToonShadingRigState m_ToonShadingRigs;
+		bool                m_ToonShadingRigsDirty = false;
 
 		// The dense indices of the selected submesh instances. Any Erase on m_InstanceBuffer can
 		// move a dense index, so a deletion staleness-marks the list exactly like a selection

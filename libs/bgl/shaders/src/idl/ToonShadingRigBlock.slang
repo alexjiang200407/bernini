@@ -25,7 +25,10 @@ public struct ToonShadingRigBlock
     public float4 faceLight;
 
     public uint slotCount;
-    public uint pad[3];
+
+    // The MeshInstance entry the block was evaluated for.
+    public uint placement;
+    public uint pad[2];
 
     public ToonShadingRigSlot slots[cMaxToonShadingRigSlots];
 };

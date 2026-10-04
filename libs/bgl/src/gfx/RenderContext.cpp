@@ -233,7 +233,7 @@ namespace bgl
 		m_OverlayPass(startup.context), m_OutlineMask(startup.context),
 		m_TaaResolve(startup.context), m_CompactInstances(startup.context),
 		m_RigFrames(startup.context), m_SkinnedPose(startup.context),
-		m_TransparentSort(startup.context)
+		m_ToonShadingRigs(startup.context), m_TransparentSort(startup.context)
 #if defined(BERNINI_GPU_DEBUG)
 		,
 		m_BufferPoisoner(m_ResourceManager), m_DebugBuffer(m_ResourceManager, c_DebugBufferCapacity)
@@ -929,6 +929,10 @@ namespace bgl
 		// makes the pass no longer a root and culls it.
 		m_FrameGraph.SetResourceNamespace(view->GetResourceNamespace());
 		m_SkinnedPose.AttachToFrameGraph(m_FrameGraph, draw);
+
+		// After the pose pass, whose palettes give a head bone its pose, and before anything draws a
+		// face; per view like the pose pass, and under its namespace for the same reason.
+		m_ToonShadingRigs.AttachToFrameGraph(m_FrameGraph, draw);
 		m_FrameGraph.SetResourceNamespace(view->GetCullNamespace(draw.cullIdx));
 
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kWorld);
