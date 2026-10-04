@@ -3,6 +3,11 @@
 #include "util/SkinnedSynth.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
+#include <assetlib_structs/BGrassFields.h>
+#include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/Grass.h>
+#include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/VertexLayout.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
@@ -11,17 +16,26 @@
 #include <bgl/error.h>
 #include <bgl/glm.h>
 #include <bgl/types/Camera.h>
+#include <bgl/types/DirectionalLightDesc.h>
+#include <bgl/types/GrassDesc.h>
+#include <bgl/types/GrassHandle.h>
 #include <bgl/types/LayerType.h>
+#include <bgl/types/LodSelectionDesc.h>
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/RenderJob.h>
+#include <bgl/types/StaticMeshGeomDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <algorithm>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_exception.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -514,6 +528,277 @@ TEST_CASE("A toon character and a PBR surface each read their own sun", "[surfac
 		shoot(pbr, 1.0f, 0.0f, pbrOnly);
 		CHECK(bgl::test::MaxChannelDelta(neither, toonOnly) == 0.0f);
 		CHECK(middle(pbrOnly) > middle(neither) + 0.05f);
+	}
+}
+
+namespace
+{
+	// One quad in the z = 0 plane, spanning x0..x1 and -1..1, as the next submesh of `mesh`. No
+	// normal attribute: a decoded vertex then faces +Z.
+	void
+	AppendQuad(assetlib::BMesh& mesh, float x0, float x1)
+	{
+		constexpr uint16_t c_Stride = 12;
+
+		const std::array<glm::vec3, 4> corners = {
+			glm::vec3(x0, -1.0f, 0.0f),
+			glm::vec3(x1, -1.0f, 0.0f),
+			glm::vec3(x1, 1.0f, 0.0f),
+			glm::vec3(x0, 1.0f, 0.0f),
+		};
+		const auto byteOffset = static_cast<uint32_t>(mesh.vertexData.size());
+		mesh.vertexData.resize(byteOffset + sizeof(corners));
+		std::memcpy(mesh.vertexData.data() + byteOffset, corners.data(), sizeof(corners));
+
+		auto meshlet            = assetlib::Meshlet();
+		meshlet.vertexOffset    = static_cast<uint32_t>(mesh.meshletVertices.size());
+		meshlet.triangleOffset  = static_cast<uint32_t>(mesh.meshletTriangles.size());
+		meshlet.vertexCount     = 4;
+		meshlet.triangleCount   = 2;
+		meshlet.boundingRadius  = 2.0f;
+		const auto firstMeshlet = static_cast<uint32_t>(mesh.meshlets.size());
+		mesh.meshlets.push_back(meshlet);
+		for (uint32_t v = 0; v < 4; ++v) mesh.meshletVertices.push_back(v);
+		constexpr std::array<uint8_t, 6> c_Triangles = { { 0, 1, 2, 0, 2, 3 } };
+		mesh.meshletTriangles.insert(
+			mesh.meshletTriangles.end(),
+			c_Triangles.begin(),
+			c_Triangles.end());
+
+		auto submesh                  = assetlib::Submesh();
+		submesh.layout.attributeCount = 1;
+		submesh.layout.stride         = c_Stride;
+		submesh.layout.attributes[0]  = { assetlib::VertexSemantic::kPosition,
+			                              assetlib::VertexFormat::kFloat32x3,
+			                              0 };
+		submesh.vertexByteOffset      = byteOffset;
+		submesh.vertexCount           = 4;
+		submesh.firstMeshlet          = firstMeshlet;
+		submesh.meshletCount          = 1;
+		submesh.material              = 0;
+		submesh.aabbMin               = glm::vec3(x0, -1.0f, 0.0f);
+		submesh.aabbMax               = glm::vec3(x1, 1.0f, 0.0f);
+		mesh.submeshes.push_back(submesh);
+	}
+
+	/** Two levels: level 0 a quad left of centre, level 1 one right of it. */
+	assetlib::BMesh
+	MakeSplitLevels()
+	{
+		auto mesh = assetlib::BMesh();
+		AppendQuad(mesh, -1.0f, -0.1f);
+		AppendQuad(mesh, 0.1f, 1.0f);
+		mesh.meshes.push_back(
+			assetlib::Mesh{ .firstSubmesh = 0, .submeshCount = 1, .nameOffset = 0, .lodCount = 2 });
+		mesh.lods = { { 20.0f }, { 0.0f } };
+		return mesh;
+	}
+
+	/** A field of `side` x `side` clumps over the plane's XY, growing along its normal. */
+	assetlib::BGrassFields
+	MakeField(const uint32_t side, const float spacing)
+	{
+		auto grass  = assetlib::BGrassFields();
+		grass.looks = { "unused.bgrass" };
+		grass.names = { "Ground" };
+
+		const float origin = -0.5f * spacing * static_cast<float>(side - 1);
+		for (uint32_t y = 0; y < side; ++y)
+		{
+			for (uint32_t x = 0; x < side; ++x)
+			{
+				grass.clumps.push_back(
+					assetlib::GrassClump{ .position = glm::vec3(
+											  origin + spacing * static_cast<float>(x),
+											  origin + spacing * static_cast<float>(y),
+											  0.0f),
+				                          .heightScale = 1.0f,
+				                          .normal      = glm::vec3(0.0f, 0.0f, 1.0f),
+				                          .color       = glm::u8vec4(255) });
+			}
+		}
+
+		auto field = assetlib::GrassField{ .mesh = 0, .look = 0, .firstChunk = 0, .chunkCount = 0 };
+		for (uint32_t first = 0; first < grass.clumps.size();
+		     first += assetlib::c_GrassClumpsPerChunk)
+		{
+			const auto count = std::min<uint32_t>(
+				assetlib::c_GrassClumpsPerChunk,
+				static_cast<uint32_t>(grass.clumps.size()) - first);
+			grass.chunks.push_back(
+				assetlib::GrassChunk{ .boundingCenter = glm::vec3(0.0f),
+			                          .boundingRadius = spacing * static_cast<float>(side),
+			                          .firstClump     = first,
+			                          .clumpCount     = count,
+			                          .maxHeightScale = 1.0f });
+			++field.chunkCount;
+		}
+		grass.fields = { field };
+		return grass;
+	}
+
+	/** Which of the two suns a frame turns on. */
+	enum class Sun
+	{
+		kToon,
+		kPbr,
+	};
+
+	void
+	LightBy(bgl::ISceneView& view, const Sun sun, const glm::vec3& direction)
+	{
+		const auto on  = bgl::DirectionalLightDesc{ .direction = direction, .intensity = 1.0f };
+		const auto off = bgl::DirectionalLightDesc{ .direction = direction, .intensity = 0.0f };
+		view.SetToonDirectionalLight(sun == Sun::kToon ? on : off);
+		view.SetPbrDirectionalLight(sun == Sun::kPbr ? on : off);
+	}
+}
+
+// The toon sun reaches every lane a toon character draws through, not the one at rest alone: a
+// level dissolving, a blade of grass and the shared blend program each light the character by the
+// toon sun and draw it black by the PBR sun. A binding missed in one of them draws black as well,
+// so each is shown lit.
+TEST_CASE("A toon character's every lane reads the toon sun", "[surface][render][toon]")
+{
+	auto gfx = bgl::test::CreateGraphics(ToonOptions());
+	REQUIRE(gfx != nullptr);
+	auto scene = gfx->CreateScene(ToonScene());
+
+	const MaterialHandle character = scene->CreateSurfaceMaterial(Cel(c_Flat, {}));
+
+	{
+		// The placement stands at distance 2 and spans about 35 pixels: a threshold scale of 4 puts
+		// it at level 1, and 1 dissolves it to level 0 over five frames, both halves drawing.
+		INFO("dissolving between levels");
+		const auto levels    = MakeSplitLevels();
+		const auto materials = std::array<MaterialHandle, 1>{ character };
+		const auto geom      = scene->AddStaticMeshGeom(
+			bgl::StaticMeshGeomDesc().SetMesh(&levels).SetMaterials(materials));
+		REQUIRE(geom.IsValid());
+
+		const auto dissolve = [&](const Sun sun, const char* png) {
+			auto targetDesc       = bgl::RenderTargetDesc();
+			targetDesc.width      = 64;
+			targetDesc.height     = 64;
+			targetDesc.headless   = true;
+			targetDesc.taaEnabled = false;
+			auto target           = gfx->CreateRenderTarget(targetDesc);
+			auto view             = gfx->CreateSceneView(scene, 4);
+			LightBy(*view, sun, glm::vec3(0.0f, 0.0f, -1.0f));
+			view->CreateStaticMeshInstance(
+				bgl::StaticMeshInstanceDesc().SetGeom(geom).SetTransform(
+					glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -2.0f))));
+
+			auto job     = bgl::RenderJob();
+			job.view     = view;
+			job.viewport = bgl::Viewport(64.0f, 64.0f);
+			job.camera   = bgl::Camera()
+			                   .LookAt(
+								   glm::vec3(0.0f),
+								   glm::vec3(0.0f, 0.0f, -1.0f),
+								   glm::vec3(0.0f, 1.0f, 0.0f))
+			                   .Perspective(glm::radians(90.0f), 1.0f, 0.1f, 100.0f);
+
+			auto selection       = bgl::LodSelectionDesc();
+			selection.pixelScale = 4.0f;
+			view->SetLodSelection(selection);
+			gfx->DrawFrame(target, job);
+
+			selection.pixelScale = 1.0f;
+			view->SetLodSelection(selection);
+			for (int frame = 1; frame <= 2; ++frame)
+			{
+				job.time += 0.03f;
+				gfx->DrawFrame(target, job);
+			}
+			gfx->ScreenshotPng(target, png);
+
+			return std::pair(
+				bgl::test::MeanColor(png, 18, 20, 10, 24).r,
+				bgl::test::MeanColor(png, 36, 20, 10, 24).r);
+		};
+
+		const auto [toonNear, toonFar] =
+			dissolve(Sun::kToon, "assets/golden/toon_lanes_dissolve_toon.got.png");
+		const auto [pbrNear, pbrFar] =
+			dissolve(Sun::kPbr, "assets/golden/toon_lanes_dissolve_pbr.got.png");
+		CHECK(toonNear > 0.05f);
+		CHECK(toonFar > 0.05f);
+		CHECK(pbrNear < 1e-3f);
+		CHECK(pbrFar < 1e-3f);
+	}
+
+	{
+		INFO("on grass");
+		const auto black = scene->CreatePbrMaterial(
+			bgl::PbrMaterialDesc{ .baseColorFactor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f) });
+		const auto ground = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, black);
+
+		auto look            = bgl::GrassDesc();
+		look.material        = character;
+		look.blade.rootWidth = 0.05f;
+		const auto looks     = std::array<bgl::GrassHandle, 1>{ scene->CreateGrass(look) };
+		scene->AttachGrass(ground, MakeField(40, 0.12f), 0, looks);
+
+		const auto grass = [&](const Sun sun, const char* png) {
+			auto targetDesc     = bgl::RenderTargetDesc();
+			targetDesc.width    = 400;
+			targetDesc.height   = 300;
+			targetDesc.headless = true;
+			auto target         = gfx->CreateRenderTarget(targetDesc);
+			auto view           = gfx->CreateSceneView(scene, 4);
+			LightBy(*view, sun, glm::normalize(glm::vec3(0.0f, -1.0f, -0.5f)));
+			view->CreateStaticMeshInstance(
+				bgl::StaticMeshInstanceDesc().SetGeom(ground).SetTransform(
+					glm::rotate(
+						glm::mat4(1.0f),
+						glm::radians(-90.0f),
+						glm::vec3(1.0f, 0.0f, 0.0f))));
+
+			auto job     = bgl::RenderJob();
+			job.view     = view;
+			job.viewport = bgl::Viewport(400.0f, 300.0f);
+			job.camera   = bgl::Camera()
+			                   .LookAt(
+								   glm::vec3(0.0f, 3.0f, 6.0f),
+								   glm::vec3(0.0f),
+								   glm::vec3(0.0f, 1.0f, 0.0f))
+			                   .Perspective(glm::radians(60.0f), 400.0f / 300.0f, 0.1f, 200.0f);
+			for (int i = 0; i < 6; ++i) gfx->DrawFrame(target, job);
+			gfx->ScreenshotPng(target, png);
+			return bgl::test::MeanColor(png, 150, 120, 100, 80).r;
+		};
+
+		CHECK(grass(Sun::kToon, "assets/golden/toon_lanes_grass_toon.got.png") > 0.05f);
+		CHECK(grass(Sun::kPbr, "assets/golden/toon_lanes_grass_pbr.got.png") < 1e-3f);
+	}
+
+	{
+		INFO("blended");
+		const auto blended = scene->CreateSurfaceMaterial(Cel(c_Half, {}, LayerType::kBlend));
+		const auto plane   = scene->AddPlaneGeom(1, 1, 30.0f, 30.0f, blended);
+
+		const auto blend = [&](const Sun sun, const char* png) {
+			auto targetDesc     = bgl::RenderTargetDesc();
+			targetDesc.width    = 400;
+			targetDesc.height   = 300;
+			targetDesc.headless = true;
+			auto target         = gfx->CreateRenderTarget(targetDesc);
+			auto view           = gfx->CreateSceneView(scene, 4);
+			LightBy(*view, sun, glm::vec3(0.0f, 0.0f, -1.0f));
+			view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(plane));
+
+			auto job     = bgl::RenderJob();
+			job.view     = view;
+			job.camera   = SphereCamera();
+			job.viewport = bgl::Viewport(400.0f, 300.0f);
+			for (int i = 0; i < 6; ++i) gfx->DrawFrame(target, job);
+			gfx->ScreenshotPng(target, png);
+			return bgl::test::MeanColor(png, 150, 100, 100, 100).b;
+		};
+
+		CHECK(blend(Sun::kToon, "assets/golden/toon_lanes_blend_toon.got.png") > 0.05f);
+		CHECK(blend(Sun::kPbr, "assets/golden/toon_lanes_blend_pbr.got.png") < 1e-3f);
 	}
 }
 

@@ -450,10 +450,11 @@ namespace bgl
 
 		if (auto foundToonData = kernel.FindUniforms("toonData"))
 		{
-			auto& toonData                   = *foundToonData;
-			toonData["sunDirection"]         = draw.lighting.toonSunDirection;
-			toonData["sunRadiance"]          = draw.lighting.toonSunRadiance;
-			toonData["toonShadingRigBlocks"] = resources.GetBuffer(c_ToonShadingRigBlocksName);
+			auto& toonData = *foundToonData;
+			toonData["sunDirection"].SetIfValid(draw.lighting.toonSunDirection);
+			toonData["sunRadiance"].SetIfValid(draw.lighting.toonSunRadiance);
+			toonData["toonShadingRigBlocks"].SetIfValid(
+				resources.GetBuffer(c_ToonShadingRigBlocksName));
 		}
 	}
 

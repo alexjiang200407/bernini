@@ -71,7 +71,6 @@ public extension MaterialData
         return output;
     }
 
-    // A lit surface draws a blade exactly as it shades it: no tint, occlusion or translucency.
     // A toon character on a blade: the lit grass program, lit by the toon sun.
     public ForwardPSOut GameToonGrassProgram<G : IToonCharacterSurfaceSource>(GrassVSOut input)
     {
@@ -83,6 +82,7 @@ public extension MaterialData
         return output;
     }
 
+    // A lit surface draws a blade exactly as it shades it: no tint, occlusion or translucency.
     public ForwardPSOut GameLitGrassProgram<G : ILitSurfaceSource>(GrassVSOut input)
     {
         let record = LitGameRecord<G>.Load(input.materialOffset);

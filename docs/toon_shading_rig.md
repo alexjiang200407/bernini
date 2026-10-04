@@ -75,7 +75,7 @@ mesh group. No other bucket draws through it, so no PBR or lit draw carries the 
 character's dissolve lane and the shared blend program, which every surface shares, carry none
 either: a dissolving or blended character shades without its rig. The character's generated
 programs then shade through `GameToon*Program`, which loads the block from the view's pool
-(`MaterialData::toonShadingRigBlocks`) when the word names one.
+(`ToonData::toonShadingRigBlocks`, a constant buffer only the toon character's programs declare) when the word names one.
 
 `ShadeToonCharacterFace` (`lib.math.ToonShading`) is the cel model of
 [Game-defined surfaces](game_defined_surfaces.md) § Toon surfaces with two changes on a pixel that
