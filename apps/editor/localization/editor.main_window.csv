@@ -63,6 +63,8 @@ sharpness_menu,TAA Sharpness
 sharpness_off,Off
 sharpness_percent,{0}%
 sharpness_tip,How hard the resolved image is sharpened (RCAS) before the display curve. Only viewports with temporal antialiasing and a render scale below 1 sharpen; it also sharpens hashed alpha's grain.
+standard_tone_mapping,Standard Tone Mapping
+standard_tone_mapping_tip,"End the viewports in Standard -- the colour as it is, as a toon look is authored -- rather than AgX's filmic curve. The project's .bproj sets the default."
 taa_disabled_tip,No open viewport allocated temporal-AA history.
 taa_enabled_tip,Jitter the projection and accumulate a temporal history in the viewports.
 taa_initial_disabled_tip,"No viewport enabled temporalAA in config.json, so none allocated a history."
