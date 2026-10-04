@@ -90,6 +90,10 @@ far run shows the field thinning to nothing; its `Forward Grass 0` row is what t
   `assetlib_cli migrate --project "<the .bproj>" --yes`. The viewer never writes into a project.
   `just run` splits its arguments on spaces, and the test project's `.bproj` has one, so run that
   binary by the path `just exes --target assetlib_cli` prints.
+- **A character's toon shading rig comes with it.** A `.bimport` naming a `.btoonrig` draws its
+  face with that rig, as any load through `game::AssetManager` does
+  ([Toon Shading Rig](toon_shading_rig.md) § Loading); `--sun` with `--sun-azimuth` and
+  `--sun-elevation` is how to look at it under a side, a front and an overhead sun.
 - **Know whether it was lit.** The test project has no environment of its own; without
   `--env-root "$PWD/assets/Data"` it renders unlit, which is a black image, and says `unlit`.
 - **The sun is off unless asked for, and it does not replace the environment.** `bgl`'s own default

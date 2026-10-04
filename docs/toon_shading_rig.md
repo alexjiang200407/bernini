@@ -4,7 +4,7 @@ A toon shading rig (`ToonShadingRigDesc`, the Shading Rig of Petikam, Anjyo & Rh
 art-directed shadow and light edits, each keyed on the sun's direction in head space. This page is
 what happens to one each frame: which placements are evaluated, where a placement's head is, how the
 keys become the block a face's pixels read, and how those pixels find it -- then the `.btoonrig`
-document one is authored as. The API is in
+document one is authored as, and how gamelib loads it with a character. The API is in
 [bgl API](bgl_api.md); the material half the toon character model shades with is in
 [Game-defined surfaces](game_defined_surfaces.md) § Toon surfaces.
 
@@ -123,6 +123,32 @@ Each value is the `ToonShadingRigDesc` field of its name, with three differences
 A key needs `light` and `position`, and an edit needs `keys`; every other value takes the desc's
 default when absent, and `faceLight` absent remaps nothing. An edit's `name` is the author's label
 and nothing reads it. Ranges are not checked on read: `IScene::AddToonShadingRig` states them once.
+
+## Loading
+
+`game::AssetManager` loads the rig with the character: an acquire of a source whose `.bimport`
+names one reads the `.btoonrig`, turns it into a `ToonShadingRigDesc`
+(`game::ToonShadingRigDescOf`, [toon_shading_rig.h](../libs/gamelib/include/gamelib/toon_shading_rig.h)),
+adds it to the scene once, and gives it to every placement `CreateInstance` or
+`CreateSkinnedInstance` makes of the geom. The geom holds a reference and the scene's rig is deleted
+with the last geom holding it. gamelib creates no instance blocks: whoever creates one names its rig
+in `MeshInstanceBlockDesc::toonShadingRig`.
+
+- **A skinned acquire** resolves the head bone by name against the clip set's skeleton, into the
+  index the pass poses.
+- **A static acquire** has nothing to pose, so a head bone is read off the source's `.bskel` and its
+  bind transform folded into `headToBone`: the head sits where the static mesh draws it. A rig naming
+  no head bone needs no skeleton at all.
+- **A rig that cannot be drawn is left off and warned about**, never fatal -- one that will not read,
+  names a bone the skeleton lacks, or that `AddToonShadingRig` refuses -- as an avatar naming a
+  missing bone leaves a rig unplanted. The character still draws, cel shaded.
+
+One upload is keyed by the document, the skeleton and whether it is posed, since the desc depends
+on all three; the same character's static and skinned geoms are two uploads.
+
+`bgl_ai_viewer` loads through the same manager, so a character it renders carries its rig;
+`--sun-azimuth` and `--sun-elevation` put the sun beside, in front of or above the face
+([AI Viewer](ai_viewer.md)).
 
 ## Cost
 

@@ -10,6 +10,7 @@
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/SourceStamp.h>
 #include <bgl/IScene.h>
+#include <bgl/ISceneView.h>
 #include <bgl/types/BlendSetDesc.h>
 #include <bgl/types/FootPlantDesc.h>
 #include <bgl/types/GrassDesc.h>
@@ -24,6 +25,7 @@
 #include <bgl/types/StaticMeshGeomDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
+#include <bgl/types/ToonShadingRigHandle.h>
 #include <concepts>
 #include <core/str/str.h>
 #include <cstddef>
@@ -36,6 +38,7 @@
 #include <gamelib/AssetManager.h>
 #include <gamelib/BlendSpaceInfo.h>
 #include <gamelib/ClipInfo.h>
+#include <gamelib/toon_shading_rig.h>
 
 #include <assetlib/RegenMesh.h>
 #include <assetlib/avatar.h>
@@ -53,6 +56,7 @@
 #include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/BToonShadingRig.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/Grass.h>
 #include <assetlib_structs/ImageData.h>
@@ -444,6 +448,11 @@ namespace game
 			for (const auto& [slot, geom] : m_Geoms) m_Scene->DeleteGeom(geom.handle);
 			m_Geoms.clear();
 
+			// Below the instances that hold them; nothing else does.
+			for (const auto& [key, rig] : m_ToonShadingRigs)
+				m_Scene->DeleteToonShadingRig(rig.handle);
+			m_ToonShadingRigs.clear();
+
 			// Below the geoms that bind them, above the materials they shade through.
 			for (const auto& [key, look] : m_GrassByPath) m_Scene->DeleteGrass(look.handle);
 			m_GrassByPath.clear();
@@ -709,6 +718,11 @@ namespace game
 				if (record.submeshMaterials[i].IsValid())
 					m_Scene->SetSubmeshMaterial(record.handle, i, record.submeshMaterials[i]);
 			AttachMeshGrass(record, loaded, meshIndex);
+			record.toonShadingRig = AcquireToonShadingRig(
+				resolved.document,
+				resolved.document.skeleton,
+				nullptr,
+				ToonShadingRigPose::kBindPose);
 		}
 		catch (...)
 		{
@@ -1032,9 +1046,14 @@ namespace game
 			record.skinnedAnimations        = animationsNorm;
 			// The rig's, not this call's: a shared rig hands back the set it was built with, and
 			// recording the empty request instead would later refuse this geom its own set.
-			record.skinnedSpaces = rig.spaces;
-			record.skinnedBlend  = rig.blend;
-			record.refCount      = 1;
+			record.skinnedSpaces  = rig.spaces;
+			record.skinnedBlend   = rig.blend;
+			record.refCount       = 1;
+			record.toonShadingRig = AcquireToonShadingRig(
+				resolved.document,
+				animations.skeleton,
+				&skeleton,
+				ToonShadingRigPose::kPosed);
 
 			const uint32_t slot = record.handle.handle.index;
 			m_GeomByPath.emplace(key, slot);
@@ -1371,6 +1390,7 @@ namespace game
 		}
 
 		const bgl::MeshInstanceHandle instance = view->CreateStaticMeshInstance(desc);
+		AttachToonShadingRig(it->second, *view, instance);
 
 		RegisterInstance(std::move(view), geom.handle.index, instance);
 
@@ -1439,6 +1459,7 @@ namespace game
 		}
 
 		const bgl::MeshInstanceHandle instance = view->CreateSkinnedMeshInstance(desc);
+		AttachToonShadingRig(it->second, *view, instance);
 
 		RegisterInstance(std::move(view), geom.handle.index, instance);
 
@@ -1538,6 +1559,97 @@ namespace game
 		for (const std::string& look : record.grassLooks)
 			if (!look.empty())
 				ReleaseGrassLook(look);
+
+		// After the geom for the reason DeleteRig is: a placement of it still holds the rig until
+		// then, and DeleteToonShadingRig refuses one that is held.
+		if (!record.toonShadingRig.empty())
+			ReleaseToonShadingRig(record.toonShadingRig);
+	}
+
+	std::string
+	AssetManager::AcquireToonShadingRig(
+		const assetlib::ImportDocument& document,
+		const std::string_view          skeletonKey,
+		const assetlib::Skeleton*       skeleton,
+		const ToonShadingRigPose        pose) noexcept
+	{
+		if (document.toonShadingRig.empty())
+			return {};
+
+		const std::string_view path = document.toonShadingRig;
+		try
+		{
+			// The desc depends on the skeleton the head bone resolves against and on whether the
+			// mesh is posed, so those key it as well as the document.
+			const std::string normalized = assetlib::normalizePath(path);
+			const std::string key        = std::format(
+				"{}#{}#{}",
+				normalized,
+				skeletonKey,
+				pose == ToonShadingRigPose::kPosed ? "posed" : "bind");
+
+			if (const auto it = m_ToonShadingRigs.find(key); it != m_ToonShadingRigs.end())
+			{
+				++it->second.refCount;
+				return key;
+			}
+
+			const auto rig = m_Store.Load<assetlib::BToonShadingRig>(normalized);
+			if (skeleton == nullptr && !rig.headBone.empty() && !skeletonKey.empty())
+				skeleton = &ReadSkeleton(skeletonKey);
+
+			const bgl::ToonShadingRigHandle handle =
+				m_Scene->AddToonShadingRig(ToonShadingRigDescOf(rig, skeleton, pose));
+			m_ToonShadingRigs.emplace(key, ToonShadingRigRecord{ handle, 1 });
+			return key;
+		}
+		catch (const std::exception& e)
+		{
+			// Left off rather than failing the mesh, as an avatar that cannot be resolved leaves a
+			// rig unplanted: the character still draws, cel shaded.
+			logger::warn(
+				"AssetManager: the toon shading rig '{}' is left off '{}': {}",
+				path,
+				document.source,
+				e.what());
+			return {};
+		}
+	}
+
+	void
+	AssetManager::ReleaseToonShadingRig(const std::string& key)
+	{
+		const auto it = m_ToonShadingRigs.find(key);
+		if (it == m_ToonShadingRigs.end())
+			return;
+
+		core::ensure(it->second.refCount > 0, "AssetManager: toon shading rig reference underflow");
+		if (--it->second.refCount > 0)
+			return;
+
+		m_Scene->DeleteToonShadingRig(it->second.handle);
+		m_ToonShadingRigs.erase(it);
+	}
+
+	void
+	AssetManager::AttachToonShadingRig(
+		const GeomRecord&             geom,
+		bgl::ISceneView&              view,
+		const bgl::MeshInstanceHandle instance)
+	{
+		if (geom.toonShadingRig.empty())
+			return;
+
+		try
+		{
+			view.SetToonShadingRig(instance, m_ToonShadingRigs.at(geom.toonShadingRig).handle);
+		}
+		catch (...)
+		{
+			// The instance is not registered yet, so nothing else would delete it.
+			view.DeleteMeshInstance(instance);
+			throw;
+		}
 	}
 
 	void
@@ -2148,5 +2260,14 @@ namespace game
 	{
 		const auto it = m_Geoms.find(geom.handle.index);
 		return it == m_Geoms.end() ? 0 : it->second.refCount;
+	}
+
+	uint32_t
+	AssetManager::ToonShadingRigRefCount(bgl::ToonShadingRigHandle rig) const noexcept
+	{
+		const auto it = std::ranges::find(m_ToonShadingRigs, rig, [](const auto& entry) {
+			return entry.second.handle;
+		});
+		return it == m_ToonShadingRigs.end() ? 0 : it->second.refCount;
 	}
 }

@@ -67,7 +67,8 @@ separate snapshot, and embedded grass is adapted to the renderer's existing gras
 
 ```
 instance -> geom -> material -> texture
-         |       \-> grass look -> material
+         |       |-> grass look -> material
+         |       \-> toon shading rig
          \-> material (per-submesh override, when one is worn)
 ```
 
@@ -79,6 +80,12 @@ snapshot names, keyed by path like a material; a look holds its material. Packed
 about and its fields drawn bare. `SetGrassLook` redraws a held look from a document that is not
 saved, in place, for an editor dragging a value: every geom drawing it follows, and the material's
 reference moves only once the renderer has taken the new look.
+
+A source whose `.bimport` names a `.btoonrig` gets the toon shading rig the same way: the geom holds
+one reference, keyed by the document, the skeleton its head bone resolves against and whether the
+geom is posed, and every placement the manager makes of the geom is given it. The scene's rig is
+deleted with the last geom holding it. A rig that cannot be drawn is warned about and left off, as
+an avatar naming a missing bone is ([Toon Shading Rig](../../docs/toon_shading_rig.md) § Loading).
 
 That is not just tidy — **it is what makes deletion safe**. `bgl` deliberately tracks nothing, and
 documents preconditions it cannot check: a material may not be deleted while a submesh is bound to it,
