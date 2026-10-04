@@ -21,6 +21,7 @@
 #include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/BToonShadingRig.h>
 #include <assetlib_structs/Skeleton.h>
 
 #include "material/material_texture_refs.h"
@@ -220,6 +221,9 @@ namespace assetlib
 				return AssetCodec<BlendSet>::Serialize(AssetCodec<BlendSet>::Deserialize(bytes));
 			case AssetType::kGrass:
 				return AssetCodec<BGrass>::Serialize(AssetCodec<BGrass>::Deserialize(bytes));
+			case AssetType::kToonShadingRig:
+				return AssetCodec<BToonShadingRig>::Serialize(
+					AssetCodec<BToonShadingRig>::Deserialize(bytes));
 			// No container to re-serialize, so nothing a schema change could have staled.
 			case AssetType::kTexture:
 			case AssetType::kImportDocument:

@@ -53,6 +53,7 @@ namespace assetlib
 	struct BlendSet;
 	struct BGrass;
 	struct BGrassFields;
+	struct BToonShadingRig;
 	struct EnvMapRoute;
 
 	enum class Ktx2Decode : uint32_t;
@@ -973,6 +974,10 @@ namespace assetlib
 		/** Each field of a mesh source's grass: its name, look, chunks and clumps. */
 		[[nodiscard]] std::string
 		Describe(const BGrassFields& grass) const;
+
+		/** A toon shading rig's head binding, face light and edits, the head bone as named. */
+		[[nodiscard]] std::string
+		Describe(const BToonShadingRig& rig) const;
 
 	private:
 		struct ImportIndex;

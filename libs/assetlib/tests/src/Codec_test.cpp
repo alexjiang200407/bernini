@@ -9,6 +9,7 @@
 #include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/BToonShadingRig.h>
 #include <assetlib_structs/Skeleton.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -134,6 +135,12 @@ TEST_CASE("The store writes exactly what the codec encodes", "[codec]")
 		BGrass grass;
 		CheckStoreWritesCodecBytes(grass, "a.bgrass");
 	}
+
+	SECTION("btoonrig")
+	{
+		BToonShadingRig rig;
+		CheckStoreWritesCodecBytes(rig, "a.btoonrig");
+	}
 }
 
 TEST_CASE("The container table is the only list", "[codec]")
@@ -190,6 +197,7 @@ TEST_CASE("The container table is the only list", "[codec]")
 		CHECK_FALSE(containerKindFor(AssetType::kImportDocument).IsCacheEntry());
 		CHECK_FALSE(containerKindFor(AssetType::kBlend).IsCacheEntry());
 		CHECK_FALSE(containerKindFor(AssetType::kGrass).IsCacheEntry());
+		CHECK_FALSE(containerKindFor(AssetType::kToonShadingRig).IsCacheEntry());
 	}
 }
 

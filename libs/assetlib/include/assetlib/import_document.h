@@ -47,7 +47,7 @@ namespace assetlib
 	 *
 	 * Two halves with different duties: the `parameters` object changes what the importer computes,
 	 * so its serialized subtree is what the cache key hashes; `source`, `bindings`, `materialOverrides`,
-	 * `skeleton`,
+	 * `skeleton`, `toonShadingRig`,
 	 * `outputs`, `textureDir`, the two stamp-and-token pairs and the per-part hashes an environment
 	 * was written with never key -- none of them changes what the importer computes. Keys a reader
 	 * does not know stay in the half they arrived in
@@ -111,6 +111,12 @@ namespace assetlib
 
 		/** The `.bskel` this source's joint indices address; empty for a source with no rig. */
 		std::string skeleton;
+
+		/**
+		 * The `.btoonrig` the character's face is shaded with, as a mount key; empty for none. One
+		 * per character, whatever its materials: a rig belongs to a face, not to a look.
+		 */
+		std::string toonShadingRig;
 
 		/** Every container this source produced, as mount keys, sorted. See docs/asset_containers.md. */
 		std::vector<std::string> outputs;

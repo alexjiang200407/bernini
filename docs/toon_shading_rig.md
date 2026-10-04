@@ -3,7 +3,8 @@
 A toon shading rig (`ToonShadingRigDesc`, the Shading Rig of Petikam, Anjyo & Rhee 2021) is a face's
 art-directed shadow and light edits, each keyed on the sun's direction in head space. This page is
 what happens to one each frame: which placements are evaluated, where a placement's head is, how the
-keys become the block a face's pixels read, and how those pixels find it. The API is in
+keys become the block a face's pixels read, and how those pixels find it -- then the `.btoonrig`
+document one is authored as. The API is in
 [bgl API](bgl_api.md); the material half the toon character model shades with is in
 [Game-defined surfaces](game_defined_surfaces.md) § Toon surfaces.
 
@@ -87,6 +88,41 @@ is `face`, each by as much as it is:
   with `e = 1 - anisotropy`; then faded out over the last quarter of its radius, cut where the twist
   passes a quarter turn, and scaled by how far the pixel's normal -- pulled toward the head's
   sphere by its normal smoothing -- faces the edit.
+
+## The document
+
+A rig is authored as a `.btoonrig` ([BToonShadingRig.h](../libs/assetlib_structs/include/assetlib_structs/BToonShadingRig.h)),
+an authored text document like a `.bgrass`: canonical JSON, unknown keys kept at every depth -- the
+top, `faceLight`, each edit and each key -- and a known key of the wrong shape refused. A character's
+`.bimport` names it under `toonShadingRig`, one per character whatever its materials, so a delete,
+a rename, `refs` and `pack` see the edge ([Asset Containers](asset_containers.md)).
+
+```json
+{
+	"edits": [ { "keySharpness": 10.0, "mirrored": true, "name": "nose",
+	             "keys": [ { "anisotropy": 0.55, "bend": 0, "bulge": 0, "gain": -0.85,
+	                         "light": [0.6, 0.2, 0.77], "normalSmoothing": 0.5,
+	                         "position": [0.01, 0.03, 0.09], "radius": 0.07,
+	                         "rotation": 80.2, "sharpness": 1.0, "size": 0.115 } ] } ],
+	"faceLight": { "azimuthFadeAmount": 0.75, "azimuthFadeEnd": 80, "azimuthFadeStart": 35,
+	               "maxAzimuth": 45, "maxElevation": 25, "minElevation": -10 },
+	"fadeEndPixels": 48.0, "fadeStartPixels": 96.0, "headBone": "head", "headRadius": 0.12,
+	"headToBone": [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+}
+```
+
+Each value is the `ToonShadingRigDesc` field of its name, with three differences:
+
+- **Angles are degrees** -- a key's `rotation` and every `faceLight` value -- and become radians where
+  the desc is built.
+- **`headBone` is a bone's name**, resolved against the mesh's `.bskel` where the two meet
+  (`assetlib::resolveHeadBone`), never an index: a re-import that reorders the rig must not move the
+  head. Absent, the placement's own frame is the head; an empty name is refused.
+- **`headToBone` is four rows of four**, as a matrix is written: the translation is the last column.
+
+A key needs `light` and `position`, and an edit needs `keys`; every other value takes the desc's
+default when absent, and `faceLight` absent remaps nothing. An edit's `name` is the author's label
+and nothing reads it. Ranges are not checked on read: `IScene::AddToonShadingRig` states them once.
 
 ## Cost
 

@@ -15,6 +15,7 @@ namespace assetlib
 	struct BlendSet;
 	struct BGrass;
 	struct BGrassFields;
+	struct BToonShadingRig;
 
 	/**
 	 * Renders the contents of an asset as human-readable text -- the counterpart of writeObj for the
@@ -119,6 +120,14 @@ namespace assetlib
 	/** A `.bgrassfields`: each field's name, look, and how many chunks and clumps it holds. */
 	[[nodiscard]] std::string
 	describe(const BGrassFields& grass);
+
+	/**
+	 * A `.btoonrig`: its head's binding and fade, the face light in degrees, and each edit with
+	 * its keys. The head bone is printed as named, unresolved -- the skeleton is the mesh's, and
+	 * the rig names none.
+	 */
+	[[nodiscard]] std::string
+	describe(const BToonShadingRig& rig);
 
 	/**
 	 * The mounted form of describe: each routed source stamped, so a stale bake is visible.
