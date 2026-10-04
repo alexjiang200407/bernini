@@ -32,7 +32,7 @@ Bare, it renders `assets/Data`'s apples — the one project `copy_assets` stages
 | `--fps` | 30 | frame `i` renders at clip time `i / fps` |
 | `--warmup` | 8 | frames rendered first, held at time 0 |
 | `--env`, `--env-root` | `forest.benv`, `--project` | the environment it is lit by, and the root that is keyed under |
-| `--sun` | 0, off | an analytic sun's intensity, in the irradiance map's units — **additive** on `--env`, which already integrates whatever sun its source HDR held |
+| `--sun` | 0, off | an analytic sun's intensity, in the irradiance map's units — **additive** on `--env`, which already integrates whatever sun its source HDR held. It sets both of the view's suns alike, the PBR one and the toon character model's, so a headless render has one sun on screen |
 | `--sun-azimuth`, `--sun-elevation` | 35, 38 | where that sun sits, in degrees: azimuth about the up axis from +Z toward +X, elevation above the horizon |
 | `--sun-color` | `1 1 1` | its colour, as three floats |
 | `-w`, `-h`, `--taa` | 1280, 720, on | the output, as a viewport renders it |
@@ -96,6 +96,9 @@ far run shows the field thinning to nothing; its `Forward Grass 0` row is what t
   `--sun-elevation` is how to look at it under a side, a front and an overhead sun.
 - **Know whether it was lit.** The test project has no environment of its own; without
   `--env-root "$PWD/assets/Data"` it renders unlit, which is a black image, and says `unlit`.
+- **One sun drives both lights.** A view has two -- the one PBR and every other model read, and
+  the toon character model's (`SetToonDirectionalLight`) -- and the `--sun` options set them alike.
+  Without `--sun` a toon character draws black: it reads no environment.
 - **The sun is off unless asked for, and it does not replace the environment.** `bgl`'s own default
   intensity is 0, so every render this tool made before there was a sun is the render it still
   makes. Switched on with `--sun`, it *adds* to `--env`, whose cubes already integrate whatever sun

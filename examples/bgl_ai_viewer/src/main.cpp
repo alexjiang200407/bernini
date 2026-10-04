@@ -645,15 +645,19 @@ try
 	const bool envLit = headless::LightView(view, envAssets, opts.env);
 
 	// Additive on the environment above, which already integrates whatever sun its source HDR held
-	// -- so a model measured under both is measured under two suns. See docs/ai_viewer.md.
+	// -- so a model measured under both is measured under two suns. One sun on screen: the PBR
+	// sun and the toon character model's are set alike. See docs/ai_viewer.md.
 	if (opts.sunIntensity > 0.0f)
 	{
-		view->SetPbrDirectionalLight(
-			{ .direction = headless::SunDirection(
-				  glm::radians(opts.sunAzimuth),
-				  glm::radians(opts.sunElevation)),
-		      .color     = glm::vec3(opts.sunColor[0], opts.sunColor[1], opts.sunColor[2]),
-		      .intensity = opts.sunIntensity });
+		const auto sun = bgl::DirectionalLightDesc{
+			.direction = headless::SunDirection(
+				glm::radians(opts.sunAzimuth),
+				glm::radians(opts.sunElevation)),
+			.color     = glm::vec3(opts.sunColor[0], opts.sunColor[1], opts.sunColor[2]),
+			.intensity = opts.sunIntensity,
+		};
+		view->SetPbrDirectionalLight(sun);
+		view->SetToonDirectionalLight(sun);
 	}
 
 	const bool lit = envLit || opts.sunIntensity > 0.0f;
