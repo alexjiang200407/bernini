@@ -1,4 +1,6 @@
 import Entry;
+import MeshInstance;
+import RangeWithCount;
 import ToonShadingRig;
 
 // A run of a view's placements that share one toon shading rig: a hero's is one placement, an
@@ -7,9 +9,7 @@ import ToonShadingRig;
 // being the running count of placements before this range.
 public struct ToonShadingRigRange
 {
-    // A MeshInstance entry; the run is [firstPlacement, firstPlacement + count).
-    public uint firstPlacement;
-    public uint count;
+    public RangeWithCount<MeshInstance> placements;
     public uint firstThread;
     public Entry<ToonShadingRig> rig;
 };

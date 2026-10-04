@@ -52,7 +52,7 @@ namespace bgl
 		for (idl::ToonShadingRigRange& range : ranges)
 		{
 			range.firstThread = placements;
-			placements += range.count;
+			placements += range.placements.count;
 		}
 
 		m_Ranges.Assign(std::span<const idl::ToonShadingRigRange>(ranges));

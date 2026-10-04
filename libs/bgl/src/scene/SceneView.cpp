@@ -1562,10 +1562,10 @@ namespace bgl
 			const ToonShadingRigHandle rig = m_MeshBuffer.MetaAt(meshIndex).toonShadingRig;
 			if (rig.IsValid())
 			{
-				auto range           = idl::ToonShadingRigRange();
-				range.firstPlacement = meshIndex;
-				range.count          = 1;
-				range.rig            = rig.handle;
+				auto range                         = idl::ToonShadingRigRange();
+				range.placements.range.offsetStart = meshIndex;
+				range.placements.count             = 1;
+				range.rig                          = rig.handle;
 				ranges.push_back(range);
 			}
 		}
@@ -1579,10 +1579,10 @@ namespace bgl
 			const MeshInstanceBlock& block = m_InstanceBlocks[index];
 			if (block.toonShadingRig.IsValid())
 			{
-				auto range           = idl::ToonShadingRigRange();
-				range.firstPlacement = block.range.first;
-				range.count          = block.range.count;
-				range.rig            = block.toonShadingRig.handle;
+				auto range                         = idl::ToonShadingRigRange();
+				range.placements.range.offsetStart = block.range.first;
+				range.placements.count             = block.range.count;
+				range.rig                          = block.toonShadingRig.handle;
 				ranges.push_back(range);
 			}
 		}
