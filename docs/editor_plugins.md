@@ -303,7 +303,8 @@ exercise both services through the end of viewport teardown.
   plugins. `AddAction` is a menu-bar/content-menu contract, not a toolbar-button contract.
 - **Importers:** the source is an OS path, the destination a project folder key. Store operations
   own writes. The host reports thrown errors; a successful write calls `AssetChanged`, which drops
-  cached previews and their render assets because another document may reference the changed key.
+  the changed key's preview and every preview drawn from it -- a mesh wearing a changed material --
+  and redoes any of them still being produced. Every other preview stays cached.
 - **The host's own mesh import** runs the other way, and the two are not alternatives.
   `IEditorImporter` is a plugin *supplying* an import for an extension the host would not otherwise
   know; `IEditorHost::ImportMeshSource` is a plugin *asking* for the glTF cook the editor already

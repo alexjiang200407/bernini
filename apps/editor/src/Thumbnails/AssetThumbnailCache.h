@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QHash>
 #include <QQueue>
 #include <QThreadPool>
 #include <bgl/IRenderTarget.h>
@@ -20,6 +21,7 @@
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/MeshInstanceHandle.h>
 #include <bgl/types/RenderJob.h>
+#include <core/str/str.h>
 #include <cstdint>
 #include <editor_plugin_api/IEditorRegistry.h>
 #include <filesystem>
@@ -34,6 +36,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 class QImage;
@@ -99,9 +102,13 @@ public:
 		m_ProjectPostProcessType = postProcessType;
 	}
 
-	/** Drops previews and in-flight work after an asset write, including previews that depend on it. */
+	/**
+	 * Drops the preview of the asset at mount key `key` after a write to it, and every preview drawn
+	 * from it -- a mesh wearing a changed material. Work already under way on any of them is redone
+	 * when it lands rather than stored. Every other preview stays.
+	 */
 	void
-	Invalidate();
+	Invalidate(std::string_view key);
 
 	// Whether `path` names an asset this cache knows how to draw.
 	[[nodiscard]] static bool
@@ -136,6 +143,14 @@ private:
 		kMaterial,
 	};
 
+	// What a preview was drawn from. A plugin describes its thumbnail from whatever it reads in the
+	// store, so a described one is drawn from anything.
+	struct DrawnFrom
+	{
+		std::vector<std::string> keys;
+		bool                     anything = false;
+	};
+
 	// The worker's CookStaticMesh output for every mesh the nodes reference, keyed by mesh index.
 	// The CPU half of AddStaticMeshGeom, taken off the render thread; the commit consumes the entries.
 	using CookedMeshes = std::unordered_map<uint32_t, bgl::PreparedStaticMesh>;
@@ -154,8 +169,11 @@ private:
 		qint64                                 stamp = 0;
 		QString                                failure;
 		std::string                            material;
+		std::string                            geometry;
 		std::optional<bgl::Camera>             camera;
-		uint64_t                               epoch = 0;
+		uint64_t                               epoch     = 0;
+		bool                                   described = false;
+		DrawnFrom                              drawnFrom;
 	};
 
 	// One asset's trip through the GPU: built, drawn and submitted on its first tick, resolved on a
@@ -179,6 +197,29 @@ private:
 	// materials and leaves the frame loop.
 	void
 	PumpQueue();
+
+	// The mount keys `pending` is drawn from: itself, its geometry, its materials and their textures.
+	[[nodiscard]] DrawnFrom
+	DrawnFromOf(const PendingRender& pending) const;
+
+	// Records the revision `path`'s claim begins at, having just been claimed.
+	void
+	Claimed(const QString& path);
+
+	// Whether something `drawnFrom` names was written after `path` was claimed, so what the claim
+	// read may be the old content.
+	[[nodiscard]] bool
+	ChangedSinceClaim(const QString& path, const DrawnFrom& drawnFrom) const;
+
+	// Reject for a plugin-described thumbnail: the provider failed on what it read in the store, so
+	// any write may be the one that fixes it.
+	void
+	RejectDescribed(const QString& path, qint64 stamp, const QString& reason = {});
+
+	// Ends `path`'s claim without storing what it produced and asks for it again, because something
+	// it was drawn from was written while it was being produced.
+	void
+	Redo(const QString& path);
 
 	// A finished shot arriving back on the UI thread. `image` is null when the render failed; a stale
 	// `epoch` means the shot was cancelled after it completed, and its claim is already gone.
@@ -281,6 +322,24 @@ private:
 	// Stale-completion guard: bumped by CancelShot, so a completion posted before the cancel ran is
 	// recognized and dropped rather than stored under a dead claim.
 	uint64_t m_Epoch = 0;
+
+	// Bumped by every Invalidate. A claim records the revision it began at, and an asset in
+	// m_ChangedAt past it was written after the claim read it.
+	uint64_t                               m_Revision = 0;
+	core::str::unordered_str_map<uint64_t> m_ChangedAt;
+	QHash<QString, uint64_t>               m_ClaimedAt;
+
+	// What each stored preview was drawn from, so a write finds the previews it outdated.
+	QHash<QString, DrawnFrom> m_DrawnFrom;
+
+	// What the in-flight shot is drawn from. One shot at a time.
+	DrawnFrom m_ShotDrawnFrom;
+
+	// What the batch's shots were drawn from. A write to one of them leaves m_ThumbAssets sharing
+	// the old upload by path, so the batch's materials are released before the next shot.
+	std::unordered_set<std::string, core::str::transparent_string_hash, std::equal_to<>>
+		 m_BatchDrawnFrom;
+	bool m_BatchStale = false;
 
 	// The frame-loop registration that drives Advance, held only while a batch renders. 0 when
 	// detached.

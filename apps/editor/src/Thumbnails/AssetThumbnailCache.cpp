@@ -392,28 +392,93 @@ AssetThumbnailCache::SetStore(const assetlib::AssetStore* store)
 	// against the old data root.
 	Clear();
 	m_Queue.clear();
+	m_DrawnFrom.clear();
+	m_ChangedAt.clear();
+	m_ClaimedAt.clear();
 }
 
 void
-AssetThumbnailCache::Invalidate()
+AssetThumbnailCache::Invalidate(const std::string_view key)
 {
-	CancelShot();
-	ReleaseGeometry();
-	ReleaseMaterials();
-	m_Queue.clear();
-	Clear();
+	m_ChangedAt.insert_or_assign(std::string(key), ++m_Revision);
 
-	if (!IsReady())
-		return;
+	for (auto it = m_DrawnFrom.begin(); it != m_DrawnFrom.end();)
+	{
+		const DrawnFrom& drawnFrom = it.value();
+		if (!drawnFrom.anything && std::ranges::find(drawnFrom.keys, key) == drawnFrom.keys.end())
+		{
+			++it;
+			continue;
+		}
 
-	m_Desc.renderer->Invoke([&] {
-		m_ThumbAssets.reset();
-		if (m_Store != nullptr)
-			m_ThumbAssets = std::make_unique<game::AssetManager>(
-				m_Desc.renderer->GetScene(),
-				m_Store->GetDataRoot(),
-				game::AssetManagerOptions{ .hashedAsBlend = true });
+		Remove(it.key());
+		it = m_DrawnFrom.erase(it);
+	}
+
+	if (m_BatchDrawnFrom.contains(key))
+		m_BatchStale = true;
+}
+
+AssetThumbnailCache::DrawnFrom
+AssetThumbnailCache::DrawnFromOf(const PendingRender& pending) const
+{
+	auto keys = std::vector<std::string>();
+	if (std::string self = ToRelative(pending.path); !self.empty())
+		keys.push_back(std::move(self));
+	if (!pending.geometry.empty())
+		keys.push_back(pending.geometry);
+	if (!pending.material.empty())
+		keys.push_back(pending.material);
+	if (pending.mesh != nullptr)
+	{
+		for (const std::string& material : pending.mesh->bindings.submeshMaterials)
+		{
+			if (!material.empty())
+				keys.push_back(material);
+		}
+	}
+	if (pending.prefetch != nullptr)
+	{
+		for (const auto& [texture, image] : *pending.prefetch) keys.push_back(texture);
+	}
+
+	std::ranges::sort(keys);
+	const auto duplicates = std::ranges::unique(keys);
+	keys.erase(duplicates.begin(), duplicates.end());
+	return DrawnFrom{ .keys = std::move(keys), .anything = pending.described };
+}
+
+void
+AssetThumbnailCache::Claimed(const QString& path)
+{
+	m_ClaimedAt.insert(path, m_Revision);
+}
+
+bool
+AssetThumbnailCache::ChangedSinceClaim(const QString& path, const DrawnFrom& drawnFrom) const
+{
+	const uint64_t claimedAt = m_ClaimedAt.value(path);
+	if (drawnFrom.anything)
+		return m_Revision > claimedAt;
+
+	return std::ranges::any_of(drawnFrom.keys, [&](const std::string& key) {
+		const auto it = m_ChangedAt.find(key);
+		return it != m_ChangedAt.end() && it->second > claimedAt;
 	});
+}
+
+void
+AssetThumbnailCache::RejectDescribed(const QString& path, const qint64 stamp, const QString& reason)
+{
+	Reject(path, stamp, reason);
+	m_DrawnFrom.insert(path, DrawnFrom{ .anything = true });
+}
+
+void
+AssetThumbnailCache::Redo(const QString& path)
+{
+	Abandon(path);
+	Request(path);
 }
 
 std::filesystem::path
@@ -479,6 +544,7 @@ AssetThumbnailCache::Request(const QString& path)
 		const std::optional<qint64> claimed = BeginRequest(path);
 		if (!claimed)
 			return;
+		Claimed(path);
 		const std::string key = ToRelative(path);
 		if (key.empty())
 		{
@@ -500,23 +566,36 @@ AssetThumbnailCache::Request(const QString& path)
 			}
 			QMetaObject::invokeMethod(
 				this,
-				[this, path, stamp, epoch, thumbnail = std::move(thumbnail), failure]() mutable {
+				[this,
+			     path,
+			     key,
+			     stamp,
+			     epoch,
+			     thumbnail = std::move(thumbnail),
+			     failure]() mutable {
 					if (epoch != m_Epoch || !IsClaimed(path))
 						return;
 					if (!failure.isEmpty())
 					{
-						Reject(path, stamp, failure);
+						RejectDescribed(path, stamp, failure);
 						return;
 					}
 					if (auto* image = std::get_if<QImage>(&thumbnail))
 					{
+						auto drawnFrom = DrawnFrom{ .keys = { key }, .anything = true };
+						if (ChangedSinceClaim(path, drawnFrom))
+						{
+							Redo(path);
+							return;
+						}
 						Store(path, QPixmap::fromImage(*image), stamp);
+						m_DrawnFrom.insert(path, std::move(drawnFrom));
 						return;
 					}
 					const auto* scene = std::get_if<editor::ThumbnailScene>(&thumbnail);
 					if (scene == nullptr)
 					{
-						Reject(path, stamp);
+						RejectDescribed(path, stamp);
 						return;
 					}
 
@@ -528,7 +607,7 @@ AssetThumbnailCache::Request(const QString& path)
 						material = true;
 					if (material && !scene->material.has_value())
 					{
-						Reject(
+						RejectDescribed(
 							path,
 							stamp,
 							editor::Localize(
@@ -542,6 +621,7 @@ AssetThumbnailCache::Request(const QString& path)
 				                 material,
 				                 stamp,
 				                 epoch,
+				                 geometry,
 				                 materialKey = scene->material.value_or(std::string()),
 				                 camera      = scene->camera](
 									std::shared_ptr<assetlib::RegenMesh>   mesh,
@@ -555,6 +635,7 @@ AssetThumbnailCache::Request(const QString& path)
 					         material,
 					         stamp,
 					         epoch,
+					         geometry,
 					         materialKey,
 					         camera,
 					         mesh     = std::move(mesh),
@@ -565,14 +646,16 @@ AssetThumbnailCache::Request(const QString& path)
 								pending.path = path;
 								pending.type =
 									material ? ThumbnailType::kMaterial : ThumbnailType::kMesh;
-								pending.mesh     = std::move(mesh);
-								pending.cooked   = std::move(cooked);
-								pending.prefetch = std::move(prefetch);
-								pending.stamp    = stamp;
-								pending.failure  = QString::fromStdString(error);
-								pending.material = materialKey;
-								pending.camera   = camera;
-								pending.epoch    = epoch;
+								pending.mesh      = std::move(mesh);
+								pending.cooked    = std::move(cooked);
+								pending.prefetch  = std::move(prefetch);
+								pending.stamp     = stamp;
+								pending.failure   = QString::fromStdString(error);
+								pending.material  = materialKey;
+								pending.geometry  = geometry;
+								pending.camera    = camera;
+								pending.epoch     = epoch;
+								pending.described = true;
 								Enqueue(path, pending.type, std::move(pending));
 							},
 							Qt::QueuedConnection);
@@ -588,7 +671,7 @@ AssetThumbnailCache::Request(const QString& path)
 					}
 					catch (const std::exception& error)
 					{
-						Reject(path, stamp, QString::fromUtf8(error.what()));
+						RejectDescribed(path, stamp, QString::fromUtf8(error.what()));
 						return;
 					}
 					m_Pool.start(new LoadTask(
@@ -615,6 +698,7 @@ AssetThumbnailCache::Request(const QString& path)
 	const std::optional<qint64> claimed = BeginRequest(path);
 	if (!claimed)
 		return;
+	Claimed(path);
 
 	const qint64   stamp = *claimed;
 	const uint64_t epoch = m_Epoch;
@@ -680,10 +764,14 @@ AssetThumbnailCache::Enqueue(const QString& path, ThumbnailType type, PendingRen
 			"AssetThumbnail: cannot produce '%s': %s",
 			qPrintable(path),
 			qPrintable(pending.failure));
-		Reject(path, pending.stamp, pending.failure);
+		if (pending.described)
+			RejectDescribed(path, pending.stamp, pending.failure);
+		else
+			Reject(path, pending.stamp, pending.failure);
 		return;
 	}
 
+	pending.drawnFrom = DrawnFromOf(pending);
 	m_Queue.enqueue(std::move(pending));
 	PumpQueue();
 }
@@ -693,6 +781,10 @@ AssetThumbnailCache::PumpQueue()
 {
 	if (m_ShotInFlight)
 		return;
+
+	// Read before a write to something it is drawn from: rendering it would only store the old look.
+	while (!m_Queue.isEmpty() && ChangedSinceClaim(m_Queue.head().path, m_Queue.head().drawnFrom))
+		Redo(m_Queue.dequeue().path);
 
 	if (m_Queue.isEmpty())
 	{
@@ -706,11 +798,16 @@ AssetThumbnailCache::PumpQueue()
 	// The claim ends when the shot's completion lands in OnShotDone, many frame-loop ticks from
 	// now -- not here. A repaint in between misses on Lookup, and would otherwise restart the read
 	// and render.
+	if (m_BatchStale)
+		ReleaseMaterials();
+
 	m_ShotInFlight = true;
 	AttachToFrameLoop();
 
 	PendingRender  pending = m_Queue.dequeue();
 	const uint64_t epoch   = pending.epoch;
+	m_ShotDrawnFrom        = pending.drawnFrom;
+	m_BatchDrawnFrom.insert(pending.drawnFrom.keys.begin(), pending.drawnFrom.keys.end());
 	m_Desc.renderer->Post([this, pending = std::move(pending), epoch]() mutable {
 		m_Shot.emplace();
 		m_Shot->item  = std::move(pending);
@@ -731,9 +828,18 @@ AssetThumbnailCache::OnShotDone(
 		return;
 
 	if (image.isNull())
+	{
 		Abandon(path);
+	}
+	else if (ChangedSinceClaim(path, m_ShotDrawnFrom))
+	{
+		Redo(path);
+	}
 	else
+	{
 		Store(path, QPixmap::fromImage(image), stamp);
+		m_DrawnFrom.insert(path, std::move(m_ShotDrawnFrom));
+	}
 
 	m_ShotInFlight = false;
 	PumpQueue();
@@ -1106,6 +1212,9 @@ AssetThumbnailCache::ReleaseGeometry()
 void
 AssetThumbnailCache::ReleaseMaterials()
 {
+	m_BatchDrawnFrom.clear();
+	m_BatchStale = false;
+
 	if (m_ThumbAssets == nullptr || !IsReady())
 	{
 		m_Materials.clear();

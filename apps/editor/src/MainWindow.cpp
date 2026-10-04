@@ -1396,7 +1396,7 @@ MainWindow::SetActiveProject(assetlib::Project project)
 					m_ContentExplorer->update();
 					if (m_Thumbnails != nullptr)
 					{
-						m_Thumbnails->Invalidate();
+						m_Thumbnails->Invalidate(key);
 						m_Thumbnails->Request(
 							QString::fromStdWString(
 								m_Project->GetStore().ResolveWritePath(key).wstring()));
