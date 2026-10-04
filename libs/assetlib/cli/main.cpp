@@ -29,6 +29,7 @@
 #include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
+#include <assetlib_structs/BToonShadingRig.h>
 #include <core/err/util.h>
 #include <core/file/file.h>
 #include <core/profiling/MemoryReport.h>
@@ -114,6 +115,8 @@ namespace
 			return "shades its blades with";
 		case assetlib::RefKind::kFieldGrass:
 			return "grows grass, as a point primitive's look,";
+		case assetlib::RefKind::kToonShadingRig:
+			return "shades its face with";
 		case assetlib::RefKind::kPlugin:
 			return "references";
 		}
@@ -150,12 +153,13 @@ namespace
 			const auto type = assetlib::assetTypeFromExtension(std::filesystem::path(key));
 			if (type == assetlib::AssetType::kMaterial ||
 			    type == assetlib::AssetType::kEnvironment || type == assetlib::AssetType::kAvatar ||
-			    type == assetlib::AssetType::kBlend || type == assetlib::AssetType::kGrass)
+			    type == assetlib::AssetType::kBlend || type == assetlib::AssetType::kGrass ||
+			    type == assetlib::AssetType::kToonShadingRig)
 				return *type;
 
 			core::throw_runtime_error(
 				"{} is a text document, and the only text containers this tool knows are "
-				".bmaterial, .benv, .bavatar, .bblend and .bgrass",
+				".bmaterial, .benv, .bavatar, .bblend, .bgrass and .btoonrig",
 				key);
 		}
 
@@ -836,6 +840,11 @@ main(int argc, char** argv)
 			case assetlib::AssetType::kGrass:
 			{
 				std::cout << describeAsset(store.Load<assetlib::BGrass>(key));
+				break;
+			}
+			case assetlib::AssetType::kToonShadingRig:
+			{
+				std::cout << describeAsset(store.Load<assetlib::BToonShadingRig>(key));
 				break;
 			}
 

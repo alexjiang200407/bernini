@@ -8,6 +8,7 @@
 #include "passes/draw_bucket_config.h"
 #include "scene/Scene.h"
 #include "scene/scene_buffer_names.h"
+#include "util/util.h"
 #include <array>
 #include <bgl/ISceneView.h>
 #include <bgl/idl/BaseTable.h>
@@ -35,6 +36,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace bgl
 {
@@ -60,6 +62,13 @@ namespace bgl
 			"alphaHashSeed"sv,
 			"sunDirection"sv,
 			"sunRadiance"sv,
+		};
+
+		// Only the toon character's programs declare it; see lib.forward.ToonData.
+		constexpr std::array<std::string_view, 3> c_ToonDataFields = {
+			"sunDirection"sv,
+			"sunRadiance"sv,
+			"toonShadingRigBlocks"sv,
 		};
 		// clang-format on
 
@@ -90,8 +99,10 @@ namespace bgl
 		};
 
 		// Every bucket kernel is opaque-shaped; only the shared blend kernel differs.
+		// A toon character's bucket at rest draws through MSToon, whose vertices carry the placement's
+		// toon shading rig block; its dissolve lane, and every other bucket, through the shared ones.
 		PsoConfig
-		ConfigFor(const DrawBucketDesc& desc, const DrawLane lane)
+		ConfigFor(const DrawBucketDesc& desc, const DrawLane lane, const bool toonCharacter)
 		{
 			auto config =
 				PsoConfig{ DrawBucketPixelSrc(desc),    DrawBucketCullMode(desc),   true, false,
@@ -100,6 +111,10 @@ namespace bgl
 			{
 				config.meshEntry  = "MSDissolve"sv;
 				config.pixelEntry = "PSDissolve"sv;
+			}
+			else if (toonCharacter && desc.geom != GeometryStage::kGrass)
+			{
+				config.meshEntry = "MSToon"sv;
 			}
 			return config;
 		}
@@ -200,17 +215,28 @@ namespace bgl
 					!m_DrawBucketTable->Transparent(bucket),
 					"A transparent bucket demands the shared kernel, never one of its own");
 				const DrawBucketDesc& desc = m_DrawBucketTable->Desc(bucket);
+				const auto            slot = GameSlot(desc.material);
+				const bool toon = slot.has_value() && *slot < m_ToonCharacterSlots.size() &&
+				                  m_ToonCharacterSlots[*slot];
 				ctx.pipelines->Add(
 					m_Kernels[bucket],
-					ForwardPipelineDesc(ctx.device, ConfigFor(desc, DrawLane::kAtRest)));
+					ForwardPipelineDesc(ctx.device, ConfigFor(desc, DrawLane::kAtRest, toon)));
 				if (DrawBucketDissolves(desc))
 				{
 					ctx.pipelines->Add(
 						m_DissolveKernels[bucket],
-						ForwardPipelineDesc(ctx.device, ConfigFor(desc, DrawLane::kDissolve)));
+						ForwardPipelineDesc(
+							ctx.device,
+							ConfigFor(desc, DrawLane::kDissolve, toon)));
 				}
 			}
 		}
+	}
+
+	void
+	ForwardPhases::SetToonCharacterSlots(std::vector<bool> slots)
+	{
+		m_ToonCharacterSlots = std::move(slots);
 	}
 
 	void
@@ -258,6 +284,7 @@ namespace bgl
 			.Check("viewData"sv, c_ViewDataFields)
 			.Check("materialData"sv, GetUniformKeys(c_MaterialBuffers))
 			.Check("materialData"sv, c_MaterialDataFields)
+			.Check("toonData"sv, c_ToonDataFields)
 			.Check("skinnedData"sv, GetUniformKeys(c_SkinnedBuffers));
 		GrassForwardPhase::CheckBindings(check);
 	}
@@ -312,6 +339,7 @@ namespace bgl
 		{
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
 		}
+		desc.AddBufferRead(c_ToonShadingRigBlocksName, bgpu::BarrierSyncFlag::kPixelShader);
 
 		phase.Declare(desc);
 
@@ -418,6 +446,15 @@ namespace bgl
 			matData["alphaHashSeed"].SetIfValid(draw.viewState.alphaHashSeed);
 			matData["sunDirection"].SetIfValid(draw.lighting.sunDirection);
 			matData["sunRadiance"].SetIfValid(draw.lighting.sunRadiance);
+		}
+
+		if (auto foundToonData = kernel.FindUniforms("toonData"))
+		{
+			auto& toonData = *foundToonData;
+			toonData["sunDirection"].SetIfValid(draw.lighting.toonSunDirection);
+			toonData["sunRadiance"].SetIfValid(draw.lighting.toonSunRadiance);
+			toonData["toonShadingRigBlocks"].SetIfValid(
+				resources.GetBuffer(c_ToonShadingRigBlocksName));
 		}
 	}
 

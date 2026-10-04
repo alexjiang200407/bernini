@@ -46,6 +46,9 @@ struct PostProcessData
     float gradeVignetteIntensity;
     float gradeVignetteSmoothness;
     uint gradeEnabled;
+
+    // The toon post-process: Blender's Standard view, the exposed value clamped, no curve and no grade.
+    uint toon;
 };
 
 ConstantBuffer<PostProcessData> gPostProcessData;
@@ -122,7 +125,7 @@ void MSMain(uint gtid: SV_GroupThreadID, OutputVertices<VSOut, 3> verts, OutputI
     }
 }
 
-// AgX leaves its result linear so the sRGB target re-encodes it. Alpha is forced opaque: the
+// AgX and Standard leave their result linear so the sRGB target re-encodes it. Alpha is forced opaque: the
 // backbuffer is a display surface, and scene alpha is a surface's own coverage, not the pixel's --
 // a hashed or cutout survivor carries its texture alpha, and passing that through hands a capture
 // (and anything compositing the backbuffer) transparency the image does not have.
@@ -155,7 +158,11 @@ float4 PSMain(VSOut input) : SV_Target
 
     float3 color;
 
-    if (gPostProcessData.gradeEnabled != 0)
+    if (gPostProcessData.toon != 0)
+    {
+        color = saturate(scene.rgb);
+    }
+    else if (gPostProcessData.gradeEnabled != 0)
     {
         ColorGrade grade;
         grade.whiteBalance = gPostProcessData.gradeWhiteBalance;

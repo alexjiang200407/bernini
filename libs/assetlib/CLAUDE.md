@@ -59,6 +59,7 @@ their subsystem directory.
 | `bmesh/`, `grass/` | Mesh/glTF cooking and embedded grass geometry |
 | `animation/` | Skeletons, clips, skinning, avatars, blend sets and posed bounds |
 | `environment/`, `material/`, `texture/` | Environment cooking, materials and texture processing |
+| `toon/` | The toon shading rig document and its head bone's resolution |
 | `import/`, `references/` | Import documents and identities; reference graphs and rename operations |
 | `pak/`, `project/`, `registry/` | Archives, project layout and asset-kind registration |
 | `io/`, `util/` | Container readers, cache/JSON encoding, filesystem and progress helpers |

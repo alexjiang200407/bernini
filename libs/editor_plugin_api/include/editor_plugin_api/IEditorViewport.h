@@ -138,5 +138,14 @@ namespace editor
 		 */
 		[[nodiscard]] virtual uint32_t
 		GetRenderHeight() const noexcept = 0;
+
+		/**
+		 * Whether what the viewport shows is toon-shaded -- a mesh with a toon material, say. A toon
+		 * look is authored to be seen without a filmic curve, so such a viewport ends in the toon
+		 * post-process (bgl::PostProcessType::kToon) rather than the project's, until the user picks
+		 * one for the viewports; then the user's pick holds.
+		 */
+		virtual void
+		SetShowsToonContent(bool toon) = 0;
 	};
 }

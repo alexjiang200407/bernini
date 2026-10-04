@@ -23,6 +23,7 @@
 #include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <bgl/types/TextureAssetHandle.h>
+#include <bgl/types/ToonShadingRigHandle.h>
 #include <core/str/str.h>
 #include <cstddef>
 #include <cstdint>
@@ -38,8 +39,16 @@
 #include <unordered_map>
 #include <vector>
 
+namespace assetlib
+{
+	struct ImportDocument;
+	struct Skeleton;
+}
+
 namespace game
 {
+	enum class ToonShadingRigPose : uint8_t;
+
 	/**
 	 * The texture files `material` names, relative to the data root: the nine authoring routes when
 	 * `loose`, otherwise the baked triplet. A surface's slots list one path apiece -- the whole
@@ -197,6 +206,12 @@ namespace game
 		 * the geom. A look that cannot be drawn -- no material, or one the renderer refuses -- is
 		 * warned about and its fields left bare, as an unbound submesh is left unlit.
 		 *
+		 * A source whose `.bimport` names a `.btoonrig` gets that toon shading rig too, held by the
+		 * geom and given to every placement CreateInstance makes of it. Static geometry holds the
+		 * bind pose, so a head bone the rig names is read off the source's `.bskel` there. A rig
+		 * that cannot be drawn -- unreadable, naming a bone the rig lacks, or refused by the
+		 * renderer -- is warned about and left off, as an avatar is.
+		 *
 		 * @throws std::runtime_error if the import cannot resolve, the geometry is unreadable or stale, or
 		 *         `meshIndex` is out of range.
 		 */
@@ -250,6 +265,11 @@ namespace game
 		 * A **shared** acquire ignores it entirely -- not even to validate it. The sphere belongs to
 		 * the geom, and the geom already exists, so nothing this call passes can change it. Release
 		 * the geom to zero to re-bound it.
+		 *
+		 * The toon shading rig the mesh's `.bimport` names comes with it as AcquireMesh's does, its
+		 * head bone resolved by name against the clip set's skeleton, and is given to every
+		 * placement CreateSkinnedInstance makes. One upload per document and skeleton, shared by
+		 * every geom drawing it.
 		 *
 		 * @throws std::runtime_error if an input cannot be read, `meshIndex` is out of range, the clip
 		 *         set no longer matches the skeleton it names, the geom is live with clips from a
@@ -389,7 +409,8 @@ namespace game
 		/**
 		 * Places `desc.geom` in `view` at `desc.transform`. The instance holds a reference on the
 		 * geometry, so geometry cannot be deleted while it is still being drawn, and holds `view` too,
-		 * so the view it lives in outlives it. `view` must draw this manager's scene.
+		 * so the view it lives in outlives it. `view` must draw this manager's scene. It takes the
+		 * geom's toon shading rig, if it holds one.
 		 *
 		 * @throws bgl::SceneError if `view` is null, or the geom is not one this manager owns or has
 		 *         expired.
@@ -424,7 +445,7 @@ namespace game
 		/**
 		 * The skinned counterpart of CreateInstance: places `desc.geom`, which AcquireSkinnedMesh
 		 * returned, spawned on `desc.playback` and posed from `desc.source`. The same references are
-		 * taken and the same DestroyInstance releases them.
+		 * taken, the same toon shading rig given, and the same DestroyInstance releases them.
 		 *
 		 * `PoseSource::kBoneAnimTable` and `PoseSource::kAuto` reserve the rig's table on the first
 		 * such instance -- see ISceneView::CreateSkinnedMeshInstance for what that costs.
@@ -571,6 +592,10 @@ namespace game
 		[[nodiscard]] uint32_t
 		GeomRefCount(bgl::GeomHandle geom) const noexcept;
 
+		// The geoms holding it; 0 if not owned
+		[[nodiscard]] uint32_t
+		ToonShadingRigRefCount(bgl::ToonShadingRigHandle rig) const noexcept;
+
 	private:
 		struct TextureRecord
 		{
@@ -644,10 +669,20 @@ namespace game
 			uint32_t            refCount = 0;
 		};
 
+		struct ToonShadingRigRecord
+		{
+			bgl::ToonShadingRigHandle handle;
+			uint32_t                  refCount = 0;
+		};
+
 		struct GeomRecord
 		{
 			std::string     key;  // empty for procedural geometry
 			bgl::GeomHandle handle;
+
+			// The toon shading rig every placement of it takes, as its key in m_ToonShadingRigs,
+			// holding one reference; empty for none.
+			std::string toonShadingRig;
 
 			// One per submesh: the material that submesh is bound to, and holds a reference to.
 			std::vector<bgl::MaterialHandle> submeshMaterials;
@@ -823,6 +858,37 @@ namespace game
 		void
 		ReleaseGrassLook(const std::string& key);
 
+		/**
+		 * The toon shading rig `document` names, drawn on a mesh of the skeleton at `skeletonKey`,
+		 * added on the first acquire and shared after; its key in m_ToonShadingRigs, or empty when
+		 * the document names none or it cannot be drawn, which is warned about. Takes a reference
+		 * only when it returns a key.
+		 *
+		 * @param skeleton The rig at `skeletonKey`, when the caller has it in hand; read here if the
+		 *        document names a head bone and it is null.
+		 */
+		[[nodiscard]] std::string
+		AcquireToonShadingRig(
+			const assetlib::ImportDocument& document,
+			std::string_view                skeletonKey,
+			const assetlib::Skeleton*       skeleton,
+			ToonShadingRigPose              pose) noexcept;
+
+		/** Drops one reference, deleting the rig at zero. @pre No placement still holds it. */
+		void
+		ReleaseToonShadingRig(const std::string& key);
+
+		/**
+		 * Gives `instance` the toon shading rig `geom` holds, if any.
+		 *
+		 * @throws bgl::SceneError for anything ISceneView::SetToonShadingRig refuses.
+		 */
+		void
+		AttachToonShadingRig(
+			const GeomRecord&       geom,
+			bgl::ISceneView&        view,
+			bgl::MeshInstanceHandle instance);
+
 		// Destroys a geom and releases the materials it held. Assumes its refcount reached zero
 		void
 		DestroyGeom(GeomRecord& record);
@@ -972,6 +1038,8 @@ namespace game
 		std::unordered_map<uint32_t, GeomRecord>     m_Geoms;
 
 		core::str::unordered_str_map<RigRecord> m_Rigs;
+
+		core::str::unordered_str_map<ToonShadingRigRecord> m_ToonShadingRigs;
 
 		std::unique_ptr<ContainerReads> m_Reads;
 

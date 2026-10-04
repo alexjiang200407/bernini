@@ -1,6 +1,7 @@
 import idl.Constants;
 import lib.forward.common;
 import lib.forward.mesh_stage;
+import idl.ToonShadingRigPool;
 import lib.forward.static_vertex;
 
 // The static forward geometry stage. The shared expansion, one tier's vertex evaluation.
@@ -111,6 +112,60 @@ void MSDissolve(
     {
         let vertex = StaticVertex(ctx, payload.instance, v);
         verts[v] = DissolveVSOut(vertex, ctx.lodDissolve);
+        if (ctx.cull)
+        {
+            RecordClip(v, vertex.position);
+        }
+    }
+
+    if (DrawCullsBackfaces())
+    {
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    for (uint t = gtid; t < triangleCount; t += cMeshGroupSize)
+    {
+        tris[t] = CullBackface(ctx, EvaluatePrimitive(ctx, t));
+    }
+}
+
+// MSMain for a toon character bucket at rest: every vertex also carries its placement's evaluated
+// toon shading rig block, which MSMain leaves out so no other draw pays an interpolant for it. A
+// copy for the reason MSDissolve is one.
+[shader("mesh")]
+[numthreads(cMeshGroupSize, 1, 1)]
+[outputtopology("triangle")]
+void MSToon(
+    uint gid: SV_GroupID,
+    uint gtid: SV_GroupThreadID,
+    payload CulledPayload payload,
+    OutputVertices<ToonVSOut, cMaxVerticesPerMeshlet> verts,
+    OutputIndices<uint3, cMaxPrimsPerMeshlet> tris
+)
+{
+    let meshletIdx = CulledMeshletIndex(payload, gid);
+
+    uint vertexCount = 0u;
+    uint triangleCount = 0u;
+    uint rigSlot = 0u;
+    MeshletContext ctx;
+    bool visible = meshletIdx < payload.meshletCount;
+
+    if (visible)
+    {
+        ctx = PrepareMeshlet(payload.instance, payload.submeshEntry, payload.lodDissolve, meshletIdx);
+        visible = LocalSphereInCullFrustum(ctx.mesh, ctx.meshlet.boundingSphere);
+        vertexCount = visible ? ctx.meshlet.vertexCount : 0u;
+        triangleCount = visible ? ctx.meshlet.triangleCount : 0u;
+        rigSlot = (ctx.mesh.flags >> cToonShadingRigSlotShift) & cToonShadingRigSlotMask;
+    }
+
+    SetMeshOutputCounts(vertexCount, triangleCount);
+
+    for (uint v = gtid; v < vertexCount; v += cMeshGroupSize)
+    {
+        let vertex = StaticVertex(ctx, payload.instance, v);
+        verts[v] = ToonVSOut(vertex, rigSlot);
         if (ctx.cull)
         {
             RecordClip(v, vertex.position);

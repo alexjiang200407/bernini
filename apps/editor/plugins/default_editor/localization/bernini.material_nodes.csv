@@ -33,6 +33,7 @@ specular_factor_label,Specular Factor
 specular_factor_tooltip,"Weights the whole specular lobe. 1 is an ordinary dielectric; 0 is a surface with no reflection at all, which is what a Phong export with its specular switched off means."
 split_group_label,Split {0}
 split_group_tooltip,Route this group's channels individually
+split_slot_tooltip,Route this slot's channels individually
 surface_kind_color,Color
 surface_kind_coverage,Coverage
 surface_kind_data,Data

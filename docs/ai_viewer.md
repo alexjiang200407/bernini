@@ -32,9 +32,10 @@ Bare, it renders `assets/Data`'s apples — the one project `copy_assets` stages
 | `--fps` | 30 | frame `i` renders at clip time `i / fps` |
 | `--warmup` | 8 | frames rendered first, held at time 0 |
 | `--env`, `--env-root` | `forest.benv`, `--project` | the environment it is lit by, and the root that is keyed under |
-| `--sun` | 0, off | an analytic sun's intensity, in the irradiance map's units — **additive** on `--env`, which already integrates whatever sun its source HDR held |
+| `--sun` | 0, off | an analytic sun's intensity, in the irradiance map's units — **additive** on `--env`, which already integrates whatever sun its source HDR held. It sets both of the view's suns alike, the PBR one and the toon character model's, so a headless render has one sun on screen |
 | `--sun-azimuth`, `--sun-elevation` | 35, 38 | where that sun sits, in degrees: azimuth about the up axis from +Z toward +X, elevation above the horizon |
 | `--sun-color` | `1 1 1` | its colour, as three floats |
+| `--post-process` | `filmic` | the post-process: `filmic` (AgX and the grade), or `toon` -- the exposed colour clamped, no curve, which a toon look is authored for (`IRenderTarget::SetPostProcessType`) |
 | `-w`, `-h`, `--taa` | 1280, 720, on | the output, as a viewport renders it |
 | `--render-scale` | 1 | the grid the geometry passes render on, relative to the output; below 1 the TAA resolve reconstructs the output ([Temporal Antialiasing](taa.md) § Render scale) |
 | `--bloom` | off | bloom at `bgl::BloomSettings`' defaults; its `BloomDown*`/`BloomUp*` passes join the timings |
@@ -47,6 +48,7 @@ Bare, it renders `assets/Data`'s apples — the one project `copy_assets` stages
 | `--crowd`, `--crowd-columns` | 0, 6 | copies of the model in rows of that many, receding from the camera; 0 places it once |
 | `--source` | `per-instance`, or `auto` for a crowd | the pose source a skinned mesh is spawned on: `per-instance`, `table` or `auto` |
 | `--pose-budget`, `--pose-pixels` | `LodSelectionDesc`'s | the view's choice for `auto`: units posed per instance at once, and the size on screen below which a one-level mesh draws from its table |
+| `--lod` | by size | the level every placement draws whatever its size (`LodSelectionDesc::forceLevel`); a mesh with fewer draws its coarsest |
 
 What it prints, in order: the mesh and whether it is skinned; for a skinned mesh the clip table with
 `>` on the one playing — run once without `--clip` to learn the names; `lit` or `unlit`; one line
@@ -90,8 +92,15 @@ far run shows the field thinning to nothing; its `Forward Grass 0` row is what t
   `assetlib_cli migrate --project "<the .bproj>" --yes`. The viewer never writes into a project.
   `just run` splits its arguments on spaces, and the test project's `.bproj` has one, so run that
   binary by the path `just exes --target assetlib_cli` prints.
+- **A character's toon shading rig comes with it.** A `.bimport` naming a `.btoonrig` draws its
+  face with that rig, as any load through `game::AssetManager` does
+  ([Toon Shading Rig](toon_shading_rig.md) § Loading); `--sun` with `--sun-azimuth` and
+  `--sun-elevation` is how to look at it under a side, a front and an overhead sun.
 - **Know whether it was lit.** The test project has no environment of its own; without
   `--env-root "$PWD/assets/Data"` it renders unlit, which is a black image, and says `unlit`.
+- **One sun drives both lights.** A view has two -- the one PBR and every other model read, and
+  the toon character model's (`SetToonDirectionalLight`) -- and the `--sun` options set them alike.
+  Without `--sun` a toon character draws black: it reads no environment.
 - **The sun is off unless asked for, and it does not replace the environment.** `bgl`'s own default
   intensity is 0, so every render this tool made before there was a sun is the render it still
   makes. Switched on with `--sun`, it *adds* to `--env`, whose cubes already integrate whatever sun

@@ -273,6 +273,18 @@ namespace bgl
 			m_ColorGradeEnabled = enabled;
 		}
 
+		[[nodiscard]] PostProcessType
+		GetPostProcessType() const noexcept final
+		{
+			return m_PostProcessType;
+		}
+
+		void
+		SetPostProcessType(PostProcessType postProcessType) noexcept final
+		{
+			m_PostProcessType = postProcessType;
+		}
+
 		[[nodiscard]] ColorGradeSettings
 		GetColorGradeSettings() const noexcept final
 		{
@@ -526,6 +538,7 @@ namespace bgl
 		BloomChain    m_BloomChain;
 
 		bool               m_ColorGradeEnabled = false;
+		PostProcessType    m_PostProcessType   = PostProcessType::kFilmic;
 		ColorGradeSettings m_ColorGradeSettings;
 
 		bool                                           m_GpuTimingEnabled = false;

@@ -71,6 +71,24 @@ void PSLitDepthHashedAlpha(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace)
     materialData.DiscardUncoveredGameLitHashedAlpha<NullLitSurface>(input, isFrontFace);
 }
 
+[shader("pixel")]
+ForwardPSOut PSToonOpaque(ToonVSOut input, bool isFrontFace: SV_IsFrontFace)
+{
+    return materialData.GameToonOpaqueProgram<NullToonCharacterSurface>(input.Surface(), input.toonShadingRigSlot, isFrontFace);
+}
+
+[shader("pixel")]
+ForwardPSOut PSToonAlphaTested(ToonVSOut input, bool isFrontFace: SV_IsFrontFace)
+{
+    return materialData.GameToonAlphaTestedProgram<NullToonCharacterSurface>(input.Surface(), input.toonShadingRigSlot, isFrontFace);
+}
+
+[shader("pixel")]
+ForwardPSOut PSToonHashedAlpha(ToonVSOut input, bool isFrontFace: SV_IsFrontFace)
+{
+    return materialData.GameToonHashedAlphaProgram<NullToonCharacterSurface>(input.Surface(), input.toonShadingRigSlot, isFrontFace);
+}
+
 // The generated blend program's shape: a switch on the record's kind, an arm per surface -- the
 // arm's function picked by the surface's contract -- and the engine's kinds as the fallthrough.
 [shader("pixel")]
@@ -83,7 +101,7 @@ float4 PSTransparent(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace) : SV_
     case 5u:
         return materialData.ShadeGameLitBlended<NullLitSurface>(input, isFrontFace);
     case 6u:
-        return materialData.ShadeGameLitBlended<ToonCharacterLit<NullToonCharacterSurface> >(input, isFrontFace);
+        return materialData.ShadeGameToonBlended<NullToonCharacterSurface>(input, isFrontFace);
     case 7u:
         return materialData.ShadeGameLitBlended<ToonEnvironmentLit<NullToonEnvironmentSurface> >(input, isFrontFace);
     default:
@@ -104,14 +122,9 @@ ForwardPSOut PSGrassLit(GrassVSOut input)
     return materialData.GameLitGrassProgram<NullLitSurface>(input);
 }
 
-// A toon surface is bound as its model's adapter over the game's type, and draws through the lit
-// programs above; these put the adapter itself through the same validation, per model.
-[shader("pixel")]
-ForwardPSOut PSToonCharacterOpaque(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace)
-{
-    return materialData.GameLitOpaqueProgram<ToonCharacterLit<NullToonCharacterSurface> >(input, isFrontFace);
-}
-
+// A toon environment surface is bound as its model's adapter over the game's type, and draws
+// through the lit programs above; this puts the adapter itself through the same validation. A toon
+// character draws through the GameToon programs instead.
 [shader("pixel")]
 ForwardPSOut PSToonEnvironmentOpaque(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace)
 {
@@ -121,7 +134,7 @@ ForwardPSOut PSToonEnvironmentOpaque(ForwardVSOut input, bool isFrontFace: SV_Is
 [shader("pixel")]
 ForwardPSOut PSGrassToonCharacter(GrassVSOut input)
 {
-    return materialData.GameLitGrassProgram<ToonCharacterLit<NullToonCharacterSurface> >(input);
+    return materialData.GameToonGrassProgram<NullToonCharacterSurface>(input);
 }
 
 [shader("pixel")]

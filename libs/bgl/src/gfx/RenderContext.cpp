@@ -233,17 +233,20 @@ namespace bgl
 		m_OverlayPass(startup.context), m_OutlineMask(startup.context),
 		m_TaaResolve(startup.context), m_CompactInstances(startup.context),
 		m_RigFrames(startup.context), m_SkinnedPose(startup.context),
-		m_TransparentSort(startup.context)
+		m_ToonShadingRigs(startup.context), m_TransparentSort(startup.context)
 #if defined(BERNINI_GPU_DEBUG)
 		,
 		m_BufferPoisoner(m_ResourceManager), m_DebugBuffer(m_ResourceManager, c_DebugBufferCapacity)
 #endif
 	{
 		m_GameSurfaceShading.reserve(surfaceTypes.size());
+		auto toonCharacterSlots = std::vector<bool>();
 		for (const SurfaceType& type : surfaceTypes)
 		{
 			m_GameSurfaceShading.emplace_back(type.shading);
+			toonCharacterSlots.push_back(type.shading == SurfaceShading::kToonCharacter);
 		}
+		m_Forward.SetToonCharacterSlots(std::move(toonCharacterSlots));
 
 		// Registered so a deferred destroy cannot reclaim a slot this queue may still be reading.
 		m_CommandQueue = m_Device->CreateGraphicsCommandQueue();
@@ -874,9 +877,13 @@ namespace bgl
 		draw.lighting.env      = m_BlackEnvironment.Complete(env);
 		draw.lighting.exposure = view->GetExposure();
 
-		const auto& sun            = view->GetDirectionalLight();
+		const auto& sun            = view->GetPbrDirectionalLight();
 		draw.lighting.sunDirection = sun.direction;
 		draw.lighting.sunRadiance  = sun.color * sun.intensity;
+
+		const auto& toonSun            = view->GetToonDirectionalLight();
+		draw.lighting.toonSunDirection = toonSun.direction;
+		draw.lighting.toonSunRadiance  = toonSun.color * toonSun.intensity;
 
 		// Still without temporal AA: a coverage pattern nothing accumulates is flicker. Its period is
 		// not the jitter's -- eight patterns average to nine grey levels rather than to coverage.
@@ -929,6 +936,10 @@ namespace bgl
 		// makes the pass no longer a root and culls it.
 		m_FrameGraph.SetResourceNamespace(view->GetResourceNamespace());
 		m_SkinnedPose.AttachToFrameGraph(m_FrameGraph, draw);
+
+		// After the pose pass, whose palettes give a head bone its pose, and before anything draws a
+		// face; per view like the pose pass, and under its namespace for the same reason.
+		m_ToonShadingRigs.AttachToFrameGraph(m_FrameGraph, draw);
 		m_FrameGraph.SetResourceNamespace(view->GetCullNamespace(draw.cullIdx));
 
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kWorld);
@@ -1202,6 +1213,7 @@ namespace bgl
 
 		postProcessArgs.colorGrade        = rt.GetColorGradeSettings();
 		postProcessArgs.colorGradeEnabled = rt.IsColorGradeEnabled();
+		postProcessArgs.postProcessType   = rt.GetPostProcessType();
 
 		m_PostProcess.AttachToFrameGraph(m_FrameGraph, postProcessArgs);
 

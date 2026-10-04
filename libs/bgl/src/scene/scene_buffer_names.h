@@ -77,6 +77,12 @@ namespace bgl
 	constexpr std::string_view c_PoseRequestsName   = "scene.poseRequests"sv;
 	constexpr std::string_view c_DominantFramesName = "scene.dominantFrames"sv;
 
+	// The toon shading rigs', per view (ToonShadingRigState): the rigged placement ranges, the pool's
+	// counter and the pool of evaluated blocks the forward pass reads.
+	constexpr std::string_view c_ToonShadingRigRangesName = "scene.toonShadingRigRanges"sv;
+	constexpr std::string_view c_ToonShadingRigPoolName   = "scene.toonShadingRigPool"sv;
+	constexpr std::string_view c_ToonShadingRigBlocksName = "scene.toonShadingRigBlocks"sv;
+
 	constexpr std::string_view c_InstanceVisibilityName = "scene.instanceVisibility"sv;
 	constexpr std::string_view c_CompactedInstancesName = "scene.compactedInstances"sv;
 

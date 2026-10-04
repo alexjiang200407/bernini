@@ -188,6 +188,7 @@ namespace assetlib
 			case AssetType::kAvatar:
 			case AssetType::kBlend:
 			case AssetType::kGrass:
+			case AssetType::kToonShadingRig:
 			case AssetType::kCount:
 				break;
 			}
@@ -354,6 +355,7 @@ namespace assetlib
 				case AssetType::kAvatar:
 				case AssetType::kBlend:
 				case AssetType::kGrass:
+				case AssetType::kToonShadingRig:
 				case AssetType::kCount:
 					break;
 				}

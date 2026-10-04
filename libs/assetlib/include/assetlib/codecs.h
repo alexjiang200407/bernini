@@ -50,6 +50,9 @@ namespace assetlib
 	// Text: a grass look, which names the material its blades shade through.
 	inline constexpr std::string_view c_GrassExtension = ".bgrass";
 
+	// Text: a face's toon shading rig, which a character's `.bimport` names.
+	inline constexpr std::string_view c_ToonShadingRigExtension = ".btoonrig";
+
 	// Not assets either: the files a `.bimport` describes, copied into the project beside it. A
 	// mesh import takes the first; an environment import takes the second or a float cube `.ktx2`.
 	// `assetTypeFromExtension` knows none of them as a source, so a plan that has to reach one asks
@@ -88,6 +91,7 @@ namespace assetlib
 	struct Avatar;
 	struct BlendSet;
 	struct BGrass;
+	struct BToonShadingRig;
 	struct BEnv;
 	struct BEnvLighting;
 	struct BMaterial;
@@ -292,6 +296,23 @@ namespace assetlib
 		Serialize(const BGrass& value);
 
 		[[nodiscard]] static BGrass
+		Deserialize(std::span<const std::byte> bytes);
+	};
+
+	/**
+	 * `.btoonrig` -- an authored document: a face's toon shading rig, its head bone by name. No
+	 * magic and no bake token, because nothing cooks it into anything.
+	 */
+	template <>
+	struct AssetCodec<BToonShadingRig>
+	{
+		static constexpr std::string_view c_Extension = c_ToonShadingRigExtension;
+		static constexpr AssetType        c_Type      = AssetType::kToonShadingRig;
+
+		[[nodiscard]] static std::vector<std::byte>
+		Serialize(const BToonShadingRig& value);
+
+		[[nodiscard]] static BToonShadingRig
 		Deserialize(std::span<const std::byte> bytes);
 	};
 }

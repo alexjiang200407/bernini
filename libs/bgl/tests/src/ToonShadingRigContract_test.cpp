@@ -1,5 +1,6 @@
 #include "gfx/GraphicsBase.h"
 #include "scene/toon_shading_rig_record.h"
+#include "util/DispatchReport.h"
 #include "util/GpuValidation.h"
 #include "util/SkinnedSynth.h"
 #include "util/TestGraphics.h"
@@ -99,118 +100,6 @@ namespace
 				bgl::SkinnedPlaybackDesc::FromClip(bgl::test::skinned_synth::c_LoopClip)));
 	}
 
-	/**
-	 * Runs `shader`'s one-thread compute entry over a raw buffer holding `records` (bound as
-	 * `gUniforms.records` when non-empty) and returns the `outCount` values it wrote to
-	 * `gUniforms.outValues`. `bind` sets the shader's other uniforms.
-	 */
-	std::vector<glm::vec4>
-	DispatchReport(
-		const std::string&                               shader,
-		const std::span<const std::byte>                 records,
-		const uint32_t                                   outCount,
-		const std::function<void(bgpu::ComputeKernel&)>& bind)
-	{
-		auto opts                                = bgl::test::GraphicsSetup();
-		opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
-		opts.gpuContext.enableDebugLayer         = true;
-		opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
-
-		auto gfx = bgl::test::CreateGraphics(opts);
-		REQUIRE(gfx != nullptr);
-
-		auto* gfxBase = gfx->As<bgl::GraphicsBase>();
-		REQUIRE(gfxBase != nullptr);
-
-		auto  resourceManager = gfxBase->GetResourceManagerCpy();
-		auto* device          = gfxBase->GetDevice();
-
-		auto cmdListDesc  = bgpu::CommandListDesc();
-		cmdListDesc.type  = bgpu::QueueType::kGraphics;
-		auto cmdAllocator = device->CreateCommandAllocator();
-		auto cmdList      = device->CreateCommandList(cmdListDesc, cmdAllocator, resourceManager);
-		auto cmdQueue     = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
-
-		auto recordBuffer = bgpu::BufferHandle();
-		if (!records.empty())
-		{
-			recordBuffer = resourceManager->CreateRawBuffer(
-				bgpu::RawViewDesc()
-					.SetByteSize(static_cast<uint32_t>(records.size()))
-					.SetDebugName("Test Records"));
-			REQUIRE(resourceManager->ValidBufferHandle(recordBuffer));
-		}
-
-		auto outDesc         = bgpu::ComputeBufferDesc();
-		outDesc.initialCount = outCount;
-		outDesc.debugName    = "Test Results";
-		outDesc.SetElement<glm::vec4>();
-		const bgpu::BufferHandle outValues = resourceManager->CreateComputeBuffer(outDesc);
-		REQUIRE(resourceManager->ValidBufferHandle(outValues));
-
-		auto rbDesc                         = bgpu::ReadbackBufferDesc();
-		rbDesc.byteSize                     = outCount * sizeof(glm::vec4);
-		rbDesc.debugName                    = "Test Readback";
-		const bgpu::ReadbackBufferHandle rb = resourceManager->CreateReadbackBuffer(rbDesc);
-
-		auto kernel = device->CreateComputeKernel(
-			bgpu::ComputePipelineDesc()
-				.SetShader(device->CreateShader(shader))
-				.SetDebugName(shader));
-		REQUIRE(kernel.pipeline != nullptr);
-
-		if (!records.empty())
-		{
-			kernel["gUniforms"]["records"] = recordBuffer;
-		}
-		kernel["gUniforms"]["outValues"] = outValues;
-		bind(kernel);
-
-		cmdList->Open(cmdQueue, cmdAllocator);
-
-		if (!records.empty())
-		{
-			cmdList->WriteBuffer(recordBuffer, records.data(), 0, records.size());
-			cmdList->Barrier(
-				recordBuffer,
-				bgpu::BufferBarrierDesc()
-					.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
-					.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
-					.AddSyncAfter(bgpu::BarrierSyncFlag::kComputeShader)
-					.AddAccessAfter(bgpu::BarrierAccessFlag::kShaderResource));
-		}
-
-		auto computeState   = bgpu::ComputeState();
-		computeState.kernel = &kernel;
-		cmdList->SetComputeState(computeState);
-		cmdList->Dispatch(1, 1, 1);
-
-		cmdList->Barrier(
-			outValues,
-			bgpu::BufferBarrierDesc()
-				.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
-				.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
-				.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
-				.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
-
-		cmdList->CopyBufferToReadback(rb, outValues);
-		cmdList->Close();
-
-		cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList));
-
-		const auto* mapped = static_cast<const glm::vec4*>(resourceManager->MapReadback(rb));
-		REQUIRE(mapped != nullptr);
-		auto got = std::vector<glm::vec4>(mapped, mapped + outCount);
-		resourceManager->UnmapReadback(rb);
-
-		resourceManager->DestroyReadbackBuffer(rb, false);
-		resourceManager->DestroyBuffer(outValues, false);
-		if (!records.empty())
-		{
-			resourceManager->DestroyBuffer(recordBuffer, false);
-		}
-		return got;
-	}
 }
 
 TEST_CASE("AddToonShadingRig refuses a rig no pass could evaluate", "[toonshadingrig][contract]")
@@ -520,7 +409,7 @@ TEST_CASE("AddToonShadingRig packs what the evaluation pass reads", "[toonshadin
 		    .SetBend(-1.0f)
 		    .SetBulge(2.0f)
 		    .SetRotation(1.5f)
-		    .SetRadius(0.07f)
+		    .SetRadius(0.09f)
 		    .SetNormalSmoothing(0.125f);
 	};
 
@@ -577,7 +466,7 @@ TEST_CASE("AddToonShadingRig packs what the evaluation pass reads", "[toonshadin
 	CHECK(first.lightAndGain.w == -0.5f);
 	CHECK(first.positionAndSize == glm::vec4(0.1f, 0.2f, 0.3f, 0.25f));
 	CHECK(first.shape == glm::vec4(0.5f, 0.75f, -1.0f, 2.0f));
-	CHECK(first.rotationRadiusSmoothing == glm::vec4(1.5f, 0.07f, 0.125f, 0.0f));
+	CHECK(first.rotationRadiusSmoothing == glm::vec4(1.5f, 0.09f, 0.125f, 0.0f));
 	CHECK(packed.keys[3].lightAndGain.w == 0.0f);
 
 	// Rows, as a placement's transform is stored: the translation is each row's w.
@@ -641,7 +530,7 @@ TEST_CASE(
 
 	auto key                    = bgl::idl::ToonShadingRigKey();
 	key.lightAndGain            = glm::vec4(0.0f, 0.6f, 0.8f, -0.5f);
-	key.rotationRadiusSmoothing = glm::vec4(1.4f, 0.07f, 0.5f, 0.0f);
+	key.rotationRadiusSmoothing = glm::vec4(0.9f, 0.09f, 0.5f, 0.0f);
 
 	auto block                                = bgl::idl::ToonShadingRigBlock();
 	block.headFromWorld[1]                    = glm::vec4(21.0f, 22.0f, 23.0f, 24.0f);
@@ -656,7 +545,7 @@ TEST_CASE(
 	std::memcpy(bytes.data() + c_KeyOffset, &key, sizeof(key));
 	std::memcpy(bytes.data() + c_BlockOffset, &block, sizeof(block));
 
-	const std::vector<glm::vec4> got = DispatchReport(
+	const std::vector<glm::vec4> got = bgl::test::DispatchReport(
 		"CSToonShadingRigLoad",
 		bytes,
 		c_OutValues,
@@ -704,7 +593,7 @@ TEST_CASE(
 	"[toonshadingrig][toon][compute]")
 {
 	const std::vector<glm::vec4> got =
-		DispatchReport("CSToonCharacterDefaults", {}, 4, [](bgpu::ComputeKernel&) {});
+		bgl::test::DispatchReport("CSToonCharacterDefaults", {}, 4, [](bgpu::ComputeKernel&) {});
 	REQUIRE(got.size() == 4);
 
 	CHECK(got[0] == glm::vec4(1.0f));

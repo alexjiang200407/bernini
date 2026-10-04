@@ -303,6 +303,18 @@ namespace
 		return named == actions.end() ? nullptr : *named;
 	}
 
+	// An entry of Render > Post Process, whose labels other menus share.
+	QAction*
+	PostProcessChoice(const MainWindow& window, const QString& text)
+	{
+		for (const QMenu* menu : window.findChildren<QMenu*>())
+			if (menu->title() == "Post Process")
+				for (QAction* action : menu->actions())
+					if (action->text() == text)
+						return action;
+		return nullptr;
+	}
+
 	void
 	ObserveViewportTeardown(MainWindow& window, QObject& observer, std::vector<fs::path>& roots)
 	{
@@ -548,6 +560,10 @@ TEST_CASE(
 	const auto baseline = sceneSlots();
 	for (int replacementIndex = 0; replacementIndex < 3; ++replacementIndex)
 	{
+		QAction* toon = PostProcessChoice(window, "Toon");
+		REQUIRE(toon != nullptr);
+		toon->trigger();
+
 		std::vector<fs::path> releasedRoots;
 		QObject               teardownObserver;
 		ObserveViewportTeardown(window, teardownObserver, releasedRoots);
@@ -617,6 +633,11 @@ TEST_CASE(
 			CHECK(root == second.DataRoot());
 		}
 		CHECK(sceneSlots() == baseline);
+
+		// The last project's post-process choice does not carry over: Auto, and the new one's.
+		CHECK(PostProcessChoice(window, "Auto")->isChecked());
+		for (const RenderTargetWindow* view : views)
+			CHECK(view->GetPostProcessType() == bgl::PostProcessType::kFilmic);
 	}
 }
 
@@ -2206,4 +2227,60 @@ TEST_CASE(
 	QMimeData other;
 	other.setUrls({ QUrl::fromLocalFile(QStringLiteral("/nowhere/rock.bmesh")) });
 	CHECK_FALSE(GrassEditorWindow::AcceptsDrop(&other));
+}
+
+// Render > Post Process: Auto lets each viewport decide -- Toon for toon content, else the
+// project's -- and Filmic or Toon holds every viewport to one. The checked entry is always the
+// user's choice.
+TEST_CASE(
+	"A viewport's post-process is the user's choice, or Auto's: the toon content's or the "
+	"project's",
+	"[mainwindow][render]")
+{
+	const HeadlessEditor editor;
+
+	SECTION("a project authored for toon starts every viewport in it")
+	{
+		auto project = assetlib::Project::Open(editor.ProjectFile());
+		project.SetPostProcessType(assetlib::PostProcessType::kToon);
+		project.Save();
+
+		const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+		const QList<RenderTargetWindow*> viewports = window.findChildren<RenderTargetWindow*>();
+		REQUIRE_FALSE(viewports.empty());
+		for (const RenderTargetWindow* view : viewports)
+			CHECK(view->GetPostProcessType() == bgl::PostProcessType::kToon);
+	}
+
+	SECTION("toon content ends in Toon until the user picks a post-process")
+	{
+		const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+		auto* view = window.findChild<MeshEditorWindow*>()->findChild<RenderTargetWindow*>();
+		REQUIRE(view != nullptr);
+		CHECK(view->GetPostProcessType() == bgl::PostProcessType::kFilmic);
+
+		QAction* autoChoice = PostProcessChoice(window, "Auto");
+		QAction* filmic     = PostProcessChoice(window, "Filmic");
+		QAction* toon       = PostProcessChoice(window, "Toon");
+		REQUIRE(autoChoice != nullptr);
+		REQUIRE(filmic != nullptr);
+		REQUIRE(toon != nullptr);
+		CHECK(autoChoice->isChecked());
+
+		view->SetShowsToonContent(true);
+		CHECK(view->GetPostProcessType() == bgl::PostProcessType::kToon);
+		CHECK(autoChoice->isChecked());
+
+		filmic->trigger();
+		CHECK(filmic->isChecked());
+		CHECK_FALSE(autoChoice->isChecked());
+		CHECK(view->GetPostProcessType() == bgl::PostProcessType::kFilmic);
+
+		view->SetShowsToonContent(false);
+		toon->trigger();
+		CHECK(view->GetPostProcessType() == bgl::PostProcessType::kToon);
+
+		autoChoice->trigger();
+		CHECK(view->GetPostProcessType() == bgl::PostProcessType::kFilmic);
+	}
 }

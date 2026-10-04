@@ -1,12 +1,14 @@
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 
 #include "Render/Renderer.h"
+#include "util/toon_light.h"
 #include <algorithm>
 #include <cmath>
 #include <core/glm.h>
 #include <cstdint>
 #include <editor_plugin_api/IEditorViewport.h>
 #include <format>
+#include <optional>
 #include <qcoreevent.h>
 #include <qlogging.h>
 #include <qnamespace.h>
@@ -240,12 +242,15 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 		target->SetBloomEnabled(m_Desc.bloom.enabled);
 		target->SetColorGradeSettings(grade);
 		target->SetColorGradeEnabled(m_Desc.colorGrade.enabled);
+		target->SetPostProcessType(GetPostProcessType());
 		return target;
 	});
 	m_SceneView    = m_Desc.renderer->Invoke([&] {
-		return m_Desc.renderer->GetGraphics()->CreateSceneView(
+		auto view = m_Desc.renderer->GetGraphics()->CreateSceneView(
 			m_Desc.renderer->GetScene(),
 			m_Desc.initialInstances);
+		view->SetToonDirectionalLight(editor::DefaultToonLight());
+		return view;
 	});
 
 	m_DrawWidth  = m_Width;
@@ -477,6 +482,45 @@ RenderTargetWindow::GetBloomSettings() const
 		return {};
 
 	return m_Desc.renderer->Invoke([&] { return m_RenderTarget->GetBloomSettings(); });
+}
+
+void
+RenderTargetWindow::SetProjectPostProcessType(bgl::PostProcessType postProcessType)
+{
+	m_ProjectPostProcessType = postProcessType;
+	ApplyPostProcessType();
+}
+
+void
+RenderTargetWindow::SetChosenPostProcessType(std::optional<bgl::PostProcessType> postProcessType)
+{
+	m_ChosenPostProcessType = postProcessType;
+	ApplyPostProcessType();
+}
+
+void
+RenderTargetWindow::SetShowsToonContent(bool toon)
+{
+	m_ShowsToonContent = toon;
+	ApplyPostProcessType();
+}
+
+bgl::PostProcessType
+RenderTargetWindow::GetPostProcessType() const noexcept
+{
+	if (m_ChosenPostProcessType.has_value())
+		return *m_ChosenPostProcessType;
+	return m_ShowsToonContent ? bgl::PostProcessType::kToon : m_ProjectPostProcessType;
+}
+
+void
+RenderTargetWindow::ApplyPostProcessType()
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return;
+
+	const bgl::PostProcessType postProcessType = GetPostProcessType();
+	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetPostProcessType(postProcessType); });
 }
 
 void

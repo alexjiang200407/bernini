@@ -38,7 +38,7 @@ namespace bgl
 		// Every member Execute writes. Kept beside the code that writes them so
 		// BindingNameCheck catches a shader rename at startup: an optional write is silent, so
 		// a stale name would otherwise resolve to nothing every frame and say nothing.
-		constexpr std::array<std::string_view, 23> c_Fields = {
+		constexpr std::array<std::string_view, 24> c_Fields = {
 			"sceneColor"sv,
 			"sourceTexelSize"sv,
 			"rcasStrength"sv,
@@ -62,6 +62,7 @@ namespace bgl
 			"gradeVignetteIntensity"sv,
 			"gradeVignetteSmoothness"sv,
 			"gradeEnabled"sv,
+			"toon"sv,
 		};
 
 		/**
@@ -169,6 +170,7 @@ namespace bgl
 				tonemap["bloomIntensity"].SetIfValid(args.bloomIntensity);
 			}
 
+			tonemap["toon"].SetIfValid(args.postProcessType == PostProcessType::kToon ? 1u : 0u);
 			tonemap["gradeEnabled"].SetIfValid(args.colorGradeEnabled ? 1u : 0u);
 			if (args.colorGradeEnabled)
 			{

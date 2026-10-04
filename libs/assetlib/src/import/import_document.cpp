@@ -47,6 +47,7 @@ namespace assetlib
 		constexpr std::string_view c_PackedSourceHashKey  = "packedSourceHash";
 		constexpr std::string_view c_TextureBakeTokenKey  = "textureBakeToken";
 		constexpr std::string_view c_SkeletonKey          = "skeleton";
+		constexpr std::string_view c_ToonShadingRigKey    = "toonShadingRig";
 		constexpr std::string_view c_OutputsKey           = "outputs";
 		constexpr std::string_view c_SourceKey            = "source";
 		constexpr std::string_view c_EnvironmentKey       = "environment";
@@ -339,7 +340,8 @@ namespace assetlib
 
 		for (const auto& [stringKey, field] :
 		     { std::pair<std::string_view, std::string*>{ c_SkeletonKey, &document.skeleton },
-		       { c_SourceKey, &document.source } })
+		       { c_SourceKey, &document.source },
+		       { c_ToonShadingRigKey, &document.toonShadingRig } })
 		{
 			if (const auto it = json.find(stringKey); it != json.end())
 			{
@@ -492,6 +494,9 @@ namespace assetlib
 
 		if (!document.source.empty())
 			json[c_SourceKey] = document.source;
+
+		if (!document.toonShadingRig.empty())
+			json[c_ToonShadingRigKey] = document.toonShadingRig;
 
 		if (!document.outputs.empty())
 		{

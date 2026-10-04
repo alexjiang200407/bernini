@@ -2,6 +2,7 @@
 
 #include <QQueue>
 #include <QThreadPool>
+#include <bgl/IRenderTarget.h>
 
 #include "Render/Renderer.h"
 #include "util/held_open_assets.h"
@@ -87,6 +88,16 @@ public:
 	/** Borrowed until replaced; drains old work before returning. Null closes the project. */
 	void
 	SetStore(const assetlib::AssetStore* store);
+
+	/**
+	 * The post-process a thumbnail ends in, the open project's; a thumbnail drawn with a toon
+	 * material ends in toon whatever this is, as its preview does. Takes effect from the next shot.
+	 */
+	void
+	SetProjectPostProcessType(bgl::PostProcessType postProcessType) noexcept
+	{
+		m_ProjectPostProcessType = postProcessType;
+	}
 
 	/** Drops previews and in-flight work after an asset write, including previews that depend on it. */
 	void
@@ -186,11 +197,13 @@ private:
 	BuildShot(Shot& shot);
 
 	// Puts the mesh in the scene at each node that references it, wearing the materials it names.
-	void
+	// True when one of them is a toon model's.
+	bool
 	BuildMesh(Shot& shot);
 
-	// Puts a sphere in the scene wearing the material the request named.
-	void
+	// Puts a sphere in the scene wearing the material the request named. True when it is a toon
+	// model's.
+	bool
 	BuildMaterial(Shot& shot);
 
 	// Frames [center, radius] in the shot's camera and viewport.
@@ -279,6 +292,7 @@ private:
 	editor::EnvironmentBinding m_Environment;
 
 	bgl::RenderTargetRef m_RenderTarget;
+	bgl::PostProcessType m_ProjectPostProcessType = bgl::PostProcessType::kFilmic;
 	bgl::SceneViewRef    m_SceneView;
 	bgl::MaterialHandle  m_DefaultMaterial;
 

@@ -270,7 +270,8 @@ namespace bgl
 	 *
 	 * Which rigged placements are evaluated is chosen on the GPU each frame: only those visible and
 	 * whose projected head is larger than `fadeEndPixels`, into a per-view pool of
-	 * cToonShadingRigPoolCapacity. Past the pool's capacity, or farther, a placement shades cel only.
+	 * cToonShadingRigPoolCapacity. Past the pool's capacity, or farther, a placement shades cel only;
+	 * which placements win the pool when more ask is unspecified and may change between frames.
 	 */
 	struct ToonShadingRigDesc
 	{

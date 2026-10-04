@@ -7,6 +7,7 @@
 #include <core/err/util.h>
 #include <editor_plugin_api/IEditorViewport.h>
 #include <editor_sdk/mesh_load.h>
+#include <editor_sdk/toon_content.h>
 
 #include <editor_plugin_api/IEditorHost.h>
 #include <editor_sdk/environment.h>
@@ -143,6 +144,9 @@ MeshPreviewWindow::ClearGeometry()
 	// Before anything is released, so a listener still sees the mesh these submeshes belong to.
 	if (!m_MeshPath.empty())
 		Q_EMIT GeometryAboutToChange();
+
+	m_SubmeshToon.clear();
+	m_Viewport->SetShowsToonContent(false);
 
 	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 		for (const InstanceRef& instance : m_Instances)
@@ -417,7 +421,12 @@ MeshPreviewWindow::LoadMesh(const std::filesystem::path& path)
 void
 MeshPreviewWindow::SetSubmeshMaterial(uint32_t submeshIndex, bgl::MaterialHandle material)
 {
-	m_Viewport->Invoke([&](editor::RenderContext&, const bgl::SceneViewRef& view) {
+	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
+		m_SubmeshToon.resize(m_SubmeshRefs.size(), false);
+		if (submeshIndex < m_SubmeshToon.size())
+			m_SubmeshToon[submeshIndex] =
+				material.IsValid() && editor::IsToonMaterial(context.graphics, material);
+
 		if (!material.IsValid() || submeshIndex >= m_SubmeshRefs.size())
 			return;
 
@@ -441,6 +450,8 @@ MeshPreviewWindow::SetSubmeshMaterial(uint32_t submeshIndex, bgl::MaterialHandle
 			qWarning("MeshPreview: SetSubmeshMaterial(%u) failed: %s", submeshIndex, e.what());
 		}
 	});
+
+	m_Viewport->SetShowsToonContent(std::ranges::find(m_SubmeshToon, true) != m_SubmeshToon.end());
 }
 
 std::vector<MeshPreviewWindow::SubmeshTarget>

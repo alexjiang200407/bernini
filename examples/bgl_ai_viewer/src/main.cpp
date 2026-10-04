@@ -17,6 +17,7 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/LodLevel.h>
 #include <bgl/glm.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/DirectionalLightDesc.h>
@@ -84,6 +85,9 @@ namespace
 		// Off unless asked for, as bgl's own default is; on, it takes bgl's default settings.
 		bool bloom = false;
 
+		// The post-process, "filmic" or "toon".
+		std::string postProcessType = "filmic";
+
 		// The camera frames the box every clip's poses fill unless asked for the playing clip's
 		// alone: a clip set with root motion walks that box far past any one pose.
 		bool frameClip = false;
@@ -115,6 +119,9 @@ namespace
 		// The view's selection of the automatic source, LodSelectionDesc's defaults unless asked.
 		std::optional<uint32_t> poseBudget;
 		std::optional<float>    posePixels;
+
+		// The level every placement draws (LodSelectionDesc::forceLevel). Empty selects by size.
+		std::optional<uint32_t> lod;
 	};
 
 	/** @throws std::runtime_error naming the three spellings when `name` is none of them. */
@@ -548,6 +555,13 @@ try
 			   "reconstructs the output (RenderTargetDesc::renderScale)")
 			->check(CLI::PositiveNumber);
 		app.add_flag("--bloom", opts.bloom, "Render with bloom at bgl's default settings");
+		app.add_option(
+			   "--post-process",
+			   opts.postProcessType,
+			   "The post-process: filmic (bgl's default, AgX and the grade) or toon, the exposed "
+			   "colour clamped, which a toon look is authored for "
+			   "(IRenderTarget::SetPostProcessType)")
+			->check(CLI::IsMember({ "filmic", "toon" }));
 		app.add_flag(
 			"--frame-clip",
 			opts.frameClip,
@@ -608,6 +622,12 @@ try
 			   "Size on screen below which an automatic unit on a one-level mesh draws from its "
 			   "table (LodSelectionDesc::posePixels)")
 			->check(CLI::PositiveNumber);
+		app.add_option(
+			   "--lod",
+			   opts.lod,
+			   "The level every placement draws, whatever its size; a mesh with fewer draws its "
+			   "coarsest (LodSelectionDesc::forceLevel)")
+			->check(CLI::Range(0u, bgl::cMaxMeshLods - 1u));
 
 		CLI11_PARSE(app, argc, argv);
 	}
@@ -634,6 +654,9 @@ try
 		opts.taa,
 		opts.renderScale);
 	target->SetBloomEnabled(opts.bloom);
+	target->SetPostProcessType(
+		opts.postProcessType == "toon" ? bgl::PostProcessType::kToon :
+										 bgl::PostProcessType::kFilmic);
 
 	auto scene     = headless::CreateHeadlessScene(graphics);
 	auto view      = graphics->CreateSceneView(scene, std::max(128u, 64u * opts.crowd));
@@ -645,26 +668,32 @@ try
 	const bool envLit = headless::LightView(view, envAssets, opts.env);
 
 	// Additive on the environment above, which already integrates whatever sun its source HDR held
-	// -- so a model measured under both is measured under two suns. See docs/ai_viewer.md.
+	// -- so a model measured under both is measured under two suns. One sun on screen: the PBR
+	// sun and the toon character model's are set alike. See docs/ai_viewer.md.
 	if (opts.sunIntensity > 0.0f)
 	{
-		view->SetDirectionalLight(
-			{ .direction = headless::SunDirection(
-				  glm::radians(opts.sunAzimuth),
-				  glm::radians(opts.sunElevation)),
-		      .color     = glm::vec3(opts.sunColor[0], opts.sunColor[1], opts.sunColor[2]),
-		      .intensity = opts.sunIntensity });
+		const auto sun = bgl::DirectionalLightDesc{
+			.direction = headless::SunDirection(
+				glm::radians(opts.sunAzimuth),
+				glm::radians(opts.sunElevation)),
+			.color     = glm::vec3(opts.sunColor[0], opts.sunColor[1], opts.sunColor[2]),
+			.intensity = opts.sunIntensity,
+		};
+		view->SetPbrDirectionalLight(sun);
+		view->SetToonDirectionalLight(sun);
 	}
 
 	const bool lit = envLit || opts.sunIntensity > 0.0f;
 
-	if (opts.poseBudget || opts.posePixels)
+	if (opts.poseBudget || opts.posePixels || opts.lod)
 	{
 		auto selection = view->GetLodSelection();
 		if (opts.poseBudget)
 			selection.poseBudget = *opts.poseBudget;
 		if (opts.posePixels)
 			selection.posePixels = *opts.posePixels;
+		if (opts.lod)
+			selection.forceLevel = static_cast<bgl::LodLevel>(*opts.lod);
 		view->SetLodSelection(selection);
 	}
 
@@ -673,8 +702,8 @@ try
 	                               PlaceGrassPatch(opts, store, *scene, assets, view);
 
 	std::cout << std::format(
-		"{} frames at {} fps, {}x{}, render scale {}, {}, TAA {}, bloom {}, {} warm-up frames "
-		"held at t = 0\n\n",
+		"{} frames at {} fps, {}x{}, render scale {}, {}, TAA {}, bloom {}, {} post-process, {} "
+		"warm-up frames held at t = 0\n\n",
 		opts.frames,
 		opts.fps,
 		opts.width,
@@ -685,6 +714,7 @@ try
 			std::string(lit ? "lit" : "unlit"),
 		opts.taa ? "on" : "off",
 		opts.bloom ? "on" : "off",
+		opts.postProcessType,
 		opts.warmup);
 
 	const std::filesystem::path outDir = std::filesystem::absolute(opts.outDir);

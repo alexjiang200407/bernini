@@ -1068,7 +1068,7 @@ to write back, and `assetlib_cli` is where a person deletes one deliberately.
 
 Assets reference each other **by path relative to the data root**, and there is no manifest, no GUID and
 no back-index: identity *is* the path. So "what references this?" is answered by walking the project.
-There are exactly five edges:
+There are exactly six edges:
 
 | Edge | Held by | Field |
 | --- | --- | --- |
@@ -1077,6 +1077,7 @@ There are exactly five edges:
 | material → source texture | `.bmaterial` | `PbrParams::routes[i].texture`, one per channel, and `geometryOcclusionTexture` |
 | mesh → skeleton | `.bimport` | `ImportDocument::skeleton` |
 | clip set → skeleton | `.banim` | `AnimationSet::skeleton` |
+| character → toon shading rig | `.bimport` | `ImportDocument::toonShadingRig` |
 
 A material names textures **twice** — the maps its last bake wrote, and the sources it read them from
 (a routed channel, the authored occlusion map). Both hold a file alive: the baked maps are what the
@@ -1093,6 +1094,8 @@ From those edges, three rules:
 * **A material deletes only if no mesh names it.**
 * **A texture deletes only if no material names it** — as either a baked map or a routed source.
 * **A skeleton deletes only if no mesh skins to it and no clip set was resampled against it.**
+* **A toon shading rig deletes only if no `.bimport` names it.** It names no file itself, so it
+  holds nothing else alive.
 
 Deletion is **not cascading by default**. The maps a deleted material leaves behind are precisely what
 the prune already collects, so the two compose instead of duplicating each other.

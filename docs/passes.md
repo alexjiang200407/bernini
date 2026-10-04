@@ -32,7 +32,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 
 `RenderContext` ([gfx/RenderContext.cpp](libs/bgl/src/gfx/RenderContext.cpp)) drives the frame and
 owns the long-lived pass objects (`m_BrdfLut`, `m_Forward`, `m_BlobShadows`, `m_Skybox`, `m_TransparentSort`,
-`m_CompactInstances`, `m_WriteInstanceBlocks`, `m_RigFrames`, `m_SkinnedPose`, `m_OutlineMask`, `m_TaaResolve`,
+`m_CompactInstances`, `m_WriteInstanceBlocks`, `m_RigFrames`, `m_SkinnedPose`, `m_ToonShadingRigs`, `m_OutlineMask`, `m_TaaResolve`,
 `m_BloomPass`, `m_PostProcess`, `m_OverlayPass`, `m_PreparePresentPass`); `Graphics` owns one context and
 forwards the frame methods to it. A frame is built between `BeginFrame` and `EndFrame`, with one `Draw` per
 view in between; the passes are added in this order and, because the graph never reorders, execute
@@ -49,7 +49,8 @@ flowchart TD
         RIG --> CI["Compact Instances (3 sub-passes, a 4th ahead of the cull with automatic placements)"]
         CI --> TS["Transparent Sort (3 sub-passes)"]
         TS --> POSE["Pose Skinned (one workgroup per skinned instance)"]
-        POSE --> FWW["Forward World (indirect dispatch per static-tier bucket)"]
+        POSE --> TSR["Toon Shading Rigs (only when a placement holds a rig; one thread per rigged placement)"]
+        TSR --> FWW["Forward World (indirect dispatch per static-tier bucket)"]
         FWW --> GRS["Forward Grass (only when a drawn geom has grass; one dispatch per grass bucket)"]
         GRS --> BLOB["Blob Shadows (only when the view has a disc; reads the depth as it stands)"]
         BLOB --> FWS["Forward Skinned (indirect dispatch per skinned-tier bucket)"]
@@ -103,6 +104,16 @@ applied**: exposure is a per-view scale and a target may carry several views, so
 fold it in, while the display curve — `AgX` in
 [lib/math/Tonemap.slang](libs/bgl/shaders/src/lib/math/Tonemap.slang) — belongs to the output and runs once.
 `AgX` leaves its result linear, so the sRGB backbuffer view is still what encodes it.
+
+**The post-process is the target's: filmic, or toon.** `IRenderTarget::SetPostProcessType` (and
+`RenderTargetDesc::postProcessType`) picks it per output, `PostProcessType::kFilmic` by default:
+AgX and the colour grade. `kToon` is Blender's Standard view: the exposed value clamped to [0, 1]
+and nothing else, so a colour authored to be seen as it is -- a toon look -- reaches the screen as
+authored, after the same sRGB encoding. The colour grade works in AgX's log encoding and is not
+applied under toon -- with it go its white balance, saturation, contrast and vignette, so the Color
+Grade toggle has no effect on a target in toon. RCAS, bloom and the editor's outline come before or
+after the curve and apply under both. A toon effect added later joins the `kToon` branch.
+Everything below is the filmic path.
 
 **The curve is Blender 5.2's AgX, and the LUT is Blender's own file.** Blender's `AgX Base sRGB`
 view is a 57³ formation LUT applied in FilmLight E-Gamut log2 space, then a Rec.1886 decode, and
@@ -259,7 +270,7 @@ the dielectric weight the environment's half already computed. `reflectance` sta
 own ratio — a blended surface raises its coverage by it, and a sun's radiance is not a fraction of
 anything. The sun is scaled by neither the material's ambient occlusion nor a shadow, because there
 is no shadow pass; what it is scaled by, and in which units, is
-[bgl_api.md](bgl_api.md)'s `SetDirectionalLight`.
+[bgl_api.md](bgl_api.md)'s `SetPbrDirectionalLight`.
 
 **Ambient occlusion has two sources, multiplied.** `PbrSurface::orm.r` is the material's own AO,
 read through UV0, times its geometry occlusion map — geometry AO baked on a unique second UV set, which a
@@ -596,6 +607,18 @@ reprojects through a pose nothing drew, which is the caller's to avoid.
   count in `scene.posePool` return at once — `bgpu` has no compute indirect dispatch.
 * **Skipped** when the view places no instance owning a palette and no automatic one. A table
   instance owns none and is posed by `Pose Rig Frames` once.
+
+### Toon Shading Rigs — [passes/ToonShadingRigPass.{h,cpp}](libs/bgl/src/passes/ToonShadingRigPass.cpp)
+
+One compute dispatch per draw, one thread per placement holding a toon shading rig, attached under
+the view's namespace after Pose Skinned and before every forward phase; absent from a view whose
+placements hold none. A thread selects its placement -- not hidden, its head sphere in this draw's
+frustum and larger on screen than the rig's `fadeEndPixels` -- into the view's pool with an atomic,
+evaluates the rig into the block it took, and writes the block's index plus one into the upper bits
+of the placement's `MeshInstance::flags`; every other rigged placement's bits it clears. Reads the
+palettes, the pose-pool slices, the dominant frames and the bone anim tables, since a head bone's
+pose is whichever the placement drew; writes the mesh buffer, the pool and the blocks. Its inputs,
+the math and the pool are in [Toon Shading Rig](toon_shading_rig.md).
 
 ### Write Instance Blocks — [passes/WriteInstanceBlocksPass.{h,cpp}](libs/bgl/src/passes/WriteInstanceBlocksPass.cpp)
 

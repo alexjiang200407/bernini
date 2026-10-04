@@ -12,6 +12,7 @@
 #include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/BToonShadingRig.h>
 #include <assetlib_structs/Skeleton.h>
 #include <cstddef>
 #include <cstdint>
@@ -881,5 +882,56 @@ namespace assetlib
 	describe(const BEnv& env)
 	{
 		return describe(env, nullptr);
+	}
+
+	std::string
+	describe(const BToonShadingRig& rig)
+	{
+		std::string out;
+
+		out += "btoonrig\n";
+		out += std::format(
+			"  head         bone {}  radius {}  fade {}..{} px\n",
+			rig.headBone.empty() ? std::string("(the placement's frame)") :
+								   "'" + rig.headBone + "'",
+			rig.headRadius,
+			rig.fadeEndPixels,
+			rig.fadeStartPixels);
+
+		const ToonFaceLight& light = rig.faceLight;
+		out += std::format(
+			"  face light   elevation {}..{}  azimuth <= {}  fade {}..{} by {} (degrees)\n",
+			light.minElevation,
+			light.maxElevation,
+			light.maxAzimuth,
+			light.azimuthFadeStart,
+			light.azimuthFadeEnd,
+			light.azimuthFadeAmount);
+
+		out += std::format("  edits        {}\n", rig.edits.size());
+		for (const ToonShadingRigEdit& edit : rig.edits)
+		{
+			out += std::format(
+				"    '{}'{}: {} keys, key sharpness {}\n",
+				edit.name,
+				edit.mirrored ? " mirrored" : "",
+				edit.keys.size(),
+				edit.keySharpness);
+
+			for (const ToonShadingRigKey& key : edit.keys)
+				out += std::format(
+					"      light ({}, {}, {})  at ({}, {}, {})  gain {}  size {}  radius {}\n",
+					key.light.x,
+					key.light.y,
+					key.light.z,
+					key.position.x,
+					key.position.y,
+					key.position.z,
+					key.gain,
+					key.size,
+					key.radius);
+		}
+
+		return out;
 	}
 }

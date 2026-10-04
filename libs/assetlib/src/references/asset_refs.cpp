@@ -132,7 +132,8 @@ namespace assetlib
 		 * every container it produced. The last two are references like any other: nothing else
 		 * records them, so a rename that missed one would leave the document naming a file that is
 		 * gone -- and an `outputs` entry naming a key that no longer exists reads as *absent* to
-		 * the producing side, which would put the old file back.
+		 * the producing side, which would put the old file back. It also names the toon shading rig
+		 * its face is shaded with, an edge like a material's.
 		 */
 		void
 		collectImportDocumentEdges(
@@ -157,6 +158,7 @@ namespace assetlib
 
 			if (!document.skeleton.empty())
 				addEdge(edges, referrer, document.skeleton, RefKind::kDocumentSkeleton);
+			addEdge(edges, referrer, document.toonShadingRig, RefKind::kToonShadingRig);
 			for (const std::string& output : document.outputs)
 				addEdge(edges, referrer, output, RefKind::kDocumentOutput);
 		}

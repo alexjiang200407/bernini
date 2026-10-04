@@ -24,6 +24,7 @@
 #include <QtNodes/internal/NodeData.hpp>
 #include <array>
 
+class QCheckBox;
 class QDoubleSpinBox;
 class QPushButton;
 class SurfaceTextureData;
@@ -34,10 +35,10 @@ class SurfaceTextureData;
  * The layer keys are its state too, edited from the properties panel (ADR-9).
  *
  * One is registered per surface the engine reflected, named `SurfaceOutput:<surface>`. A slot's
- * whole-texture port carries SurfaceTextureData; a *data* slot also offers one channel port per
- * component, carrying single-channel ChannelData, and the two kinds are mutually exclusive per
- * slot (ADR-7) -- the model asks PortAccepts before offering a wire. Colour, normal and coverage
- * slots stay whole-bound.
+ * whole-texture port carries SurfaceTextureData. A *data* slot can be split, as a PBR sink's group
+ * is: its whole port gives way to one channel port per component, carrying single-channel
+ * ChannelData -- whole or channels, never both (ADR-7). Colour, normal and coverage slots stay
+ * whole-bound.
  */
 class SurfaceOutputNode : public MaterialSinkNode
 {
@@ -117,8 +118,8 @@ public:
 	void
 	SetValue(size_t index, const glm::vec4& value);
 
-	/** How a port index maps onto the declared slots: every slot has a whole-texture port, and a
-	 *  data slot puts one channel port per component after its own. */
+	/** How a port index maps onto the declared slots: a slot has one whole-texture port, or -- a
+	 *  data slot that is split -- one channel port per component in its place. */
 	struct PortRef
 	{
 		size_t   slot      = SIZE_MAX;  // == textures.size() when the index is out of range
@@ -129,13 +130,32 @@ public:
 	[[nodiscard]] PortRef
 	ResolvePort(QtNodes::PortIndex port) const;
 
-	/** The whole-texture port of `slot`. */
+	/**
+	 * The whole-texture port of `slot`: its first port. Splitting a slot shifts every later slot's
+	 * ports, so a caller that wires the board must ask rather than hold literal indices.
+	 */
 	[[nodiscard]] unsigned int
 	WholePortFor(size_t slot) const;
 
-	/** The `component`-th channel port of data slot `slot`. */
+	/**
+	 * The port `slot`'s `component` connects to, honouring whether the slot is split: its own
+	 * channel port when it is, the one whole port when it is not -- as MaterialOutputNode::GroupPort
+	 * answers a collapsed group's wide port.
+	 */
 	[[nodiscard]] unsigned int
 	ChannelPortFor(size_t slot, uint32_t component) const;
+
+	/** Whether data slot `slot` shows its channel ports in place of its whole port. */
+	[[nodiscard]] bool
+	IsSplit(size_t slot) const;
+
+	/**
+	 * Splits data slot `slot` into channel ports, or joins it back into its whole port. The slot's
+	 * old ports go and take their wires with them, as unsplitting a PBR group does; a slot that is
+	 * not a data slot does not split.
+	 */
+	void
+	SetSplit(size_t slot, bool split);
 
 	/** Whether anything is wired into `slot`'s channel ports. */
 	[[nodiscard]] bool
@@ -195,6 +215,14 @@ private:
 	void
 	SyncWidgets();
 
+	// The ports `slot` takes: its channel count when split, else 1.
+	[[nodiscard]] unsigned int
+	SlotPortCount(size_t slot) const;
+
+	// The ports `split` gives `slot`.
+	[[nodiscard]] static unsigned int
+	PortsWhen(bool split);
+
 	void
 	PickColor(size_t index);
 
@@ -216,6 +244,11 @@ private:
 	std::vector<std::array<std::shared_ptr<ChannelData>, assetlib::c_SurfaceSlotChannelCount>>
 		m_Routes;
 
+	// The ports each texture slot takes: 1, or a split data slot's channel count -- and 0 for the
+	// moment SetSplit swaps them. Saved as which slots are split, by name, so a surface that
+	// reorders its slots still loads the split it had.
+	std::vector<unsigned int> m_SlotPorts;
+
 	assetlib::AlphaMode m_AlphaMode   = assetlib::AlphaMode::kOpaque;
 	float               m_AlphaCutoff = 0.5f;
 	bool                m_DoubleSided = true;
@@ -225,4 +258,7 @@ private:
 
 	// Parallel to m_Values; null everywhere but a `[Color]` value's row.
 	std::vector<QPushButton*> m_Swatches;
+
+	// Parallel to the texture slots; null everywhere but a data slot's row.
+	std::vector<QCheckBox*> m_SplitBoxes;
 };

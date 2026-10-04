@@ -1,9 +1,12 @@
 #include "Thumbnails/AssetThumbnailCache.h"
 #include "util/editor_language.h"
+#include "util/toon_light.h"
 #include <algorithm>
 #include <assetlib/bmesh.h>
+#include <bgl/IRenderTarget.h>
 #include <core/err/util.h>
 #include <editor_sdk/mesh_load.h>
+#include <editor_sdk/toon_content.h>
 
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
@@ -282,6 +285,7 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 			m_SceneView    = m_Desc.renderer->GetGraphics()->CreateSceneView(
 				m_Desc.renderer->GetScene(),
 				m_Desc.initialInstances);
+			m_SceneView->SetToonDirectionalLight(editor::DefaultToonLight());
 		}
 		catch (const std::exception& e)
 		{
@@ -931,15 +935,15 @@ AssetThumbnailCache::AcquireMaterial(std::string_view relPath, game::TexturePref
 void
 AssetThumbnailCache::BuildShot(Shot& shot)
 {
-	if (shot.item.type == ThumbnailType::kMesh)
-		BuildMesh(shot);
-	else
-		BuildMaterial(shot);
+	const bool toon =
+		shot.item.type == ThumbnailType::kMesh ? BuildMesh(shot) : BuildMaterial(shot);
+	m_RenderTarget->SetPostProcessType(
+		toon ? bgl::PostProcessType::kToon : m_ProjectPostProcessType);
 	if (shot.item.camera.has_value())
 		shot.job.camera = *shot.item.camera;
 }
 
-void
+bool
 AssetThumbnailCache::BuildMesh(Shot& shot)
 {
 	const assetlib::BMesh& mesh     = shot.item.mesh->mesh;
@@ -1006,9 +1010,10 @@ AssetThumbnailCache::BuildMesh(Shot& shot)
 	const float     radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
 
 	FrameShot(shot, center, radius);
+	return editor::AnyToonMaterial(*m_Desc.renderer->GetGraphics().Get(), materials);
 }
 
-void
+bool
 AssetThumbnailCache::BuildMaterial(Shot& shot)
 {
 	const std::string relPath =
@@ -1025,6 +1030,7 @@ AssetThumbnailCache::BuildMaterial(Shot& shot)
 		bgl::StaticMeshInstanceDesc().SetGeom(m_Geoms.back())));
 
 	FrameShot(shot, glm::vec3(0.0f), 1.0f);
+	return editor::IsToonMaterial(*m_Desc.renderer->GetGraphics().Get(), material);
 }
 
 void

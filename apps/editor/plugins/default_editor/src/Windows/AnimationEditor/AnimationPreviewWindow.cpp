@@ -10,6 +10,7 @@
 #include <editor_plugin_api/IEditorViewport.h>
 #include <editor_plugin_api/ILanguageResolver.h>
 #include <editor_sdk/mesh_load.h>
+#include <editor_sdk/toon_content.h>
 
 #include "Windows/AnimationEditor/animation_bindings.h"
 #include "Windows/AnimationEditor/animation_draws.h"
@@ -24,6 +25,7 @@
 #include <bgl/ISceneView.h>
 #include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/InstanceDesc.h>
+#include <bgl/types/MaterialHandle.h>
 #include <bgl/types/MeshInstanceHandle.h>
 #include <editor_plugin_api/localize.h>
 #include <editor_sdk/BMeshUtil.h>
@@ -83,6 +85,29 @@ namespace
 	FirstEnvironmentUrl(const QMimeData* mime)
 	{
 		return editor::FirstLocalFileWithSuffix(mime, u".benv");
+	}
+
+	// Whether a material the mesh binds is a toon model's. Each is already held by the mesh's
+	// acquire, so the acquire here is a lookup; one that cannot load draws nothing toon.
+	bool
+	BindsToonMaterial(editor::RenderContext& context, const assetlib::MeshBindings& bindings)
+	{
+		for (const std::string& path : bindings.submeshMaterials)
+		{
+			if (path.empty())
+				continue;
+			try
+			{
+				const bgl::MaterialHandle material = context.assets.AcquireMaterial(path);
+				const bool                toon = editor::IsToonMaterial(context.graphics, material);
+				context.assets.ReleaseMaterial(material);
+				if (toon)
+					return true;
+			}
+			catch (const std::exception&)
+			{}
+		}
+		return false;
 	}
 }
 
@@ -346,6 +371,8 @@ AnimationPreviewWindow::Clear()
 void
 AnimationPreviewWindow::ClearGeometry()
 {
+	m_Viewport->SetShowsToonContent(false);
+
 	if (m_GroundPlaced)
 	{
 		// The floor leaves with the rig, and the ground it tilted goes back to flat: the scene is
@@ -628,7 +655,8 @@ AnimationPreviewWindow::LoadMesh(
 				core::throw_runtime_error("Animation has no owning import document");
 			animationSource = assetlib::importedSourceKeyFor(owner->documentKey, owner->document);
 		}
-		auto loaded = Loaded();
+		auto loaded    = Loaded();
+		bool showsToon = false;
 
 		if (m_ForcedLod.has_value())
 			SetForcedLod(std::nullopt);
@@ -772,10 +800,12 @@ AnimationPreviewWindow::LoadMesh(
 							ApplyBlobShadow(view, draw.instance, draw.castsShadow);
 					}
 
-					loaded = std::move(out);
+					showsToon = BindsToonMaterial(context, current.bindings);
+					loaded    = std::move(out);
 				});
 			},
 			background::Cancellable::kNo);
+		m_Viewport->SetShowsToonContent(showsToon);
 
 		if (!upload.Completed())
 		{

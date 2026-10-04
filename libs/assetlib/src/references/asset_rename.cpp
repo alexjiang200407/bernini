@@ -238,22 +238,25 @@ namespace assetlib
 				for (MaterialOverrideBinding& entry : document.materialOverrides)
 					entry.material = mapTarget(plan, entry.material);
 
-				document.source     = mapTarget(plan, document.source);
-				document.skeleton   = mapTarget(plan, document.skeleton);
-				document.textureDir = mapTarget(plan, document.textureDir);
+				document.source         = mapTarget(plan, document.source);
+				document.skeleton       = mapTarget(plan, document.skeleton);
+				document.toonShadingRig = mapTarget(plan, document.toonShadingRig);
+				document.textureDir     = mapTarget(plan, document.textureDir);
 				for (std::string& output : document.outputs) output = mapTarget(plan, output);
 				return AssetCodec<ImportDocument>::Serialize(document);
 			}
 
 			// Nothing here holds a reference to rewrite: a skeleton names no asset, the foreign
-			// kinds are bytes this library does not read, and an avatar reaches its skeleton by the
-			// convention its own key is rather than by naming it.
+			// kinds are bytes this library does not read, an avatar reaches its skeleton by the
+			// convention its own key is rather than by naming it, and a toon shading rig names its
+			// head bone and no file.
 			case AssetType::kTexture:
 			case AssetType::kSkeleton:
 			case AssetType::kUiDocument:
 			case AssetType::kUiStyle:
 			case AssetType::kFont:
 			case AssetType::kAvatar:
+			case AssetType::kToonShadingRig:
 			case AssetType::kCount:
 				break;
 			}

@@ -28,6 +28,7 @@
 #include <bgl/idl/SkinnedAutoState.h>
 #include <bgl/idl/SkinnedState.h>
 #include <bgl/idl/SkinnedTableState.h>
+#include <bgl/idl/ToonShadingRigRange.h>
 #include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl/types/GeomHandle.h>
@@ -213,7 +214,7 @@ namespace bgl
 			m_ResourceManager,
 			bgpu::UploadBufferDesc().SetInitialCount(1).SetDebugName("Grass Chunk Refs")),
 		m_TransparentSort(m_ResourceManager, PaddedInstances(m_InitialInstances)),
-		m_AutoPose(m_ResourceManager, 1),
+		m_AutoPose(m_ResourceManager, 1), m_ToonShadingRigs(m_ResourceManager),
 		// The outline binds it as the mesh stage's compactedInstances, which is a ComputeBuffer.
 		m_CurrentSelectedInstances(
 			m_ResourceManager,
@@ -1143,7 +1144,8 @@ namespace bgl
 
 		m_SceneRaw->AcquireToonShadingRig(rig);
 		m_SceneRaw->ReleaseToonShadingRig(meta.toonShadingRig);
-		meta.toonShadingRig = rig;
+		meta.toonShadingRig    = rig;
+		m_ToonShadingRigsDirty = true;
 	}
 
 	void
@@ -1192,8 +1194,17 @@ namespace bgl
 		}
 
 		MeshMeta& meta = m_MeshBuffer.MetaAt(instance.handle.index);
+		if (!meta.toonShadingRig.IsValid())
+		{
+			return;
+		}
 		m_SceneRaw->ReleaseToonShadingRig(meta.toonShadingRig);
-		meta.toonShadingRig = ToonShadingRigHandle();
+		meta.toonShadingRig    = ToonShadingRigHandle();
+		m_ToonShadingRigsDirty = true;
+
+		// The evaluation pass no longer reaches the placement, so its record is uploaded again to
+		// take the slot bits the pass last wrote off it.
+		m_MeshBuffer.Set(instance.handle, m_MeshBuffer.AtIndex(instance.handle.index));
 	}
 
 	ToonShadingRigHandle
@@ -1325,7 +1336,11 @@ namespace bgl
 		{
 			m_BlobShadowsDirty = true;
 		}
-		m_SceneRaw->ReleaseToonShadingRig(meta.toonShadingRig);
+		if (meta.toonShadingRig.IsValid())
+		{
+			m_SceneRaw->ReleaseToonShadingRig(meta.toonShadingRig);
+			m_ToonShadingRigsDirty = true;
+		}
 		if (!m_SceneRaw->GetGeomGrass(meta.geom).empty())
 		{
 			m_GrassDirty = true;
@@ -1534,6 +1549,49 @@ namespace bgl
 	}
 
 	void
+	SceneView::RebuildToonShadingRigList()
+	{
+		auto ranges = std::vector<idl::ToonShadingRigRange>();
+
+		for (uint32_t meshIndex = 0; meshIndex < m_MeshBuffer.Capacity(); ++meshIndex)
+		{
+			if (!m_MeshBuffer.IsIndexValid(meshIndex))
+			{
+				continue;
+			}
+			const ToonShadingRigHandle rig = m_MeshBuffer.MetaAt(meshIndex).toonShadingRig;
+			if (rig.IsValid())
+			{
+				auto range           = idl::ToonShadingRigRange();
+				range.firstPlacement = meshIndex;
+				range.count          = 1;
+				range.rig            = rig.handle;
+				ranges.push_back(range);
+			}
+		}
+
+		for (uint32_t index = 0; index < m_InstanceBlocks.capacity(); ++index)
+		{
+			if (!m_InstanceBlocks.allocated(index))
+			{
+				continue;
+			}
+			const MeshInstanceBlock& block = m_InstanceBlocks[index];
+			if (block.toonShadingRig.IsValid())
+			{
+				auto range           = idl::ToonShadingRigRange();
+				range.firstPlacement = block.range.first;
+				range.count          = block.range.count;
+				range.rig            = block.toonShadingRig.handle;
+				ranges.push_back(range);
+			}
+		}
+
+		m_ToonShadingRigs.Assign(std::move(ranges));
+		m_ToonShadingRigsDirty = false;
+	}
+
+	void
 	SceneView::RebuildBlobShadowList()
 	{
 		auto list = std::vector<idl::BlobShadow>();
@@ -1698,33 +1756,52 @@ namespace bgl
 		++m_TemporalEpoch;
 	}
 
-	void
-	SceneView::SetDirectionalLight(const DirectionalLightDesc& desc)
+	namespace
 	{
-		if (!core::is_finite(desc.direction) || !core::is_finite(desc.color) ||
-		    !std::isfinite(desc.intensity))
+		/** `desc` with its direction normalized, or a refusal naming `caller`. */
+		DirectionalLightDesc
+		ValidatedLight(const DirectionalLightDesc& desc, const std::string_view caller)
 		{
-			throw SceneError("SetDirectionalLight: direction, colour and intensity must be finite");
-		}
+			if (!core::is_finite(desc.direction) || !core::is_finite(desc.color) ||
+			    !std::isfinite(desc.intensity))
+			{
+				throw SceneError(
+					std::format("{}: direction, colour and intensity must be finite", caller));
+			}
 
-		if (desc.intensity < 0.0f)
-		{
-			throw SceneError(
-				std::format(
-					"SetDirectionalLight: intensity must be non-negative, got {}",
-					desc.intensity));
-		}
+			if (desc.intensity < 0.0f)
+			{
+				throw SceneError(
+					std::format(
+						"{}: intensity must be non-negative, got {}",
+						caller,
+						desc.intensity));
+			}
 
-		// Normalizing a zero-length direction yields NaN, and there is no direction to fall back on
-		// -- a sun pointing nowhere is the caller forgetting to set one, not a sun that is off.
-		const auto lengthSq = glm::dot(desc.direction, desc.direction);
-		if (lengthSq <= 0.0f)
-		{
-			throw SceneError("SetDirectionalLight: direction must have non-zero length");
-		}
+			// Normalizing a zero-length direction yields NaN, and there is no direction to fall back
+			// on -- a sun pointing nowhere is the caller forgetting to set one, not a sun that is off.
+			const auto lengthSq = glm::dot(desc.direction, desc.direction);
+			if (lengthSq <= 0.0f)
+			{
+				throw SceneError(std::format("{}: direction must have non-zero length", caller));
+			}
 
-		m_DirectionalLight           = desc;
-		m_DirectionalLight.direction = desc.direction * glm::inversesqrt(lengthSq);
+			auto light      = desc;
+			light.direction = desc.direction * glm::inversesqrt(lengthSq);
+			return light;
+		}
+	}
+
+	void
+	SceneView::SetPbrDirectionalLight(const DirectionalLightDesc& desc)
+	{
+		m_PbrDirectionalLight = ValidatedLight(desc, "SetPbrDirectionalLight");
+	}
+
+	void
+	SceneView::SetToonDirectionalLight(const DirectionalLightDesc& desc)
+	{
+		m_ToonDirectionalLight = ValidatedLight(desc, "SetToonDirectionalLight");
 	}
 
 	void
@@ -1905,6 +1982,7 @@ namespace bgl
 			if (desc.toonShadingRig.IsValid())
 			{
 				m_SceneRaw->AcquireToonShadingRig(desc.toonShadingRig);
+				m_ToonShadingRigsDirty = true;
 			}
 
 			m_AutoDirty = m_AutoDirty || skinned;
@@ -1967,7 +2045,11 @@ namespace bgl
 
 		MeshInstanceBlock& record = m_InstanceBlocks[block.handle.index];
 		ReleaseBlockRange(record.range, record.shared);
-		m_SceneRaw->ReleaseToonShadingRig(record.toonShadingRig);
+		if (record.toonShadingRig.IsValid())
+		{
+			m_SceneRaw->ReleaseToonShadingRig(record.toonShadingRig);
+			m_ToonShadingRigsDirty = true;
+		}
 
 		record = MeshInstanceBlock();
 		m_InstanceBlocks.release_slot(block.handle);
@@ -2159,6 +2241,12 @@ namespace bgl
 		m_AutoPose.Update(cmdList);
 		m_Palettes.Update(cmdList);
 
+		if (m_ToonShadingRigsDirty)
+		{
+			RebuildToonShadingRigList();
+		}
+		m_ToonShadingRigs.Update(cmdList);
+
 		if (m_BlobShadowsDirty)
 		{
 			RebuildBlobShadowList();
@@ -2262,6 +2350,16 @@ namespace bgl
 			auto palettes = std::string(c_BonePaletteName);
 			fg.ImportBuffer(palettes, m_Palettes.GetBufferHandle());
 			resourceNames.push_back(std::move(palettes));
+		}
+
+		{
+			// Rebuilt before the handles are read, as the lists above: the first range grows the
+			// block pool, and growth mints a new handle.
+			if (m_ToonShadingRigsDirty)
+			{
+				RebuildToonShadingRigList();
+			}
+			m_ToonShadingRigs.ImportResources(fg, resourceNames);
 		}
 
 		{

@@ -5,6 +5,7 @@
 #include "scene/BonePaletteBuffer.h"
 #include "scene/CullState.h"
 #include "scene/NamedBuffer.h"
+#include "scene/ToonShadingRigState.h"
 #include "scene/TransparentSortState.h"
 #include "scene/scene_buffer_names.h"
 #include "types/AutoRecord.h"
@@ -238,7 +239,10 @@ namespace bgl
 		SetEnvironmentMap(const EnvironmentMapDesc& desc) override;
 
 		void
-		SetDirectionalLight(const DirectionalLightDesc& desc) override;
+		SetPbrDirectionalLight(const DirectionalLightDesc& desc) override;
+
+		void
+		SetToonDirectionalLight(const DirectionalLightDesc& desc) override;
 
 		void
 		SetSkyBox(SkyboxDesc desc) override;
@@ -252,11 +256,18 @@ namespace bgl
 			return m_EnvironmentMap;
 		}
 
-		/// The sun as SetDirectionalLight left it, with `direction` already normalized.
+		/// The sun as SetPbrDirectionalLight left it, with `direction` already normalized.
 		[[nodiscard]] const DirectionalLightDesc&
-		GetDirectionalLight() const noexcept
+		GetPbrDirectionalLight() const noexcept
 		{
-			return m_DirectionalLight;
+			return m_PbrDirectionalLight;
+		}
+
+		/// The toon character model's sun as SetToonDirectionalLight left it, normalized likewise.
+		[[nodiscard]] const DirectionalLightDesc&
+		GetToonDirectionalLight() const noexcept
+		{
+			return m_ToonDirectionalLight;
 		}
 
 		[[nodiscard]] float
@@ -326,6 +337,13 @@ namespace bgl
 		GetAutoPose() const noexcept
 		{
 			return m_AutoPose;
+		}
+
+		/** The rigged placement ranges and the pool their evaluated blocks are written into. */
+		[[nodiscard]] const ToonShadingRigState&
+		GetToonShadingRigs() const noexcept
+		{
+			return m_ToonShadingRigs;
 		}
 
 		/**
@@ -675,6 +693,11 @@ namespace bgl
 		void
 		RebuildAutoList();
 
+		// Re-derives the toon shading rig ranges from the live placements and blocks. O(placements +
+		// blocks), and only after a rig changed hands.
+		void
+		RebuildToonShadingRigList();
+
 		/**
 		 * Re-resolves every non-overridden instance against the Scene's current defaults, rewriting
 		 * only those that changed. O(instances), but only runs after a SetSubmeshMaterial -- an
@@ -791,6 +814,11 @@ namespace bgl
 		core::multi_slot_handle m_PosePoolBlock;
 		bool                    m_AutoDirty = false;
 
+		// Per view: the ranges of placements holding a toon shading rig, rebuilt whenever a rig is
+		// set or cleared or its holder deleted -- the authoring-time bargain m_PosedDirty keeps.
+		ToonShadingRigState m_ToonShadingRigs;
+		bool                m_ToonShadingRigsDirty = false;
+
 		// The dense indices of the selected submesh instances. Any Erase on m_InstanceBuffer can
 		// move a dense index, so a deletion staleness-marks the list exactly like a selection
 		// change does.
@@ -807,7 +835,8 @@ namespace bgl
 
 		EnvironmentMap            m_EnvironmentMap;
 		std::optional<SkyboxDesc> m_Skybox;
-		DirectionalLightDesc      m_DirectionalLight;
+		DirectionalLightDesc      m_PbrDirectionalLight;
+		DirectionalLightDesc      m_ToonDirectionalLight;
 		float                     m_Exposure = 1.0f;
 		WindDesc                  m_Wind;
 		LodSelectionDesc          m_LodSelection;

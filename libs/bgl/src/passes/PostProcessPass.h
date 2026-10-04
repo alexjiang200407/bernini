@@ -79,6 +79,7 @@ namespace bgl
 			// Validated by the target that carries it; written only when enabled.
 			ColorGradeSettings colorGrade;
 			bool               colorGradeEnabled = false;
+			PostProcessType    postProcessType   = PostProcessType::kFilmic;
 		};
 
 		explicit PostProcessPass(const PassInitContext& ctx);

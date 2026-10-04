@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <editor_plugin_api/IEditorViewport.h>
+#include <optional>
 #include <qcoreevent.h>
 #include <qpaintdevice.h>
 #include <qtmetamacros.h>
@@ -159,6 +160,21 @@ public:
 
 	[[nodiscard]] bgl::ColorGradeSettings
 	GetColorGradeSettings() const;
+
+	// The post-process this viewport ends in is the user's pick if there is one, else toon for
+	// toon content, else the project's. Each setter re-derives it.
+	void
+	SetProjectPostProcessType(bgl::PostProcessType postProcessType);
+
+	// Empty is Auto: the project and the content decide.
+	void
+	SetChosenPostProcessType(std::optional<bgl::PostProcessType> postProcessType);
+
+	void
+	SetShowsToonContent(bool toon) override;
+
+	[[nodiscard]] bgl::PostProcessType
+	GetPostProcessType() const noexcept;
 
 	// Times every pass of this viewport's frames on the GPU; the rows ride FrameStatsUpdated as the
 	// table Log GPU Pass Timings writes. Off by default: a timed frame is not free.
@@ -323,9 +339,16 @@ private:
 	// backbuffers.
 	QTimer* m_ResizeTimer = nullptr;
 
+	void
+	ApplyPostProcessType();
+
 	RenderTargetWindowDesc m_Desc;
 	bgl::RenderTargetRef   m_RenderTarget;
-	bgl::SceneViewRef      m_SceneView;
+
+	bgl::PostProcessType                m_ProjectPostProcessType = bgl::PostProcessType::kFilmic;
+	std::optional<bgl::PostProcessType> m_ChosenPostProcessType;
+	bool                                m_ShowsToonContent = false;
+	bgl::SceneViewRef                   m_SceneView;
 
 	// Non-zero only while this window is in the frame loop.
 	Renderer::ViewportId m_ViewportId = 0;

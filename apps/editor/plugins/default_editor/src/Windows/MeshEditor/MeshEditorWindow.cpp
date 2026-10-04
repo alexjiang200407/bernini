@@ -505,7 +505,9 @@ MeshEditorWindow::ResetGraph(int graphIndex, const QJsonObject& graph)
 		}
 		else
 		{
-			model.load(graph);
+			QJsonObject current = graph;
+			UpgradeSurfaceSinkPorts(current, *m_Registry);
+			model.load(current);
 		}
 	});
 }

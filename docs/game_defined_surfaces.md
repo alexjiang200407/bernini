@@ -106,10 +106,26 @@ place — and `face` says how much of the pixel takes its placement's toon shadi
 light (`ISceneView::SetToonShadingRig`, or an instance block's `toonShadingRig`; [bgl API](bgl_api.md)). No other shading model reads a rig. Every field defaults to what a surface
 that says nothing about it means. The environment's half holds a `baseColor` alone.
 
-**The lighting does not read them yet.** Both models draw `baseColor` flat:
-`lib.math.ToonShading`'s `ShadeToonCharacter` and `ShadeToonEnvironment` return it as pre-exposure
-radiance, reading nothing of the light, so exposure and tonemapping still apply after it as for
-every surface.
+**The character is lit by the toon sun alone** (`ISceneView::SetToonDirectionalLight`), a light of
+its own beside the one every other model reads, with no fallback between them.
+`lib.math.ToonShading`'s `ShadeToonCharacter` takes the term from the reader's world normal and that
+sun's direction, picks the tone, and multiplies it by the sun's radiance: every tone, shades included, so a shade is the lit colour darkened by its
+tint and a sun's colour reaches all three. There is no environment term, no highlight and no rim —
+a cel shade is a flat painted tone, and an ambient term would grade it with the normal. Steps of
+zero keep every pixel lit, as an eye is authored. On a placement whose toon shading rig was
+evaluated this draw, a pixel that is `face` takes the rig instead, by as much as it is face: lit by
+the rig's face light rather than the sun, and its terminator moved by the rig's edits
+([Toon Shading Rig](toon_shading_rig.md) § The pixels). A character's buckets therefore draw at
+rest through programs of their own, whose vertices carry the placement's evaluated block; a
+blended character, and one dissolving between levels, shade without the rig. The environment model
+still draws `baseColor` flat, reading nothing of the light.
+Both return pre-exposure radiance, so exposure and tonemapping apply after them as for every
+surface.
+
+**A toon look is authored for the toon post-process**, Blender's Standard view -- its cel colours
+are the screen's, which AgX's filmic curve would lift and desaturate -- so a toon game sets its
+project's `.bproj` `postProcess` to `"toon"` and its targets end in it
+(`IRenderTarget::SetPostProcessType`); the editor shows a toon asset in it on its own.
 
 **A toon surface draws through the lit programs.** Registration binds a toon slot to its model's
 adapter over the game's type — `ToonCharacterLit<G>` or `ToonEnvironmentLit<G>`, in
@@ -293,7 +309,9 @@ per-slot bakes — is identical under every model.
   channel routes, an object: `routes` maps `r`/`g`/`b`/`a` to `{texture, channel}` with the
   source stamps beside them, and `baked`/`token` name the packed map the bake wrote. The two
   forms are exclusive per slot, the routes winning where a document carries both. Routing is the
-  editor's offer on *data* slots only — a colour or a normal map is authored whole — and the bake
+  editor's offer on *data* slots only — a colour or a normal map is authored whole: the sink shows
+  a data slot's one whole port until its "Split {slot}" box swaps it for four channel ports, as a
+  PBR sink's group splits, and a routed document opens with its slot split — and the bake
   behind it is `AssetStore::BakeMaterial`, the same compositor the PBR triplet uses, writing one
   linear BC7 map per routed slot under the shared `slot_` prefix. A routed slot whose bake is
   stale or absent draws each channel from its own source instead: the routes ride the material's

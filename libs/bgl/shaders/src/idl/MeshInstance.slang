@@ -29,7 +29,9 @@ public struct MeshInstance
     public RawEntry<IPlayback> playback;
 
     // MeshInstanceFlag bits; zero is the default behaviour. Read by every GPU stage that reaches the
-    // placement, so a bit takes effect in all of them at once.
+    // placement, so a bit takes effect in all of them at once. The bits from
+    // cToonShadingRigSlotShift up are the renderer's, not a flag: the placement's evaluated toon
+    // shading rig block this draw (idl.ToonShadingRigPool), written by that pass alone.
     public uint flags;
 
     // Seconds its playback record is evaluated ahead of the view's clock, at `time` and at

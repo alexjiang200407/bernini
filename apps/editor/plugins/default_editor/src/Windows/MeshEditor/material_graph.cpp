@@ -34,6 +34,7 @@
 #include "Windows/MeshEditor/nodes/SurfaceOutputNode.h"
 #include "Windows/MeshEditor/nodes/TextureNode.h"
 #include <QtNodes/internal/Definitions.hpp>
+#include <QtNodes/internal/NodeDelegateModel.hpp>
 #include <QtNodes/internal/NodeDelegateModelRegistry.hpp>
 #include <assetlib/bmaterial.h>
 #include <assetlib_structs/BMaterial.h>
@@ -201,6 +202,84 @@ RebaseGraphTextures(QJsonObject& graph, const std::filesystem::path& dir, bool t
 		nodeValue             = node;
 	}
 	graph["nodes"] = nodes;
+}
+
+void
+UpgradeSurfaceSinkPorts(QJsonObject& graph, QtNodes::NodeDelegateModelRegistry& registry)
+{
+	QJsonArray nodes       = graph["nodes"].toArray();
+	QJsonArray connections = graph["connections"].toArray();
+
+	for (QJsonValueRef nodeValue : nodes)
+	{
+		QJsonObject node     = nodeValue.toObject();
+		QJsonObject internal = node["internal-data"].toObject();
+		if (!internal["model-name"].toString().startsWith(QLatin1String("SurfaceOutput:")) ||
+		    internal.contains(QLatin1String("split")))
+			continue;
+
+		const std::unique_ptr<QtNodes::NodeDelegateModel> created =
+			registry.create(internal["model-name"].toString());
+		auto* sink = qobject_cast<SurfaceOutputNode*>(created.get());
+		if (sink == nullptr)
+			continue;
+
+		// The layout the board was saved in: each slot's whole port, then a data slot's channels.
+		const std::vector<bgl::SurfaceTexture>& declared = sink->Surface().params.textures;
+		auto                                    legacy = std::vector<SurfaceOutputNode::PortRef>();
+		for (size_t slot = 0; slot < declared.size(); ++slot)
+		{
+			legacy.push_back({ slot, true, 0 });
+			if (declared[slot].kind != bgl::SurfaceTextureKind::kData)
+				continue;
+			for (uint32_t c = 0; c < assetlib::c_SurfaceSlotChannelCount; ++c)
+				legacy.push_back({ slot, false, c });
+		}
+
+		const int  id = node["id"].toInt();
+		const auto legacyOf =
+			[&](const QJsonObject& connection) -> const SurfaceOutputNode::PortRef* {
+			const int port = connection["inPortIndex"].toInt();
+			if (connection["inNodeId"].toInt() != id || port < 0 ||
+			    static_cast<size_t>(port) >= legacy.size())
+				return nullptr;
+			return &legacy[static_cast<size_t>(port)];
+		};
+
+		auto split = QJsonObject();
+		for (const QJsonValue& value : connections)
+		{
+			if (const auto* ref = legacyOf(value.toObject()); ref != nullptr && !ref->whole)
+				split[QString::fromStdString(declared[ref->slot].name)] = true;
+		}
+		sink->load(QJsonObject{ { "split", split } });
+
+		auto kept = QJsonArray();
+		for (const QJsonValue& value : connections)
+		{
+			QJsonObject connection = value.toObject();
+			if (connection["inNodeId"].toInt() == id)
+			{
+				const auto* ref = legacyOf(connection);
+
+				// A whole wire into a slot its channels split: ADR-7 never let both be wired.
+				if (ref == nullptr || ref->whole == sink->IsSplit(ref->slot))
+					continue;
+				connection["inPortIndex"] = static_cast<int>(
+					ref->whole ? sink->WholePortFor(ref->slot) :
+								 sink->ChannelPortFor(ref->slot, ref->component));
+			}
+			kept.append(connection);
+		}
+		connections = kept;
+
+		internal["split"]     = split;
+		node["internal-data"] = internal;
+		nodeValue             = node;
+	}
+
+	graph["nodes"]       = nodes;
+	graph["connections"] = connections;
 }
 
 std::shared_ptr<QtNodes::NodeDelegateModelRegistry>
