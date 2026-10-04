@@ -5,6 +5,7 @@
 #include "util/TestEnvironment.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
+#include "util/VelocityReadback.h"
 #include <bgl/GeomType.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IMeshInstanceWriter.h>
@@ -118,12 +119,17 @@ namespace
 			return drawn;
 		}
 
-		/** `c_Shown` automatic placements where the mover puts its shown slots, one by one. */
+		/**
+		 * `c_Shown` automatic placements where the mover puts its shown slots, one by one, each
+		 * spawned `offsetStep` seconds further into the clip than the one before -- what a slot
+		 * the mover gives that offset should draw.
+		 */
 		void
-		AddFromCpu(bgl::ISceneView& view) const
+		AddFromCpu(bgl::ISceneView& view, float offsetStep = 0.0f) const
 		{
 			for (uint32_t slot = 0; slot < c_Shown; ++slot)
 			{
+				const float ahead = float(slot) * offsetStep * synth::c_SampleRate;
 				view.CreateSkinnedMeshInstance(
 					bgl::SkinnedMeshInstanceDesc()
 						.SetGeom(quad)
@@ -131,13 +137,14 @@ namespace
 							glm::translate(
 								glm::mat4(1.0f),
 								c_Origin + glm::vec3(c_Spacing * float(slot), 0.0f, 0.0f)))
-						.SetPlayback(c_Playback)
+						.SetPlayback(
+							bgl::SkinnedPlaybackDesc::FromClip(synth::c_LoopClip, ahead, 1.0f))
 						.SetSource(bgl::PoseSource::kAuto));
 			}
 		}
 
 		bgl::MeshInstanceBlockHandle
-		AddBlock(bgl::ISceneView& view) const
+		AddBlock(bgl::ISceneView& view, float offsetStep = 0.0f) const
 		{
 			const auto block = view.CreateMeshInstanceBlock(
 				bgl::MeshInstanceBlockDesc()
@@ -150,7 +157,7 @@ namespace
 			params["spacing"]    = c_Spacing;
 			params["motion"]     = glm::vec3(0.0f);
 			params["shown"]      = c_Shown;
-			params["offsetStep"] = 0.0f;
+			params["offsetStep"] = offsetStep;
 			return block;
 		}
 
@@ -238,4 +245,46 @@ TEST_CASE(
 	s.Draw(drawn, 1);
 	CHECK(view->GetAutoPose().GetPlacementCount() == 0);
 	CHECK_FALSE(view->GetPlaybackArena().IsOffsetValid(record));
+}
+
+TEST_CASE(
+	"A skinned block's slot plays its record its offset ahead of the clock",
+	"[instance_block][skinned][auto][render]")
+{
+	auto s = SkinnedBlockScene(bgl::test::CreateGraphics(HeadlessOptions()));
+
+	const auto source = GENERATE(bgl::PoseSource::kPerInstance, bgl::PoseSource::kBoneAnimTable);
+	INFO((source == bgl::PoseSource::kPerInstance ? "per instance" : "from the table"));
+
+	// A fifth of a loop cycle apart, so each of the three slots stands somewhere else.
+	constexpr float c_OffsetStep = 0.4f / synth::c_SampleRate;
+
+	auto fromCpu = s.MakeView(source);
+	s.AddFromCpu(*fromCpu.view, c_OffsetStep);
+
+	auto fromBlock = s.MakeView(source);
+	s.AddBlock(*fromBlock.view, c_OffsetStep);
+
+	const auto cpu   = s.Draw(fromCpu, 6);
+	const auto block = s.Draw(fromBlock, 6);
+	CHECK(block == cpu);
+
+	// The offsets are what moved them: the same block played in step draws something else.
+	auto inStep = s.MakeView(source);
+	s.AddBlock(*inStep.view);
+	CHECK(s.Draw(inStep, 6) != cpu);
+
+	// And the pose the frame before was evaluated at the same offset, or the motion would differ.
+	const auto cpuMotion =
+		bgl::test::ReadVelocityTexels(s.gfx.Get(), fromCpu.target.Get(), c_Size, c_Size);
+	const auto blockMotion =
+		bgl::test::ReadVelocityTexels(s.gfx.Get(), fromBlock.target.Get(), c_Size, c_Size);
+	REQUIRE(cpuMotion.size() == blockMotion.size());
+	uint32_t moving = 0;
+	for (size_t i = 0; i < cpuMotion.size(); ++i)
+	{
+		CHECK(glm::length(glm::vec2(blockMotion[i]) - glm::vec2(cpuMotion[i])) < 1e-3f);
+		moving += glm::length(glm::vec2(cpuMotion[i])) > 1e-3f ? 1u : 0u;
+	}
+	CHECK(moving > 0);
 }
