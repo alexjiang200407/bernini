@@ -426,40 +426,43 @@ TEST_CASE("originOf answers only for a key inside a half", "[project][origin]")
 	CHECK_FALSE(originOf("DerivedThings/a.bmesh").has_value());
 }
 
-TEST_CASE("A project's tone mapping round-trips, AgX unless it says otherwise", "[project]")
+TEST_CASE("A project's post-process type round-trips, filmic unless it says otherwise", "[project]")
 {
-	const Sandbox sandbox("bernini_project_tone_mapping_round_trips");
+	const Sandbox sandbox("bernini_project_post_process_round_trips");
 
 	Project created = Project::Create(sandbox.ProjectFile(), "MyGame");
-	CHECK(created.GetToneMapping() == assetlib::ToneMapping::kAgX);
-	// Create writes what it always wrote: AgX is the absent key.
-	CHECK_FALSE(nlohmann::json::parse(ReadText(sandbox.ProjectFile())).contains("toneMapping"));
+	CHECK(created.GetPostProcessType() == assetlib::PostProcessType::kFilmic);
+	// Create writes what it always wrote: filmic is the absent key.
+	CHECK_FALSE(nlohmann::json::parse(ReadText(sandbox.ProjectFile())).contains("postProcess"));
 
-	created.SetToneMapping(assetlib::ToneMapping::kStandard);
+	created.SetPostProcessType(assetlib::PostProcessType::kToon);
 	created.Save();
-	CHECK(nlohmann::json::parse(ReadText(sandbox.ProjectFile())).at("toneMapping") == "standard");
+	CHECK(nlohmann::json::parse(ReadText(sandbox.ProjectFile())).at("postProcess") == "toon");
 	CHECK(
-		Project::Open(sandbox.ProjectFile()).GetToneMapping() == assetlib::ToneMapping::kStandard);
+		Project::Open(sandbox.ProjectFile()).GetPostProcessType() ==
+		assetlib::PostProcessType::kToon);
 
-	created.SetToneMapping(assetlib::ToneMapping::kAgX);
+	created.SetPostProcessType(assetlib::PostProcessType::kFilmic);
 	created.Save();
-	CHECK_FALSE(nlohmann::json::parse(ReadText(sandbox.ProjectFile())).contains("toneMapping"));
+	CHECK_FALSE(nlohmann::json::parse(ReadText(sandbox.ProjectFile())).contains("postProcess"));
 
 	// A project that predates the key draws as it always did.
 	WriteText(sandbox.ProjectFile(), R"({ "name": "MyGame", "version": 1 })");
-	CHECK(Project::Open(sandbox.ProjectFile()).GetToneMapping() == assetlib::ToneMapping::kAgX);
+	CHECK(
+		Project::Open(sandbox.ProjectFile()).GetPostProcessType() ==
+		assetlib::PostProcessType::kFilmic);
 }
 
-TEST_CASE("A project refuses a tone mapping it does not know", "[project]")
+TEST_CASE("A project refuses a post-process type it does not know", "[project]")
 {
-	const Sandbox sandbox("bernini_project_tone_mapping_refused");
+	const Sandbox sandbox("bernini_project_post_process_refused");
 
-	for (const std::string_view value : { R"("filmic")", R"(1)", R"("AgX")" })
+	for (const std::string_view value : { R"("standard")", R"(1)", R"("Toon")" })
 	{
 		INFO(value);
 		WriteText(
 			sandbox.ProjectFile(),
-			std::string(R"({ "name": "MyGame", "version": 1, "toneMapping": )") +
+			std::string(R"({ "name": "MyGame", "version": 1, "postProcess": )") +
 				std::string(value) + " }");
 		CHECK_THROWS_AS(Project::Open(sandbox.ProjectFile()), std::runtime_error);
 	}

@@ -242,7 +242,7 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 		target->SetBloomEnabled(m_Desc.bloom.enabled);
 		target->SetColorGradeSettings(grade);
 		target->SetColorGradeEnabled(m_Desc.colorGrade.enabled);
-		target->SetToneMapping(GetToneMapping());
+		target->SetPostProcessType(GetPostProcessType());
 		return target;
 	});
 	m_SceneView    = m_Desc.renderer->Invoke([&] {
@@ -485,42 +485,42 @@ RenderTargetWindow::GetBloomSettings() const
 }
 
 void
-RenderTargetWindow::SetProjectToneMapping(bgl::ToneMapping toneMapping)
+RenderTargetWindow::SetProjectPostProcessType(bgl::PostProcessType postProcessType)
 {
-	m_ProjectToneMapping = toneMapping;
-	ApplyToneMapping();
+	m_ProjectPostProcessType = postProcessType;
+	ApplyPostProcessType();
 }
 
 void
-RenderTargetWindow::SetChosenToneMapping(std::optional<bgl::ToneMapping> toneMapping)
+RenderTargetWindow::SetChosenPostProcessType(std::optional<bgl::PostProcessType> postProcessType)
 {
-	m_ChosenToneMapping = toneMapping;
-	ApplyToneMapping();
+	m_ChosenPostProcessType = postProcessType;
+	ApplyPostProcessType();
 }
 
 void
 RenderTargetWindow::SetShowsToonContent(bool toon)
 {
 	m_ShowsToonContent = toon;
-	ApplyToneMapping();
+	ApplyPostProcessType();
 }
 
-bgl::ToneMapping
-RenderTargetWindow::GetToneMapping() const noexcept
+bgl::PostProcessType
+RenderTargetWindow::GetPostProcessType() const noexcept
 {
-	if (m_ChosenToneMapping.has_value())
-		return *m_ChosenToneMapping;
-	return m_ShowsToonContent ? bgl::ToneMapping::kStandard : m_ProjectToneMapping;
+	if (m_ChosenPostProcessType.has_value())
+		return *m_ChosenPostProcessType;
+	return m_ShowsToonContent ? bgl::PostProcessType::kToon : m_ProjectPostProcessType;
 }
 
 void
-RenderTargetWindow::ApplyToneMapping()
+RenderTargetWindow::ApplyPostProcessType()
 {
 	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
 		return;
 
-	const bgl::ToneMapping toneMapping = GetToneMapping();
-	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetToneMapping(toneMapping); });
+	const bgl::PostProcessType postProcessType = GetPostProcessType();
+	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetPostProcessType(postProcessType); });
 }
 
 void

@@ -937,7 +937,8 @@ AssetThumbnailCache::BuildShot(Shot& shot)
 {
 	const bool toon =
 		shot.item.type == ThumbnailType::kMesh ? BuildMesh(shot) : BuildMaterial(shot);
-	m_RenderTarget->SetToneMapping(toon ? bgl::ToneMapping::kStandard : m_ProjectToneMapping);
+	m_RenderTarget->SetPostProcessType(
+		toon ? bgl::PostProcessType::kToon : m_ProjectPostProcessType);
 	if (shot.item.camera.has_value())
 		shot.job.camera = *shot.item.camera;
 }

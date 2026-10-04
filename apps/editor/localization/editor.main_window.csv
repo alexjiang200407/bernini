@@ -5,7 +5,7 @@ checking_derived_assets,Checking derived assets...
 checking_imported_sources,Checking imported sources...
 clean_unused_textures_title,Clean Unused Textures
 color_grade,Color Grade
-color_grade_tip,White-balance and grade the viewports ahead of the display curve. The grade is each viewport's `colorGrade` section in config.json. No effect on a viewport in Standard tone mapping.
+color_grade_tip,White-balance and grade the viewports ahead of the display curve. The grade is each viewport's `colorGrade` section in config.json. No effect on a viewport in Toon post-process.
 compiling_shaders,Compiling shaders...
 compressing_progress,Compressing {0} ({1} of {2})...
 content_explorer_title,Content Explorer
@@ -39,6 +39,11 @@ plugin_asset_title,Plugin Asset
 plugin_import_title,Plugin Import
 plugin_panel_title,Plugin Panel
 plugins_menu,Plugins
+post_process_auto,Auto
+post_process_filmic,Filmic
+post_process_menu,Post Process
+post_process_tip,"The post-process the viewports end in: Filmic (AgX and the colour grade), or Toon -- the colour as it is, which a toon look is authored for. Auto is the project's, and Toon for a viewport showing toon content."
+post_process_toon,Toon
 project_data_status,Project data: {0}
 rebuild_failed_info,Anything that draws one will report that the project needs updating until its source is back.
 rebuild_failed_text,Some assets could not be rebuilt.
@@ -72,10 +77,5 @@ textures_moved_info,"Each held the same bytes as a file the extract wrote, so th
 textures_moved_text,Some textures moved to the name the current rule gives them.
 textures_superseded_info,"They are still on disk and nothing has been changed. A material routing at one is drawing what its source held at import -- re-route it in the Mesh Editor, or delete it once nothing does."
 textures_superseded_text,Some textures are no longer produced by their source.
-tone_mapping_agx,AgX
-tone_mapping_auto,Auto
-tone_mapping_menu,Tone Mapping
-tone_mapping_standard,Standard
-tone_mapping_tip,"The display curve the viewports end in: AgX's filmic curve, or Standard -- the colour as it is, which a toon look is authored for. Auto is the project's curve, and Standard for a viewport showing toon content."
 tools_menu,Tools
 update_project_title,Update Project

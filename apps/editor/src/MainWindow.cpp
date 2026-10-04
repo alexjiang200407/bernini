@@ -579,8 +579,8 @@ MainWindow::SetUpRenderMenu()
 		editor::Localize(
 			"editor.main_window.color_grade_tip",
 			"White-balance and grade the viewports ahead of the display curve. The grade is each "
-			"viewport's `colorGrade` section in config.json. No effect on a viewport in Standard "
-			"tone mapping."));
+			"viewport's `colorGrade` section in config.json. No effect on a viewport in Toon "
+			"post-process."));
 
 	connect(grade, &QAction::toggled, this, [this](bool enabled) {
 		m_ColorGradeOverride = enabled;
@@ -588,7 +588,7 @@ MainWindow::SetUpRenderMenu()
 			view->SetColorGradeEnabled(enabled);
 	});
 
-	SetUpToneMappingMenu(render);
+	SetUpPostProcessMenu(render);
 
 	auto* timing = render->addAction(
 		editor::Localize("editor.main_window.gpu_pass_timing", "GPU Pass Timing"));
@@ -623,45 +623,44 @@ MainWindow::SetUpRenderMenu()
 	SetUpRenderScaleMenu(render);
 }
 
-// Auto lets each viewport decide -- Standard where it shows toon content, the project's curve
-// elsewhere; AgX and Standard hold every viewport to one curve. The checked entry is always the
-// user's choice, so the menu never says one curve while the viewport shows another.
+// Auto lets each viewport decide -- Toon where it shows toon content, the project's elsewhere;
+// Filmic and Toon hold every viewport to one. The checked entry is always the user's choice, so
+// the menu never says one post-process while the viewport shows another.
 void
-MainWindow::SetUpToneMappingMenu(QMenu* render)
+MainWindow::SetUpPostProcessMenu(QMenu* render)
 {
 	QMenu* menu =
-		render->addMenu(editor::Localize("editor.main_window.tone_mapping_menu", "Tone Mapping"));
+		render->addMenu(editor::Localize("editor.main_window.post_process_menu", "Post Process"));
 	menu->setStatusTip(
 		editor::Localize(
-			"editor.main_window.tone_mapping_tip",
-			"The display curve the viewports end in: AgX's filmic curve, or Standard -- the colour "
-			"as it is, which a toon look is authored for. Auto is the project's curve, and "
-	        "Standard "
-			"for a viewport showing toon content."));
+			"editor.main_window.post_process_tip",
+			"The post-process the viewports end in: Filmic (AgX and the colour grade), or Toon -- "
+			"the colour as it is, which a toon look is authored for. Auto is the project's, and "
+			"Toon for a viewport showing toon content."));
 
 	auto* group = new QActionGroup(menu);
 	group->setExclusive(true);
 
-	const auto addChoice = [&](const QString& label, std::optional<bgl::ToneMapping> choice) {
+	const auto addChoice = [&](const QString& label, std::optional<bgl::PostProcessType> choice) {
 		QAction* action = menu->addAction(label);
 		action->setCheckable(true);
-		action->setChecked(choice == m_ToneMappingOverride);
+		action->setChecked(choice == m_PostProcessTypeOverride);
 		group->addAction(action);
 		connect(action, &QAction::triggered, this, [this, choice] {
-			m_ToneMappingOverride = choice;
+			m_PostProcessTypeOverride = choice;
 			for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
-				view->SetChosenToneMapping(choice);
+				view->SetChosenPostProcessType(choice);
 		});
 		return action;
 	};
-	m_ToneMappingAuto =
-		addChoice(editor::Localize("editor.main_window.tone_mapping_auto", "Auto"), std::nullopt);
+	m_PostProcessTypeAuto =
+		addChoice(editor::Localize("editor.main_window.post_process_auto", "Auto"), std::nullopt);
 	addChoice(
-		editor::Localize("editor.main_window.tone_mapping_agx", "AgX"),
-		bgl::ToneMapping::kAgX);
+		editor::Localize("editor.main_window.post_process_filmic", "Filmic"),
+		bgl::PostProcessType::kFilmic);
 	addChoice(
-		editor::Localize("editor.main_window.tone_mapping_standard", "Standard"),
-		bgl::ToneMapping::kStandard);
+		editor::Localize("editor.main_window.post_process_toon", "Toon"),
+		bgl::PostProcessType::kToon);
 }
 
 void
@@ -1364,20 +1363,20 @@ MainWindow::SetActiveProject(assetlib::Project project)
 	m_Project = std::make_unique<assetlib::Project>(std::move(project));
 	editor::RecordRecentProject(m_RecentProjectsFile, m_Project->GetProjectFile());
 
-	m_ProjectToneMapping = m_Project->GetToneMapping() == assetlib::ToneMapping::kStandard ?
-	                           bgl::ToneMapping::kStandard :
-	                           bgl::ToneMapping::kAgX;
+	m_ProjectPostProcessType = m_Project->GetPostProcessType() == assetlib::PostProcessType::kToon ?
+	                               bgl::PostProcessType::kToon :
+	                               bgl::PostProcessType::kFilmic;
 	// A new project starts at Auto: a choice made for the last one's look is not this one's.
-	m_ToneMappingOverride.reset();
-	if (m_ToneMappingAuto != nullptr)
-		m_ToneMappingAuto->setChecked(true);
+	m_PostProcessTypeOverride.reset();
+	if (m_PostProcessTypeAuto != nullptr)
+		m_PostProcessTypeAuto->setChecked(true);
 	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 	{
-		view->SetProjectToneMapping(m_ProjectToneMapping);
-		view->SetChosenToneMapping(std::nullopt);
+		view->SetProjectPostProcessType(m_ProjectPostProcessType);
+		view->SetChosenPostProcessType(std::nullopt);
 	}
 	if (m_Thumbnails)
-		m_Thumbnails->SetProjectToneMapping(m_ProjectToneMapping);
+		m_Thumbnails->SetProjectPostProcessType(m_ProjectPostProcessType);
 	const auto dataDir = QString::fromStdWString(m_Project->GetDataDirectory().wstring());
 
 	// One manager over the editor's one scene: every viewport draws that scene, so a texture a material
@@ -1911,8 +1910,8 @@ MainWindow::ConfigureViewport(RenderTargetWindow& view)
 		view.SetBloomEnabled(*m_BloomOverride);
 	if (m_ColorGradeOverride)
 		view.SetColorGradeEnabled(*m_ColorGradeOverride);
-	view.SetProjectToneMapping(m_ProjectToneMapping);
-	view.SetChosenToneMapping(m_ToneMappingOverride);
+	view.SetProjectPostProcessType(m_ProjectPostProcessType);
+	view.SetChosenPostProcessType(m_PostProcessTypeOverride);
 	view.SetOutlineEnabled(m_OutlineEnabled);
 	view.SetGpuTimingEnabled(m_GpuTimingAction != nullptr && m_GpuTimingAction->isChecked());
 }

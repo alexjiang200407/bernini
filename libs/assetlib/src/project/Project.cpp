@@ -24,16 +24,16 @@ namespace assetlib
 		{
 			std::string              name;
 			std::vector<std::string> plugins;
-			int                      version     = 1;
-			ToneMapping              toneMapping = ToneMapping::kAgX;
+			int                      version         = 1;
+			PostProcessType          postProcessType = PostProcessType::kFilmic;
 		};
 
-		constexpr std::string_view c_ToneMappingKey = "toneMapping";
+		constexpr std::string_view c_PostProcessKey = "postProcess";
 
 		[[nodiscard]] std::string_view
-		toneMappingName(const ToneMapping toneMapping) noexcept
+		postProcessName(const PostProcessType postProcessType) noexcept
 		{
-			return toneMapping == ToneMapping::kStandard ? "standard" : "agx";
+			return postProcessType == PostProcessType::kToon ? "toon" : "filmic";
 		}
 
 		ProjectMetadata
@@ -52,17 +52,17 @@ namespace assetlib
 				metadata.version = json.value("version", currentVersion);
 				metadata.plugins = json.value("plugins", std::vector<std::string>());
 
-				if (const auto it = json.find(c_ToneMappingKey); it != json.end())
+				if (const auto it = json.find(c_PostProcessKey); it != json.end())
 				{
 					const std::string value = it->is_string() ? it->get<std::string>() : "";
-					if (value == "agx")
-						metadata.toneMapping = ToneMapping::kAgX;
-					else if (value == "standard")
-						metadata.toneMapping = ToneMapping::kStandard;
+					if (value == "filmic")
+						metadata.postProcessType = PostProcessType::kFilmic;
+					else if (value == "toon")
+						metadata.postProcessType = PostProcessType::kToon;
 					else
 						core::throw_runtime_error(
-							"Malformed project file: '{}' is {}, not \"agx\" or \"standard\"",
-							c_ToneMappingKey,
+							"Malformed project file: '{}' is {}, not \"filmic\" or \"toon\"",
+							c_PostProcessKey,
 							it->dump());
 				}
 				return metadata;
@@ -129,11 +129,11 @@ namespace assetlib
 		const ProjectMetadata metadata = readMetadata(projectFile, c_FormatVersion);
 
 		Project project;
-		project.m_ProjectFile   = projectFile;
-		project.m_Name          = metadata.name;
-		project.m_PluginIds     = metadata.plugins;
-		project.m_FormatVersion = metadata.version;
-		project.m_ToneMapping   = metadata.toneMapping;
+		project.m_ProjectFile     = projectFile;
+		project.m_Name            = metadata.name;
+		project.m_PluginIds       = metadata.plugins;
+		project.m_FormatVersion   = metadata.version;
+		project.m_PostProcessType = metadata.postProcessType;
 		if (registry != nullptr)
 			project.m_Registry = std::move(registry);
 
@@ -181,8 +181,8 @@ namespace assetlib
 			{ "plugins", m_PluginIds },
 		};
 		// Only a project off the default names its curve: an AgX file keeps its shape.
-		if (m_ToneMapping != ToneMapping::kAgX)
-			json[std::string(c_ToneMappingKey)] = std::string(toneMappingName(m_ToneMapping));
+		if (m_PostProcessType != PostProcessType::kFilmic)
+			json[std::string(c_PostProcessKey)] = std::string(postProcessName(m_PostProcessType));
 
 		std::ofstream stream(m_ProjectFile);
 		if (!stream)

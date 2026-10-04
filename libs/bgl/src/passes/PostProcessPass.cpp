@@ -62,7 +62,7 @@ namespace bgl
 			"gradeVignetteIntensity"sv,
 			"gradeVignetteSmoothness"sv,
 			"gradeEnabled"sv,
-			"standard"sv,
+			"toon"sv,
 		};
 
 		/**
@@ -170,7 +170,7 @@ namespace bgl
 				tonemap["bloomIntensity"].SetIfValid(args.bloomIntensity);
 			}
 
-			tonemap["standard"].SetIfValid(args.toneMapping == ToneMapping::kStandard ? 1u : 0u);
+			tonemap["toon"].SetIfValid(args.postProcessType == PostProcessType::kToon ? 1u : 0u);
 			tonemap["gradeEnabled"].SetIfValid(args.colorGradeEnabled ? 1u : 0u);
 			if (args.colorGradeEnabled)
 			{

@@ -312,11 +312,11 @@ flowchart TD
 
 ### IRenderTarget
 
-* **`SetToneMapping(curve)` / `GetToneMapping()`** — the display curve the output ends in, a
-  `ToneMapping`: `kAgX` (the default) or `kStandard`, Blender's Standard view -- the exposed value
-  clamped, no curve and no colour grade, so none of the grade's white balance, saturation, contrast
-  or vignette either. A target's and not a view's, since the curve runs once on the output;
-  `RenderTargetDesc::toneMapping` starts it. Exposure, RCAS, bloom and the outline apply under both.
+* **`SetPostProcessType(type)` / `GetPostProcessType()`** — the post-process pipeline the output
+  ends in, a `PostProcessType`: `kFilmic` (the default), AgX and the colour grade, or `kToon`,
+  Blender's Standard view -- the exposed value clamped, no curve and no colour grade, so none of the
+  grade's white balance, saturation, contrast or vignette either. A target's and not a view's, since
+  it runs once on the output; `RenderTargetDesc::postProcessType` starts it. Exposure, RCAS, bloom and the outline apply under both.
   See
   [Passes](passes.md) § Scene colour.
 

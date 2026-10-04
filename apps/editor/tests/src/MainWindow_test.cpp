@@ -303,12 +303,12 @@ namespace
 		return named == actions.end() ? nullptr : *named;
 	}
 
-	// An entry of Render > Tone Mapping, whose labels other menus share.
+	// An entry of Render > Post Process, whose labels other menus share.
 	QAction*
-	ToneMappingChoice(const MainWindow& window, const QString& text)
+	PostProcessChoice(const MainWindow& window, const QString& text)
 	{
 		for (const QMenu* menu : window.findChildren<QMenu*>())
-			if (menu->title() == "Tone Mapping")
+			if (menu->title() == "Post Process")
 				for (QAction* action : menu->actions())
 					if (action->text() == text)
 						return action;
@@ -560,9 +560,9 @@ TEST_CASE(
 	const auto baseline = sceneSlots();
 	for (int replacementIndex = 0; replacementIndex < 3; ++replacementIndex)
 	{
-		QAction* standard = ToneMappingChoice(window, "Standard");
-		REQUIRE(standard != nullptr);
-		standard->trigger();
+		QAction* toon = PostProcessChoice(window, "Toon");
+		REQUIRE(toon != nullptr);
+		toon->trigger();
 
 		std::vector<fs::path> releasedRoots;
 		QObject               teardownObserver;
@@ -634,10 +634,10 @@ TEST_CASE(
 		}
 		CHECK(sceneSlots() == baseline);
 
-		// The last project's tone-mapping choice does not carry over: Auto, and the new one's curve.
-		CHECK(ToneMappingChoice(window, "Auto")->isChecked());
+		// The last project's post-process choice does not carry over: Auto, and the new one's.
+		CHECK(PostProcessChoice(window, "Auto")->isChecked());
 		for (const RenderTargetWindow* view : views)
-			CHECK(view->GetToneMapping() == bgl::ToneMapping::kAgX);
+			CHECK(view->GetPostProcessType() == bgl::PostProcessType::kFilmic);
 	}
 }
 
@@ -2229,58 +2229,58 @@ TEST_CASE(
 	CHECK_FALSE(GrassEditorWindow::AcceptsDrop(&other));
 }
 
-// Render > Tone Mapping: Auto lets each viewport decide -- Standard for toon content, else the
-// project's curve -- and AgX or Standard holds every viewport to one. The checked entry is always
-// the user's choice.
+// Render > Post Process: Auto lets each viewport decide -- Toon for toon content, else the
+// project's -- and Filmic or Toon holds every viewport to one. The checked entry is always the
+// user's choice.
 TEST_CASE(
-	"A viewport's tone mapping is the user's choice, or Auto's: the toon content's or the "
-    "project's",
+	"A viewport's post-process is the user's choice, or Auto's: the toon content's or the "
+	"project's",
 	"[mainwindow][render]")
 {
 	const HeadlessEditor editor;
 
-	SECTION("a project authored for Standard starts every viewport in it")
+	SECTION("a project authored for toon starts every viewport in it")
 	{
 		auto project = assetlib::Project::Open(editor.ProjectFile());
-		project.SetToneMapping(assetlib::ToneMapping::kStandard);
+		project.SetPostProcessType(assetlib::PostProcessType::kToon);
 		project.Save();
 
 		const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 		const QList<RenderTargetWindow*> viewports = window.findChildren<RenderTargetWindow*>();
 		REQUIRE_FALSE(viewports.empty());
 		for (const RenderTargetWindow* view : viewports)
-			CHECK(view->GetToneMapping() == bgl::ToneMapping::kStandard);
+			CHECK(view->GetPostProcessType() == bgl::PostProcessType::kToon);
 	}
 
-	SECTION("toon content ends in Standard until the user picks a curve")
+	SECTION("toon content ends in Toon until the user picks a post-process")
 	{
 		const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 		auto* view = window.findChild<MeshEditorWindow*>()->findChild<RenderTargetWindow*>();
 		REQUIRE(view != nullptr);
-		CHECK(view->GetToneMapping() == bgl::ToneMapping::kAgX);
+		CHECK(view->GetPostProcessType() == bgl::PostProcessType::kFilmic);
 
-		QAction* autoChoice = ToneMappingChoice(window, "Auto");
-		QAction* agx        = ToneMappingChoice(window, "AgX");
-		QAction* standard   = ToneMappingChoice(window, "Standard");
+		QAction* autoChoice = PostProcessChoice(window, "Auto");
+		QAction* filmic     = PostProcessChoice(window, "Filmic");
+		QAction* toon       = PostProcessChoice(window, "Toon");
 		REQUIRE(autoChoice != nullptr);
-		REQUIRE(agx != nullptr);
-		REQUIRE(standard != nullptr);
+		REQUIRE(filmic != nullptr);
+		REQUIRE(toon != nullptr);
 		CHECK(autoChoice->isChecked());
 
 		view->SetShowsToonContent(true);
-		CHECK(view->GetToneMapping() == bgl::ToneMapping::kStandard);
+		CHECK(view->GetPostProcessType() == bgl::PostProcessType::kToon);
 		CHECK(autoChoice->isChecked());
 
-		agx->trigger();
-		CHECK(agx->isChecked());
+		filmic->trigger();
+		CHECK(filmic->isChecked());
 		CHECK_FALSE(autoChoice->isChecked());
-		CHECK(view->GetToneMapping() == bgl::ToneMapping::kAgX);
+		CHECK(view->GetPostProcessType() == bgl::PostProcessType::kFilmic);
 
 		view->SetShowsToonContent(false);
-		standard->trigger();
-		CHECK(view->GetToneMapping() == bgl::ToneMapping::kStandard);
+		toon->trigger();
+		CHECK(view->GetPostProcessType() == bgl::PostProcessType::kToon);
 
 		autoChoice->trigger();
-		CHECK(view->GetToneMapping() == bgl::ToneMapping::kAgX);
+		CHECK(view->GetPostProcessType() == bgl::PostProcessType::kFilmic);
 	}
 }

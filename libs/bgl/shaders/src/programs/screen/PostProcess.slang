@@ -47,8 +47,8 @@ struct PostProcessData
     float gradeVignetteSmoothness;
     uint gradeEnabled;
 
-    // Blender's Standard view: the exposed value clamped, no curve and no grade.
-    uint standard;
+    // The toon post-process: Blender's Standard view, the exposed value clamped, no curve and no grade.
+    uint toon;
 };
 
 ConstantBuffer<PostProcessData> gPostProcessData;
@@ -158,7 +158,7 @@ float4 PSMain(VSOut input) : SV_Target
 
     float3 color;
 
-    if (gPostProcessData.standard != 0)
+    if (gPostProcessData.toon != 0)
     {
         color = saturate(scene.rgb);
     }

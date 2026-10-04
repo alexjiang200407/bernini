@@ -8,18 +8,20 @@
 namespace bgl
 {
 	/**
-	 * The display curve a target turns its exposed linear HDR into the display with. Either way
-	 * the backbuffer's sRGB encoding follows.
+	 * The post-process pipeline a target turns its exposed linear HDR into the display with.
+	 * Exposure, bloom, RCAS and the outline run under both, and the backbuffer's sRGB encoding
+	 * follows either way.
 	 */
-	enum class ToneMapping : uint8_t
+	enum class PostProcessType : uint8_t
 	{
-		// Blender's AgX: a filmic curve that rolls highlights off and desaturates toward white.
-		kAgX,
+		// Blender's AgX, a filmic curve that rolls highlights off and desaturates toward white,
+		// then the colour grade.
+		kFilmic,
 
-		// Blender's Standard: no curve, the exposed value clamped to [0, 1]. A colour authored to be
-		// seen as it is -- a toon look, an unlit swatch -- reaches the display as authored. The
-		// colour grade, which works in AgX's log encoding, is not applied.
-		kStandard,
+		// Blender's Standard view: no curve, the exposed value clamped to [0, 1], so a toon look
+		// reaches the display as authored. The colour grade, which works in AgX's log encoding, is
+		// not applied.
+		kToon,
 	};
 
 	/**
@@ -47,8 +49,8 @@ namespace bgl
 		// the sharpen, and so does a render scale of 1 or more; see IRenderTarget::SetTaaSharpness.
 		float taaSharpness = 1.0f;
 
-		// The display curve; see IRenderTarget::SetToneMapping.
-		ToneMapping toneMapping = ToneMapping::kAgX;
+		// The post-process pipeline; see IRenderTarget::SetPostProcessType.
+		PostProcessType postProcessType = PostProcessType::kFilmic;
 
 		// The native surface a windowed target presents into: an HWND on D3D12, a CAMetalLayer
 		// on Metal. Ignored when headless. The Metal layer and its window are the caller's: the
@@ -241,15 +243,15 @@ namespace bgl
 		virtual void
 		SetColorGradeSettings(const ColorGradeSettings& settings) = 0;
 
-		[[nodiscard]] virtual ToneMapping
-		GetToneMapping() const noexcept = 0;
+		[[nodiscard]] virtual PostProcessType
+		GetPostProcessType() const noexcept = 0;
 
 		/**
-		 * The display curve subsequent frames end in. A target's, not a view's: the curve runs once
+		 * The post-process pipeline subsequent frames end in. A target's, not a view's: it runs once
 		 * on the output, however many views draw into it. Nothing is allocated either way.
 		 */
 		virtual void
-		SetToneMapping(ToneMapping toneMapping) noexcept = 0;
+		SetPostProcessType(PostProcessType postProcessType) noexcept = 0;
 
 		/** Whether every pass of a frame drawn to this target is timed on the GPU. Off by default. */
 		[[nodiscard]] virtual bool

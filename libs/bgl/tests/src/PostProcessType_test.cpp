@@ -21,8 +21,8 @@
 #include <cmath>
 #include <string>
 
-// The display curve a target ends in: Standard is the exposed value clamped and sRGB-encoded, as
-// Blender's Standard view shows it, and AgX is what it always was. A full-frame Unlit plane puts a
+// The post-process a target ends in: toon is the exposed value clamped and sRGB-encoded, as
+// Blender's Standard view shows it, and filmic is the AgX it always was. A full-frame Unlit plane puts a
 // known radiance on every pixel, so the frame is the curve's answer for it and nothing else.
 
 namespace
@@ -95,12 +95,12 @@ namespace
 	};
 }
 
-TEST_CASE("Standard shows the exposed value clamped and sRGB-encoded", "[tonemap][render]")
+TEST_CASE("Toon post-process shows the exposed value clamped and sRGB-encoded", "[tonemap][render]")
 {
 	Plane plane;
-	CHECK(plane.target->GetToneMapping() == bgl::ToneMapping::kAgX);
-	plane.target->SetToneMapping(bgl::ToneMapping::kStandard);
-	CHECK(plane.target->GetToneMapping() == bgl::ToneMapping::kStandard);
+	CHECK(plane.target->GetPostProcessType() == bgl::PostProcessType::kFilmic);
+	plane.target->SetPostProcessType(bgl::PostProcessType::kToon);
+	CHECK(plane.target->GetPostProcessType() == bgl::PostProcessType::kToon);
 
 	// One quantization step, and a little for the 16-bit scene colour on the way.
 	constexpr float c_Margin = 1.5f / 255.0f;
@@ -127,7 +127,9 @@ TEST_CASE("Standard shows the exposed value clamped and sRGB-encoded", "[tonemap
 	}
 }
 
-TEST_CASE("A target switches its curve between frames, and AgX is what it was", "[tonemap][render]")
+TEST_CASE(
+	"A target switches its post-process between frames, and filmic is what it was",
+	"[tonemap][render]")
 {
 	Plane           plane;
 	const glm::vec3 radiance(0.8f, 0.35f, 0.1f);
@@ -137,22 +139,22 @@ TEST_CASE("A target switches its curve between frames, and AgX is what it was", 
 	const auto* back     = "assets/golden/tonemap_switch_back.got.png";
 
 	plane.Shoot(radiance, 1.0f, agx);
-	plane.target->SetToneMapping(bgl::ToneMapping::kStandard);
+	plane.target->SetPostProcessType(bgl::PostProcessType::kToon);
 	plane.Shoot(radiance, 1.0f, standard);
-	plane.target->SetToneMapping(bgl::ToneMapping::kAgX);
+	plane.target->SetPostProcessType(bgl::PostProcessType::kFilmic);
 	plane.Shoot(radiance, 1.0f, back);
 
 	CHECK(bgl::test::MaxChannelDelta(agx, standard) > 0.05f);
 	CHECK(bgl::test::MaxChannelDelta(agx, back) == 0.0f);
 
-	// A target asked for Standard at creation starts in it.
-	auto targetDesc        = bgl::RenderTargetDesc();
-	targetDesc.width       = c_Size;
-	targetDesc.height      = c_Size;
-	targetDesc.headless    = true;
-	targetDesc.toneMapping = bgl::ToneMapping::kStandard;
-	plane.target           = plane.gfx->CreateRenderTarget(targetDesc);
-	CHECK(plane.target->GetToneMapping() == bgl::ToneMapping::kStandard);
+	// A target asked for toon at creation starts in it.
+	auto targetDesc            = bgl::RenderTargetDesc();
+	targetDesc.width           = c_Size;
+	targetDesc.height          = c_Size;
+	targetDesc.headless        = true;
+	targetDesc.postProcessType = bgl::PostProcessType::kToon;
+	plane.target               = plane.gfx->CreateRenderTarget(targetDesc);
+	CHECK(plane.target->GetPostProcessType() == bgl::PostProcessType::kToon);
 	const auto* created = "assets/golden/tonemap_switch_created.got.png";
 	plane.Shoot(radiance, 1.0f, created);
 	CHECK(bgl::test::MaxChannelDelta(standard, created) == 0.0f);

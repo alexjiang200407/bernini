@@ -273,16 +273,16 @@ namespace bgl
 			m_ColorGradeEnabled = enabled;
 		}
 
-		[[nodiscard]] ToneMapping
-		GetToneMapping() const noexcept final
+		[[nodiscard]] PostProcessType
+		GetPostProcessType() const noexcept final
 		{
-			return m_ToneMapping;
+			return m_PostProcessType;
 		}
 
 		void
-		SetToneMapping(ToneMapping toneMapping) noexcept final
+		SetPostProcessType(PostProcessType postProcessType) noexcept final
 		{
-			m_ToneMapping = toneMapping;
+			m_PostProcessType = postProcessType;
 		}
 
 		[[nodiscard]] ColorGradeSettings
@@ -538,7 +538,7 @@ namespace bgl
 		BloomChain    m_BloomChain;
 
 		bool               m_ColorGradeEnabled = false;
-		ToneMapping        m_ToneMapping       = ToneMapping::kAgX;
+		PostProcessType    m_PostProcessType   = PostProcessType::kFilmic;
 		ColorGradeSettings m_ColorGradeSettings;
 
 		bool                                           m_GpuTimingEnabled = false;

@@ -85,8 +85,8 @@ namespace
 		// Off unless asked for, as bgl's own default is; on, it takes bgl's default settings.
 		bool bloom = false;
 
-		// The display curve, "agx" or "standard".
-		std::string toneMapping = "agx";
+		// The post-process, "filmic" or "toon".
+		std::string postProcessType = "filmic";
 
 		// The camera frames the box every clip's poses fill unless asked for the playing clip's
 		// alone: a clip set with root motion walks that box far past any one pose.
@@ -556,11 +556,12 @@ try
 			->check(CLI::PositiveNumber);
 		app.add_flag("--bloom", opts.bloom, "Render with bloom at bgl's default settings");
 		app.add_option(
-			   "--tone-mapping",
-			   opts.toneMapping,
-			   "The display curve: agx (bgl's default) or standard, the exposed colour clamped, "
-			   "which a toon look is authored for (IRenderTarget::SetToneMapping)")
-			->check(CLI::IsMember({ "agx", "standard" }));
+			   "--post-process",
+			   opts.postProcessType,
+			   "The post-process: filmic (bgl's default, AgX and the grade) or toon, the exposed "
+			   "colour clamped, which a toon look is authored for "
+			   "(IRenderTarget::SetPostProcessType)")
+			->check(CLI::IsMember({ "filmic", "toon" }));
 		app.add_flag(
 			"--frame-clip",
 			opts.frameClip,
@@ -653,8 +654,9 @@ try
 		opts.taa,
 		opts.renderScale);
 	target->SetBloomEnabled(opts.bloom);
-	target->SetToneMapping(
-		opts.toneMapping == "standard" ? bgl::ToneMapping::kStandard : bgl::ToneMapping::kAgX);
+	target->SetPostProcessType(
+		opts.postProcessType == "toon" ? bgl::PostProcessType::kToon :
+										 bgl::PostProcessType::kFilmic);
 
 	auto scene     = headless::CreateHeadlessScene(graphics);
 	auto view      = graphics->CreateSceneView(scene, std::max(128u, 64u * opts.crowd));
@@ -700,7 +702,7 @@ try
 	                               PlaceGrassPatch(opts, store, *scene, assets, view);
 
 	std::cout << std::format(
-		"{} frames at {} fps, {}x{}, render scale {}, {}, TAA {}, bloom {}, {} tone mapping, {} "
+		"{} frames at {} fps, {}x{}, render scale {}, {}, TAA {}, bloom {}, {} post-process, {} "
 		"warm-up frames held at t = 0\n\n",
 		opts.frames,
 		opts.fps,
@@ -712,7 +714,7 @@ try
 			std::string(lit ? "lit" : "unlit"),
 		opts.taa ? "on" : "off",
 		opts.bloom ? "on" : "off",
-		opts.toneMapping,
+		opts.postProcessType,
 		opts.warmup);
 
 	const std::filesystem::path outDir = std::filesystem::absolute(opts.outDir);

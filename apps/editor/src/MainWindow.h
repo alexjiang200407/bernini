@@ -214,7 +214,7 @@ private:
 	SetUpSharpnessMenu(QMenu* render);
 
 	void
-	SetUpToneMappingMenu(QMenu* render);
+	SetUpPostProcessMenu(QMenu* render);
 
 	void
 	SetUpPluginContributions();
@@ -241,15 +241,15 @@ private:
 	std::optional<bool>       m_BloomOverride;
 	std::optional<bool>       m_ColorGradeOverride;
 
-	// The open project's curve, and the Render > Tone Mapping choice; empty is Auto, which a new
+	// The open project's post-process, and the Render > Post Process choice; empty is Auto, which a new
 	// project resets it to.
-	bgl::ToneMapping                m_ProjectToneMapping = bgl::ToneMapping::kAgX;
-	std::optional<bgl::ToneMapping> m_ToneMappingOverride;
-	QAction*                        m_ToneMappingAuto = nullptr;
-	std::optional<float>            m_RenderScaleOverride;
-	std::optional<float>            m_ReconstructionWidthOverride;
-	std::optional<float>            m_SharpnessOverride;
-	bool                            m_OutlineEnabled = true;
+	bgl::PostProcessType                m_ProjectPostProcessType = bgl::PostProcessType::kFilmic;
+	std::optional<bgl::PostProcessType> m_PostProcessTypeOverride;
+	QAction*                            m_PostProcessTypeAuto = nullptr;
+	std::optional<float>                m_RenderScaleOverride;
+	std::optional<float>                m_ReconstructionWidthOverride;
+	std::optional<float>                m_SharpnessOverride;
+	bool                                m_OutlineEnabled = true;
 
 	// Set only while Build() is running: what startup reports into, and how RunBehindScreen tells
 	// which screen is up. Cleared once the window is ready, so a later Open Project gets the modal.

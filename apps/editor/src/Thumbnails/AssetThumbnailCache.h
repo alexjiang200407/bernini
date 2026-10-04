@@ -90,13 +90,13 @@ public:
 	SetStore(const assetlib::AssetStore* store);
 
 	/**
-	 * The curve a thumbnail ends in, the open project's; a thumbnail drawn with a toon material
-	 * ends in Standard whatever this is, as its preview does. Takes effect from the next shot.
+	 * The post-process a thumbnail ends in, the open project's; a thumbnail drawn with a toon
+	 * material ends in toon whatever this is, as its preview does. Takes effect from the next shot.
 	 */
 	void
-	SetProjectToneMapping(bgl::ToneMapping toneMapping) noexcept
+	SetProjectPostProcessType(bgl::PostProcessType postProcessType) noexcept
 	{
-		m_ProjectToneMapping = toneMapping;
+		m_ProjectPostProcessType = postProcessType;
 	}
 
 	/** Drops previews and in-flight work after an asset write, including previews that depend on it. */
@@ -292,7 +292,7 @@ private:
 	editor::EnvironmentBinding m_Environment;
 
 	bgl::RenderTargetRef m_RenderTarget;
-	bgl::ToneMapping     m_ProjectToneMapping = bgl::ToneMapping::kAgX;
+	bgl::PostProcessType m_ProjectPostProcessType = bgl::PostProcessType::kFilmic;
 	bgl::SceneViewRef    m_SceneView;
 	bgl::MaterialHandle  m_DefaultMaterial;
 

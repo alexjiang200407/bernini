@@ -35,7 +35,7 @@ namespace
 	}
 }
 
-// A preview ends in Standard tone mapping when it shows a toon model's material, and only then.
+// A preview ends in the toon post-process when it shows a toon model's material, and only then.
 TEST_CASE("A material is toon when a toon model's surface draws it", "[toon][tonemap]")
 {
 	const auto surfaces = Surfaces();

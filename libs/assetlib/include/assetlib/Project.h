@@ -13,14 +13,14 @@
 namespace assetlib
 {
 	/**
-	 * The display curve a project's look is authored for, which its renders end in: AgX, a filmic
-	 * curve, or Standard, the exposed colour as it is -- what a toon game wants. `.bproj` key
-	 * `toneMapping`, "agx" or "standard".
+	 * The post-process pipeline a project's look is authored for, which its renders end in: filmic
+	 * (AgX and the grade), or toon (Blender's Standard view, no grade). `.bproj` key `postProcess`,
+	 * "filmic" or "toon".
 	 */
-	enum class ToneMapping : uint8_t
+	enum class PostProcessType : uint8_t
 	{
-		kAgX,
-		kStandard,
+		kFilmic,
+		kToon,
 	};
 
 	class Project
@@ -96,18 +96,18 @@ namespace assetlib
 			return m_PluginIds;
 		}
 
-		/** The curve the project's renders end in; AgX for a `.bproj` that names none. */
-		[[nodiscard]] ToneMapping
-		GetToneMapping() const noexcept
+		/** The pipeline the project's renders end in; filmic for a `.bproj` that names none. */
+		[[nodiscard]] PostProcessType
+		GetPostProcessType() const noexcept
 		{
-			return m_ToneMapping;
+			return m_PostProcessType;
 		}
 
-		/** Sets the curve for the next Save. */
+		/** Sets the pipeline for the next Save. */
 		void
-		SetToneMapping(ToneMapping toneMapping) noexcept
+		SetPostProcessType(PostProcessType postProcessType) noexcept
 		{
-			m_ToneMapping = toneMapping;
+			m_PostProcessType = postProcessType;
 		}
 
 		std::filesystem::path
@@ -172,7 +172,7 @@ namespace assetlib
 		std::string              m_Name;
 		std::vector<std::string> m_PluginIds;
 		std::filesystem::path    m_ProjectFile;
-		int                      m_FormatVersion = c_FormatVersion;
-		ToneMapping              m_ToneMapping   = ToneMapping::kAgX;
+		int                      m_FormatVersion   = c_FormatVersion;
+		PostProcessType          m_PostProcessType = PostProcessType::kFilmic;
 	};
 }

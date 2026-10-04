@@ -105,14 +105,15 @@ fold it in, while the display curve — `AgX` in
 [lib/math/Tonemap.slang](libs/bgl/shaders/src/lib/math/Tonemap.slang) — belongs to the output and runs once.
 `AgX` leaves its result linear, so the sRGB backbuffer view is still what encodes it.
 
-**The curve is the target's: AgX, or Standard.** `IRenderTarget::SetToneMapping` (and
-`RenderTargetDesc::toneMapping`) picks it per output, AgX by default. Standard is Blender's Standard
-view: the exposed value clamped to [0, 1] and nothing else, so a colour authored to be seen as it is
--- a toon look -- reaches the screen as authored, after the same sRGB encoding. The colour grade
-works in AgX's log encoding and is not applied under Standard -- with it go its white balance,
-saturation, contrast and vignette, so the Color Grade toggle has no effect on a target in Standard.
-RCAS, bloom and the editor's outline come before or after the curve and apply under both.
-Everything below is the AgX path.
+**The post-process is the target's: filmic, or toon.** `IRenderTarget::SetPostProcessType` (and
+`RenderTargetDesc::postProcessType`) picks it per output, `PostProcessType::kFilmic` by default:
+AgX and the colour grade. `kToon` is Blender's Standard view: the exposed value clamped to [0, 1]
+and nothing else, so a colour authored to be seen as it is -- a toon look -- reaches the screen as
+authored, after the same sRGB encoding. The colour grade works in AgX's log encoding and is not
+applied under toon -- with it go its white balance, saturation, contrast and vignette, so the Color
+Grade toggle has no effect on a target in toon. RCAS, bloom and the editor's outline come before or
+after the curve and apply under both. A toon effect added later joins the `kToon` branch.
+Everything below is the filmic path.
 
 **The curve is Blender 5.2's AgX, and the LUT is Blender's own file.** Blender's `AgX Base sRGB`
 view is a 57³ formation LUT applied in FilmLight E-Gamut log2 space, then a Rec.1886 decode, and
