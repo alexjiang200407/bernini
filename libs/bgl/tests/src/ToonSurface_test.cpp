@@ -671,7 +671,7 @@ TEST_CASE("A toon character's every lane reads the toon sun", "[surface][render]
 		// it at level 1, and 1 dissolves it to level 0 over five frames, both halves drawing.
 		INFO("dissolving between levels");
 		const auto levels    = MakeSplitLevels();
-		const auto materials = std::array<MaterialHandle, 1>{ character };
+		const auto materials = std::array<MaterialHandle, 1>{ { character } };
 		const auto geom      = scene->AddStaticMeshGeom(
 			bgl::StaticMeshGeomDesc().SetMesh(&levels).SetMaterials(materials));
 		REQUIRE(geom.IsValid());
@@ -737,7 +737,7 @@ TEST_CASE("A toon character's every lane reads the toon sun", "[surface][render]
 		auto look            = bgl::GrassDesc();
 		look.material        = character;
 		look.blade.rootWidth = 0.05f;
-		const auto looks     = std::array<bgl::GrassHandle, 1>{ scene->CreateGrass(look) };
+		const auto looks     = std::array<bgl::GrassHandle, 1>{ { scene->CreateGrass(look) } };
 		scene->AttachGrass(ground, MakeField(40, 0.12f), 0, looks);
 
 		const auto grass = [&](const Sun sun, const char* png) {

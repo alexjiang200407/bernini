@@ -319,10 +319,10 @@ TEST_CASE("Both suns refuse a light that cannot be shaded", "[light]")
 
 	constexpr auto c_Nan = std::numeric_limits<float>::quiet_NaN();
 
-	const auto setters = std::array<std::function<void(const bgl::DirectionalLightDesc&)>, 2>{
+	const auto setters = std::array<std::function<void(const bgl::DirectionalLightDesc&)>, 2>{ {
 		[&](const bgl::DirectionalLightDesc& d) { probe.view->SetPbrDirectionalLight(d); },
 		[&](const bgl::DirectionalLightDesc& d) { probe.view->SetToonDirectionalLight(d); },
-	};
+	} };
 
 	for (const auto& set : setters)
 	{
