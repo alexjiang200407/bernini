@@ -78,4 +78,10 @@ namespace assetlib
 	{
 		return describe(grass);
 	}
+
+	std::string
+	AssetStore::Describe(const BToonShadingRig& rig) const
+	{
+		return describe(rig);
+	}
 }

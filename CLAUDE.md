@@ -300,7 +300,8 @@ lengths, advancing at an integral rather than a quotient.
 
 A face's toon shading rig at runtime: which rigged placements a draw evaluates into the view's pool
 and how their draws find the block, where a head is when its pose comes from a palette, a pose-pool
-slice or a table, the face light's remap, and how an edit's keys are blended.
+slice or a table, the face light's remap, how an edit's keys are blended, and the `.btoonrig`
+document a rig is authored as.
 
 **[Temporal Antialiasing](./docs/taa.md)**
 

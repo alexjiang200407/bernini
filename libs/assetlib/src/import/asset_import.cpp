@@ -124,8 +124,8 @@ namespace assetlib
 		 * The one construction the cache key and the file share, so a parameter added in only one
 		 * place cannot silently split the two.
 		 *
-		 * What was authored rather than derived is carried across: the parameter half and the
-		 * overrides. Bindings and the texture stamp describe what *this* import wrote, and a
+		 * What was authored rather than derived is carried across: the parameter half, the
+		 * overrides and the toon shading rig. Bindings and the texture stamp describe what *this* import wrote, and a
 		 * previous one's would be a lie -- but an authored `clipFloor` or a registered override is
 		 * work nothing in the source can put back, and a re-import that discarded it would lose it.
 		 */
@@ -144,6 +144,7 @@ namespace assetlib
 				document.extraParametersJson  = authored.extraParametersJson;
 				document.extraJson            = authored.extraJson;
 				document.materialOverrides    = authored.materialOverrides;
+				document.toonShadingRig       = authored.toonShadingRig;
 
 				document.bindings = authored.bindings;
 			}

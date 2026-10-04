@@ -79,6 +79,7 @@
 *.bimport text eol=lf
 *.benv text eol=lf
 *.bblend text eol=lf
+*.btoonrig text eol=lf
 
 # Translation catalogs, for the same reason and one more: a quoted field's newline is the message's
 # own, so an autocrlf checkout puts a CR inside the string the editor shows.

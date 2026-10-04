@@ -29,7 +29,7 @@ when this page disagrees, trust the header, then fix this page.
 
 | Kind | Files | Written by |
 |---|---|---|
-| Authored text | `.bmaterial`, `.benv`, `.bimport`, `.bavatar`, `.bblend`, `.bgrass` | the editor, `migrate`, deliberate saves |
+| Authored text | `.bmaterial`, `.benv`, `.bimport`, `.bavatar`, `.bblend`, `.bgrass`, `.btoonrig` | the editor, `migrate`, deliberate saves |
 | Derived cache entry | `.bmesh`, `.bskel`, `.banim`, `.bsky`, `.benvl` | the import, the bakes, `migrate`, `pack` |
 | Foreign | `.ktx2` (Basis/BC/RGB9E5 textures) | the bakes and the mesh import; stamp-governed by whatever names them |
 | Foreign, authored | `.rml`, `.rcss` (UI documents and styles), `.ttf` (fonts) | a person, in `Authored/UI` and `Authored/Fonts`; this library stores and packs them and parses none of them |
@@ -143,8 +143,10 @@ sources are keyed the way a mesh's extracted textures are, below: `envSourceStam
 `c_EnvSourceBakeToken` has no canary pin — the stages it covers run through libm trigonometry, whose
 last bits differ by platform — so its bump is the author's to remember.
 
-`source`, `skeleton` and `outputs` sit outside `parameters`, with `bindings` and
-`materialOverrides`: none of them changes what the importer computes.
+`source`, `skeleton` and `outputs` sit outside `parameters`, with `bindings`,
+`materialOverrides` and `toonShadingRig` -- the `.btoonrig` a character's face is shaded with, one per
+character whatever its materials ([Toon Shading Rig](toon_shading_rig.md)): none of them changes what
+the importer computes. A re-import carries `toonShadingRig` across, as it does the overrides.
 
 `bindings` names each submesh's default material; `materialOverrides` registers named alternatives
 per submesh (`"materialOverrides": {"crate[0]": {"Rusty": "Authored/Materials/rust.bmaterial"}}`),
