@@ -16,8 +16,8 @@ namespace crowd_render
 {
 	/**
 	 * How one agent type is drawn: its geoms, placed in the agent's frame by `model`. All static, or
-	 * all skinned to one rig -- a character cooked as several meshes is several geoms -- in which
-	 * case every agent plays `playback`, each from a phase of its own.
+	 * all skinned -- a character cooked as several meshes is several geoms -- in which case every
+	 * agent plays `playback`, each from a phase of its own.
 	 */
 	struct AgentTypeMeshDesc
 	{
@@ -146,9 +146,9 @@ namespace crowd_render
 		 * Imports the crowd's ring, compiles the writer once and creates a block per agent type.
 		 *
 		 * @throws std::runtime_error if a ref is null, the crowd has no render ring, there is not
-		 *         one desc per agent type, or a type names no geom -- or, until a block per geom is
-		 *         made, more than one; the renderer's errors as CreateMeshInstanceBlock and
-		 *         ImportBuffer throw them.
+		 *         one desc per agent type, a type names no geom, or one mixes static and skinned
+		 *         geoms; the renderer's errors as CreateMeshInstanceBlock and ImportBuffer throw
+		 *         them.
 		 */
 		explicit CrowdInstanceBlocks(CrowdInstanceBlocksDesc desc);
 		~CrowdInstanceBlocks();
@@ -183,10 +183,21 @@ namespace crowd_render
 		FinishFrame();
 
 	private:
-		CrowdInstanceBlocksDesc                   m_Desc;
-		bgl::ExternalBufferRef                    m_Ring;
-		bgl::MeshInstanceWriterRef                m_Writer;
-		std::vector<bgl::MeshInstanceBlockHandle> m_Blocks;
+		/** One of an agent type's blocks: a geom's, and the type it draws. */
+		struct TypeBlock
+		{
+			bgl::MeshInstanceBlockHandle block;
+			uint32_t                     type = 0;
+		};
+
+		CrowdInstanceBlocksDesc m_Desc;
+		bgl::ExternalBufferRef  m_Ring;
+
+		// Compiled only for a kind some type draws: a renderer compiles each writer once.
+		bgl::MeshInstanceWriterRef m_StaticWriter;
+		bgl::MeshInstanceWriterRef m_SkinnedWriter;
+
+		std::vector<TypeBlock> m_Blocks;
 
 		// The tick the last prepared frame drew, and how far between it and the tick before.
 		uint64_t m_DrawnTick  = 0;

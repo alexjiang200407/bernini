@@ -6,7 +6,10 @@ add_executable(bgl_crowd ${BGL_CROWD_SOURCES})
 
 find_package(CLI11 CONFIG REQUIRED)
 
-target_link_libraries(bgl_crowd PRIVATE core bgpu bgl crowdlib crowd_render CLI11::CLI11 example_util)
+# example_headless for loading a skinned character from a project (--project, --import): it brings
+# gamelib and assetlib, which an example may link beside the crowd, never the crowd's own libraries.
+target_link_libraries(bgl_crowd PRIVATE core bgpu bgl crowdlib crowd_render CLI11::CLI11 example_util
+    example_headless)
 
 if(RENDERER_BACKEND STREQUAL "DX12")
     target_link_libraries(bgl_crowd PRIVATE bgpu_d3d12_agility)

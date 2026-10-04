@@ -312,8 +312,12 @@ namespace crowd
 				const uint32_t sourceRecord = piece.sourceFirstAgent == idl::c_SpawnSource ?
 				                                  idl::c_SpawnSource :
 				                                  LastRecordOf(piece.sourceFirstAgent);
+				const bool     spawned      = piece.sourceFirstAgent == idl::c_SpawnSource;
 				if (firstSlot > 0 && Continues(plan.ranges.back(), piece, sourceRecord))
 				{
+					// A spawned range's ids run on, so the piece that extends it takes the next ones.
+					if (spawned)
+						m_NextId += piece.agentCount;
 					plan.ranges.back().agentCount += piece.agentCount;
 					firstSlot += piece.agentCount;
 					continue;
@@ -324,7 +328,10 @@ namespace crowd
 				      .agentCount        = piece.agentCount,
 				      .group             = row,
 				      .firstSlot         = firstSlot,
-				      .sourceFirstRecord = sourceRecord });
+				      .sourceFirstRecord = sourceRecord,
+				      .firstId           = spawned ? m_NextId : 0u });
+				if (spawned)
+					m_NextId += piece.agentCount;
 				firstSlot += piece.agentCount;
 			}
 

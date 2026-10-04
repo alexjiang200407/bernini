@@ -1,6 +1,7 @@
 // CrowdInstanceBlocks against a real renderer and crowd on one context: what it refuses, and that
 // frames bracketed by it keep the crowd stepping past its ring -- each frame hands back the ticks
 // no later frame reads.
+#include <bgl/GeomType.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
@@ -94,17 +95,33 @@ TEST_CASE("CrowdInstanceBlocks refuses what it cannot draw", "[crowd_render]")
 		crowd_render::CrowdInstanceBlocks(noGeom),
 		Catch::Matchers::ContainsSubstring("names no geom"));
 
-	// The contract's refusal, until a block is made per geom.
-	auto twoGeoms = f.Desc(f.CreateCrowd(5));
-	twoGeoms.types[0].AddGeom(f.box);
+	// Refused on the kinds alone, before the renderer is asked: the skinned handle names nothing.
+	auto mixed      = f.Desc(f.CreateCrowd(5));
+	auto posing     = f.box;
+	posing.geomType = bgl::GeomType::kSkinnedMesh;
+	mixed.types[0].AddGeom(posing);
 	CHECK_THROWS_WITH(
-		crowd_render::CrowdInstanceBlocks(twoGeoms),
-		Catch::Matchers::ContainsSubstring("not drawn yet"));
+		crowd_render::CrowdInstanceBlocks(mixed),
+		Catch::Matchers::ContainsSubstring("mixes static and skinned geoms"));
+	CHECK(f.view->GetInstanceCount() == 0);
 
 	auto blocks = crowd_render::CrowdInstanceBlocks(f.Desc(f.CreateCrowd(5)));
 	CHECK_THROWS_AS(blocks.PrepareFrame(-0.1f), std::runtime_error);
 	CHECK_THROWS_AS(blocks.PrepareFrame(1.5f), std::runtime_error);
 	CHECK_NOTHROW(blocks.PrepareFrame(0.0f));
+}
+
+TEST_CASE("An agent type of several geoms has a block of each", "[crowd_render]")
+{
+	Fixture f;
+
+	auto desc = f.Desc(f.CreateCrowd(5));
+	desc.types[0].AddGeom(f.box).SetCapacity(16);
+	{
+		auto blocks = crowd_render::CrowdInstanceBlocks(desc);
+		CHECK(f.view->GetInstanceCount() == 2 * 16);
+	}
+	CHECK(f.view->GetInstanceCount() == 0);
 }
 
 TEST_CASE("A crowd drawn by its blocks steps past its ring", "[crowd_render][render]")

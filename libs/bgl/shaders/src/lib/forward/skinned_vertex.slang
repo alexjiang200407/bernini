@@ -136,8 +136,17 @@ public SkinnedPose ResolveSkinnedPose(MeshletContext ctx, InstancedPayload paylo
         pose.blends = true;
         pose.boneCount = rig.boneCount;
 
-        TableFrameSlots(rig, clip, ClipFrames(clip, state.playback, viewData.time), pose.base, pose.upperBase, pose.weight);
-        TableFrameSlots(rig, clip, ClipFrames(clip, state.playback, viewData.prevTime), pose.prevBase, pose.prevUpperBase, pose.prevWeight);
+        TableFrameSlots(
+            rig, clip, ClipFrames(clip, state.playback, ctx.mesh.PlaybackTime(viewData.time)), pose.base, pose.upperBase, pose.weight
+        );
+        TableFrameSlots(
+            rig,
+            clip,
+            ClipFrames(clip, state.playback, ctx.mesh.PlaybackTime(viewData.prevTime)),
+            pose.prevBase,
+            pose.prevUpperBase,
+            pose.prevWeight
+        );
 
         return pose;
     }

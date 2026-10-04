@@ -15,5 +15,5 @@ void main(uint slot: SV_DispatchThreadID)
 {
     if (slot >= gUniforms.block.Capacity())
         return;
-    CrowdInstanceWriter.Write(gUniforms.block, gUniforms.params, slot);
+    SkinnedCrowdInstanceWriter.Write(gUniforms.block, gUniforms.params, slot);
 }

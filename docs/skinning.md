@@ -30,6 +30,13 @@ not obvious from a signature. The headers linked below are the source of truth.
   `SkinnedPlaybackDesc::FromClip` is the one-slot spelling of the same record. See
   [Animation Blending](docs/anim_blend.md).
 
+  A placement may play its record ahead of that clock, by `MeshInstance::playbackOffset`
+  seconds: zero for every CPU spawn, and set per slot by a skinned instance block's writer, which is
+  how a crowd's agents share one record out of step. Every reader takes the clock through
+  `MeshInstance::PlaybackTime`, at `time` and `prevTime` alike, so the offset changes which pose is
+  drawn and never the pair a motion vector is taken from. A block's record is never rewritten: a
+  slot ahead of the clock is already past a ramp that starts now.
+
 * **A posed instance is addressed by its placement, not by its playback record.** A foot planted on
   the ground needs to know where in the world the instance stands, and that is the `MeshInstance` record's
   `transform` — so the pose pass's work list holds *mesh instance indices*, reads the transform

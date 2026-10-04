@@ -62,7 +62,8 @@ namespace crowd
 	 *
 	 * A group's agents are a list of pieces in slot order, each spawned or read from a run of the
 	 * previous tick's buffer; the commands move pieces between groups, and PlanTick lays the groups
-	 * out contiguously, one AgentRange per piece.
+	 * out contiguously, one AgentRange per piece. A spawned range takes the next ids in order, so a
+	 * tick's spawns cost one counter step per range.
 	 */
 	class CrowdPlan
 	{
@@ -138,5 +139,9 @@ namespace crowd
 
 		// The last plan's groups in agent order, which this plan's sources are found in.
 		std::vector<LaidOutGroup> m_LastLayout;
+
+		// The id the next spawned agent takes. Counted per plan, so the same commands give the same
+		// ids, and wrapping only after 2^32 spawns.
+		uint32_t m_NextId = 0;
 	};
 }
