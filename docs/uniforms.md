@@ -237,7 +237,7 @@ message naming the fix — use `uint` or `float`, as [TaaResolve.slang](libs/bgl
 does. Lifting it needs a test pinning the emitted offsets against the GPU.
 
 **The Metalized layout is what the shader cache stores.** @pre a change to `MetalizeLayout` or
-`MetalAlign` must bump `c_CacheFormatVersion` in
+`MetalAlign` must bump `formatVersion` in
 [ShaderCache_metal.cpp](libs/bgpu/src/metal/shadercache/ShaderCache_metal.cpp), or a warm cache keeps
 the old layout and the change appears not to work. The same holds on D3D12, where the cache stores
 what `ReflectLayoutFromSlang` produced: a change to it bumps `formatVersion` in
@@ -283,5 +283,5 @@ assignments — see `BindSceneBuffers` in
 ---
 
 > **Maintenance:** the tables and file links above rot silently when files move, and the contracts
-> track specific constants (`c_SmartBufferUniformIndices`, `c_CacheFormatVersion`). Re-check both
+> track specific constants (`c_SmartBufferUniformIndices`, each cache owner's `formatVersion`). Re-check both
 > when the layer changes.

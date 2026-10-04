@@ -312,8 +312,7 @@ TEST_CASE("Uniforms", "[uniforms]")
 		CHECK(planes.GetSize() == 6u * sizeof(glm::vec4));
 		CHECK(uniforms["after"].GetOffset() == planes.GetOffset() + planes.GetSize());
 
-		// Each element is one float4 further on, and the last one still ends inside the buffer: an
-		// element stride of the whole array's size wrote planes[1..5] past the mirror.
+		// Each element is one float4 further on, and the last one ends inside the buffer.
 		for (uint32_t i = 0; i < 6; ++i)
 		{
 			INFO("planes[" << i << "]");
