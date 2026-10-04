@@ -219,12 +219,15 @@ void main(uint threadIdx: SV_DispatchThreadID)
     let rig = gUniforms.rigs.Get(state.rig);
 
     DominantFrames dominant;
-    DominantAt(state, rig, gUniforms.time, dominant.lowerFrame, dominant.upperFrame, dominant.upperWeight);
-    DominantAt(state, rig, gUniforms.prevTime, dominant.prevLowerFrame, dominant.prevUpperFrame, dominant.prevUpperWeight);
+    DominantAt(state, rig, mesh.PlaybackTime(gUniforms.time), dominant.lowerFrame, dominant.upperFrame, dominant.upperWeight);
+    DominantAt(
+        state, rig, mesh.PlaybackTime(gUniforms.prevTime), dominant.prevLowerFrame, dominant.prevUpperFrame, dominant.prevUpperWeight
+    );
     gUniforms.dominantFrames[placement] = dominant;
 
     let incumbent = !previous.Unset() && previous.DrawsPerInstance();
-    let holding = incumbent && visible && view.poseForced == cPoseForceNone && CrossfadeInFlight(state.slots, gUniforms.time);
+    let holding =
+        incumbent && visible && view.poseForced == cPoseForceNone && CrossfadeInFlight(state.slots, mesh.PlaybackTime(gUniforms.time));
     let wants = holding || WantsPerInstance(geom, view, size, chosen, previous, visible);
     let mayPose = incumbent || (!previous.Unset() && previous.Granted());
 

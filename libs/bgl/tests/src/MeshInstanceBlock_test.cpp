@@ -151,22 +151,6 @@ TEST_CASE("An instance block refuses what it cannot place", "[instance_block]")
 			Catch::Matchers::ContainsSubstring("names node 2"));
 	}
 
-	SECTION("a skinned geom, until its placements are drawn")
-	{
-		// The contract's refusal: the desc is checked whole, and then nothing is reserved.
-		const auto quad = bgl::test::skinned_synth::AddSlidingQuadGeom(
-			*scene,
-			scene->CreatePbrMaterial(bgl::PbrMaterialDesc()));
-		const uint32_t baseline = view->GetInstanceCount();
-
-		CHECK_THROWS_WITH(
-			view->CreateMeshInstanceBlock(
-				bgl::MeshInstanceBlockDesc().SetGeom(quad).SetCapacity(4).SetPlayback(
-					bgl::SkinnedPlaybackDesc::FromClip(bgl::test::skinned_synth::c_LoopClip))),
-			Catch::Matchers::ContainsSubstring("not drawn yet"));
-		CHECK(view->GetInstanceCount() == baseline);
-	}
-
 	SECTION("a block already deleted, or one never made")
 	{
 		const auto block = view->CreateMeshInstanceBlock(

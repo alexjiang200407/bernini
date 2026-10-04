@@ -42,6 +42,10 @@ public struct MeshInstance
     // The placement as one affine matrix, the implied fourth row filled in.
     public float4x4 Matrix() { return float4x4(transform[0], transform[1], transform[2], float4(0.0, 0.0, 0.0, 1.0)); }
 
+    // The clock its playback record is evaluated at when the view's is `viewTime`: every reader of
+    // the record goes through this, at the frame's time and at the previous frame's alike.
+    public float PlaybackTime(float viewTime) { return viewTime + playbackOffset; }
+
     // The same, as the previous frame drew it.
     public float4x4 PrevMatrix() { return float4x4(prevTransform[0], prevTransform[1], prevTransform[2], float4(0.0, 0.0, 0.0, 1.0)); }
 

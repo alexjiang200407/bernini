@@ -230,8 +230,11 @@ and portability.
     geometry, layers beyond the one additive slot, montages, facial/lip sync, variable-depth graphs.
 - [ ] Crowd Variation — a few meshes and one clip set means sameness is the primary visual risk; all
   of it must be deterministic from unit ID so nothing changes at a LOD boundary or on death.
-  - [ ] Per-unit animation phase offset from an ID hash — non-negotiable, or a formation reads as one
-    organism; offset clip time and preserve it across state transitions.
+  - [~] Per-unit animation phase offset from an ID hash — non-negotiable, or a formation reads as one
+    organism; offset clip time and preserve it across state transitions. A crowdlib agent's id is
+    given at spawn and carried by copy (`RenderAgent::id`), and `crowd_render` plays each skinned
+    agent its id's share of its type's spread ahead of the clock (`docs/crowd_render.md`). Left: state
+    transitions, which crowd units do not have yet.
   - [ ] Per-unit `playRate` jitter (±3–5%) so units that synchronise don't stay synchronised.
   - [ ] Per-unit uniform scale (±3–4%) and small formation yaw jitter.
   - [ ] Per-instance submesh mask for small toggles on one mesh — a cape, a quiver — bucketed by

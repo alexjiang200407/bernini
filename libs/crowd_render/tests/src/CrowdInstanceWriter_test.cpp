@@ -20,6 +20,7 @@
 #include <bgpu/types/QueueType.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <core/math.h>
 #include <crowdlib/AgentType.h>
 #include <crowdlib/CrowdDesc.h>
@@ -30,7 +31,9 @@
 #include <crowdlib/RenderTick.h>
 #include <cstdint>
 #include <cstring>
+#include <map>
 #include <optional>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -58,16 +61,23 @@ namespace
 
 		// One per type, each c_MaxAgents slots.
 		std::vector<std::vector<Placed>> types;
+
+		// One per type, each c_MaxAgents slots: the playback offset each was given, or -1.
+		std::vector<std::vector<float>> offsets;
 	};
 
 	/**
 	 * The writer's harness: on a device of its own beside the crowd's, it imports the ring and runs
-	 * CSRecordCrowdInstances once per agent type, then reads back the slots and the tick's records.
+	 * `shader` -- a crowd writer over the recording block -- once per agent type, then reads back
+	 * the slots, their offsets and the tick's records.
 	 */
 	class WriterHarness
 	{
 	public:
-		WriterHarness(const bgpu::GpuContextRef& context, const crowd::ICrowd& crowd) :
+		WriterHarness(
+			const bgpu::GpuContextRef& context,
+			const crowd::ICrowd&       crowd,
+			const char*                shader = "crowd_render_tests.CSRecordCrowdInstances") :
 			m_Device(bgpu::CreateDevice(context)),
 			m_Rm(m_Device->CreateResourceManager(bgpu::ResourceManagerDesc::ComputeOnly())),
 			m_Queue(m_Device->CreateCommandQueue(bgpu::QueueType::kCompute)),
@@ -85,6 +95,17 @@ namespace
 					.SetInitialCount(c_MaxAgents * 4)
 					.SetDebugName("Recorded crowd slots"));
 
+			m_Offsets = m_Rm->CreateComputeBuffer(
+				bgpu::ComputeBufferDesc()
+					.SetElement<float>()
+					.SetInitialCount(c_MaxAgents)
+					.SetDebugName("Recorded crowd offsets"));
+
+			auto offsetsDesc      = bgpu::ReadbackBufferDesc();
+			offsetsDesc.byteSize  = c_MaxAgents * sizeof(float);
+			offsetsDesc.debugName = "Recorded crowd offsets readback";
+			m_OffsetsReadback     = m_Rm->CreateReadbackBuffer(offsetsDesc);
+
 			auto slotsDesc      = bgpu::ReadbackBufferDesc();
 			slotsDesc.byteSize  = c_MaxAgents * sizeof(Placed);
 			slotsDesc.debugName = "Recorded crowd slots readback";
@@ -97,8 +118,8 @@ namespace
 
 			m_Kernel = m_Device->CreateComputeKernel(
 				bgpu::ComputePipelineDesc()
-					.SetShader(m_Device->CreateShader("crowd_render_tests.CSRecordCrowdInstances"))
-					.SetDebugName("CSRecordCrowdInstances"));
+					.SetShader(m_Device->CreateShader(shader))
+					.SetDebugName(shader));
 			REQUIRE(m_Kernel.pipeline != nullptr);
 
 			auto listDesc = bgpu::CommandListDesc();
@@ -113,6 +134,8 @@ namespace
 		~WriterHarness()
 		{
 			m_Queue->Flush();
+			m_Rm->DestroyReadbackBuffer(m_OffsetsReadback, false);
+			m_Rm->DestroyBuffer(m_Offsets, false);
 			m_Rm->DestroyReadbackBuffer(m_SlotsReadback, false);
 			m_Rm->DestroyReadbackBuffer(m_RingReadback, false);
 			m_Rm->DestroyBuffer(m_Slots, false);
@@ -120,13 +143,18 @@ namespace
 			m_Rm->UnregisterQueue(m_Queue.Get());
 		}
 
-		/** Runs the writer for every type over `frame`, the crowd's latest completed tick. */
+		/**
+		 * Runs the writer for every type over `frame`, the crowd's latest completed tick, each type
+		 * spread over `phaseSpread` seconds. Every offset starts the run at -1.
+		 */
 		Frame
 		Run(const crowd::ICrowd&             crowd,
 		    uint64_t                         tick,
 		    const crowd_render::WriterFrame& frame,
-		    const std::vector<glm::mat4>&    models)
+		    const std::vector<glm::mat4>&    models,
+		    float                            phaseSpread = 0.0f)
 		{
+			const auto                             unset   = std::vector<float>(c_MaxAgents, -1.0f);
 			const std::optional<crowd::RenderTick> written = crowd.GetRenderTick(tick);
 			REQUIRE(written.has_value());
 
@@ -134,19 +162,29 @@ namespace
 			for (uint32_t type = 0; type < models.size(); ++type)
 			{
 				m_Kernel["gUniforms"]["block"]["slots"]    = m_Slots;
+				m_Kernel["gUniforms"]["block"]["offsets"]  = m_Offsets;
 				m_Kernel["gUniforms"]["block"]["capacity"] = c_MaxAgents;
 				crowd_render::WriteWriterParams(
 					m_Kernel["gUniforms"]["params"],
 					frame,
 					m_Ring,
 					type,
-					models[type]);
+					models[type],
+					phaseSpread);
 
 				m_Queue->InsertWaitForQueueFence(
 					written->written.queue.Get(),
 					written->written.value);
 				m_Allocator->ResetAllocator();
 				m_List->Open(m_Queue.Get(), m_Allocator.Get());
+				m_List->WriteBuffer(m_Offsets, unset.data(), 0, unset.size() * sizeof(float));
+				m_List->Barrier(
+					m_Offsets,
+					bgpu::BufferBarrierDesc()
+						.AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+						.AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+						.AddSyncAfter(bgpu::BarrierSyncFlag::kComputeShader)
+						.AddAccessAfter(bgpu::BarrierAccessFlag::kUnorderedAccess));
 				auto state   = bgpu::ComputeState();
 				state.kernel = &m_Kernel;
 				m_List->SetComputeState(state);
@@ -159,6 +197,14 @@ namespace
 						.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
 						.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
 				m_List->CopyBufferToReadback(m_SlotsReadback, m_Slots);
+				m_List->Barrier(
+					m_Offsets,
+					bgpu::BufferBarrierDesc()
+						.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+						.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+						.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+						.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
+				m_List->CopyBufferToReadback(m_OffsetsReadback, m_Offsets);
 				m_List->CopyBufferToReadback(m_RingReadback, m_Ring);
 				m_List->Close();
 				m_Done = m_Queue->ExecuteCommandList(m_List.Get());
@@ -171,6 +217,10 @@ namespace
 					placed.size() * sizeof(Placed));
 				m_Rm->UnmapReadback(m_SlotsReadback);
 				result.types.push_back(std::move(placed));
+
+				const auto* given = static_cast<const float*>(m_Rm->MapReadback(m_OffsetsReadback));
+				result.offsets.emplace_back(given, given + c_MaxAgents);
+				m_Rm->UnmapReadback(m_OffsetsReadback);
 			}
 
 			const auto* ring =
@@ -202,6 +252,8 @@ namespace
 		bgpu::ComputeKernel        m_Kernel;
 		bgpu::BufferHandle         m_Ring;
 		bgpu::BufferHandle         m_Slots;
+		bgpu::BufferHandle         m_Offsets;
+		bgpu::ReadbackBufferHandle m_OffsetsReadback;
 		bgpu::ReadbackBufferHandle m_SlotsReadback;
 		bgpu::ReadbackBufferHandle m_RingReadback;
 		uint64_t                   m_Done = 0;
@@ -286,6 +338,7 @@ TEST_CASE(
 				const auto&   run    = now.runs[type];
 				const bool    shown  = slot < run.count;
 				REQUIRE((placed.position.w == 1.0f) == shown);
+				CHECK(now.offsets[type][slot] == -1.0f);
 				if (!shown)
 					continue;
 				CHECK(placed.position.y == 1.0f);
@@ -408,4 +461,94 @@ TEST_CASE("A frame between ticks places each agent alpha of the way", "[crowd_re
 		CHECK(Near(atTick.position, glm::vec4(then.position.x, 0.0f, then.position.y, 1.0f)));
 		CHECK(Near(atTick.axis, glm::vec4(then.facing.x, 0.0f, then.facing.y, 0.0f)));
 	}
+}
+
+// The skinned writer places agents as the static one does, and gives each its id's share of the
+// spread: the same agent keeps its offset across ticks that move it to another slot, and agents
+// side by side do not play in step.
+TEST_CASE(
+	"A skinned agent plays its id's share of the spread, for its life",
+	"[crowd_render][compute]")
+{
+	auto contextDesc             = bgpu::GpuContextDesc();
+	contextDesc.enableDebugLayer = true;
+	auto context                 = bgpu::CreateGpuContext(contextDesc);
+
+	auto          crowd = crowd::CreateCrowd(context, MakeDesc());
+	WriterHarness harness =
+		WriterHarness(context, *crowd, "crowd_render_tests.CSRecordSkinnedCrowdInstances");
+	const auto models = std::vector<glm::mat4>{ glm::mat4(1.0f), glm::mat4(1.0f) };
+
+	constexpr float c_Spread = 2.0f;
+
+	auto orders      = crowd::GroupOrders();
+	orders.facing    = glm::vec2(1.0f, 0.0f);
+	orders.formation = { .frontage = 4, .spacing = 1.0f };
+	const auto foot  = crowd->CreateGroup({ .agentType = 0, .agentCount = 12, .orders = orders });
+	orders.goal      = glm::vec2(0.0f, 20.0f);
+	(void)crowd->CreateGroup({ .agentType = 1, .agentCount = 8, .orders = orders });
+
+	auto step = [&] {
+		crowd->Step();
+		crowd->Wait();
+	};
+
+	auto offsetOf = std::map<uint32_t, float>();
+	auto draw     = [&] {
+		const uint64_t tick = crowd->GetCompletedTick();
+		const Frame    now  = harness.Run(
+			*crowd,
+			tick,
+			crowd_render::PlanWriterFrame(*crowd, tick, 1.0f, 0, 0.0f),
+			models,
+			c_Spread);
+		if (tick > 3)
+			crowd->ReleaseRenderReads(tick - 3, harness.Done());
+
+		for (uint32_t type = 0; type < now.types.size(); ++type)
+		{
+			const auto& run = now.runs[type];
+			for (uint32_t slot = 0; slot < c_MaxAgents; ++slot)
+			{
+				INFO("tick " << tick << ", type " << type << ", slot " << slot);
+				const float offset = now.offsets[type][slot];
+				if (slot >= run.count)
+				{
+					CHECK(offset == -1.0f);
+					continue;
+				}
+				const uint32_t id    = now.records[run.firstRecordIndex + slot].id;
+				const float    share = static_cast<float>(id * 0x9E3779B9u) / 4294967296.0f;
+				CHECK(std::abs(offset - share * c_Spread) < 1e-5f);
+				CHECK(offset >= 0.0f);
+				CHECK(offset <= c_Spread);
+
+				const auto [kept, fresh] = offsetOf.try_emplace(id, offset);
+				CHECK((fresh || kept->second == offset));
+			}
+		}
+		return now;
+	};
+
+	step();
+	const Frame first = draw();
+
+	// Twelve agents in a row of slots, and no two of them in step.
+	auto shares = std::set<float>();
+	for (uint32_t slot = 0; slot < first.runs[0].count; ++slot)
+		shares.insert(first.offsets[0][slot]);
+	CHECK(shares.size() == first.runs[0].count);
+
+	// A split and a merge move every one of the type's agents to another slot; a spawn brings new ids.
+	const auto split = crowd->SplitGroup(foot, 5);
+	step();
+	(void)draw();
+	crowd->MergeGroup(foot, split);
+	step();
+	(void)draw();
+	crowd->CreateGroup({ .agentType = 0, .agentCount = 3, .orders = orders });
+	step();
+	(void)draw();
+
+	CHECK(offsetOf.size() == 12 + 8 + 3);
 }

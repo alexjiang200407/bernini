@@ -1,6 +1,10 @@
+#include "FrameRateOverlay.h"
+#include "SkinnedAgent.h"
 #include <CLI/CLI.hpp>
 #include <DemoWindow.h>
 #include <algorithm>
+#include <assetlib/AssetStore.h>
+#include <assetlib/project_layout.h>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
@@ -8,6 +12,7 @@
 #include <bgl/glm.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/DirectionalLightDesc.h>
+#include <bgl/types/InstanceDesc.h>
 #include <bgl/types/PassTiming.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
@@ -27,7 +32,9 @@
 #include <crowdlib/debug/CrowdReadback.h>
 #include <cstdint>
 #include <exception>
+#include <filesystem>
 #include <format>
+#include <gamelib/AssetManager.h>
 #include <iostream>
 #include <optional>
 #include <span>
@@ -50,7 +57,9 @@
 // gives the crowd's mean GPU time a tick.
 //
 // With --handoff the crowd is drawn GPU to GPU instead (crowd_render::CrowdInstanceBlocks): no
-// readback and no posing, interpolated between ticks.
+// readback and no posing, interpolated between ticks. With --project and --import too, every agent
+// is that import's skinned character looping --clip, each a phase of its own, posed per instance
+// near the camera and drawn from its rig's table far from it.
 
 namespace
 {
@@ -74,6 +83,12 @@ namespace
 
 		// Draws the crowd from its render ring rather than its debug readback.
 		bool handoff = false;
+
+		// A project's data root and an import in it: every agent is drawn as that skinned
+		// character, playing `clip` (its first when empty). Needs the handoff.
+		std::string project;
+		std::string importKey;
+		std::string clip;
 	};
 
 	constexpr float c_Tick = 1.0f / 30.0f;
@@ -141,8 +156,17 @@ namespace
 		auto ctxDesc             = bgpu::GpuContextDesc();
 		ctxDesc.enableDebugLayer = true;
 		ctxDesc.shaderCacheDir   = "shadercache";
-		auto context             = bgpu::CreateGpuContext(ctxDesc);
-		auto graphics            = bgl::CreateGraphics(context, bgl::GraphicsOptions{});
+		// A character's materials may shade through surfaces its project authors, which the
+		// renderer registers only from this directory, and only when it is created.
+		if (!opts.project.empty())
+		{
+			const auto surfaceDir =
+				std::filesystem::path(opts.project) / assetlib::c_ShadersDirectoryName;
+			if (std::filesystem::is_directory(surfaceDir))
+				ctxDesc.clientShaderDir = surfaceDir;
+		}
+		auto context  = bgpu::CreateGpuContext(ctxDesc);
+		auto graphics = bgl::CreateGraphics(context, bgl::GraphicsOptions{});
 
 		const uint32_t units = opts.units;
 		const float    scale = std::sqrt(static_cast<float>(units));
@@ -211,10 +235,39 @@ namespace
 		targetDesc.headless = opts.headless;
 		targetDesc.wnd      = window ? window->NativeHandle() : nullptr;
 		auto target         = graphics->CreateRenderTarget(targetDesc);
+
+		// In a window only: a headless run's screenshot is the crowd, and its log has the timings.
+		std::optional<crowd_example::FrameRateOverlay> frameRate;
+		if (window)
+			frameRate.emplace(*graphics, opts.width, opts.height);
+		auto lastFrameStart = std::chrono::steady_clock::now();
 		target->SetGpuTimingEnabled(opts.passTimings);
 
 		auto scene = graphics->CreateScene(bgl::SceneDesc());
 		auto view  = graphics->CreateSceneView(scene, 2 * crowdDesc.maxAgents + 1);
+
+		// Before the blocks, so the geoms they name outlive them.
+		std::optional<assetlib::AssetStore>        store;
+		std::optional<game::AssetManager>          assets;
+		std::optional<crowd_example::SkinnedAgent> character;
+		if (!opts.importKey.empty())
+		{
+			const auto dataRoot = std::filesystem::path(opts.project);
+			store.emplace(dataRoot);
+			assets.emplace(scene, dataRoot);
+			character = crowd_example::LoadSkinnedAgent(
+				*store,
+				dataRoot,
+				*assets,
+				opts.importKey,
+				opts.clip);
+			std::cout << std::format(
+				"every agent is {}, {} geom(s), looping clip {} over {:.2f} s\n",
+				opts.importKey,
+				character->geoms.size(),
+				character->clipIndex,
+				character->cycleSeconds);
+		}
 
 		// The only light: with no environment map, a scene without a sun renders black.
 		view->SetDirectionalLight(
@@ -244,6 +297,25 @@ namespace
 				view);
 		for (uint32_t type = 0; type < 2; ++type)
 		{
+			if (character)
+			{
+				// Standing on the ground at the type's height, whatever the character's own scale.
+				const float height = character->bounds.max.y - character->bounds.min.y;
+				const float fit    = sizes[type].y / height;
+				auto        mesh =
+					crowd_render::AgentTypeMeshDesc()
+						.SetCapacity(counts[type])
+						.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(character->clipIndex))
+						.SetPhaseSpreadSeconds(character->cycleSeconds)
+						.SetModel(
+							glm::translate(
+								glm::mat4(1.0f),
+								glm::vec3(0.0f, -character->bounds.min.y * fit, 0.0f)) *
+							glm::scale(glm::mat4(1.0f), glm::vec3(fit)) * character->world);
+				for (const bgl::GeomHandle skinned : character->geoms) mesh.AddGeom(skinned);
+				handoffDesc.AddType(std::move(mesh));
+				continue;
+			}
 			const auto geom = scene->AddCubeGeom(scene->CreatePbrMaterial(
 				{ .baseColorFactor = colors[type], .roughnessFactor = 0.6f }));
 			if (opts.handoff)
@@ -466,7 +538,20 @@ namespace
 
 			poseTime += since(poseStart);
 			const auto drawStart = Clock::now();
-			graphics->DrawFrame(target, renderJob);
+			// The animation clock: the wall's live, a tick a frame otherwise, so a capped run poses
+			// the same every time.
+			renderJob.time =
+				live ? static_cast<float>(since(started)) : static_cast<float>(frame) * c_Tick;
+			if (frameRate)
+			{
+				frameRate->Tick(std::chrono::duration<double>(drawStart - lastFrameStart).count());
+				lastFrameStart = drawStart;
+			}
+			graphics->BeginFrame(target);
+			graphics->Draw(renderJob);
+			if (frameRate)
+				frameRate->Render(*graphics);
+			graphics->EndFrame();
 			if (handoff)
 				handoff->FinishFrame();
 			drawTime += since(drawStart);
@@ -575,6 +660,18 @@ main(int argc, char** argv)
 		"Draw the crowd GPU to GPU from its render ring, with no readback or posing");
 	app.add_option("--units", opts.units, "Multiply every group's agents by this; 1 is 136 agents")
 		->check(CLI::PositiveNumber);
+	auto* project = app.add_option(
+		"--project",
+		opts.project,
+		"A project's data root, which --import is read from");
+	auto* import = app.add_option(
+		"--import",
+		opts.importKey,
+		"A .bimport or .glb in --project whose skinned character every agent is drawn as");
+	app.add_option("--clip", opts.clip, "The clip the character loops; its first when omitted");
+	import->needs(project);
+	import->needs(app.get_option("--handoff"));
+	project->needs(import);
 
 	CLI11_PARSE(app, argc, argv);
 

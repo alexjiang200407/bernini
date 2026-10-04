@@ -612,6 +612,9 @@ reprojects through a pose nothing drew, which is the caller's to avoid.
   which read a placement. Absent from the graph when no block has a writer.
 * **Writes only its own run.** The run starts and ends on an upload block, so no CPU placement's
   upload rewrites what a writer wrote, and the CPU writes the run once, at creation.
+* **A skinned block's slots are automatic placements.** They are on the list `Choose Poses` walks
+  from the block's creation, hidden or not, and read the block's one record; a writer placing a
+  slot this pass is what makes the cull pose or table-draw it the same frame.
 
 ### Pose Rig Frames
 

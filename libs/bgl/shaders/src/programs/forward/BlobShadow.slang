@@ -198,7 +198,7 @@ void FootSole(uint placement, MeshInstance mesh, uint leg, out float3 heel, out 
         let state = gBlobShadowData.playbackBuffer.LoadRecordAs<SkinnedTableState>(mesh.playback);
         let rig = gBlobShadowData.rigs.Get(state.playback.rig);
         let clip = gBlobShadowData.clipBuffer.Get(rig.clips, state.playback.clip);
-        TableSole(mesh, rig, clip, ClipFrames(clip, state.playback, gBlobShadowData.time), leg, heel, ball);
+        TableSole(mesh, rig, clip, ClipFrames(clip, state.playback, mesh.PlaybackTime(gBlobShadowData.time)), leg, heel, ball);
         return;
     }
 

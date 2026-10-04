@@ -466,3 +466,62 @@ TEST_CASE("A plan's render records run by type, and its sources are records", "[
 	CHECK(second.ranges[1].sourceFirstRecord == 3);
 	CHECK(second.groups[1].firstRecord == 0);
 }
+
+TEST_CASE("Spawned agents take the next ids, and copies carry their own", "[crowdplan]")
+{
+	auto plan = crowd::CrowdPlan(Desc());
+
+	(void)plan.CreateGroup(Group(6));
+	(void)plan.CreateGroup(Group(4, 1));
+	const auto spawn = plan.PlanTick();
+	REQUIRE(spawn.ranges.size() == 2);
+	CHECK(spawn.ranges[0].firstId == 0);
+	CHECK(spawn.ranges[1].firstId == 6);
+
+	// A tick that spawns nothing hands out no ids; a later spawn starts where the last stopped.
+	const auto copied = plan.PlanTick();
+	for (const auto& range : copied.ranges)
+		CHECK(range.sourceFirstAgent != crowd::idl::c_SpawnSource);
+
+	(void)plan.CreateGroup(Group(3));
+	const auto later         = plan.PlanTick();
+	auto       spawnedRanges = std::vector<crowd::idl::AgentRange>();
+	for (const auto& range : later.ranges)
+	{
+		if (range.sourceFirstAgent == crowd::idl::c_SpawnSource)
+			spawnedRanges.push_back(range);
+	}
+	REQUIRE(spawnedRanges.size() == 1);
+	CHECK(spawnedRanges[0].firstId == 10);
+
+	// Two groups created and merged before a tick are one spawned range, its ids in a row.
+	auto       merged = crowd::CrowdPlan(Desc());
+	const auto front  = merged.CreateGroup(Group(5));
+	const auto rear   = merged.CreateGroup(Group(2));
+	merged.MergeGroup(rear, front);
+	const auto one = merged.PlanTick();
+	REQUIRE(one.ranges.size() == 1);
+	CHECK(one.ranges[0].firstId == 0);
+	CHECK(one.ranges[0].agentCount == 7);
+	(void)merged.CreateGroup(Group(1));
+	const auto next = merged.PlanTick();
+	CHECK(next.ranges.back().firstId == 7);
+}
+
+TEST_CASE("The same commands give the same ids", "[crowdplan]")
+{
+	auto run = [] {
+		auto plan  = crowd::CrowdPlan(Desc());
+		auto ids   = std::vector<uint32_t>();
+		auto group = plan.CreateGroup(Group(8));
+		for (const auto& range : plan.PlanTick().ranges) ids.push_back(range.firstId);
+		const auto split = plan.SplitGroup(group, 3);
+		(void)plan.CreateGroup(Group(5, 1));
+		for (const auto& range : plan.PlanTick().ranges) ids.push_back(range.firstId);
+		plan.MergeGroup(split, group);
+		(void)plan.CreateGroup(Group(2));
+		for (const auto& range : plan.PlanTick().ranges) ids.push_back(range.firstId);
+		return ids;
+	};
+	CHECK(run() == run());
+}

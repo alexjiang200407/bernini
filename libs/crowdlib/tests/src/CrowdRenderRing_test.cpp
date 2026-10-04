@@ -41,6 +41,7 @@
 #include <crowdlib/debug/CrowdReadback.h>
 #include <cstdint>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <thread>
 #include <tuple>
@@ -352,8 +353,9 @@ namespace
 
 	/**
 	 * Checks that every record of `current` not spawned follows `source` to its agent a tick
-	 * before: a distinct record, of the same type, no further than one tick's step away. Returns
-	 * how many records moved to another index, so a test can show the layout changed.
+	 * before: a distinct record, of the same type and id, no further than one tick's step away;
+	 * that every id is distinct; and that a spawned record's id is none of the previous tick's.
+	 * Returns how many records moved to another index, so a test can show the layout changed.
 	 */
 	uint32_t
 	CheckSources(
@@ -363,18 +365,26 @@ namespace
 	{
 		auto     claimed = std::vector<bool>(previous.size(), false);
 		uint32_t moved   = 0;
+		auto     ids     = std::set<uint32_t>();
+		auto     before  = std::set<uint32_t>();
+		for (const auto& record : previous) before.insert(record.id);
 		for (uint32_t index = 0; index < current.size(); ++index)
 		{
 			const auto& record = current[index];
+			CHECK(ids.insert(record.id).second);
 			if (record.source == crowd::c_RenderSpawned)
+			{
+				CHECK_FALSE(before.contains(record.id));
 				continue;
+			}
 			REQUIRE(record.source < previous.size());
 			CHECK_FALSE(claimed[record.source]);
 			claimed[record.source] = true;
 
-			const auto& before = previous[record.source];
-			CHECK(record.type == before.type);
-			CHECK(glm::length(record.position - before.position) <= maxStep);
+			const auto& then = previous[record.source];
+			CHECK(record.type == then.type);
+			CHECK(record.id == then.id);
+			CHECK(glm::length(record.position - then.position) <= maxStep);
 			moved += record.source != index ? 1 : 0;
 		}
 		return moved;

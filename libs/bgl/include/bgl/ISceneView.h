@@ -445,8 +445,7 @@ namespace bgl
 		 * @throws SceneError if `desc.geom` is not a live static or skinned geom, `desc.capacity` is 0
 		 *         or past c_MaxMeshInstanceBlockCapacity, or a skinned geom's `desc.playback` is one
 		 *         CreateSkinnedMeshInstance refuses, or `desc.toonShadingRig` is one SetToonShadingRig
-		 *         would refuse for a placement of the geom. A skinned geom is refused whole until its
-		 *         placements are drawn.
+		 *         would refuse for a placement of the geom.
 		 */
 		virtual MeshInstanceBlockHandle
 		CreateMeshInstanceBlock(const MeshInstanceBlockDesc& desc) = 0;

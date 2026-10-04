@@ -47,6 +47,7 @@
 #include <headless/PassCosts.h>
 #include <headless/framing.h>
 #include <headless/headless_render.h>
+#include <headless/import_lookup.h>
 #include <iostream>
 #include <map>
 #include <optional>
@@ -197,91 +198,6 @@ namespace
 	// Timed frames drawn past the last one, held at its time, to collect rows that trail their frame.
 	constexpr uint32_t c_DrainFrames = 16;
 
-	/** The .bproj beside the data root, for a message that has to name one. */
-	[[nodiscard]] std::string
-	ProjectFileHint(const std::filesystem::path& dataRoot)
-	{
-		auto root = std::filesystem::absolute(dataRoot).lexically_normal();
-		if (!root.has_filename())
-			root = root.parent_path();
-
-		const std::filesystem::path projectDir = root.parent_path();
-		std::error_code             error;
-		for (const auto& entry : std::filesystem::directory_iterator(projectDir, error))
-		{
-			if (entry.path().extension() == ".bproj")
-				return entry.path().string();
-		}
-		return (projectDir / "<project>.bproj").string();
-	}
-
-	/**
-	 * @throws std::runtime_error naming `key` and the command that writes it back, when a derived
-	 *         container the import names is not on disk.
-	 */
-	void
-	RequireDerived(
-		const assetlib::AssetStore&  store,
-		const std::string_view       key,
-		const std::filesystem::path& dataRoot)
-	{
-		if (!store.Exists(key))
-		{
-			core::throw_runtime_error(
-				"{} is not on disk. It is a derived container, which a project does not commit: "
-				"`assetlib_cli migrate --project \"{}\" --yes` writes back every one its .bimport "
-				"documents name.",
-				key,
-				ProjectFileHint(dataRoot));
-		}
-	}
-
-	/** @throws std::runtime_error if `key` is neither a `.bimport` nor a `.glb`. */
-	[[nodiscard]] std::string
-	ImportDocumentKey(const std::string_view key)
-	{
-		if (key.ends_with(".glb"))
-			return assetlib::importDocumentKeyFor(key);
-
-		if (!key.ends_with(".bimport"))
-		{
-			core::throw_runtime_error("--import {} names neither a .bimport nor a .glb", key);
-		}
-		return std::string(key);
-	}
-
-	[[nodiscard]] std::string
-	AnimationOutput(const assetlib::ImportDocument& document)
-	{
-		for (const std::string& output : document.outputs)
-		{
-			if (assetlib::assetTypeFromExtension(output) == assetlib::AssetType::kAnimation)
-				return output;
-		}
-		return {};
-	}
-
-	/** @throws std::runtime_error listing every clip when none is named `name`. */
-	[[nodiscard]] uint32_t
-	FindClip(const std::vector<game::ClipInfo>& clips, const std::string_view name)
-	{
-		if (name.empty())
-			return 0;
-
-		for (std::size_t i = 0; i < clips.size(); ++i)
-		{
-			if (clips[i].name == name)
-				return static_cast<uint32_t>(i);
-		}
-
-		std::string names;
-		for (const game::ClipInfo& clip : clips)
-		{
-			names += std::format("\n  {}", clip.name);
-		}
-		core::throw_runtime_error("--clip {} is not in the clip set, which holds:{}", name, names);
-	}
-
 	void
 	PrintClips(const std::vector<game::ClipInfo>& clips, const uint32_t playing)
 	{
@@ -315,7 +231,7 @@ namespace
 		game::AssetManager&          assets,
 		const bgl::SceneViewRef&     view)
 	{
-		const std::string documentKey = ImportDocumentKey(opts.import);
+		const std::string documentKey = headless::ImportDocumentKey(opts.import);
 		if (!store.Exists(documentKey))
 		{
 			core::throw_runtime_error(
@@ -332,9 +248,9 @@ namespace
 		{
 			core::throw_runtime_error("{} produced no .bmesh", documentKey);
 		}
-		RequireDerived(store, meshKey, dataRoot);
+		headless::RequireDerived(store, meshKey, dataRoot);
 
-		const std::string animationsKey = AnimationOutput(document);
+		const std::string animationsKey = headless::AnimationOutput(document);
 		const bool        rigged        = !animationsKey.empty();
 		if (!rigged && !opts.clip.empty())
 		{
@@ -351,9 +267,9 @@ namespace
 		std::optional<assetlib::Skeleton>            skeleton;
 		if (rigged)
 		{
-			RequireDerived(store, animationsKey, dataRoot);
+			headless::RequireDerived(store, animationsKey, dataRoot);
 			animations = store.Load<assetlib::AnimationSet>(animationsKey);
-			RequireDerived(store, animations->skeleton, dataRoot);
+			headless::RequireDerived(store, animations->skeleton, dataRoot);
 			skeleton    = store.Load<assetlib::Skeleton>(animations->skeleton);
 			posedBounds = assetlib::findPosedBounds(*animations, model, *skeleton);
 		}
@@ -399,7 +315,7 @@ namespace
 			headless::GrowBounds(bounds, world, posed);
 		}
 
-		const uint32_t clip = rigged && !skinned.empty() ? FindClip(clips, opts.clip) : 0;
+		const uint32_t clip = rigged && !skinned.empty() ? headless::FindClip(clips, opts.clip) : 0;
 
 		const bool            crowd  = opts.crowd > 0;
 		const bgl::PoseSource source = ParseSource(opts.source, crowd);
