@@ -9,4 +9,5 @@ public static const uint cMaxToonShadingRigKeysPerEdit = 32;
 
 // Rigged placements one view evaluates a frame: the size of its pool of evaluated blocks. Placements
 // that are visible and large enough on screen take it, up to this many; the rest shade cel only.
+// Which win past it is unspecified, and may change from frame to frame.
 public static const uint cToonShadingRigPoolCapacity = 1024;

@@ -23,7 +23,9 @@ hidden, its head sphere -- `headRadius` times the placement's uniform scale, abo
 -- lies in the draw's frustum, and the head's projected diameter,
 `2 * radius * pixelsPerUnit / distance`, exceeds the rig's `fadeEndPixels`. A selected placement takes
 the next block of the view's pool with an atomic; the pool holds `cToonShadingRigPoolCapacity`, and
-one past it is not evaluated. The selection is per draw: a frame's second draw of a view selects again
+one past it is not evaluated and shades cel only. Which placements win when more ask than it holds
+is unspecified -- the order threads reach the atomic -- and may change from frame to frame; nothing
+sorts them. The selection is per draw: a frame's second draw of a view selects again
 for its own camera.
 
 ## How the draws find the block

@@ -15,6 +15,18 @@
 
 namespace bgl
 {
+	namespace
+	{
+		static_assert(
+			idl::cToonShadingRigSlotMask >= cToonShadingRigPoolCapacity,
+			"a flags word's slot bits must name every block of the pool, plus one for none");
+		static_assert(
+			((idl::cToonShadingRigSlotMask + 1u) & idl::cToonShadingRigSlotMask) == 0u &&
+				((idl::cToonShadingRigSlotMask << idl::cToonShadingRigSlotShift) >>
+		         idl::cToonShadingRigSlotShift) == idl::cToonShadingRigSlotMask,
+			"the slot bits are a contiguous run that fits the flags word");
+	}
+
 	ToonShadingRigState::ToonShadingRigState(const bgpu::ResourceManagerRef& resourceManager) :
 		m_Ranges(
 			resourceManager,
