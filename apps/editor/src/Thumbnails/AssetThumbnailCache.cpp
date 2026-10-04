@@ -935,18 +935,14 @@ AssetThumbnailCache::AcquireMaterial(std::string_view relPath, game::TexturePref
 void
 AssetThumbnailCache::BuildShot(Shot& shot)
 {
-	m_ShotIsToon = false;
-	if (shot.item.type == ThumbnailType::kMesh)
-		BuildMesh(shot);
-	else
-		BuildMaterial(shot);
-	m_RenderTarget->SetToneMapping(
-		m_ShotIsToon ? bgl::ToneMapping::kStandard : m_ProjectToneMapping);
+	const bool toon =
+		shot.item.type == ThumbnailType::kMesh ? BuildMesh(shot) : BuildMaterial(shot);
+	m_RenderTarget->SetToneMapping(toon ? bgl::ToneMapping::kStandard : m_ProjectToneMapping);
 	if (shot.item.camera.has_value())
 		shot.job.camera = *shot.item.camera;
 }
 
-void
+bool
 AssetThumbnailCache::BuildMesh(Shot& shot)
 {
 	const assetlib::BMesh& mesh     = shot.item.mesh->mesh;
@@ -968,8 +964,6 @@ AssetThumbnailCache::BuildMesh(Shot& shot)
 		for (const std::string& relPath : bindings.submeshMaterials)
 			materials.push_back(AcquireMaterial(relPath, shot.item.prefetch.get()));
 	}
-
-	m_ShotIsToon = editor::AnyToonMaterial(*m_Desc.renderer->GetGraphics().Get(), materials);
 
 	// A node instances a mesh and the same mesh can be instanced by several nodes, so upload each
 	// mesh once and place an instance per referencing node, at that node's world transform.
@@ -1015,9 +1009,10 @@ AssetThumbnailCache::BuildMesh(Shot& shot)
 	const float     radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
 
 	FrameShot(shot, center, radius);
+	return editor::AnyToonMaterial(*m_Desc.renderer->GetGraphics().Get(), materials);
 }
 
-void
+bool
 AssetThumbnailCache::BuildMaterial(Shot& shot)
 {
 	const std::string relPath =
@@ -1028,13 +1023,13 @@ AssetThumbnailCache::BuildMaterial(Shot& shot)
 	// The Mesh Editor previews on a sphere, so a material's thumbnail is the shape the user
 	// authored it against.
 	const bgl::MaterialHandle material = AcquireMaterial(relPath, shot.item.prefetch.get());
-	m_ShotIsToon = editor::IsToonMaterial(*m_Desc.renderer->GetGraphics().Get(), material);
 
 	m_Geoms.push_back(m_Desc.renderer->GetScene()->AddSphereGeom(32, 32, 1.0f, material));
 	m_Instances.push_back(m_SceneView->CreateStaticMeshInstance(
 		bgl::StaticMeshInstanceDesc().SetGeom(m_Geoms.back())));
 
 	FrameShot(shot, glm::vec3(0.0f), 1.0f);
+	return editor::IsToonMaterial(*m_Desc.renderer->GetGraphics().Get(), material);
 }
 
 void

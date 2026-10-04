@@ -197,11 +197,13 @@ private:
 	BuildShot(Shot& shot);
 
 	// Puts the mesh in the scene at each node that references it, wearing the materials it names.
-	void
+	// True when one of them is a toon model's.
+	bool
 	BuildMesh(Shot& shot);
 
-	// Puts a sphere in the scene wearing the material the request named.
-	void
+	// Puts a sphere in the scene wearing the material the request named. True when it is a toon
+	// model's.
+	bool
 	BuildMaterial(Shot& shot);
 
 	// Frames [center, radius] in the shot's camera and viewport.
@@ -291,11 +293,8 @@ private:
 
 	bgl::RenderTargetRef m_RenderTarget;
 	bgl::ToneMapping     m_ProjectToneMapping = bgl::ToneMapping::kAgX;
-
-	// Whether the shot being built draws a toon material; set by BuildMesh and BuildMaterial.
-	bool                m_ShotIsToon = false;
-	bgl::SceneViewRef   m_SceneView;
-	bgl::MaterialHandle m_DefaultMaterial;
+	bgl::SceneViewRef    m_SceneView;
+	bgl::MaterialHandle  m_DefaultMaterial;
 
 	const assetlib::AssetStore* m_Store = nullptr;
 
