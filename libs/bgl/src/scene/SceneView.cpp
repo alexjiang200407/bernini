@@ -761,13 +761,31 @@ namespace bgl
 		uint32_t                   legCount,
 		const SkinnedPlaybackDesc& desc)
 	{
+		const AutoRecord         made     = AddAutoRecord(rig, legCount, desc);
+		const MeshInstanceHandle instance = PlaceRecord(
+			geom,
+			transform,
+			made.record,
+			core::multi_slot_handle(),
+			made.footIK,
+			nodeCount);
+		m_MeshBuffer.MetaAt(instance.handle.index).automatic = true;
+		m_AutoDirty                                          = true;
+		return instance;
+	}
+
+	SceneView::AutoRecord
+	SceneView::AddAutoRecord(
+		core::slot_handle          rig,
+		uint32_t                   legCount,
+		const SkinnedPlaybackDesc& desc)
+	{
 		// Far from the camera it draws its dominant slot from the table, so the table is asked for
 		// at spawn as a crowd instance's is.
 		m_SceneRaw->RequestBoneAnimTable(RigHandle{ rig });
 
-		const core::multi_slot_handle footIK = AddDefaultFootIK(legCount);
-
-		auto record = bgpu::idl::RawEntry();
+		auto made   = AutoRecord();
+		made.footIK = AddDefaultFootIK(legCount);
 		try
 		{
 			auto state = idl::SkinnedAutoState();
@@ -776,26 +794,21 @@ namespace bgl
 			{
 				state.slots[s] = ToRecord(desc.slot[s]);
 			}
-			state.footIK = footIK;
+			state.footIK = made.footIK;
 
-			record = m_Playback.AddRecord(
+			made.record = m_Playback.AddRecord(
 				idl::PlaybackType::kSkinnedAuto,
 				std::as_bytes(std::span(&state, 1)));
 		}
 		catch (...)
 		{
-			if (footIK)
+			if (made.footIK)
 			{
-				m_FootIK.Erase(footIK);
+				m_FootIK.Erase(made.footIK);
 			}
 			throw;
 		}
-
-		const MeshInstanceHandle instance =
-			PlaceRecord(geom, transform, record, core::multi_slot_handle(), footIK, nodeCount);
-		m_MeshBuffer.MetaAt(instance.handle.index).automatic = true;
-		m_AutoDirty                                          = true;
-		return instance;
+		return made;
 	}
 
 	MeshInstanceHandle
@@ -1795,10 +1808,10 @@ namespace bgl
 	SceneView::CreateMeshInstanceBlock(const MeshInstanceBlockDesc& desc)
 	{
 		const bool skinned = desc.geom.geomType == GeomType::kSkinnedMesh;
+		auto       rig     = Scene::AnimGeomInfo();
 		if (skinned)
 		{
-			const Scene::AnimGeomInfo rig =
-				RequireSkinnedGeom(*m_SceneRaw, desc.geom, "CreateMeshInstanceBlock");
+			rig = RequireSkinnedGeom(*m_SceneRaw, desc.geom, "CreateMeshInstanceBlock");
 			ValidatePlayback(desc.playback, rig.nodeCount, "CreateMeshInstanceBlock");
 		}
 		else if (desc.geom.geomType != GeomType::kStaticMesh || !m_SceneRaw->IsGeomAlive(desc.geom))
@@ -1818,23 +1831,25 @@ namespace bgl
 		{
 			RequireToonShadingRigFits(desc.toonShadingRig, desc.geom, "CreateMeshInstanceBlock");
 		}
-		if (skinned)
-		{
-			throw SceneError(
-				"CreateMeshInstanceBlock: a skinned geom's placements are not drawn yet");
-		}
 
-		auto range = std::optional<bgpu::EntryRange>();
+		auto range  = std::optional<bgpu::EntryRange>();
+		auto shared = AutoRecord();
 		try
 		{
+			// One record for the whole block: a slot's own animation is its offset into it, which
+			// its writer sets on the slot's MeshInstance.
+			if (skinned)
+				shared = AddAutoRecord(rig.record, rig.legCount, desc.playback);
+
 			const idl::LodSubmeshRange submeshes =
 				m_SceneRaw->GetGeomSubmeshes(desc.geom.handle.index);
 
 			// What the CPU writes once: hidden until a writer places it, and at the origin rather
 			// than collapsed, so a slot that escaped the cull would show rather than vanish.
-			auto mesh  = idl::MeshInstance();
-			mesh.geom  = m_SceneRaw->GetGeomEntry(desc.geom.handle.index);
-			mesh.flags = MeshInstanceFlags(MeshInstanceFlag::kHidden).underlying();
+			auto mesh     = idl::MeshInstance();
+			mesh.geom     = m_SceneRaw->GetGeomEntry(desc.geom.handle.index);
+			mesh.flags    = MeshInstanceFlags(MeshInstanceFlag::kHidden).underlying();
+			mesh.playback = shared.record;
 			WriteInstanceTransform(mesh, glm::mat4(1.0f));
 			WriteInstancePrevTransform(mesh, glm::mat4(1.0f));
 
@@ -1843,10 +1858,17 @@ namespace bgl
 			for (uint32_t slot = 0; slot < desc.capacity; ++slot)
 			{
 				const uint32_t meshIndex = range->first + slot;
+				for (CullState& cullState : m_CullStates)
+				{
+					cullState.MarkFresh(meshIndex);
+				}
 
+				// The record is the block's, so animState stays 0: no slot erases it alone.
 				MeshMeta& meta   = m_MeshBuffer.MetaAt(meshIndex);
 				meta.geomType    = desc.geom.geomType;
 				meta.geom        = desc.geom;
+				meta.automatic   = skinned;
+				meta.nodeCount   = rig.nodeCount;
 				meta.submeshRoot = submeshes.range.offsetStart;
 				meta.overrides.assign(submeshes.submeshCount, MaterialHandle{});
 				meta.selected.assign(submeshes.submeshCount, 0);
@@ -1879,11 +1901,14 @@ namespace bgl
 			block.capacity           = desc.capacity;
 			block.range              = *range;
 			block.toonShadingRig     = desc.toonShadingRig;
+			block.playback           = shared.record;
+			block.footIK             = shared.footIK;
 			if (desc.toonShadingRig.IsValid())
 			{
 				m_SceneRaw->AcquireToonShadingRig(desc.toonShadingRig);
 			}
 
+			m_AutoDirty = m_AutoDirty || skinned;
 			++m_TemporalEpoch;
 			return MeshInstanceBlockHandle{ handle };
 		}
@@ -1891,13 +1916,19 @@ namespace bgl
 		{
 			// A failed create leaves nothing behind: not the range, nor the records made so far.
 			if (range)
-				ReleaseBlockRange(*range);
+			{
+				ReleaseBlockRange(*range, shared);
+			}
+			else
+			{
+				ReleaseAutoRecord(shared);
+			}
 			throw SceneError(e.what());
 		}
 	}
 
 	void
-	SceneView::ReleaseBlockRange(const bgpu::EntryRange& range)
+	SceneView::ReleaseBlockRange(const bgpu::EntryRange& range, const AutoRecord& shared)
 	{
 		for (uint32_t slot = 0; slot < range.count; ++slot)
 		{
@@ -1908,6 +1939,21 @@ namespace bgl
 			}
 		}
 		m_MeshBuffer.ReleaseRange(range);
+		m_AutoDirty = m_AutoDirty || !shared.record.Null();
+		ReleaseAutoRecord(shared);
+	}
+
+	void
+	SceneView::ReleaseAutoRecord(const AutoRecord& shared)
+	{
+		if (!shared.record.Null())
+		{
+			m_Playback.Erase(shared.record.byteOffset);
+		}
+		if (shared.footIK)
+		{
+			m_FootIK.Erase(shared.footIK);
+		}
 	}
 
 	void
@@ -1921,7 +1967,9 @@ namespace bgl
 		}
 
 		MeshInstanceBlock& record = m_InstanceBlocks[block.handle.index];
-		ReleaseBlockRange(record.range);
+		ReleaseBlockRange(
+			record.range,
+			AutoRecord{ .record = record.playback, .footIK = record.footIK });
 		m_SceneRaw->ReleaseToonShadingRig(record.toonShadingRig);
 
 		record = MeshInstanceBlock();

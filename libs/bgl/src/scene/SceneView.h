@@ -632,6 +632,26 @@ namespace bgl
 		/** One FootIKLeg per leg at weight one, or null on a rig without legs. */
 		core::multi_slot_handle
 		AddDefaultFootIK(uint32_t legCount);
+
+		/** A kAuto record in the arena and the foot-IK record it names, made together. */
+		struct AutoRecord
+		{
+			bgpu::idl::RawEntry     record;
+			core::multi_slot_handle footIK;
+		};
+
+		/**
+		 * The rig's table reserved, a foot-IK record on a rig with legs, and a SkinnedAutoState
+		 * holding both and `desc`, rolled back together if the record cannot be added. What one
+		 * kAuto placement owns, and what a skinned block's placements share.
+		 * @pre `desc` validated against the rig.
+		 */
+		AutoRecord
+		AddAutoRecord(core::slot_handle rig, uint32_t legCount, const SkinnedPlaybackDesc& desc);
+
+		/** Erases what AddAutoRecord made; either half may be null. */
+		void
+		ReleaseAutoRecord(const AutoRecord& shared);
 		/**
 		 * The placement of a record already in the arena, with everything rolled back if writing it
 		 * throws. `palette` and `footIK` are null for a record that owns neither.
@@ -690,9 +710,12 @@ namespace bgl
 		void
 		SyncInstanceScratch();
 
-		/** Erases the submesh instances of a block's placements and releases its range. */
+		/**
+		 * Erases the submesh instances of a block's placements and releases its range, and for a
+		 * skinned block the record and foot-IK record its placements share.
+		 */
 		void
-		ReleaseBlockRange(const bgpu::EntryRange& range);
+		ReleaseBlockRange(const bgpu::EntryRange& range, const AutoRecord& shared);
 
 		/**
 		 * Refuses `rig` for a placement or block of `geom`: a dead rig, or one naming a head bone
