@@ -191,6 +191,57 @@ public struct DissolveVSOut
     }
 };
 
+// What a toon character draw bucket's pipelines rasterize at rest: an ordinary material vertex
+// (Surface()), and its placement's evaluated toon shading rig block plus one, zero for none
+// (idl.ToonShadingRigPool). Only those buckets draw through MSToon, so every other draw's vertex is
+// the ForwardVSOut it always was. Flat for the reason DissolveVSOut is.
+public struct ToonVSOut
+{
+    public float4 position : SV_Position;
+    public float3 worldPos : POSITION;
+    public float3 normal : NORMAL;
+    public float2 uv : TEXCOORD;
+    public float2 uv1 : SECONDUV;
+    public float4 tangent : TANGENT;
+    public nointerpolation uint materialOffset : MATERIAL;
+    public float4 clip : CLIPPOSITION;
+    public float4 prevClip : PREVCLIPPOSITION;
+    public float4 cameraPrevClip : CAMERAPREVCLIPPOSITION;
+
+    public nointerpolation uint toonShadingRigSlot : TOONSHADINGRIGSLOT;
+
+    public __init(ForwardVSOut surface, uint toonShadingRigSlot)
+    {
+        position = surface.position;
+        worldPos = surface.worldPos;
+        normal = surface.normal;
+        uv = surface.uv;
+        uv1 = surface.uv1;
+        tangent = surface.tangent;
+        materialOffset = surface.materialOffset;
+        clip = surface.clip;
+        prevClip = surface.prevClip;
+        cameraPrevClip = surface.cameraPrevClip;
+        this.toonShadingRigSlot = toonShadingRigSlot;
+    }
+
+    public ForwardVSOut Surface()
+    {
+        ForwardVSOut surface;
+        surface.position = position;
+        surface.worldPos = worldPos;
+        surface.normal = normal;
+        surface.uv = uv;
+        surface.uv1 = uv1;
+        surface.tangent = tangent;
+        surface.materialOffset = materialOffset;
+        surface.clip = clip;
+        surface.prevClip = prevClip;
+        surface.cameraPrevClip = cameraPrevClip;
+        return surface;
+    }
+};
+
 // Colour plus the screen-space velocity MRT slot. The transparent pipelines bind one render target
 // and keep returning a bare float4: a blended surface has no single depth to reproject.
 public struct ForwardPSOut

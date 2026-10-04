@@ -62,9 +62,36 @@ set. Each slot stores the edit's position, its gain, its frame -- Z toward the p
 origin, X across it from head-space up -- and its shape, clamped to what the pixel stage can draw
 ([idl/ToonShadingRigBlock.slang](../libs/bgl/shaders/src/idl/ToonShadingRigBlock.slang)).
 
+## The pixels
+
+A toon character's draw bucket at rest draws through `MSToon` -- in `programs.forward.StaticMesh`
+and `SkinnedMesh`, a copy of `MSMain` -- whose `ToonVSOut` is `ForwardVSOut` plus one
+`nointerpolation` word: the placement's block index plus one, read off its flags word once per
+mesh group. No other bucket draws through it, so no PBR or lit draw carries the word, and a
+character's dissolve lane and the shared blend program, which every surface shares, carry none
+either: a dissolving or blended character shades without its rig. The character's generated
+programs then shade through `GameToon*Program`, which loads the block from the view's pool
+(`MaterialData::toonShadingRigBlocks`) when the word names one.
+
+`ShadeToonCharacterFace` (`lib.math.ToonShading`) is the cel model of
+[Game-defined surfaces](game_defined_surfaces.md) § Toon surfaces with two changes on a pixel that
+is `face`, each by as much as it is:
+
+- **The light** is the block's face light rather than the sun, blended toward it by `face`.
+- **The terminator** moves by the sum of every slot's push, times `face` and the block's fade. The
+  pixel goes into head space through `headFromWorld`, its normal through the same rotation, both
+  with X flipped on a mirrored slot. A slot's push (`ToonShadingRigSlotOffset`) is the Shading Rig's
+  shape: the direction from the pixel to the edit, projected azimuthally about the edit's axis and
+  scaled by its size, turned by its rotation, twisted about `(bulge, bend)` by
+  `10 * (bulge * x + bend * y)` radians, and fallen off as `exp(-(e x² + |y|^(2 - sharpness) / e))`
+  with `e = 1 - anisotropy`; then faded out over the last quarter of its radius, cut where the twist
+  passes a quarter turn, and scaled by how far the pixel's normal -- pulled toward the head's
+  sphere by its normal smoothing -- faces the edit.
+
 ## Cost
 
-Per rigged placement per draw, one thread: a binary search over the ranges, the head's frame, the
+Per pixel of a face, every slot of its block; nothing on a pixel that is no face, and nothing on any
+other surface. Per rigged placement per draw, one thread: a binary search over the ranges, the head's frame, the
 sun's remap, and for a selected one every key of every edit -- at most `cMaxToonShadingRigSlots`
 slots of `cMaxToonShadingRigKeysPerEdit` keys. A view's pool is `cToonShadingRigPoolCapacity` blocks of
 848 bytes, allocated with its first range.

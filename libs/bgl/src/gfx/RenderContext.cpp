@@ -240,10 +240,13 @@ namespace bgl
 #endif
 	{
 		m_GameSurfaceShading.reserve(surfaceTypes.size());
+		auto toonCharacterSlots = std::vector<bool>();
 		for (const SurfaceType& type : surfaceTypes)
 		{
 			m_GameSurfaceShading.emplace_back(type.shading);
+			toonCharacterSlots.push_back(type.shading == SurfaceShading::kToonCharacter);
 		}
+		m_Forward.SetToonCharacterSlots(std::move(toonCharacterSlots));
 
 		// Registered so a deferred destroy cannot reclaim a slot this queue may still be reading.
 		m_CommandQueue = m_Device->CreateGraphicsCommandQueue();
