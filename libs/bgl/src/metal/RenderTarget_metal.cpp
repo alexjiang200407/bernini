@@ -52,6 +52,7 @@ namespace bgl
 			desc.renderScale);
 		SetTaaReconstructionWidth(desc.taaReconstructionWidth);
 		SetTaaSharpness(desc.taaSharpness);
+		SetToneMapping(desc.toneMapping);
 
 		if (!desc.headless)
 		{

@@ -105,6 +105,12 @@ fold it in, while the display curve — `AgX` in
 [lib/math/Tonemap.slang](libs/bgl/shaders/src/lib/math/Tonemap.slang) — belongs to the output and runs once.
 `AgX` leaves its result linear, so the sRGB backbuffer view is still what encodes it.
 
+**The curve is the target's: AgX, or Standard.** `IRenderTarget::SetToneMapping` (and
+`RenderTargetDesc::toneMapping`) picks it per output, AgX by default. Standard is Blender's Standard
+view: the exposed value clamped to [0, 1] and nothing else, so a colour authored to be seen as it is
+-- a toon look -- reaches the screen as authored, after the same sRGB encoding. The colour grade
+works in AgX's log encoding and is not applied under Standard. Everything below is the AgX path.
+
 **The curve is Blender 5.2's AgX, and the LUT is Blender's own file.** Blender's `AgX Base sRGB`
 view is a 57³ formation LUT applied in FilmLight E-Gamut log2 space, then a Rec.1886 decode, and
 that is what `AgX` does: the Rec.709-to-E-Gamut matrix and the 25-stop log encoding are the OCIO

@@ -273,6 +273,18 @@ namespace bgl
 			m_ColorGradeEnabled = enabled;
 		}
 
+		[[nodiscard]] ToneMapping
+		GetToneMapping() const noexcept final
+		{
+			return m_ToneMapping;
+		}
+
+		void
+		SetToneMapping(ToneMapping toneMapping) noexcept final
+		{
+			m_ToneMapping = toneMapping;
+		}
+
 		[[nodiscard]] ColorGradeSettings
 		GetColorGradeSettings() const noexcept final
 		{
@@ -526,6 +538,7 @@ namespace bgl
 		BloomChain    m_BloomChain;
 
 		bool               m_ColorGradeEnabled = false;
+		ToneMapping        m_ToneMapping       = ToneMapping::kAgX;
 		ColorGradeSettings m_ColorGradeSettings;
 
 		bool                                           m_GpuTimingEnabled = false;

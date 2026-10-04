@@ -1213,6 +1213,7 @@ namespace bgl
 
 		postProcessArgs.colorGrade        = rt.GetColorGradeSettings();
 		postProcessArgs.colorGradeEnabled = rt.IsColorGradeEnabled();
+		postProcessArgs.toneMapping       = rt.GetToneMapping();
 
 		m_PostProcess.AttachToFrameGraph(m_FrameGraph, postProcessArgs);
 

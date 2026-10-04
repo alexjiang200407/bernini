@@ -310,6 +310,14 @@ flowchart TD
   clearing to `nullptr` does **not** cancel one already in flight — that would fall back to the crash
   path. Call `DiscardPendingGpuAssertions()` first to drop it.
 
+### IRenderTarget
+
+* **`SetToneMapping(curve)` / `GetToneMapping()`** — the display curve the output ends in, a
+  `ToneMapping`: `kAgX` (the default) or `kStandard`, Blender's Standard view -- the exposed value
+  clamped, no curve and no colour grade. A target's and not a view's, since the curve runs once on
+  the output; `RenderTargetDesc::toneMapping` starts it. Exposure applies under both. See
+  [Passes](passes.md) § Scene colour.
+
 ### IOverlay
 
 * **`CreateGeometry(vertices, indices)`** — @pre both non-empty, `indices` a multiple of three, every
