@@ -233,7 +233,7 @@ void main(uint thread: SV_DispatchThreadID)
     }
 
     let range = gUniforms.ranges[FindRange(thread)];
-    let placement = range.placements.GetStart() + (thread - range.firstThread);
+    let placement = range.firstPlacement + (thread - range.firstThread);
     let mesh = gUniforms.meshes[placement];
     let unselected = mesh.flags & ~(cToonShadingRigSlotMask << cToonShadingRigSlotShift);
 
