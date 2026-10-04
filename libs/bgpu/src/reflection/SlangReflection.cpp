@@ -178,9 +178,11 @@ namespace bgpu
 
 		case Kind::Array:
 		{
-			result.kind        = UniformType::kArray;
-			result.arrayCount  = static_cast<uint32_t>(typeLayout->getElementCount());
-			result.arrayStride = static_cast<uint32_t>(typeLayout->getStride());
+			result.kind       = UniformType::kArray;
+			result.arrayCount = static_cast<uint32_t>(typeLayout->getElementCount());
+			// getStride() on an array is the whole array's, not the distance between its elements.
+			result.arrayStride = static_cast<uint32_t>(
+				typeLayout->getElementStride(SLANG_PARAMETER_CATEGORY_UNIFORM));
 			result.element.push_back(ReflectLayoutFromSlang(typeLayout->getElementTypeLayout()));
 			result.size = result.arrayCount * result.arrayStride;
 			return result;

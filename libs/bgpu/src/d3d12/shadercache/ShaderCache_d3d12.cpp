@@ -9,6 +9,7 @@
 #include <string>
 
 #include <bgpu/GpuContext.h>
+#include <bgpu/ProgramCache.h>
 #include <spdlog/spdlog.h>
 
 namespace bgpu
@@ -20,7 +21,7 @@ namespace bgpu
 	{
 		// Bump formatVersion when the encoding below changes: it is in every key, so an entry in the
 		// old layout is missed rather than misread.
-		constexpr auto c_Owner = bgpu::ProgramCacheOwner{ .tag = "bgl_d3d12", .formatVersion = 1 };
+		constexpr auto c_Owner = bgpu::ProgramCacheOwner{ .tag = "bgl_d3d12", .formatVersion = 2 };
 
 		using core::io::ByteReader;
 		using core::io::ByteWriter;
