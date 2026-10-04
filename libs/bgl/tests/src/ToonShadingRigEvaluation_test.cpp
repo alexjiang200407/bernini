@@ -94,7 +94,7 @@ namespace
 		void
 		Draw(const glm::vec3& toLight, float time = 0.0f)
 		{
-			view->SetDirectionalLight(
+			view->SetToonDirectionalLight(
 				{ .direction = -glm::normalize(toLight),
 			      .color     = glm::vec3(1.0f),
 			      .intensity = 1.0f });
@@ -423,6 +423,27 @@ TEST_CASE(
 		world.Draw(sun);
 		CheckBlock(world.Blocks()[0], desc, headWorld, sun);
 	}
+}
+
+TEST_CASE(
+	"A toon shading rig is evaluated against the toon sun, not the PBR one",
+	"[toonshadingrig][render]")
+{
+	Fixture world;
+
+	const auto instance = world.Place(glm::mat4(1.0f));
+	const auto desc     = TestRig();
+	world.view->SetToonShadingRig(instance, world.scene->AddToonShadingRig(desc));
+
+	world.view->SetPbrDirectionalLight(
+		{ .direction = glm::vec3(-1.0f, -0.2f, 0.0f),
+	      .color     = glm::vec3(1.0f),
+	      .intensity = 4.0f });
+
+	const glm::vec3 sun(0.3f, 0.5f, 1.0f);
+	world.Draw(sun);
+	CHECK(world.Selected() == 1u);
+	CheckBlock(world.Blocks()[0], desc, desc.headToBone, sun);
 }
 
 TEST_CASE(

@@ -4,7 +4,7 @@ import bgl.LitSurfaceSource;
 
 // A lit surface that reads the light: toon bands quantized against the sun, the environment's
 // irradiance as the ambient floor. What it pins is ISurfaceLight -- a sun moved by
-// SetDirectionalLight moves the terminator, and no environment means bands on black.
+// SetPbrDirectionalLight moves the terminator, and no environment means bands on black.
 struct BandParams
 {
     [Color]

@@ -13,6 +13,7 @@
 #include <bgl/idl/ToonShadingRigBlock.h>
 #include <bgl/idl/ToonShadingRigPool.h>
 #include <bgl/types/Camera.h>
+#include <bgl/types/DirectionalLightDesc.h>
 #include <bgl/types/LayerType.h>
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
@@ -201,10 +202,12 @@ struct FaceCharacter : IToonCharacterSurfaceSource
 			REQUIRE(target != nullptr);
 
 			auto view = gfx->CreateSceneView(scene, 4);
-			view->SetDirectionalLight(
-				{ .direction = -glm::normalize(toLight),
-			      .color     = glm::vec3(1.0f),
-			      .intensity = 1.0f });
+			// Both suns alike: the toon character reads one and the PBR sphere the other.
+			const auto sun = bgl::DirectionalLightDesc{ .direction = -glm::normalize(toLight),
+				                                        .color     = glm::vec3(1.0f),
+				                                        .intensity = 1.0f };
+			view->SetToonDirectionalLight(sun);
+			view->SetPbrDirectionalLight(sun);
 			const auto instance = view->CreateStaticMeshInstance(
 				bgl::StaticMeshInstanceDesc().SetGeom(
 					scene->AddSphereGeom(48, 48, c_HeadRadius, material)));

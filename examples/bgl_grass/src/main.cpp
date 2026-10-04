@@ -167,7 +167,7 @@ main(int argc, char** argv)
 		if (env.HasSky())
 			view->SetSkyBox({ env.skybox, env.skyMipLevel, 1.0f, env.skyRotationY });
 
-		view->SetDirectionalLight(
+		view->SetPbrDirectionalLight(
 			{ .direction = headless::SunDirection(glm::radians(35.0f), glm::radians(38.0f)),
 		      .color     = glm::vec3(1.0f, 0.96f, 0.88f),
 		      .intensity = sun });

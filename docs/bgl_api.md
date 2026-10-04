@@ -501,12 +501,17 @@ flowchart TD
 * **`SetEnvironmentMap(desc)`** — @pre irradiance and prefilter are cube maps. Takes
   `EnvironmentMapDesc` by const reference but the struct is move-only, so build it in place at the
   call site. Replaces any previous environment wholesale.
-* **`SetDirectionalLight(desc)`** — @pre every component finite, `intensity` non-negative,
-  `direction` non-zero (it is normalized here). The engine's one analytic light. It **adds** to the
+* **`SetPbrDirectionalLight(desc)`** — @pre every component finite, `intensity` non-negative,
+  `direction` non-zero (it is normalized here). The sun every model but the toon character's reads:
+  PBR, the lit surfaces, grass. It **adds** to the
   environment map rather than replacing it, and the environment already integrates whatever sun its
   source HDR held, so a scene that sets both double-counts one; which to turn down is the caller's
   call, and nothing in bgl can tell. `intensity` defaults to 0, so a view that never calls this is
   lit by its environment alone.
+* **`SetToonDirectionalLight(desc)`** — the same bounds. The sun the toon character model is lit by
+  and its toon shading rigs are evaluated against, and nothing else reads: a view lights its
+  characters for their look apart from what lights its world. No fallback either way, so a view that
+  sets only the PBR sun draws its toon characters black; the toon environment model reads neither.
 * **`SetExposure(e)`** — @pre finite and non-negative. Scales *total* radiance before tone mapping, not
   the environment's contribution — it is camera sensitivity, not an IBL property.
 * **`SetWind(desc)`** — @pre every field finite, strengths and gust speed non-negative, `gustScale`

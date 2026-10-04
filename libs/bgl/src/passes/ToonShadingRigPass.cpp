@@ -102,7 +102,7 @@ namespace bgl
 		}
 		uniforms["cameraPos"]     = draw.viewState.cameraPos;
 		uniforms["pixelsPerUnit"] = draw.viewState.pixelsPerUnit;
-		uniforms["toLight"]       = -draw.lighting.sunDirection;
+		uniforms["toLight"]       = -draw.lighting.toonSunDirection;
 		uniforms["time"]          = draw.clock.time;
 
 		auto computeState   = bgpu::ComputeState();

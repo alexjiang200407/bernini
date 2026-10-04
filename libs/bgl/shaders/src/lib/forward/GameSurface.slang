@@ -8,9 +8,9 @@ import bgl.ToonEnvironmentSurface;
 import idl.GameSurfaceRecord;
 import idl.IMaterial;
 import idl.RawEntry;
-import idl.ToonShadingRigBlock;
 import lib.forward.MaterialData;
 import lib.forward.MaterialShading;
+import lib.forward.ToonData;
 import lib.forward.common;
 import lib.geom.vertexdecode;
 import lib.math.HashedAlpha;
@@ -269,6 +269,10 @@ public struct LitGameRecord<G : ILitSurfaceSource>
     {
         return G.Shade(Reader(input, isFrontFace), MaterialSurfaceLight(), params);
     }
+    public float4 ShadeOnGrassWith<L : ISurfaceLight>(ForwardVSOut input, L light)
+    {
+        return G.Shade(GrassMaterialArenaReaderAt(byteOffset, input), light, params);
+    }
     public float4 ShadeOnGrass(ForwardVSOut input)
     {
         return G.Shade(GrassMaterialArenaReaderAt(byteOffset, input), MaterialSurfaceLight(), params);
@@ -484,52 +488,60 @@ public extension MaterialData
         return output;
     }
 
-    // A toon character surface at rest, which may carry its placement's evaluated toon shading rig:
-    // the lit programs above, the colour shaded with the rig when the vertices name a block. The
-    // coverage decisions are the lit surface's, since the rig moves only the terminator.
-    public ForwardPSOut GameToonOpaqueProgram<G : IToonCharacterSurfaceSource>(ToonVSOut input, bool isFrontFace)
+    // A toon character surface: the lit programs above, lit by the toon sun rather than the one every
+    // other model reads, and shaded with its placement's evaluated toon shading rig when `rigSlot`
+    // names a block (ToonVSOut::toonShadingRigSlot; zero on a lane that carries none). The coverage
+    // decisions are the lit surface's, since neither the light nor the rig changes them.
+    public ForwardPSOut GameToonOpaqueProgram<G : IToonCharacterSurfaceSource>(ForwardVSOut input, uint rigSlot, bool isFrontFace)
     {
         ForwardPSOut output;
-        output.color = float4(ShadeGameToon<G>(input, isFrontFace).rgb * exposure, 1.0);
-        output.motion = ComputeMotionVector(input.Surface());
+        output.color = float4(ShadeGameToon<G>(input, rigSlot, isFrontFace).rgb * exposure, 1.0);
+        output.motion = ComputeMotionVector(input);
         return output;
     }
 
-    public ForwardPSOut GameToonAlphaTestedProgram<G : IToonCharacterSurfaceSource>(ToonVSOut input, bool isFrontFace)
+    public ForwardPSOut GameToonAlphaTestedProgram<G : IToonCharacterSurfaceSource>(ForwardVSOut input, uint rigSlot, bool isFrontFace)
     {
-        DiscardUncoveredGameLitAlphaTested<ToonCharacterLit<G>>(input.Surface(), isFrontFace);
+        DiscardUncoveredGameLitAlphaTested<ToonCharacterLit<G>>(input, isFrontFace);
 
         ForwardPSOut output;
-        output.color = float4(ShadeGameToon<G>(input, isFrontFace).rgb * exposure, 1.0);
-        output.motion = ComputeMotionVector(input.Surface());
+        output.color = float4(ShadeGameToon<G>(input, rigSlot, isFrontFace).rgb * exposure, 1.0);
+        output.motion = ComputeMotionVector(input);
         return output;
     }
 
-    public ForwardPSOut GameToonHashedAlphaProgram<G : IToonCharacterSurfaceSource>(ToonVSOut input, bool isFrontFace)
+    public ForwardPSOut GameToonHashedAlphaProgram<G : IToonCharacterSurfaceSource>(ForwardVSOut input, uint rigSlot, bool isFrontFace)
     {
-        DiscardUncoveredGameLitHashedAlpha<ToonCharacterLit<G>>(input.Surface(), isFrontFace);
+        DiscardUncoveredGameLitHashedAlpha<ToonCharacterLit<G>>(input, isFrontFace);
 
         ForwardPSOut output;
-        output.color = float4(ShadeGameToon<G>(input, isFrontFace).rgb * exposure, 0.0);
-        output.motion = ComputeMotionVector(input.Surface());
+        output.color = float4(ShadeGameToon<G>(input, rigSlot, isFrontFace).rgb * exposure, 0.0);
+        output.motion = ComputeMotionVector(input);
         return output;
+    }
+
+    // Premultiplied, as ShadeGameLitBlended; the blend arm carries no rig.
+    public float4 ShadeGameToonBlended<G : IToonCharacterSurfaceSource>(ForwardVSOut input, bool isFrontFace)
+    {
+        let shaded = ShadeGameToon<G>(input, 0u, isFrontFace);
+        let coverage = saturate(shaded.a);
+        return float4(shaded.rgb * exposure * coverage, coverage);
     }
 
     // Pre-exposure, as a lit surface's Shade.
-    float4 ShadeGameToon<G : IToonCharacterSurfaceSource>(ToonVSOut input, bool isFrontFace)
+    float4 ShadeGameToon<G : IToonCharacterSurfaceSource>(ForwardVSOut input, uint rigSlot, bool isFrontFace)
     {
-        let surfaceInput = input.Surface();
-        let record = LitGameRecord<ToonCharacterLit<G>>.Load(surfaceInput.materialOffset);
-        let reader = record.Reader(surfaceInput, isFrontFace);
+        let record = LitGameRecord<ToonCharacterLit<G>>.Load(input.materialOffset);
+        let reader = record.Reader(input, isFrontFace);
         let surface = G.Evaluate(reader, record.params);
         let normal = normalize(reader.WorldNormal());
 
-        if (input.toonShadingRigSlot == 0u)
+        if (rigSlot == 0u)
         {
-            return ShadeToonCharacter(surface, MaterialSurfaceLight(), normal);
+            return ShadeToonCharacter(surface, ToonSurfaceLight(), normal);
         }
-        let rig = toonShadingRigBlocks[input.toonShadingRigSlot - 1u];
-        return ShadeToonCharacterFace(surface, MaterialSurfaceLight(), normal, reader.WorldPos(), rig);
+        let rig = toonData.toonShadingRigBlocks[rigSlot - 1u];
+        return ShadeToonCharacterFace(surface, ToonSurfaceLight(), normal, reader.WorldPos(), rig);
     }
 
     public float4 ShadeGameLit<G : ILitSurfaceSource>(ForwardVSOut input, bool isFrontFace)

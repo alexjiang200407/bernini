@@ -1756,33 +1756,52 @@ namespace bgl
 		++m_TemporalEpoch;
 	}
 
-	void
-	SceneView::SetDirectionalLight(const DirectionalLightDesc& desc)
+	namespace
 	{
-		if (!core::is_finite(desc.direction) || !core::is_finite(desc.color) ||
-		    !std::isfinite(desc.intensity))
+		/** `desc` with its direction normalized, or a refusal naming `caller`. */
+		DirectionalLightDesc
+		ValidatedLight(const DirectionalLightDesc& desc, const std::string_view caller)
 		{
-			throw SceneError("SetDirectionalLight: direction, colour and intensity must be finite");
-		}
+			if (!core::is_finite(desc.direction) || !core::is_finite(desc.color) ||
+			    !std::isfinite(desc.intensity))
+			{
+				throw SceneError(
+					std::format("{}: direction, colour and intensity must be finite", caller));
+			}
 
-		if (desc.intensity < 0.0f)
-		{
-			throw SceneError(
-				std::format(
-					"SetDirectionalLight: intensity must be non-negative, got {}",
-					desc.intensity));
-		}
+			if (desc.intensity < 0.0f)
+			{
+				throw SceneError(
+					std::format(
+						"{}: intensity must be non-negative, got {}",
+						caller,
+						desc.intensity));
+			}
 
-		// Normalizing a zero-length direction yields NaN, and there is no direction to fall back on
-		// -- a sun pointing nowhere is the caller forgetting to set one, not a sun that is off.
-		const auto lengthSq = glm::dot(desc.direction, desc.direction);
-		if (lengthSq <= 0.0f)
-		{
-			throw SceneError("SetDirectionalLight: direction must have non-zero length");
-		}
+			// Normalizing a zero-length direction yields NaN, and there is no direction to fall back
+			// on -- a sun pointing nowhere is the caller forgetting to set one, not a sun that is off.
+			const auto lengthSq = glm::dot(desc.direction, desc.direction);
+			if (lengthSq <= 0.0f)
+			{
+				throw SceneError(std::format("{}: direction must have non-zero length", caller));
+			}
 
-		m_DirectionalLight           = desc;
-		m_DirectionalLight.direction = desc.direction * glm::inversesqrt(lengthSq);
+			auto light      = desc;
+			light.direction = desc.direction * glm::inversesqrt(lengthSq);
+			return light;
+		}
+	}
+
+	void
+	SceneView::SetPbrDirectionalLight(const DirectionalLightDesc& desc)
+	{
+		m_PbrDirectionalLight = ValidatedLight(desc, "SetPbrDirectionalLight");
+	}
+
+	void
+	SceneView::SetToonDirectionalLight(const DirectionalLightDesc& desc)
+	{
+		m_ToonDirectionalLight = ValidatedLight(desc, "SetToonDirectionalLight");
 	}
 
 	void

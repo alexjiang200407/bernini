@@ -4,10 +4,9 @@
 namespace bgl
 {
 	/**
-	 * The one analytic light: a sun, infinitely far away, casting no shadow.
-	 *
-	 * Additive on the view's environment map, which already integrates whatever sun its source HDR
-	 * held. ISceneView::SetDirectionalLight is what that costs and what it refuses.
+	 * An analytic light: a sun, infinitely far away, casting no shadow. A view has two, each read by
+	 * its own shading models -- ISceneView::SetPbrDirectionalLight and SetToonDirectionalLight say
+	 * which, what each costs and what each refuses.
 	 */
 	struct DirectionalLightDesc
 	{

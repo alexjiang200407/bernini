@@ -13,6 +13,9 @@
 #include <bgl/types/Camera.h>
 #include <bgl/types/LayerType.h>
 #include <bgl/types/MaterialHandle.h>
+#include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/RenderJob.h>
+#include <bgl/types/StaticMeshInstanceDesc.h>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -285,7 +288,7 @@ TEST_CASE(
 		REQUIRE(target != nullptr);
 
 		auto view = gfx->CreateSceneView(scene, 8);
-		view->SetDirectionalLight(
+		view->SetToonDirectionalLight(
 			{
 				.direction = -glm::normalize(toLight),
 				.color     = glm::vec3(1.0f),
@@ -448,6 +451,69 @@ TEST_CASE(
 
 		CHECK(bgl::test::FrameDelta(quadEmptyPng, staticPng, 0, 0, 400, 300) > 1e-3f);
 		CHECK(bgl::test::FrameDelta(staticPng, skinnedPng, 0, 0, 400, 300) < 1e-6f);
+	}
+}
+
+// The two suns are two: a toon character is lit by the toon sun alone and a PBR surface by the PBR
+// sun alone, neither falling back on the other.
+TEST_CASE("A toon character and a PBR surface each read their own sun", "[surface][render][toon]")
+{
+	auto gfx = bgl::test::CreateGraphics(ToonOptions());
+	REQUIRE(gfx != nullptr);
+	auto scene = gfx->CreateScene(ToonScene());
+
+	const auto shoot =
+		[&](MaterialHandle material, float pbrIntensity, float toonIntensity, const char* png) {
+			auto targetDesc     = bgl::RenderTargetDesc();
+			targetDesc.width    = 400;
+			targetDesc.height   = 300;
+			targetDesc.headless = true;
+			auto target         = gfx->CreateRenderTarget(targetDesc);
+			REQUIRE(target != nullptr);
+
+			auto view = gfx->CreateSceneView(scene, 8);
+			view->SetPbrDirectionalLight(
+				{ .direction = glm::vec3(0.0f, 0.0f, -1.0f), .intensity = pbrIntensity });
+			view->SetToonDirectionalLight(
+				{ .direction = glm::vec3(0.0f, 0.0f, -1.0f), .intensity = toonIntensity });
+			view->CreateStaticMeshInstance(
+				bgl::StaticMeshInstanceDesc().SetGeom(
+					scene->AddPlaneGeom(1, 1, 30.0f, 30.0f, material)));
+
+			auto job     = bgl::RenderJob();
+			job.view     = view;
+			job.camera   = SphereCamera();
+			job.viewport = bgl::Viewport(400.0f, 300.0f);
+			for (int i = 0; i < 6; ++i) gfx->DrawFrame(target, job);
+			gfx->ScreenshotPng(target, png);
+		};
+
+	const auto middle = [](const char* png) {
+		return bgl::test::MeanColor(png, 150, 100, 100, 100).Luma();
+	};
+
+	{
+		INFO("a toon character");
+		const auto  character = scene->CreateSurfaceMaterial(Cel(c_Flat, {}));
+		const auto* toonOnly  = "assets/golden/toon_suns_character_toon.got.png";
+		const auto* pbrOnly   = "assets/golden/toon_suns_character_pbr.got.png";
+		shoot(character, 0.0f, 1.0f, toonOnly);
+		shoot(character, 1.0f, 0.0f, pbrOnly);
+		CHECK(middle(toonOnly) > 0.1f);
+		CHECK(middle(pbrOnly) < 1e-3f);
+	}
+
+	{
+		INFO("a PBR surface");
+		const auto  pbr      = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
+		const auto* neither  = "assets/golden/toon_suns_pbr_none.got.png";
+		const auto* toonOnly = "assets/golden/toon_suns_pbr_toon.got.png";
+		const auto* pbrOnly  = "assets/golden/toon_suns_pbr_pbr.got.png";
+		shoot(pbr, 0.0f, 0.0f, neither);
+		shoot(pbr, 0.0f, 1.0f, toonOnly);
+		shoot(pbr, 1.0f, 0.0f, pbrOnly);
+		CHECK(bgl::test::MaxChannelDelta(neither, toonOnly) == 0.0f);
+		CHECK(middle(pbrOnly) > middle(neither) + 0.05f);
 	}
 }
 

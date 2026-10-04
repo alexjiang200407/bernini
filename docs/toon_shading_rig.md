@@ -48,7 +48,8 @@ placement drew this frame: its palette (the per-instance source), its pose-pool 
 table frames blended by the dominant weight (the automatic source), or the table frames its clip
 resolves to (the table source).
 
-The sun goes into head space through the head's rotation, its scale divided out of each axis, and is
+The toon sun (`ISceneView::SetToonDirectionalLight`, never the PBR one) goes into head space through
+the head's rotation, its scale divided out of each axis, and is
 remapped (`FaceLightDesc`): its azimuth about +Y from +Z and its elevation above the XZ plane, the
 azimuth swung toward the front by `azimuthFadeAmount` as the elevation rises from `azimuthFadeStart`
 to `azimuthFadeEnd` (a smoothstep), then both clamped. The block keeps that light in world space, and

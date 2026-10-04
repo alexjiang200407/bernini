@@ -260,7 +260,7 @@ the dielectric weight the environment's half already computed. `reflectance` sta
 own ratio — a blended surface raises its coverage by it, and a sun's radiance is not a fraction of
 anything. The sun is scaled by neither the material's ambient occlusion nor a shadow, because there
 is no shadow pass; what it is scaled by, and in which units, is
-[bgl_api.md](bgl_api.md)'s `SetDirectionalLight`.
+[bgl_api.md](bgl_api.md)'s `SetPbrDirectionalLight`.
 
 **Ambient occlusion has two sources, multiplied.** `PbrSurface::orm.r` is the material's own AO,
 read through UV0, times its geometry occlusion map — geometry AO baked on a unique second UV set, which a

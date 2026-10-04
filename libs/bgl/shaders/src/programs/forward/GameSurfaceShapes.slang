@@ -74,19 +74,19 @@ void PSLitDepthHashedAlpha(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace)
 [shader("pixel")]
 ForwardPSOut PSToonOpaque(ToonVSOut input, bool isFrontFace: SV_IsFrontFace)
 {
-    return materialData.GameToonOpaqueProgram<NullToonCharacterSurface>(input, isFrontFace);
+    return materialData.GameToonOpaqueProgram<NullToonCharacterSurface>(input.Surface(), input.toonShadingRigSlot, isFrontFace);
 }
 
 [shader("pixel")]
 ForwardPSOut PSToonAlphaTested(ToonVSOut input, bool isFrontFace: SV_IsFrontFace)
 {
-    return materialData.GameToonAlphaTestedProgram<NullToonCharacterSurface>(input, isFrontFace);
+    return materialData.GameToonAlphaTestedProgram<NullToonCharacterSurface>(input.Surface(), input.toonShadingRigSlot, isFrontFace);
 }
 
 [shader("pixel")]
 ForwardPSOut PSToonHashedAlpha(ToonVSOut input, bool isFrontFace: SV_IsFrontFace)
 {
-    return materialData.GameToonHashedAlphaProgram<NullToonCharacterSurface>(input, isFrontFace);
+    return materialData.GameToonHashedAlphaProgram<NullToonCharacterSurface>(input.Surface(), input.toonShadingRigSlot, isFrontFace);
 }
 
 // The generated blend program's shape: a switch on the record's kind, an arm per surface -- the

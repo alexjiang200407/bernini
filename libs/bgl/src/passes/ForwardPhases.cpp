@@ -50,7 +50,7 @@ namespace bgl
 		};
 
 		// clang-format off
-		constexpr std::array<std::string_view, 12> c_MaterialDataFields = {
+		constexpr std::array<std::string_view, 11> c_MaterialDataFields = {
 			"anisoLinearWrapSampler"sv,
 			"linearClampSampler"sv,
 			"irradianceMap"sv,
@@ -60,6 +60,12 @@ namespace bgl
 			"exposure"sv,
 			"envRotation"sv,
 			"alphaHashSeed"sv,
+			"sunDirection"sv,
+			"sunRadiance"sv,
+		};
+
+		// Only the toon character's programs declare it; see lib.forward.ToonData.
+		constexpr std::array<std::string_view, 3> c_ToonDataFields = {
 			"sunDirection"sv,
 			"sunRadiance"sv,
 			"toonShadingRigBlocks"sv,
@@ -278,6 +284,7 @@ namespace bgl
 			.Check("viewData"sv, c_ViewDataFields)
 			.Check("materialData"sv, GetUniformKeys(c_MaterialBuffers))
 			.Check("materialData"sv, c_MaterialDataFields)
+			.Check("toonData"sv, c_ToonDataFields)
 			.Check("skinnedData"sv, GetUniformKeys(c_SkinnedBuffers));
 		GrassForwardPhase::CheckBindings(check);
 	}
@@ -439,8 +446,14 @@ namespace bgl
 			matData["alphaHashSeed"].SetIfValid(draw.viewState.alphaHashSeed);
 			matData["sunDirection"].SetIfValid(draw.lighting.sunDirection);
 			matData["sunRadiance"].SetIfValid(draw.lighting.sunRadiance);
-			matData["toonShadingRigBlocks"].SetIfValid(
-				resources.GetBuffer(c_ToonShadingRigBlocksName));
+		}
+
+		if (auto foundToonData = kernel.FindUniforms("toonData"))
+		{
+			auto& toonData                   = *foundToonData;
+			toonData["sunDirection"]         = draw.lighting.toonSunDirection;
+			toonData["sunRadiance"]          = draw.lighting.toonSunRadiance;
+			toonData["toonShadingRigBlocks"] = resources.GetBuffer(c_ToonShadingRigBlocksName);
 		}
 	}
 

@@ -877,9 +877,13 @@ namespace bgl
 		draw.lighting.env      = m_BlackEnvironment.Complete(env);
 		draw.lighting.exposure = view->GetExposure();
 
-		const auto& sun            = view->GetDirectionalLight();
+		const auto& sun            = view->GetPbrDirectionalLight();
 		draw.lighting.sunDirection = sun.direction;
 		draw.lighting.sunRadiance  = sun.color * sun.intensity;
+
+		const auto& toonSun            = view->GetToonDirectionalLight();
+		draw.lighting.toonSunDirection = toonSun.direction;
+		draw.lighting.toonSunRadiance  = toonSun.color * toonSun.intensity;
 
 		// Still without temporal AA: a coverage pattern nothing accumulates is flicker. Its period is
 		// not the jitter's -- eight patterns average to nine grey levels rather than to coverage.

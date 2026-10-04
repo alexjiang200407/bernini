@@ -340,9 +340,11 @@ namespace bgl
 		SetEnvironmentMap(const EnvironmentMapDesc& desc) = 0;
 
 		/**
-		 * Sets this view's one analytic light: a sun, casting no shadow. Replaces any previously set
-		 * light. Per-view for the same reason the environment is -- two views of one Scene are lit
-		 * independently.
+		 * Sets the sun every shading model but the toon character's reads: PBR, the lit surfaces
+		 * (ILitSurfaceSource), grass. A sun casting no shadow; replaces any previously set one.
+		 * Per-view for the same reason the environment is -- two views of one Scene are lit
+		 * independently. The toon character model reads SetToonDirectionalLight's sun and never this
+		 * one; neither falls back on the other.
 		 *
 		 * It *adds* to the environment map rather than replacing it, and the environment already
 		 * carries whatever sun its source HDR held, so the two double-count a sun that is in both.
@@ -358,7 +360,21 @@ namespace bgl
 		 *         `direction` has zero length.
 		 */
 		virtual void
-		SetDirectionalLight(const DirectionalLightDesc& desc) = 0;
+		SetPbrDirectionalLight(const DirectionalLightDesc& desc) = 0;
+
+		/**
+		 * Sets the sun the toon character model reads, and its toon shading rigs are evaluated
+		 * against: the light a toon character is drawn by, apart from the one PBR surfaces are, so a
+		 * view can light a character for its look whatever lights the world. Replaces any previously
+		 * set one. The toon environment model reads neither.
+		 *
+		 * A view that never calls this draws its toon characters unlit -- black -- whatever its PBR
+		 * light: the default intensity is 0, and there is no fallback.
+		 *
+		 * @throws SceneError on what SetPbrDirectionalLight refuses.
+		 */
+		virtual void
+		SetToonDirectionalLight(const DirectionalLightDesc& desc) = 0;
 
 		/**
 		 * Binds a cubemap as this view's skybox background, drawn behind the scene.

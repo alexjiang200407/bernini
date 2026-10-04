@@ -160,46 +160,48 @@ namespace bgl
 				slot);
 		}
 
-		// A toon character surface's programs: PSMain reads ToonVSOut, which carries the placement's
-		// toon shading rig block, through `toonProgram`; the dissolve lane draws the lit program
-		// without one, as a dissolving placement's vertices carry no block.
+		// A toon character surface's programs, named on the game's type so they light it with the toon
+		// sun: PSMain reads ToonVSOut, which carries the placement's toon shading rig block; the
+		// dissolve lane's vertices carry none.
 		std::string
-		ToonColorProgramSource(
-			uint32_t         slot,
-			std::string_view toonProgram,
-			std::string_view litProgram)
+		ToonColorProgramSource(uint32_t slot, std::string_view program)
 		{
 			return std::format(
 				"import {0};\nimport lib.forward.GameSurface;\nimport lib.forward.MaterialData;\n"
 				"import lib.forward.common;\nimport "
 				"lib.forward.lod_dissolve;\n\n[shader(\"pixel\")]\n"
 				"ForwardPSOut PSMain(ToonVSOut input, bool isFrontFace: SV_IsFrontFace)\n{{\n"
-				"    return materialData.{1}<Slot{3}Source>(input, isFrontFace);\n}}\n\n"
+				"    return materialData.{1}<Slot{2}Source>(input.Surface(), "
+				"input.toonShadingRigSlot, "
+				"isFrontFace);\n}}\n\n"
 				"[shader(\"pixel\")]\n"
 				"ForwardPSOut PSDissolve(DissolveVSOut input, bool isFrontFace: "
 				"SV_IsFrontFace)\n{{\n"
 				"    DiscardDissolvedLod(input);\n"
-				"    return MarkDissolvedLod(materialData.{2}<Slot{3}Surface>(input.Surface(), "
+				"    return MarkDissolvedLod(materialData.{1}<Slot{2}Source>(input.Surface(), 0u, "
 				"isFrontFace));\n}}\n",
 				BindingModuleName(slot),
-				toonProgram,
-				litProgram,
+				program,
 				slot);
 		}
 
 		// A surface's grass program: the blade's vertex in, and the surface shaded on it.
 		std::string
-		GrassProgramSource(uint32_t slot, std::string_view program)
+		GrassProgramSource(
+			uint32_t         slot,
+			std::string_view program,
+			std::string_view type = "Surface")
 		{
 			return std::format(
 				"import {};\nimport lib.forward.GrassShading;\nimport lib.forward.MaterialData;\n"
 				"import lib.forward.common;\nimport lib.forward.grass_vertex;\n\n"
 				"[shader(\"pixel\")]\n"
 				"ForwardPSOut PSMain(GrassVSOut input)\n{{\n"
-				"    return materialData.{}<Slot{}Surface>(input);\n}}\n",
+				"    return materialData.{}<Slot{}{}>(input);\n}}\n",
 				BindingModuleName(slot),
 				program,
-				slot);
+				slot,
+				type);
 		}
 
 		// The shared blend program, with one arm per registered surface ahead of the engine's own
@@ -213,14 +215,17 @@ namespace bgl
 			for (uint32_t slot = 0; slot < types.size(); ++slot)
 			{
 				imports += std::format("import {};\n", BindingModuleName(slot));
+				const bool toon = types[slot].shading == SurfaceShading::kToonCharacter;
 				arms += std::format(
 					"    case {}u:\n        return "
-					"materialData.{}<Slot{}Surface>(input, "
+					"materialData.{}<Slot{}{}>(input, "
 					"isFrontFace);\n",
 					std::to_underlying(types[slot].kind),
+					toon                                  ? "ShadeGameToonBlended" :
 					DrawsLitPrograms(types[slot].shading) ? "ShadeGameLitBlended" :
 															"ShadeGameBlended",
-					slot);
+					slot,
+					toon ? "Source" : "Surface");
 			}
 
 			return std::format(
@@ -259,21 +264,17 @@ namespace bgl
 			{
 				return {
 					{ colour(LayerType::kOpaque),
-					  ToonColorProgramSource(slot, "GameToonOpaqueProgram", "GameLitOpaqueProgram"),
+					  ToonColorProgramSource(slot, "GameToonOpaqueProgram"),
 					  false },
 					{ colour(LayerType::kMask),
-					  ToonColorProgramSource(
-						  slot,
-						  "GameToonAlphaTestedProgram",
-						  "GameLitAlphaTestedProgram"),
+					  ToonColorProgramSource(slot, "GameToonAlphaTestedProgram"),
 					  false },
 					{ colour(LayerType::kHashed),
-					  ToonColorProgramSource(
-						  slot,
-						  "GameToonHashedAlphaProgram",
-						  "GameLitHashedAlphaProgram"),
+					  ToonColorProgramSource(slot, "GameToonHashedAlphaProgram"),
 					  false },
-					grass,
+					{ grass.name,
+					  GrassProgramSource(slot, "GameToonGrassProgram", "Source"),
+					  false },
 				};
 			}
 

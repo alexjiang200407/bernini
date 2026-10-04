@@ -648,7 +648,7 @@ try
 	// -- so a model measured under both is measured under two suns. See docs/ai_viewer.md.
 	if (opts.sunIntensity > 0.0f)
 	{
-		view->SetDirectionalLight(
+		view->SetPbrDirectionalLight(
 			{ .direction = headless::SunDirection(
 				  glm::radians(opts.sunAzimuth),
 				  glm::radians(opts.sunElevation)),

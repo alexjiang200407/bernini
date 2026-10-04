@@ -88,6 +88,10 @@ namespace bgl
 		glm::vec3 sunDirection{ 0.0f, -1.0f, 0.0f };
 		glm::vec3 sunRadiance{ 0.0f };
 
+		// The toon character model's sun, resolved the same way; no other model reads it.
+		glm::vec3 toonSunDirection{ 0.0f, -1.0f, 0.0f };
+		glm::vec3 toonSunRadiance{ 0.0f };
+
 		// World to environment space: the authored yaw, and the camera's rotation when the sky
 		// follows the view. The IBL cubes and the backdrop are both looked up through it, or a
 		// turned sky lights the scene from where it used to be.

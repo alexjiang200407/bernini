@@ -219,7 +219,7 @@ GrassEditorWindow::GrassEditorWindow(
 
 		const float azimuth   = c_SunAzimuth;
 		const float elevation = c_SunElevation;
-		view->SetDirectionalLight(
+		view->SetPbrDirectionalLight(
 			{ .direction = -glm::vec3(
 				  std::cos(elevation) * std::sin(azimuth),
 				  std::sin(elevation),
