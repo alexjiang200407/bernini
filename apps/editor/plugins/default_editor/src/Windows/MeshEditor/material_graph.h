@@ -57,6 +57,17 @@ void
 SortGraph(QJsonObject& graph);
 
 /**
+ * Brings a saved board's surface sinks to the ports they have now. A board saved before a data slot
+ * could be split gave every data slot its whole port *and* its four channel ports, and its
+ * connections name ports by index in that layout; such a sink -- one whose state has no "split" --
+ * opens with each data slot split that a connection routes by channel, and every connection into
+ * it is renumbered to match. `registry` supplies each sink's surface; a sink it cannot create is
+ * left as it is, and fails to restore like any unregistered model.
+ */
+void
+UpgradeSurfaceSinkPorts(QJsonObject& graph, QtNodes::NodeDelegateModelRegistry& registry);
+
+/**
  * The node types a material graph can hold.
  *
  * `language` resolves every node's shown text; it must outlive the registry and every node it

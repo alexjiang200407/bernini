@@ -309,7 +309,9 @@ per-slot bakes — is identical under every model.
   channel routes, an object: `routes` maps `r`/`g`/`b`/`a` to `{texture, channel}` with the
   source stamps beside them, and `baked`/`token` name the packed map the bake wrote. The two
   forms are exclusive per slot, the routes winning where a document carries both. Routing is the
-  editor's offer on *data* slots only — a colour or a normal map is authored whole — and the bake
+  editor's offer on *data* slots only — a colour or a normal map is authored whole: the sink shows
+  a data slot's one whole port until its "Split {slot}" box swaps it for four channel ports, as a
+  PBR sink's group splits, and a routed document opens with its slot split — and the bake
   behind it is `AssetStore::BakeMaterial`, the same compositor the PBR triplet uses, writing one
   linear BC7 map per routed slot under the shared `slot_` prefix. A routed slot whose bake is
   stale or absent draws each channel from its own source instead: the routes ride the material's

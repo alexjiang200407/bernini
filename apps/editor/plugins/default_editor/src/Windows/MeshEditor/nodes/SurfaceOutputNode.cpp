@@ -8,6 +8,7 @@
 #include <editor_plugin_api/ILanguageResolver.h>
 #include <gamelib/shading_model.h>
 
+#include <QCheckBox>
 #include <QColor>
 #include <QColorDialog>
 #include <QDoubleSpinBox>
@@ -96,6 +97,7 @@ SurfaceOutputNode::SurfaceOutputNode(
 
 	m_Bound.resize(m_Surface.params.textures.size());
 	m_Routes.resize(m_Surface.params.textures.size());
+	m_SlotPorts.resize(m_Surface.params.textures.size(), PortsWhen(false));
 }
 
 QString
@@ -127,29 +129,42 @@ SurfaceOutputNode::nPorts(QtNodes::PortType portType) const
 		return 0u;
 
 	auto count = 0u;
-	for (const bgl::SurfaceTexture& texture : m_Surface.params.textures)
-		count += 1u + (texture.kind == bgl::SurfaceTextureKind::kData ?
-		                   static_cast<unsigned int>(assetlib::c_SurfaceSlotChannelCount) :
-		                   0u);
+	for (size_t slot = 0; slot < m_Surface.params.textures.size(); ++slot)
+		count += SlotPortCount(slot);
 	return count;
+}
+
+bool
+SurfaceOutputNode::IsSplit(size_t slot) const
+{
+	return SlotPortCount(slot) > 1u;
+}
+
+unsigned int
+SurfaceOutputNode::SlotPortCount(size_t slot) const
+{
+	return slot < m_SlotPorts.size() ? m_SlotPorts[slot] : 0u;
+}
+
+unsigned int
+SurfaceOutputNode::PortsWhen(bool split)
+{
+	return split ? static_cast<unsigned int>(assetlib::c_SurfaceSlotChannelCount) : 1u;
 }
 
 SurfaceOutputNode::PortRef
 SurfaceOutputNode::ResolvePort(QtNodes::PortIndex port) const
 {
-	auto remaining = port;
+	if (port < 0)
+		return { m_Surface.params.textures.size(), true, 0 };
+
+	auto remaining = static_cast<unsigned int>(port);
 	for (size_t slot = 0; slot < m_Surface.params.textures.size(); ++slot)
 	{
-		if (remaining == 0)
-			return { slot, true, 0 };
-		--remaining;
-
-		if (m_Surface.params.textures[slot].kind != bgl::SurfaceTextureKind::kData)
-			continue;
-
-		if (remaining < QtNodes::PortIndex(assetlib::c_SurfaceSlotChannelCount))
-			return { slot, false, static_cast<uint32_t>(remaining) };
-		remaining -= QtNodes::PortIndex(assetlib::c_SurfaceSlotChannelCount);
+		const unsigned int count = SlotPortCount(slot);
+		if (remaining < count)
+			return { slot, !IsSplit(slot), remaining };
+		remaining -= count;
 	}
 	return { m_Surface.params.textures.size(), true, 0 };
 }
@@ -159,16 +174,56 @@ SurfaceOutputNode::WholePortFor(size_t slot) const
 {
 	auto port = 0u;
 	for (size_t i = 0; i < slot && i < m_Surface.params.textures.size(); ++i)
-		port += 1u + (m_Surface.params.textures[i].kind == bgl::SurfaceTextureKind::kData ?
-		                  static_cast<unsigned int>(assetlib::c_SurfaceSlotChannelCount) :
-		                  0u);
+		port += SlotPortCount(i);
 	return port;
 }
 
 unsigned int
 SurfaceOutputNode::ChannelPortFor(size_t slot, uint32_t component) const
 {
-	return WholePortFor(slot) + 1u + component;
+	return WholePortFor(slot) + (IsSplit(slot) ? component : 0u);
+}
+
+void
+SurfaceOutputNode::SetSplit(size_t slot, bool split)
+{
+	if (slot >= m_Surface.params.textures.size() ||
+	    m_Surface.params.textures[slot].kind != bgl::SurfaceTextureKind::kData ||
+	    IsSplit(slot) == split)
+		return;
+
+	const unsigned int oldCount = SlotPortCount(slot);
+	const unsigned int newCount = PortsWhen(split);
+	const auto         first    = static_cast<QtNodes::PortIndex>(WholePortFor(slot));
+
+	// As MaterialOutputNode::SetGroupExpanded: QtNodes reads nPorts() inside each "about to" call
+	// to rebase the surviving connections, so the count changes between the paired signals.
+	Q_EMIT portsAboutToBeDeleted(
+		QtNodes::PortType::In,
+		first,
+		first + static_cast<QtNodes::PortIndex>(oldCount) - 1);
+	m_SlotPorts[slot] = 0u;
+	Q_EMIT portsDeleted();
+
+	Q_EMIT portsAboutToBeInserted(
+		QtNodes::PortType::In,
+		first,
+		first + static_cast<QtNodes::PortIndex>(newCount) - 1);
+	m_SlotPorts[slot] = newCount;
+	Q_EMIT portsInserted();
+
+	// The removed ports took their wires with them, so the slot is now unbound either way.
+	m_Bound[slot]  = nullptr;
+	m_Routes[slot] = {};
+
+	if (slot < m_SplitBoxes.size() && m_SplitBoxes[slot] != nullptr)
+	{
+		const QSignalBlocker blocker(m_SplitBoxes[slot]);
+		m_SplitBoxes[slot]->setChecked(split);
+	}
+
+	Q_EMIT requestNodeUpdate();
+	Q_EMIT Changed();
 }
 
 QtNodes::NodeDataType
@@ -312,6 +367,34 @@ SurfaceOutputNode::embeddedWidget()
 		form->addRow(QString::fromStdString(value.name), field);
 	}
 
+	m_SplitBoxes.assign(m_Surface.params.textures.size(), nullptr);
+	for (size_t slot = 0; slot < m_Surface.params.textures.size(); ++slot)
+	{
+		const bgl::SurfaceTexture& texture = m_Surface.params.textures[slot];
+		if (texture.kind != bgl::SurfaceTextureKind::kData)
+			continue;
+
+		auto* box = new QCheckBox(m_Widget);
+		box->setChecked(IsSplit(slot));
+		box->setToolTip(
+			editor::Localize(
+				m_Language,
+				"bernini.material_nodes.split_slot_tooltip",
+				"Route this slot's channels individually"));
+		form->addRow(
+			editor::Localize(
+				m_Language,
+				"bernini.material_nodes.split_group_label",
+				{ texture.name },
+				"Split {0}"),
+			box);
+
+		connect(box, &QCheckBox::toggled, this, [this, slot](bool checked) {
+			SetSplit(slot, checked);
+		});
+		m_SplitBoxes[slot] = box;
+	}
+
 	SyncWidgets();
 	WatchEmbeddedWidget(m_Widget);
 	return m_Widget;
@@ -453,6 +536,15 @@ SurfaceOutputNode::save() const
 	json["alphaCutoff"] = static_cast<double>(m_AlphaCutoff);
 	json["doubleSided"] = m_DoubleSided;
 
+	// Which data slots are split, by name, so a reloaded graph has the ports its connections name.
+	auto split = QJsonObject();
+	for (size_t slot = 0; slot < m_Surface.params.textures.size(); ++slot)
+	{
+		if (m_Surface.params.textures[slot].kind == bgl::SurfaceTextureKind::kData)
+			split[QString::fromStdString(m_Surface.params.textures[slot].name)] = IsSplit(slot);
+	}
+	json["split"] = split;
+
 	return json;
 }
 
@@ -511,6 +603,26 @@ SurfaceOutputNode::load(const QJsonObject& json)
 		m_AlphaCutoff = static_cast<float>(json["alphaCutoff"].toDouble());
 	if (json.contains("doubleSided"))
 		m_DoubleSided = json["doubleSided"].toBool();
+
+	// Assigned, not SetSplit: load() runs while the node is created, before its connections are
+	// restored, so there is nothing to rebase -- as MaterialOutputNode::load restores its groups.
+	// A state that says nothing of the split leaves it alone.
+	if (json.contains("split"))
+	{
+		const QJsonObject split = json["split"].toObject();
+		for (size_t slot = 0; slot < m_Surface.params.textures.size(); ++slot)
+		{
+			const bgl::SurfaceTexture& texture = m_Surface.params.textures[slot];
+			const bool wanted = texture.kind == bgl::SurfaceTextureKind::kData &&
+			                    split[QString::fromStdString(texture.name)].toBool();
+			m_SlotPorts[slot] = PortsWhen(wanted);
+			if (slot < m_SplitBoxes.size() && m_SplitBoxes[slot] != nullptr)
+			{
+				const QSignalBlocker blocker(m_SplitBoxes[slot]);
+				m_SplitBoxes[slot]->setChecked(wanted);
+			}
+		}
+	}
 
 	SyncWidgets();
 	Q_EMIT Changed();
@@ -595,6 +707,15 @@ SurfaceOutputNode::DocumentState(const assetlib::BMaterial& material)
 		QLatin1String(c_AlphaModeNames[static_cast<size_t>(material.layer.alphaMode)]);
 	state["alphaCutoff"] = static_cast<double>(material.layer.alphaCutoff);
 	state["doubleSided"] = material.layer.doubleSided;
+
+	// A slot the document routes by channel opens split, so its routes have ports to land on.
+	auto split = QJsonObject();
+	for (const assetlib::SurfaceTextureBinding& binding : material.surface.textures)
+	{
+		if (assetlib::slotIsRouted(binding))
+			split[QString::fromStdString(binding.name)] = true;
+	}
+	state["split"] = split;
 
 	return state;
 }

@@ -35,6 +35,7 @@
 #include <qjsonobject.h>
 #include <qobject.h>
 #include <qstringliteral.h>
+#include <utility>
 
 namespace
 {
@@ -113,20 +114,18 @@ TEST_CASE("A surface sink is its surface, reflected", "[materialgraph][surfacesi
 	SurfaceOutputNode* sink = Sink(model);
 	REQUIRE(sink != nullptr);
 
-	// A whole-texture port per slot, and a data slot adds one channel port per component
-	// (ADR-7); nothing flows out of a sink.
-	CHECK(sink->nPorts(PortType::In) == 7u);
+	// One whole-texture port per slot, a data slot's included until it is split; nothing flows
+	// out of a sink.
+	CHECK(sink->nPorts(PortType::In) == 3u);
 	CHECK(sink->nPorts(PortType::Out) == 0u);
 	CHECK(sink->portCaption(PortType::In, 0) == QStringLiteral("baseColor (Color)"));
 	CHECK(sink->portCaption(PortType::In, 1) == QStringLiteral("mask (Coverage)"));
 	CHECK(sink->portCaption(PortType::In, 2) == QStringLiteral("orm (Data)"));
-	CHECK(sink->portCaption(PortType::In, 3) == QStringLiteral("orm.r"));
-	CHECK(sink->portCaption(PortType::In, 6) == QStringLiteral("orm.a"));
 	CHECK(sink->dataType(PortType::In, 0).id == QStringLiteral("surfacetexture"));
 	CHECK(sink->dataType(PortType::In, 2).id == QStringLiteral("surfacetexture"));
-	CHECK(sink->dataType(PortType::In, 3).id != QStringLiteral("surfacetexture"));
+	CHECK_FALSE(sink->IsSplit(2));
 	CHECK(sink->WholePortFor(2) == 2u);
-	CHECK(sink->ChannelPortFor(2, 0) == 3u);
+	CHECK(sink->ChannelPortFor(2, 3) == 2u);
 
 	// The declaration's defaults arrive prefilled, components past the type's staying zero.
 	CHECK(sink->Value(0).x == 8.0f);
@@ -135,6 +134,51 @@ TEST_CASE("A surface sink is its surface, reflected", "[materialgraph][surfacesi
 	// Found, guarded and switched exactly as the PBR sinks are.
 	CHECK(model.OutputNodeId() == id);
 	CHECK_FALSE(model.deleteNode(id));
+}
+
+TEST_CASE("Splitting a data slot swaps its whole port for channels", "[materialgraph][surfacesink]")
+{
+	SurfaceOutputNode sink(c_Language, RimSurface());
+
+	sink.SetSplit(2, true);
+	CHECK(sink.IsSplit(2));
+	CHECK(sink.nPorts(PortType::In) == 6u);
+	CHECK(sink.portCaption(PortType::In, 2) == QStringLiteral("orm.r"));
+	CHECK(sink.portCaption(PortType::In, 5) == QStringLiteral("orm.a"));
+	CHECK(sink.dataType(PortType::In, 2).id != QStringLiteral("surfacetexture"));
+	CHECK(sink.WholePortFor(2) == 2u);
+	CHECK(sink.ChannelPortFor(2, 0) == 2u);
+	CHECK(sink.ChannelPortFor(2, 3) == 5u);
+
+	// Only a data slot splits: a colour or coverage map is authored whole.
+	sink.SetSplit(0, true);
+	sink.SetSplit(1, true);
+	CHECK_FALSE(sink.IsSplit(0));
+	CHECK_FALSE(sink.IsSplit(1));
+
+	sink.SetSplit(2, false);
+	CHECK(sink.nPorts(PortType::In) == 3u);
+	CHECK(sink.portCaption(PortType::In, 2) == QStringLiteral("orm (Data)"));
+}
+
+TEST_CASE("A sink round-trips its split slots by name", "[materialgraph][surfacesink]")
+{
+	SurfaceOutputNode saved(c_Language, RimSurface());
+	saved.SetSplit(2, true);
+	CHECK(saved.save()["split"].toObject()["orm"].toBool());
+
+	SurfaceOutputNode reloaded(c_Language, RimSurface());
+	reloaded.load(saved.save());
+	CHECK(reloaded.IsSplit(2));
+	CHECK(reloaded.nPorts(PortType::In) == 6u);
+
+	// Keyed by name: a surface that declares its slots in another order splits the same slot.
+	bgl::SurfaceType reordered = RimSurface();
+	std::swap(reordered.params.textures[0], reordered.params.textures[2]);
+	SurfaceOutputNode moved(c_Language, reordered);
+	moved.load(saved.save());
+	CHECK(moved.IsSplit(0));
+	CHECK(moved.portCaption(PortType::In, 0) == QStringLiteral("orm.r"));
 }
 
 TEST_CASE("A routed channel cannot wire into a whole-texture port", "[materialgraph][surfacesink]")
@@ -157,7 +201,7 @@ TEST_CASE("A routed channel cannot wire into a whole-texture port", "[materialgr
 }
 
 TEST_CASE(
-	"A data slot routes single channels, exclusively with its whole port",
+	"A data slot routes single channels once split, and its wires go with its ports",
 	"[materialgraph][surfacesink]")
 {
 	MaterialGraphModel model(Registry());
@@ -167,38 +211,40 @@ TEST_CASE(
 	SurfaceOutputNode* sink    = Sink(model);
 	REQUIRE(sink != nullptr);
 
-	const auto ormWhole = QtNodes::PortIndex(sink->WholePortFor(2));
-	const auto ormR     = QtNodes::PortIndex(sink->ChannelPortFor(2, 0));
-	const auto ormG     = QtNodes::PortIndex(sink->ChannelPortFor(2, 1));
-
-	// A channel port takes a single channel and nothing wider -- a bundle or the whole texture
-	// would silently drop the swizzle it carries.
-	constexpr auto c_TextureR = QtNodes::PortIndex(TextureNode::c_BundleCount);
-	CHECK(model.connectionPossible(ConnectionId{ texture, c_TextureR, sinkId, ormR }));
-	CHECK_FALSE(model.connectionPossible(ConnectionId{ texture, 0, sinkId, ormR }));
-	CHECK_FALSE(model.connectionPossible(
-		ConnectionId{ texture, QtNodes::PortIndex(TextureNode::c_TexturePort), sinkId, ormR }));
-
 	if (auto* node = model.delegateModel<TextureNode>(texture))
 		node->SetTexturePath(QStringLiteral("C:/proj/Data/Derived/SourceTextures/head/ao.ktx2"));
 
-	// Routed and whole are one slot's two mutually exclusive forms (ADR-7): wiring a channel
-	// closes the whole port, and unwiring it opens the port again.
+	constexpr auto c_TextureR     = QtNodes::PortIndex(TextureNode::c_BundleCount);
+	constexpr auto c_TextureWhole = QtNodes::PortIndex(TextureNode::c_TexturePort);
+
+	// Whole: the slot's one port takes the texture, and no single channel.
+	const auto ormWhole = QtNodes::PortIndex(sink->WholePortFor(2));
+	CHECK_FALSE(model.connectionPossible(ConnectionId{ texture, c_TextureR, sinkId, ormWhole }));
+	model.addConnection(ConnectionId{ texture, c_TextureWhole, sinkId, ormWhole });
+	CHECK(sink->BoundTexture(2).endsWith(QStringLiteral("ao.ktx2")));
+
+	// Splitting replaces the port, so the whole wire goes with it -- as splitting a PBR group does.
+	sink->SetSplit(2, true);
+	CHECK(model.allConnectionIds(sinkId).empty());
+	CHECK(sink->BoundTexture(2).isEmpty());
+
+	// A channel port takes a single channel and nothing wider -- a bundle or the whole texture
+	// would silently drop the swizzle it carries.
+	const auto ormR = QtNodes::PortIndex(sink->ChannelPortFor(2, 0));
+	const auto ormG = QtNodes::PortIndex(sink->ChannelPortFor(2, 1));
+	CHECK(model.connectionPossible(ConnectionId{ texture, c_TextureR, sinkId, ormR }));
+	CHECK_FALSE(model.connectionPossible(ConnectionId{ texture, 0, sinkId, ormR }));
+	CHECK_FALSE(model.connectionPossible(ConnectionId{ texture, c_TextureWhole, sinkId, ormR }));
+
 	model.addConnection(ConnectionId{ texture, c_TextureR, sinkId, ormR });
+	model.addConnection(ConnectionId{ texture, c_TextureR + 1, sinkId, ormG });
 	CHECK(sink->SlotIsRouted(2));
-	CHECK_FALSE(model.connectionPossible(
-		ConnectionId{ texture, QtNodes::PortIndex(TextureNode::c_TexturePort), sinkId, ormWhole }));
-	CHECK(model.connectionPossible(ConnectionId{ texture, c_TextureR + 1, sinkId, ormG }));
 
-	model.deleteConnection(ConnectionId{ texture, c_TextureR, sinkId, ormR });
+	// Unsplitting drops the channel wires the same way, leaving the slot unbound.
+	sink->SetSplit(2, false);
+	CHECK(model.allConnectionIds(sinkId).empty());
 	CHECK_FALSE(sink->SlotIsRouted(2));
-	CHECK(model.connectionPossible(
-		ConnectionId{ texture, QtNodes::PortIndex(TextureNode::c_TexturePort), sinkId, ormWhole }));
-
-	// And the reverse: a whole binding closes the channel ports.
-	model.addConnection(
-		ConnectionId{ texture, QtNodes::PortIndex(TextureNode::c_TexturePort), sinkId, ormWhole });
-	CHECK_FALSE(model.connectionPossible(ConnectionId{ texture, c_TextureR, sinkId, ormR }));
+	CHECK(model.connectionPossible(ConnectionId{ texture, c_TextureWhole, sinkId, ormWhole }));
 }
 
 TEST_CASE("A routed slot compiles to its routes, not a binding", "[materialgraph][surfacesink]")
@@ -215,6 +261,8 @@ TEST_CASE("A routed slot compiles to its routes, not a binding", "[materialgraph
 		node->SetTexturePath(QStringLiteral("C:/proj/Data/Derived/SourceTextures/head/ao.ktx2"));
 	if (auto* node = model.delegateModel<TextureNode>(mr))
 		node->SetTexturePath(QStringLiteral("C:/proj/Data/Derived/SourceTextures/head/mr.ktx2"));
+
+	sink->SetSplit(2, true);
 
 	// The angelica shape: AO from one texture's R, roughness/metallic from another's G and B.
 	constexpr auto c_R = QtNodes::PortIndex(TextureNode::c_BundleCount);
@@ -258,6 +306,9 @@ TEST_CASE("A routed document builds its board", "[materialgraph][surfacesink]")
 
 	SurfaceOutputNode* sink = Sink(model);
 	REQUIRE(sink != nullptr);
+
+	// A slot the document routes opens split, so its routes have their ports to land on.
+	CHECK(sink->IsSplit(2));
 	REQUIRE(sink->SlotIsRouted(2));
 
 	// Absolute like every live-graph path, per the whole-binding case above.
@@ -621,12 +672,89 @@ TEST_CASE(
 TEST_CASE("The node carries no layer widgets", "[materialgraph][surfacesink]")
 {
 	// ADR-9: a combo popup is a child window the proxy embeds unscaled into the zoomed scene, so
-	// the layer moved to the panel and the node's widget holds value spins alone.
+	// the layer moved to the panel and the node's widget holds value spins -- and a data slot's
+	// split box, Double Sided being the panel's.
 	SurfaceOutputNode sink(c_Language, RimSurface());
 	QWidget*          widget = sink.embeddedWidget();
 	REQUIRE(widget != nullptr);
 	CHECK(widget->findChild<QComboBox*>() == nullptr);
-	CHECK(widget->findChild<QCheckBox*>() == nullptr);
+
+	const auto boxes = widget->findChildren<QCheckBox*>();
+	REQUIRE(boxes.size() == 1);
+	CHECK_FALSE(boxes[0]->isChecked());
+
+	// The box is the split: ticking it splits the slot, and a load that splits it ticks it.
+	boxes[0]->setChecked(true);
+	CHECK(sink.IsSplit(2));
+	sink.load(QJsonObject{ { "split", QJsonObject{ { "orm", false } } } });
+	CHECK_FALSE(boxes[0]->isChecked());
+	CHECK_FALSE(sink.IsSplit(2));
+}
+
+TEST_CASE(
+	"A board saved before slots split opens with its channel wires split",
+	"[materialgraph][surfacesink]")
+{
+	// The layout such a board was saved in: every slot's whole port, and the data slot's four
+	// channel ports after its own -- baseColor 0, mask 1, orm 2, orm.r..a 3..6.
+	MaterialGraphModel saved(Registry());
+	const NodeId       ao     = saved.addNode(QStringLiteral("Texture"));
+	const NodeId       base   = saved.addNode(QStringLiteral("Texture"));
+	const NodeId       sinkId = saved.addNode(QStringLiteral("SurfaceOutput:Rim"));
+	if (auto* node = saved.delegateModel<TextureNode>(ao))
+		node->SetTexturePath(QStringLiteral("C:/proj/Data/Derived/SourceTextures/head/ao.ktx2"));
+	if (auto* node = saved.delegateModel<TextureNode>(base))
+		node->SetTexturePath(QStringLiteral("C:/proj/Data/Derived/SourceTextures/head/base.ktx2"));
+
+	constexpr auto c_TextureR     = TextureNode::c_BundleCount;
+	constexpr auto c_TextureWhole = TextureNode::c_TexturePort;
+	const auto     wire           = [](NodeId out, unsigned int outPort, NodeId in, int inPort) {
+		return QJsonObject{ { "outNodeId", static_cast<int>(out) },
+			                { "outPortIndex", static_cast<int>(outPort) },
+			                { "inNodeId", static_cast<int>(in) },
+			                { "inPortIndex", inPort } };
+	};
+
+	QJsonObject graph = saved.save();
+	QJsonArray  nodes = graph["nodes"].toArray();
+	for (QJsonValueRef value : nodes)
+	{
+		QJsonObject node     = value.toObject();
+		QJsonObject internal = node["internal-data"].toObject();
+		internal.remove(QStringLiteral("split"));
+		node["internal-data"] = internal;
+		value                 = node;
+	}
+	graph["nodes"]       = nodes;
+	graph["connections"] = QJsonArray{ wire(base, c_TextureWhole, sinkId, 0),
+		                               wire(ao, c_TextureR, sinkId, 3),
+		                               wire(ao, c_TextureR + 2, sinkId, 5) };
+
+	UpgradeSurfaceSinkPorts(graph, *Registry());
+
+	MaterialGraphModel model(Registry());
+	model.load(graph);
+	SurfaceOutputNode* sink = Sink(model);
+	REQUIRE(sink != nullptr);
+
+	CHECK(sink->IsSplit(2));
+	CHECK(sink->BoundTexture(0).endsWith(QStringLiteral("base.ktx2")));
+	CHECK(sink->RouteFor(2, 0).path.endsWith(QStringLiteral("ao.ktx2")));
+	CHECK(sink->RouteFor(2, 0).channel == 0);
+	CHECK(sink->RouteFor(2, 2).channel == 2);
+	CHECK(sink->RouteFor(2, 1).path.isEmpty());
+	CHECK(model.allConnectionIds(model.OutputNodeId()).size() == 3u);
+
+	// And a board of that age with no channel wire opens with the slot whole.
+	graph["nodes"]       = nodes;
+	graph["connections"] = QJsonArray{ wire(base, c_TextureWhole, sinkId, 2) };
+	UpgradeSurfaceSinkPorts(graph, *Registry());
+
+	MaterialGraphModel whole(Registry());
+	whole.load(graph);
+	REQUIRE(Sink(whole) != nullptr);
+	CHECK_FALSE(Sink(whole)->IsSplit(2));
+	CHECK(Sink(whole)->BoundTexture(2).endsWith(QStringLiteral("base.ktx2")));
 }
 
 TEST_CASE("A routed board's desc carries its wires as routes", "[materialgraph][surfacesink]")
@@ -645,6 +773,8 @@ TEST_CASE("A routed board's desc carries its wires as routes", "[materialgraph][
 		node->SetTexturePath(QStringLiteral("C:/proj/Data/Derived/SourceTextures/head/ao.ktx2"));
 	if (auto* node = model.delegateModel<TextureNode>(mr))
 		node->SetTexturePath(QStringLiteral("C:/proj/Data/Derived/SourceTextures/head/mr.ktx2"));
+
+	sink->SetSplit(2, true);
 
 	constexpr auto c_TextureR = QtNodes::PortIndex(TextureNode::c_BundleCount);
 	const auto     ormR       = QtNodes::PortIndex(sink->ChannelPortFor(2, 0));
