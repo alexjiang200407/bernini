@@ -214,3 +214,7 @@ id ([crowd_render.md](crowd_render.md)), standing on the ground at its type's he
 derived containers must be on disk (`assetlib_cli migrate`), and its surfaces are registered from
 its `Authored/Shaders`. On the test project's Rabbit at `--units 1`, debug Metal, Forward Skinned
 costs about 2.1 ms a frame, and Choose Poses and Pose Skinned 0.02 ms each.
+
+In a window the frame rate is drawn in the corner, averaged over half a second: RmlUi through the
+renderer's overlay, with the engine's bundled font, so the example stages `copy_assets` and links
+`gamelib` ahead of `example_util` to share gamelib's one RmlUi. A headless run draws none.

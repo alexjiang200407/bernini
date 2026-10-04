@@ -1,3 +1,4 @@
+#include "FrameRateOverlay.h"
 #include "SkinnedAgent.h"
 #include <CLI/CLI.hpp>
 #include <DemoWindow.h>
@@ -234,6 +235,12 @@ namespace
 		targetDesc.headless = opts.headless;
 		targetDesc.wnd      = window ? window->NativeHandle() : nullptr;
 		auto target         = graphics->CreateRenderTarget(targetDesc);
+
+		// In a window only: a headless run's screenshot is the crowd, and its log has the timings.
+		std::optional<crowd_example::FrameRateOverlay> frameRate;
+		if (window)
+			frameRate.emplace(*graphics, opts.width, opts.height);
+		auto lastFrameStart = std::chrono::steady_clock::now();
 		target->SetGpuTimingEnabled(opts.passTimings);
 
 		auto scene = graphics->CreateScene(bgl::SceneDesc());
@@ -535,7 +542,16 @@ namespace
 			// the same every time.
 			renderJob.time =
 				live ? static_cast<float>(since(started)) : static_cast<float>(frame) * c_Tick;
-			graphics->DrawFrame(target, renderJob);
+			if (frameRate)
+			{
+				frameRate->Tick(std::chrono::duration<double>(drawStart - lastFrameStart).count());
+				lastFrameStart = drawStart;
+			}
+			graphics->BeginFrame(target);
+			graphics->Draw(renderJob);
+			if (frameRate)
+				frameRate->Render(*graphics);
+			graphics->EndFrame();
 			if (handoff)
 				handoff->FinishFrame();
 			drawTime += since(drawStart);
