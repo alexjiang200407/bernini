@@ -40,31 +40,31 @@ namespace
 		auto key            = ToonShadingRigKey();
 		key.light           = glm::vec3(0.6f, 0.2f, 0.77f);
 		key.position        = glm::vec3(0.01f, 0.03f, 0.09f);
-		key.gain            = -0.85f;
-		key.size            = 0.115f;
-		key.anisotropy      = 0.55f;
-		key.sharpness       = 1.0f;
+		key.gain            = -0.4f;
+		key.size            = 0.2f;
+		key.anisotropy      = 0.3f;
+		key.sharpness       = 0.25f;
 		key.bend            = 0.25f;
 		key.bulge           = -0.5f;
-		key.rotation        = 80.2f;
-		key.radius          = 0.07f;
-		key.normalSmoothing = 0.4f;
+		key.rotation        = 30.7f;
+		key.radius          = 0.15f;
+		key.normalSmoothing = 0.75f;
 
 		auto edit         = ToonShadingRigEdit();
-		edit.name         = "nose";
+		edit.name         = "brow";
 		edit.keys         = { key, key };
 		edit.keys[1].gain = -0.2f;
-		edit.keySharpness = 12.0f;
+		edit.keySharpness = 6.0f;
 		edit.mirrored     = true;
 
 		auto rig            = BToonShadingRig();
 		rig.edits           = { edit };
-		rig.faceLight       = { .minElevation      = -10.0f,
-			                    .maxElevation      = 25.0f,
-			                    .maxAzimuth        = 45.0f,
-			                    .azimuthFadeStart  = 35.0f,
-			                    .azimuthFadeEnd    = 80.0f,
-			                    .azimuthFadeAmount = 0.75f };
+		rig.faceLight       = { .minElevation      = -20.0f,
+			                    .maxElevation      = 15.0f,
+			                    .maxAzimuth        = 60.0f,
+			                    .azimuthFadeStart  = 30.0f,
+			                    .azimuthFadeEnd    = 70.0f,
+			                    .azimuthFadeAmount = 0.6f };
 		rig.headBone        = "neck_top";
 		rig.headToBone      = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.1f, 0.02f)) *
 		                      glm::rotate(glm::mat4(1.0f), 0.5f, glm::vec3(0.0f, 1.0f, 0.0f));
@@ -134,8 +134,8 @@ TEST_CASE("A toon shading rig document is canonical JSON", "[toonshadingrig][cod
 	CHECK(text == json.dump(1, '\t') + '\n');
 
 	// Floats at their shortest decimal, so a hand-typed value survives a save as typed.
-	CHECK(text.find("80.2,") != std::string::npos);
-	CHECK(text.find("80.19") == std::string::npos);
+	CHECK(text.find("30.7,") != std::string::npos);
+	CHECK(text.find("30.69") == std::string::npos);
 
 	// headToBone is four rows, the translation down the last column as a matrix is written.
 	const auto& rows = json.at("headToBone");
@@ -153,7 +153,7 @@ TEST_CASE(
 
 	const BToonShadingRig sparse = Parse(R"({
 		"edits": [ { "keys": [ { "light": [1, 0, 0], "position": [0, 0, 0.1] } ] } ],
-		"faceLight": { "maxAzimuth": 45 }
+		"faceLight": { "maxAzimuth": 60 }
 	})");
 	REQUIRE(sparse.edits.size() == 1);
 	CHECK(sparse.edits[0].keySharpness == 10.0f);
@@ -162,7 +162,7 @@ TEST_CASE(
 	REQUIRE(sparse.edits[0].keys.size() == 1);
 	CHECK(sparse.edits[0].keys[0].size == ToonShadingRigKey().size);
 	CHECK(sparse.edits[0].keys[0].light == glm::vec3(1.0f, 0.0f, 0.0f));
-	CHECK(sparse.faceLight.maxAzimuth == 45.0f);
+	CHECK(sparse.faceLight.maxAzimuth == 60.0f);
 	CHECK(sparse.faceLight.minElevation == ToonFaceLight().minElevation);
 	CHECK(sparse.headBone.empty());
 	CHECK(sparse.headToBone == glm::mat4(1.0f));

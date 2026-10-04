@@ -185,15 +185,15 @@ namespace
 	bgl::ToonShadingRigDesc
 	TestRig()
 	{
-		const glm::vec3 nose  = glm::vec3(0.03f, -0.02f, 0.1f);
-		auto            side  = Key(glm::vec3(1.0f, 0.0f, 0.35f), nose, -0.8f, 0.1f)
-		                            .SetAnisotropy(0.5f)
-		                            .SetSharpness(0.6f)
-		                            .SetRotation(1.4f)
-		                            .SetRadius(0.07f)
+		const glm::vec3 spot  = glm::vec3(0.05f, 0.04f, 0.11f);
+		auto            side  = Key(glm::vec3(1.0f, 0.0f, 0.35f), spot, -0.6f, 0.14f)
+		                            .SetAnisotropy(0.35f)
+		                            .SetSharpness(0.45f)
+		                            .SetRotation(0.9f)
+		                            .SetRadius(0.12f)
 		                            .SetNormalSmoothing(0.5f);
-		auto            front = Key(glm::vec3(0.0f, 0.0f, 1.0f), nose, 0.0f, 0.3f);
-		auto low = Key(glm::vec3(0.7f, -0.7f, 0.35f), nose * 1.2f, -0.4f, 0.12f).SetBend(0.3f);
+		auto            front = Key(glm::vec3(0.0f, 0.0f, 1.0f), spot, 0.0f, 0.3f);
+		auto low = Key(glm::vec3(0.7f, -0.7f, 0.35f), spot * 1.2f, -0.4f, 0.12f).SetBend(0.3f);
 
 		auto up   = Key(glm::vec3(0.0f, 1.0f, 0.2f), glm::vec3(0.0f, 0.05f, 0.1f), 0.4f, 0.2f)
 		                .SetBend(0.2f)
@@ -201,12 +201,12 @@ namespace
 		auto down = Key(glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, -0.02f, 0.12f), -0.3f, 0.15f);
 
 		auto faceLight = bgl::FaceLightDesc()
-		                     .SetMinElevation(glm::radians(-10.0f))
-		                     .SetMaxElevation(glm::radians(25.0f))
-		                     .SetMaxAzimuth(glm::radians(45.0f))
-		                     .SetAzimuthFadeStart(glm::radians(35.0f))
-		                     .SetAzimuthFadeEnd(glm::radians(80.0f))
-		                     .SetAzimuthFadeAmount(0.75f);
+		                     .SetMinElevation(glm::radians(-20.0f))
+		                     .SetMaxElevation(glm::radians(15.0f))
+		                     .SetMaxAzimuth(glm::radians(60.0f))
+		                     .SetAzimuthFadeStart(glm::radians(30.0f))
+		                     .SetAzimuthFadeEnd(glm::radians(70.0f))
+		                     .SetAzimuthFadeAmount(0.6f);
 
 		return bgl::ToonShadingRigDesc()
 		    .SetHeadToBone(
@@ -399,7 +399,7 @@ TEST_CASE(
 		world.Draw(sun);
 		const auto [azimuth, elevation] = head(CheckBlock(world.Blocks()[0], desc, headWorld, sun));
 		CHECK(elevation <= desc.faceLight.maxElevation + 1e-4f);
-		CHECK(std::abs(azimuth) < glm::radians(45.0f));
+		CHECK(std::abs(azimuth) < desc.faceLight.maxAzimuth);
 	}
 
 	{

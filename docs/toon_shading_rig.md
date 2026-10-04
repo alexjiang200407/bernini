@@ -99,13 +99,13 @@ a rename, `refs` and `pack` see the edge ([Asset Containers](asset_containers.md
 
 ```json
 {
-	"edits": [ { "keySharpness": 10.0, "mirrored": true, "name": "nose",
-	             "keys": [ { "anisotropy": 0.55, "bend": 0, "bulge": 0, "gain": -0.85,
-	                         "light": [0.6, 0.2, 0.77], "normalSmoothing": 0.5,
-	                         "position": [0.01, 0.03, 0.09], "radius": 0.07,
-	                         "rotation": 80.2, "sharpness": 1.0, "size": 0.115 } ] } ],
-	"faceLight": { "azimuthFadeAmount": 0.75, "azimuthFadeEnd": 80, "azimuthFadeStart": 35,
-	               "maxAzimuth": 45, "maxElevation": 25, "minElevation": -10 },
+	"edits": [ { "keySharpness": 6.0, "mirrored": true, "name": "brow",
+	             "keys": [ { "anisotropy": 0.3, "bend": 0, "bulge": 0, "gain": -0.4,
+	                         "light": [0.3, 0.6, 0.74], "normalSmoothing": 0.75,
+	                         "position": [0.04, 0.06, 0.1], "radius": 0.15,
+	                         "rotation": 30, "sharpness": 0.25, "size": 0.2 } ] } ],
+	"faceLight": { "azimuthFadeAmount": 0.6, "azimuthFadeEnd": 70, "azimuthFadeStart": 30,
+	               "maxAzimuth": 60, "maxElevation": 15, "minElevation": -20 },
 	"fadeEndPixels": 48.0, "fadeStartPixels": 96.0, "headBone": "head", "headRadius": 0.12,
 	"headToBone": [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
 }

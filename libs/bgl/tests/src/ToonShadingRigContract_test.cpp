@@ -409,7 +409,7 @@ TEST_CASE("AddToonShadingRig packs what the evaluation pass reads", "[toonshadin
 		    .SetBend(-1.0f)
 		    .SetBulge(2.0f)
 		    .SetRotation(1.5f)
-		    .SetRadius(0.07f)
+		    .SetRadius(0.09f)
 		    .SetNormalSmoothing(0.125f);
 	};
 
@@ -466,7 +466,7 @@ TEST_CASE("AddToonShadingRig packs what the evaluation pass reads", "[toonshadin
 	CHECK(first.lightAndGain.w == -0.5f);
 	CHECK(first.positionAndSize == glm::vec4(0.1f, 0.2f, 0.3f, 0.25f));
 	CHECK(first.shape == glm::vec4(0.5f, 0.75f, -1.0f, 2.0f));
-	CHECK(first.rotationRadiusSmoothing == glm::vec4(1.5f, 0.07f, 0.125f, 0.0f));
+	CHECK(first.rotationRadiusSmoothing == glm::vec4(1.5f, 0.09f, 0.125f, 0.0f));
 	CHECK(packed.keys[3].lightAndGain.w == 0.0f);
 
 	// Rows, as a placement's transform is stored: the translation is each row's w.
@@ -530,7 +530,7 @@ TEST_CASE(
 
 	auto key                    = bgl::idl::ToonShadingRigKey();
 	key.lightAndGain            = glm::vec4(0.0f, 0.6f, 0.8f, -0.5f);
-	key.rotationRadiusSmoothing = glm::vec4(1.4f, 0.07f, 0.5f, 0.0f);
+	key.rotationRadiusSmoothing = glm::vec4(0.9f, 0.09f, 0.5f, 0.0f);
 
 	auto block                                = bgl::idl::ToonShadingRigBlock();
 	block.headFromWorld[1]                    = glm::vec4(21.0f, 22.0f, 23.0f, 24.0f);
