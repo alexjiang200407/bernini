@@ -239,7 +239,9 @@ does. Lifting it needs a test pinning the emitted offsets against the GPU.
 **The Metalized layout is what the shader cache stores.** @pre a change to `MetalizeLayout` or
 `MetalAlign` must bump `c_CacheFormatVersion` in
 [ShaderCache_metal.cpp](libs/bgpu/src/metal/shadercache/ShaderCache_metal.cpp), or a warm cache keeps
-the old layout and the change appears not to work.
+the old layout and the change appears not to work. The same holds on D3D12, where the cache stores
+what `ReflectLayoutFromSlang` produced: a change to it bumps `formatVersion` in
+[ShaderCache_d3d12.cpp](libs/bgpu/src/d3d12/shadercache/ShaderCache_d3d12.cpp).
 
 ---
 

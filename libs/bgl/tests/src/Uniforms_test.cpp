@@ -13,8 +13,11 @@
 #include <bgpu/resource/Srv.h>
 #include <bgpu/uniforms/DescriptorHandle.h>
 #include <bgpu/uniforms/UniformValueType.h>
+#include <bgpu/uniforms/Uniforms.h>
 #include <bgpu/uniforms/UniformsBase.h>
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <core/glm.h>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -295,7 +298,46 @@ TEST_CASE("Uniforms", "[uniforms]")
 		}
 	}
 
-	SECTION("Array") {}
+	SECTION("Array")
+	{
+		auto kernel = device->CreateComputeKernel(
+			bgpu::ComputePipelineDesc()
+				.SetShader(device->CreateShader("CSUniformReflectionArray"))
+				.SetDebugName("CSUniformReflectionArray"));
+		bgpu::Uniforms& uniforms = kernel["gUniforms"];
+
+		const auto planes = uniforms["planes"];
+		REQUIRE(planes.GetType() == bgpu::UniformType::kArray);
+		CHECK(planes.GetOffset() == 16u);
+		CHECK(planes.GetSize() == 6u * sizeof(glm::vec4));
+		CHECK(uniforms["after"].GetOffset() == planes.GetOffset() + planes.GetSize());
+
+		// Each element is one float4 further on, and the last one still ends inside the buffer: an
+		// element stride of the whole array's size wrote planes[1..5] past the mirror.
+		for (uint32_t i = 0; i < 6; ++i)
+		{
+			INFO("planes[" << i << "]");
+			CHECK(planes[i].GetOffset() == planes.GetOffset() + i * sizeof(glm::vec4));
+			CHECK(planes[i].GetOffset() + sizeof(glm::vec4) <= uniforms.GetSize());
+		}
+		CHECK(planes[6].IsNull());
+
+		const auto before  = glm::vec4(-1.0f);
+		const auto after   = glm::vec3(-2.0f);
+		uniforms["before"] = before;
+		uniforms["after"]  = after;
+		for (uint32_t i = 0; i < 6; ++i)
+		{
+			planes[i] = glm::vec4(static_cast<float>(i));
+		}
+
+		for (uint32_t i = 0; i < 6; ++i)
+		{
+			CHECK(planes[i].operator glm::vec4() == glm::vec4(static_cast<float>(i)));
+		}
+		CHECK(uniforms["before"].operator glm::vec4() == before);
+		CHECK(uniforms["after"].operator glm::vec3() == after);
+	}
 
 	SECTION("Struct") {}
 }
