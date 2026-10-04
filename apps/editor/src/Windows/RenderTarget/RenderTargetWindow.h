@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <editor_plugin_api/IEditorViewport.h>
+#include <optional>
 #include <qcoreevent.h>
 #include <qpaintdevice.h>
 #include <qtmetamacros.h>
@@ -159,6 +160,21 @@ public:
 
 	[[nodiscard]] bgl::ColorGradeSettings
 	GetColorGradeSettings() const;
+
+	// The curve this viewport ends in is the user's pick if there is one, else Standard for toon
+	// content, else the project's. Each setter re-derives it.
+	void
+	SetProjectToneMapping(bgl::ToneMapping toneMapping);
+
+	// The user's pick from the Render menu, or empty to let the project and the content decide.
+	void
+	SetChosenToneMapping(std::optional<bgl::ToneMapping> toneMapping);
+
+	void
+	SetShowsToonContent(bool toon) override;
+
+	[[nodiscard]] bgl::ToneMapping
+	GetToneMapping() const noexcept;
 
 	// Times every pass of this viewport's frames on the GPU; the rows ride FrameStatsUpdated as the
 	// table Log GPU Pass Timings writes. Off by default: a timed frame is not free.
@@ -323,9 +339,17 @@ private:
 	// backbuffers.
 	QTimer* m_ResizeTimer = nullptr;
 
+	// Hands GetToneMapping's answer to the target. GUI thread.
+	void
+	ApplyToneMapping();
+
 	RenderTargetWindowDesc m_Desc;
 	bgl::RenderTargetRef   m_RenderTarget;
-	bgl::SceneViewRef      m_SceneView;
+
+	bgl::ToneMapping                m_ProjectToneMapping = bgl::ToneMapping::kAgX;
+	std::optional<bgl::ToneMapping> m_ChosenToneMapping;
+	bool                            m_ShowsToonContent = false;
+	bgl::SceneViewRef               m_SceneView;
 
 	// Non-zero only while this window is in the frame loop.
 	Renderer::ViewportId m_ViewportId = 0;

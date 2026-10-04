@@ -5,6 +5,7 @@
 #include <QString>
 
 #include <assetlib/Project.h>
+#include <bgl/IRenderTarget.h>
 #include <core/str/str.h>
 #include <cstddef>
 #include <filesystem>
@@ -236,10 +237,15 @@ private:
 	std::optional<bool>       m_TaaOverride;
 	std::optional<bool>       m_BloomOverride;
 	std::optional<bool>       m_ColorGradeOverride;
-	std::optional<float>      m_RenderScaleOverride;
-	std::optional<float>      m_ReconstructionWidthOverride;
-	std::optional<float>      m_SharpnessOverride;
-	bool                      m_OutlineEnabled = true;
+
+	// The open project's curve, and the user's pick from the Render menu that outranks it and every
+	// viewport's content -- see RenderTargetWindow::GetToneMapping.
+	bgl::ToneMapping                m_ProjectToneMapping = bgl::ToneMapping::kAgX;
+	std::optional<bgl::ToneMapping> m_ToneMappingOverride;
+	std::optional<float>            m_RenderScaleOverride;
+	std::optional<float>            m_ReconstructionWidthOverride;
+	std::optional<float>            m_SharpnessOverride;
+	bool                            m_OutlineEnabled = true;
 
 	// Set only while Build() is running: what startup reports into, and how RunBehindScreen tells
 	// which screen is up. Cleared once the window is ready, so a later Open Project gets the modal.

@@ -2207,3 +2207,47 @@ TEST_CASE(
 	other.setUrls({ QUrl::fromLocalFile(QStringLiteral("/nowhere/rock.bmesh")) });
 	CHECK_FALSE(GrassEditorWindow::AcceptsDrop(&other));
 }
+
+// A viewport ends in the curve the user picked from the Render menu, else Standard when it shows a
+// toon asset, else the project's: a toon look is authored for Standard, and the project says what
+// the rest of its look is.
+TEST_CASE(
+	"A viewport's tone mapping is the user's, the toon content's or the project's",
+	"[mainwindow][render]")
+{
+	const HeadlessEditor editor;
+
+	SECTION("a project authored for Standard starts every viewport in it")
+	{
+		auto project = assetlib::Project::Open(editor.ProjectFile());
+		project.SetToneMapping(assetlib::ToneMapping::kStandard);
+		project.Save();
+
+		const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+		const QList<RenderTargetWindow*> viewports = window.findChildren<RenderTargetWindow*>();
+		REQUIRE_FALSE(viewports.empty());
+		for (const RenderTargetWindow* view : viewports)
+			CHECK(view->GetToneMapping() == bgl::ToneMapping::kStandard);
+	}
+
+	SECTION("toon content ends in Standard until the user picks a curve")
+	{
+		const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+		auto* view = window.findChild<MeshEditorWindow*>()->findChild<RenderTargetWindow*>();
+		REQUIRE(view != nullptr);
+		CHECK(view->GetToneMapping() == bgl::ToneMapping::kAgX);
+
+		view->SetShowsToonContent(true);
+		CHECK(view->GetToneMapping() == bgl::ToneMapping::kStandard);
+
+		QAction* standard = ActionNamed(window, "Standard Tone Mapping");
+		REQUIRE(standard != nullptr);
+		standard->setChecked(true);
+		standard->setChecked(false);
+		CHECK(view->GetToneMapping() == bgl::ToneMapping::kAgX);
+
+		view->SetShowsToonContent(false);
+		standard->setChecked(true);
+		CHECK(view->GetToneMapping() == bgl::ToneMapping::kStandard);
+	}
+}

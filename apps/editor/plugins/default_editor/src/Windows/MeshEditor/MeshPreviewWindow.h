@@ -303,11 +303,15 @@ private:
 	std::optional<uint32_t>       m_LastLod;
 	std::vector<InstanceRef>      m_Instances;
 	std::vector<SubmeshRef>       m_SubmeshRefs;
-	bgl::MaterialHandle           m_DefaultMaterial;
-	QStringList                   m_SubmeshNames;
-	QStringList                   m_SubmeshMaterialPaths;
-	std::filesystem::path         m_MeshPath;  // empty for the default sphere
-	std::filesystem::path         m_DataRoot;  // empty until a project is opened
+
+	// Per submesh, whether the material it shows is a toon model's: any one makes the viewport end
+	// in Standard tone mapping (IEditorViewport::SetShowsToonContent).
+	std::vector<bool>     m_SubmeshToon;
+	bgl::MaterialHandle   m_DefaultMaterial;
+	QStringList           m_SubmeshNames;
+	QStringList           m_SubmeshMaterialPaths;
+	std::filesystem::path m_MeshPath;  // empty for the default sphere
+	std::filesystem::path m_DataRoot;  // empty until a project is opened
 
 	// The configured environment is kept whole because a drop carries only a path and Reset has to
 	// be able to get back to it. Its root stands in until a project opens and m_DataRoot names its

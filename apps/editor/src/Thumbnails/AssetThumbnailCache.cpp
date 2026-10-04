@@ -3,8 +3,10 @@
 #include "util/toon_light.h"
 #include <algorithm>
 #include <assetlib/bmesh.h>
+#include <bgl/IRenderTarget.h>
 #include <core/err/util.h>
 #include <editor_sdk/mesh_load.h>
+#include <editor_sdk/toon_content.h>
 
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
@@ -933,10 +935,13 @@ AssetThumbnailCache::AcquireMaterial(std::string_view relPath, game::TexturePref
 void
 AssetThumbnailCache::BuildShot(Shot& shot)
 {
+	m_ShotIsToon = false;
 	if (shot.item.type == ThumbnailType::kMesh)
 		BuildMesh(shot);
 	else
 		BuildMaterial(shot);
+	m_RenderTarget->SetToneMapping(
+		m_ShotIsToon ? bgl::ToneMapping::kStandard : m_ProjectToneMapping);
 	if (shot.item.camera.has_value())
 		shot.job.camera = *shot.item.camera;
 }
@@ -963,6 +968,8 @@ AssetThumbnailCache::BuildMesh(Shot& shot)
 		for (const std::string& relPath : bindings.submeshMaterials)
 			materials.push_back(AcquireMaterial(relPath, shot.item.prefetch.get()));
 	}
+
+	m_ShotIsToon = editor::AnyToonMaterial(*m_Desc.renderer->GetGraphics().Get(), materials);
 
 	// A node instances a mesh and the same mesh can be instanced by several nodes, so upload each
 	// mesh once and place an instance per referencing node, at that node's world transform.
@@ -1021,6 +1028,7 @@ AssetThumbnailCache::BuildMaterial(Shot& shot)
 	// The Mesh Editor previews on a sphere, so a material's thumbnail is the shape the user
 	// authored it against.
 	const bgl::MaterialHandle material = AcquireMaterial(relPath, shot.item.prefetch.get());
+	m_ShotIsToon = editor::IsToonMaterial(*m_Desc.renderer->GetGraphics().Get(), material);
 
 	m_Geoms.push_back(m_Desc.renderer->GetScene()->AddSphereGeom(32, 32, 1.0f, material));
 	m_Instances.push_back(m_SceneView->CreateStaticMeshInstance(

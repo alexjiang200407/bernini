@@ -587,6 +587,24 @@ MainWindow::SetUpRenderMenu()
 			view->SetColorGradeEnabled(enabled);
 	});
 
+	// Unchecked until the user touches it: until then each viewport ends in the project's curve,
+	// or in Standard where it shows a toon asset. Touched, the pick holds for every viewport.
+	auto* standard = render->addAction(
+		editor::Localize("editor.main_window.standard_tone_mapping", "Standard Tone Mapping"));
+	standard->setCheckable(true);
+	standard->setChecked(false);
+	standard->setStatusTip(
+		editor::Localize(
+			"editor.main_window.standard_tone_mapping_tip",
+			"End the viewports in Standard -- the colour as it is, as a toon look is authored -- "
+			"rather than AgX's filmic curve. The project's .bproj sets the default."));
+
+	connect(standard, &QAction::toggled, this, [this](bool enabled) {
+		m_ToneMappingOverride = enabled ? bgl::ToneMapping::kStandard : bgl::ToneMapping::kAgX;
+		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+			view->SetChosenToneMapping(m_ToneMappingOverride);
+	});
+
 	auto* timing = render->addAction(
 		editor::Localize("editor.main_window.gpu_pass_timing", "GPU Pass Timing"));
 	timing->setCheckable(true);
@@ -1319,6 +1337,14 @@ MainWindow::SetActiveProject(assetlib::Project project)
 
 	m_Project = std::make_unique<assetlib::Project>(std::move(project));
 	editor::RecordRecentProject(m_RecentProjectsFile, m_Project->GetProjectFile());
+
+	m_ProjectToneMapping = m_Project->GetToneMapping() == assetlib::ToneMapping::kStandard ?
+	                           bgl::ToneMapping::kStandard :
+	                           bgl::ToneMapping::kAgX;
+	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+		view->SetProjectToneMapping(m_ProjectToneMapping);
+	if (m_Thumbnails)
+		m_Thumbnails->SetProjectToneMapping(m_ProjectToneMapping);
 	const auto dataDir = QString::fromStdWString(m_Project->GetDataDirectory().wstring());
 
 	// One manager over the editor's one scene: every viewport draws that scene, so a texture a material
@@ -1852,6 +1878,8 @@ MainWindow::ConfigureViewport(RenderTargetWindow& view)
 		view.SetBloomEnabled(*m_BloomOverride);
 	if (m_ColorGradeOverride)
 		view.SetColorGradeEnabled(*m_ColorGradeOverride);
+	view.SetProjectToneMapping(m_ProjectToneMapping);
+	view.SetChosenToneMapping(m_ToneMappingOverride);
 	view.SetOutlineEnabled(m_OutlineEnabled);
 	view.SetGpuTimingEnabled(m_GpuTimingAction != nullptr && m_GpuTimingAction->isChecked());
 }

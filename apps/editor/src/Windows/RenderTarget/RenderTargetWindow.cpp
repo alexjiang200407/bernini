@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <editor_plugin_api/IEditorViewport.h>
 #include <format>
+#include <optional>
 #include <qcoreevent.h>
 #include <qlogging.h>
 #include <qnamespace.h>
@@ -241,6 +242,7 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 		target->SetBloomEnabled(m_Desc.bloom.enabled);
 		target->SetColorGradeSettings(grade);
 		target->SetColorGradeEnabled(m_Desc.colorGrade.enabled);
+		target->SetToneMapping(GetToneMapping());
 		return target;
 	});
 	m_SceneView    = m_Desc.renderer->Invoke([&] {
@@ -480,6 +482,45 @@ RenderTargetWindow::GetBloomSettings() const
 		return {};
 
 	return m_Desc.renderer->Invoke([&] { return m_RenderTarget->GetBloomSettings(); });
+}
+
+void
+RenderTargetWindow::SetProjectToneMapping(bgl::ToneMapping toneMapping)
+{
+	m_ProjectToneMapping = toneMapping;
+	ApplyToneMapping();
+}
+
+void
+RenderTargetWindow::SetChosenToneMapping(std::optional<bgl::ToneMapping> toneMapping)
+{
+	m_ChosenToneMapping = toneMapping;
+	ApplyToneMapping();
+}
+
+void
+RenderTargetWindow::SetShowsToonContent(bool toon)
+{
+	m_ShowsToonContent = toon;
+	ApplyToneMapping();
+}
+
+bgl::ToneMapping
+RenderTargetWindow::GetToneMapping() const noexcept
+{
+	if (m_ChosenToneMapping.has_value())
+		return *m_ChosenToneMapping;
+	return m_ShowsToonContent ? bgl::ToneMapping::kStandard : m_ProjectToneMapping;
+}
+
+void
+RenderTargetWindow::ApplyToneMapping()
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return;
+
+	const bgl::ToneMapping toneMapping = GetToneMapping();
+	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetToneMapping(toneMapping); });
 }
 
 void

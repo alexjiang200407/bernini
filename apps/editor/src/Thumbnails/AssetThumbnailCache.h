@@ -2,6 +2,7 @@
 
 #include <QQueue>
 #include <QThreadPool>
+#include <bgl/IRenderTarget.h>
 
 #include "Render/Renderer.h"
 #include "util/held_open_assets.h"
@@ -87,6 +88,16 @@ public:
 	/** Borrowed until replaced; drains old work before returning. Null closes the project. */
 	void
 	SetStore(const assetlib::AssetStore* store);
+
+	/**
+	 * The curve a thumbnail ends in, the open project's; a thumbnail drawn with a toon material
+	 * ends in Standard whatever this is, as its preview does. Takes effect from the next shot.
+	 */
+	void
+	SetProjectToneMapping(bgl::ToneMapping toneMapping) noexcept
+	{
+		m_ProjectToneMapping = toneMapping;
+	}
 
 	/** Drops previews and in-flight work after an asset write, including previews that depend on it. */
 	void
@@ -279,8 +290,12 @@ private:
 	editor::EnvironmentBinding m_Environment;
 
 	bgl::RenderTargetRef m_RenderTarget;
-	bgl::SceneViewRef    m_SceneView;
-	bgl::MaterialHandle  m_DefaultMaterial;
+	bgl::ToneMapping     m_ProjectToneMapping = bgl::ToneMapping::kAgX;
+
+	// Whether the shot being built draws a toon material; set by BuildMesh and BuildMaterial.
+	bool                m_ShotIsToon = false;
+	bgl::SceneViewRef   m_SceneView;
+	bgl::MaterialHandle m_DefaultMaterial;
 
 	const assetlib::AssetStore* m_Store = nullptr;
 
