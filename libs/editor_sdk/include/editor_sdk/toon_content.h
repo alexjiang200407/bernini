@@ -8,16 +8,19 @@ namespace editor
 {
 	/**
 	 * Whether `material` is drawn by one of the toon models -- a surface registered on
-	 * IToonCharacterSurfaceSource or IToonEnvironmentSurfaceSource. What a preview asks to decide
-	 * it shows a toon look, which is authored for Standard tone mapping.
+	 * IToonCharacterSurfaceSource or IToonEnvironmentSurfaceSource, looked up among `surfaces`
+	 * (IGraphics::GetSurfaceTypes). What a preview asks to decide it shows a toon look, which is
+	 * authored for Standard tone mapping.
 	 */
 	[[nodiscard]] inline bool
-	IsToonMaterial(const bgl::IGraphics& graphics, const bgl::MaterialHandle material) noexcept
+	IsToonMaterial(
+		std::span<const bgl::SurfaceType> surfaces,
+		const bgl::MaterialHandle         material) noexcept
 	{
 		if (!material.IsValid())
 			return false;
 
-		for (const bgl::SurfaceType& type : graphics.GetSurfaceTypes())
+		for (const bgl::SurfaceType& type : surfaces)
 		{
 			if (type.kind == material.materialType)
 			{
@@ -28,17 +31,31 @@ namespace editor
 		return false;
 	}
 
+	[[nodiscard]] inline bool
+	IsToonMaterial(const bgl::IGraphics& graphics, const bgl::MaterialHandle material) noexcept
+	{
+		return IsToonMaterial(graphics.GetSurfaceTypes(), material);
+	}
+
 	/** Whether any of `materials` is drawn by a toon model; see IsToonMaterial. */
+	[[nodiscard]] inline bool
+	AnyToonMaterial(
+		std::span<const bgl::SurfaceType>    surfaces,
+		std::span<const bgl::MaterialHandle> materials) noexcept
+	{
+		for (const bgl::MaterialHandle material : materials)
+		{
+			if (IsToonMaterial(surfaces, material))
+				return true;
+		}
+		return false;
+	}
+
 	[[nodiscard]] inline bool
 	AnyToonMaterial(
 		const bgl::IGraphics&                graphics,
 		std::span<const bgl::MaterialHandle> materials) noexcept
 	{
-		for (const bgl::MaterialHandle material : materials)
-		{
-			if (IsToonMaterial(graphics, material))
-				return true;
-		}
-		return false;
+		return AnyToonMaterial(graphics.GetSurfaceTypes(), materials);
 	}
 }
