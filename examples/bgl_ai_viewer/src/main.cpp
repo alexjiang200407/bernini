@@ -17,6 +17,7 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/LodLevel.h>
 #include <bgl/glm.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/DirectionalLightDesc.h>
@@ -118,6 +119,9 @@ namespace
 		// The view's selection of the automatic source, LodSelectionDesc's defaults unless asked.
 		std::optional<uint32_t> poseBudget;
 		std::optional<float>    posePixels;
+
+		// The level every placement draws (LodSelectionDesc::forceLevel). Empty selects by size.
+		std::optional<uint32_t> lod;
 	};
 
 	/** @throws std::runtime_error naming the three spellings when `name` is none of them. */
@@ -617,6 +621,12 @@ try
 			   "Size on screen below which an automatic unit on a one-level mesh draws from its "
 			   "table (LodSelectionDesc::posePixels)")
 			->check(CLI::PositiveNumber);
+		app.add_option(
+			   "--lod",
+			   opts.lod,
+			   "The level every placement draws, whatever its size; a mesh with fewer draws its "
+			   "coarsest (LodSelectionDesc::forceLevel)")
+			->check(CLI::Range(0u, bgl::cMaxMeshLods - 1u));
 
 		CLI11_PARSE(app, argc, argv);
 	}
@@ -673,13 +683,15 @@ try
 
 	const bool lit = envLit || opts.sunIntensity > 0.0f;
 
-	if (opts.poseBudget || opts.posePixels)
+	if (opts.poseBudget || opts.posePixels || opts.lod)
 	{
 		auto selection = view->GetLodSelection();
 		if (opts.poseBudget)
 			selection.poseBudget = *opts.poseBudget;
 		if (opts.posePixels)
 			selection.posePixels = *opts.posePixels;
+		if (opts.lod)
+			selection.forceLevel = static_cast<bgl::LodLevel>(*opts.lod);
 		view->SetLodSelection(selection);
 	}
 

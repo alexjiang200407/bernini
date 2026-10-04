@@ -48,6 +48,7 @@ Bare, it renders `assets/Data`'s apples — the one project `copy_assets` stages
 | `--crowd`, `--crowd-columns` | 0, 6 | copies of the model in rows of that many, receding from the camera; 0 places it once |
 | `--source` | `per-instance`, or `auto` for a crowd | the pose source a skinned mesh is spawned on: `per-instance`, `table` or `auto` |
 | `--pose-budget`, `--pose-pixels` | `LodSelectionDesc`'s | the view's choice for `auto`: units posed per instance at once, and the size on screen below which a one-level mesh draws from its table |
+| `--lod` | by size | the level every placement draws whatever its size (`LodSelectionDesc::forceLevel`); a mesh with fewer draws its coarsest |
 
 What it prints, in order: the mesh and whether it is skinned; for a skinned mesh the clip table with
 `>` on the one playing — run once without `--clip` to learn the names; `lit` or `unlit`; one line
