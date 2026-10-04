@@ -581,9 +581,11 @@ struct FlatEnvironment : IToonEnvironmentSurfaceSource
 	}
 }
 
-// The toon models from the document down: a document's factor reaches the screen flat, the two
-// models draw alike for one colour -- neither reads the light -- and a document naming the other
-// model is refused, naming both.
+// The toon models from the document down: a document's factor reaches the screen, the environment
+// flat and the character lit -- under a sun of radiance one from behind the camera's right, the
+// middle of the sphere is the lit tone, the factor itself, as the environment draws it, and its
+// left side is in shade -- and a
+// document naming the other model is refused, naming both.
 TEST_CASE("A toon surface material draws from its document", "[gamelib][surface][toon]")
 {
 	using Catch::Matchers::ContainsSubstring;
@@ -643,6 +645,12 @@ TEST_CASE("A toon surface material draws from its document", "[gamelib][surface]
 		targetDesc.headless = true;
 		auto target         = gfx->CreateRenderTarget(targetDesc);
 		auto view           = gfx->CreateSceneView(scene, 8);
+		view->SetDirectionalLight(
+			{
+				.direction = glm::normalize(glm::vec3(-1.0f, 0.0f, -1.0f)),
+				.color     = glm::vec3(1.0f),
+				.intensity = 1.0f,
+			});
 
 		if (material != nullptr)
 		{
@@ -671,7 +679,8 @@ TEST_CASE("A toon surface material draws from its document", "[gamelib][surface]
 	shoot("character_blue.bmaterial", bluePng);
 
 	CHECK(bgl::test::FrameDelta(emptyPng, characterPng, 0, 0, 256, 256) > 1e-3f);
-	CHECK(bgl::test::FrameDelta(characterPng, environmentPng, 0, 0, 256, 256) < 1e-6f);
+	CHECK(bgl::test::FrameDelta(characterPng, environmentPng, 118, 118, 20, 20) < 1e-5f);
+	CHECK(bgl::test::FrameDelta(characterPng, environmentPng, 0, 0, 256, 256) > 1e-5f);
 	CHECK(bgl::test::FrameDelta(characterPng, bluePng, 0, 0, 256, 256) > 1e-3f);
 
 	CHECK_THROWS_MATCHES(

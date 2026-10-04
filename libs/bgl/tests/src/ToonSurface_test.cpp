@@ -22,41 +22,56 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <initializer_list>
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 
 using namespace bgl;
 
 namespace
 {
-	// The test project's two surfaces, as a game writes them: base colour through a slot, times a
-	// factor. An unbound slot samples white, so the factor alone is what draws.
+	// A character surface as a game writes one: base colour through a slot, times a factor, and the
+	// cel model's steps and threshold offset as values. An unbound slot samples white, so the
+	// factor alone is the colour; the shade tints are the contract's defaults.
 	constexpr std::string_view c_ToonCharacter = R"(import bgl.MaterialReader;
 import bgl.ToonCharacterSurface;
 
-struct FlatParams
+struct CelParams
 {
     [Color]
     [Default(1.0, 1.0, 1.0, 1.0)]
     float4 baseColorFactor;
 
+    [Default(0.5)]
+    float baseStep;
+
+    [Default(0.3)]
+    float shadeStep;
+
+    [Default(0.0)]
+    float shadeOffset;
+
     ColorSlot baseColor;
 };
 
-struct FlatCharacter : IToonCharacterSurfaceSource
+struct CelCharacter : IToonCharacterSurfaceSource
 {
-    typealias MaterialParams = FlatParams;
+    typealias MaterialParams = CelParams;
 
-    static float Coverage<R : IMaterialReader>(R reader, FlatParams params)
+    static float Coverage<R : IMaterialReader>(R reader, CelParams params)
     {
         return params.baseColorFactor.a * reader.Sample(params.baseColor, reader.Uv()).a;
     }
 
-    static ToonCharacterSurface Evaluate<R : IMaterialReader>(R reader, FlatParams params)
+    static ToonCharacterSurface Evaluate<R : IMaterialReader>(R reader, CelParams params)
     {
         ToonCharacterSurface surface = ToonCharacterSurface();
         surface.baseColor = params.baseColorFactor * reader.Sample(params.baseColor, reader.Uv());
+        surface.baseStep = params.baseStep;
+        surface.shadeStep = params.shadeStep;
+        surface.shadeOffset = params.shadeOffset;
         return surface;
     }
 };
@@ -178,6 +193,20 @@ struct FlatEnvironment : IToonEnvironmentSurfaceSource
 		};
 	}
 
+	/** A character material with the cel values `values` adds to its colour. */
+	SurfaceMaterialDesc
+	Cel(glm::vec4                                            factor,
+	    std::initializer_list<std::pair<std::string, float>> values,
+	    LayerType                                            layer = LayerType::kOpaque)
+	{
+		auto desc = Toon("ToonCharacter", factor, layer);
+		for (const auto& [name, value] : values)
+		{
+			desc.values.push_back({ name, glm::vec4(value) });
+		}
+		return desc;
+	}
+
 	SurfaceMaterialDesc
 	Unlit(glm::vec4 color, LayerType layer = LayerType::kOpaque)
 	{
@@ -208,20 +237,25 @@ TEST_CASE("A toon surface registers under its own model", "[surface][registry][t
 	CHECK(types[2].name == "Unlit");
 	CHECK(types[2].shading == SurfaceShading::kLit);
 
-	REQUIRE(types[0].params.values.size() == 1u);
+	REQUIRE(types[0].params.values.size() == 4u);
 	CHECK(types[0].params.values[0].name == "baseColorFactor");
 	CHECK(types[0].params.values[0].defaultValue == glm::vec4(1.0f));
+	CHECK(types[0].params.values[3].name == "shadeOffset");
 	REQUIRE(types[0].params.textures.size() == 1u);
 	CHECK(types[0].params.textures[0].name == "baseColor");
 }
 
-// Flat is exactly the base colour, unlit: each toon model draws what Unlit draws for the same
-// colour, pixel for pixel, with a sun set that any lighting would read -- opaque, blended, and on
-// skinned geometry. Each frame is a fresh view and target, so no two share temporal history, and
-// each is compared against its own empty frame so an equality cannot be two blank ones.
+// The cel model, tone by tone: a plane facing the camera has one normal, so a sun at a chosen
+// angle to it puts every pixel at one half-Lambert value, and the frame is one tone. Each is
+// compared against Unlit drawing that tone's colour -- base colour times its tint times the sun's
+// radiance, which is one here -- through the same exposure and tonemap, in the frame's middle,
+// clear of the plane's edges. Each frame is a fresh view and target, so no two share temporal
+// history, and every equality is paired with a difference so it cannot be two blank frames.
 //
 // Linear rather than sectioned: a SECTION re-runs the body, and the body is a device.
-TEST_CASE("A toon surface draws its base colour flat", "[surface][render][toon]")
+TEST_CASE(
+	"A toon character is lit in three tones over the half-Lambert term",
+	"[surface][render][toon]")
 {
 	using bgl::test::skinned_synth::AddQuadStaticGeom;
 	using bgl::test::skinned_synth::AddSlidingQuadGeom;
@@ -231,7 +265,16 @@ TEST_CASE("A toon surface draws its base colour flat", "[surface][render][toon]"
 
 	auto scene = gfx->CreateScene(ToonScene());
 
+	// Toward the light, for a plane whose normal is +Z, with the half-Lambert term 0.5 * z + 0.5
+	// each gives it.
+	const glm::vec3 lit    = glm::vec3(0.0f, 0.0f, 1.0f);      // 1.0
+	const glm::vec3 nearly = glm::vec3(0.9165f, 0.0f, 0.4f);   // 0.7
+	const glm::vec3 first  = glm::vec3(0.9798f, 0.0f, -0.2f);  // 0.4
+	const glm::vec3 second = glm::vec3(0.6f, 0.0f, -0.8f);     // 0.1
+	const glm::vec3 behind = glm::vec3(0.0f, 0.0f, -1.0f);     // 0.0
+
 	const auto shoot = [&](const std::function<void(ISceneView&)>& place,
+	                       const glm::vec3&                        toLight,
 	                       const bgl::Camera&                      camera,
 	                       const char*                             png) {
 		auto targetDesc     = bgl::RenderTargetDesc();
@@ -244,9 +287,9 @@ TEST_CASE("A toon surface draws its base colour flat", "[surface][render][toon]"
 		auto view = gfx->CreateSceneView(scene, 8);
 		view->SetDirectionalLight(
 			{
-				.direction = glm::normalize(glm::vec3(-1.0f, -0.4f, -1.0f)),
+				.direction = -glm::normalize(toLight),
 				.color     = glm::vec3(1.0f),
-				.intensity = 3.0f,
+				.intensity = 1.0f,
 			});
 		place(*view);
 
@@ -258,84 +301,139 @@ TEST_CASE("A toon surface draws its base colour flat", "[surface][render][toon]"
 		gfx->ScreenshotPng(target, png);
 	};
 
-	const auto sphere = [&](MaterialHandle material) {
-		const auto geom = scene->AddSphereGeom(24, 24, 3.5f, material);
+	const auto plane = [&](MaterialHandle material) {
+		const auto geom = scene->AddPlaneGeom(1, 1, 30.0f, 30.0f, material);
 		return [geom](ISceneView& view) {
 			view.CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
 		};
 	};
 
-	const auto* emptyPng = "assets/golden/toon_empty.got.png";
-	shoot([](ISceneView&) {}, SphereCamera(), emptyPng);
+	const auto middle = [](const char* a, const char* b) {
+		return bgl::test::FrameDelta(a, b, 150, 100, 100, 100);
+	};
+	// Mean squared, in [0, 1] per channel: under one 8-bit step apart, and several steps apart.
+	constexpr float c_Same  = 1e-5f;
+	constexpr float c_Apart = 1e-3f;
+
+	const glm::vec3 base   = glm::vec3(c_Flat);
+	const auto      tone   = [&](const glm::vec3& tint) { return glm::vec4(base * tint, 1.0f); };
+	const glm::vec3 shade1 = glm::vec3(0.75f);
+	const glm::vec3 shade2 = glm::vec3(0.55f);
+
+	const MaterialHandle character = scene->CreateSurfaceMaterial(Cel(c_Flat, {}));
+
+	const auto* litRef    = "assets/golden/toon_cel_lit_ref.got.png";
+	const auto* firstRef  = "assets/golden/toon_cel_first_ref.got.png";
+	const auto* secondRef = "assets/golden/toon_cel_second_ref.got.png";
+	shoot(
+		plane(scene->CreateSurfaceMaterial(Unlit(tone(glm::vec3(1.0f))))),
+		lit,
+		SphereCamera(),
+		litRef);
+	shoot(plane(scene->CreateSurfaceMaterial(Unlit(tone(shade1)))), lit, SphereCamera(), firstRef);
+	shoot(plane(scene->CreateSurfaceMaterial(Unlit(tone(shade2)))), lit, SphereCamera(), secondRef);
 
 	{
-		INFO("opaque");
-		const auto* unlitPng       = "assets/golden/toon_unlit.got.png";
-		const auto* characterPng   = "assets/golden/toon_character.got.png";
-		const auto* environmentPng = "assets/golden/toon_environment.got.png";
+		INFO("three tones");
+		const auto* litPng    = "assets/golden/toon_cel_lit.got.png";
+		const auto* firstPng  = "assets/golden/toon_cel_first.got.png";
+		const auto* secondPng = "assets/golden/toon_cel_second.got.png";
 
-		shoot(sphere(scene->CreateSurfaceMaterial(Unlit(c_Flat))), SphereCamera(), unlitPng);
-		shoot(
-			sphere(scene->CreateSurfaceMaterial(Toon("ToonCharacter", c_Flat))),
-			SphereCamera(),
-			characterPng);
-		shoot(
-			sphere(scene->CreateSurfaceMaterial(Toon("ToonEnvironment", c_Flat))),
-			SphereCamera(),
-			environmentPng);
+		shoot(plane(character), lit, SphereCamera(), litPng);
+		shoot(plane(character), first, SphereCamera(), firstPng);
+		shoot(plane(character), second, SphereCamera(), secondPng);
 
-		CHECK(bgl::test::FrameDelta(emptyPng, unlitPng, 0, 0, 400, 300) > 1e-3f);
-		CHECK(bgl::test::FrameDelta(unlitPng, characterPng, 0, 0, 400, 300) < 1e-6f);
-		CHECK(bgl::test::FrameDelta(unlitPng, environmentPng, 0, 0, 400, 300) < 1e-6f);
+		CHECK(middle(litPng, litRef) < c_Same);
+		CHECK(middle(firstPng, firstRef) < c_Same);
+		CHECK(middle(secondPng, secondRef) < c_Same);
+		CHECK(middle(litPng, firstPng) > c_Apart);
+		CHECK(middle(firstPng, secondPng) > c_Apart);
+
+		// Anywhere above the base step is the one lit tone: a cel step, not a gradient.
+		const auto* nearlyPng = "assets/golden/toon_cel_nearly.got.png";
+		shoot(plane(character), nearly, SphereCamera(), nearlyPng);
+		CHECK(middle(nearlyPng, litRef) < c_Same);
 	}
 
 	{
-		// Blended draws resolve in the one shared transparent program, so this is each toon
-		// slot's arm there -- and Shade's alpha, which the blend reads as coverage.
-		INFO("blended");
-		const auto* unlitPng       = "assets/golden/toon_unlit_blend.got.png";
-		const auto* characterPng   = "assets/golden/toon_character_blend.got.png";
-		const auto* environmentPng = "assets/golden/toon_environment_blend.got.png";
+		INFO("a threshold offset moves a lit pixel into the first shade");
+		const auto* offsetPng = "assets/golden/toon_cel_offset.got.png";
+		shoot(
+			plane(scene->CreateSurfaceMaterial(Cel(c_Flat, { { "shadeOffset", -0.3f } }))),
+			nearly,
+			SphereCamera(),
+			offsetPng);
+		CHECK(middle(offsetPng, firstRef) < c_Same);
+	}
 
+	{
+		INFO("steps of zero light even the side facing away");
+		const auto* behindPng = "assets/golden/toon_cel_behind.got.png";
+		const auto* alwaysPng = "assets/golden/toon_cel_always.got.png";
+		shoot(plane(character), behind, SphereCamera(), behindPng);
 		shoot(
-			sphere(scene->CreateSurfaceMaterial(Unlit(c_Half, LayerType::kBlend))),
+			plane(scene->CreateSurfaceMaterial(
+				Cel(c_Flat, { { "baseStep", 0.0f }, { "shadeStep", 0.0f } }))),
+			behind,
 			SphereCamera(),
-			unlitPng);
+			alwaysPng);
+		CHECK(middle(behindPng, secondRef) < c_Same);
+		CHECK(middle(alwaysPng, litRef) < c_Same);
+	}
+
+	{
+		INFO("the environment model is still flat");
+		const auto* environmentPng = "assets/golden/toon_cel_environment.got.png";
 		shoot(
-			sphere(scene->CreateSurfaceMaterial(Toon("ToonCharacter", c_Half, LayerType::kBlend))),
-			SphereCamera(),
-			characterPng);
-		shoot(
-			sphere(
-				scene->CreateSurfaceMaterial(Toon("ToonEnvironment", c_Half, LayerType::kBlend))),
+			plane(scene->CreateSurfaceMaterial(Toon("ToonEnvironment", c_Flat))),
+			second,
 			SphereCamera(),
 			environmentPng);
+		CHECK(middle(environmentPng, litRef) < c_Same);
+	}
 
-		CHECK(bgl::test::FrameDelta(emptyPng, unlitPng, 0, 0, 400, 300) > 1e-3f);
-		CHECK(bgl::test::FrameDelta(unlitPng, characterPng, 0, 0, 400, 300) < 1e-6f);
-		CHECK(bgl::test::FrameDelta(unlitPng, environmentPng, 0, 0, 400, 300) < 1e-6f);
+	{
+		// Blended draws resolve in the one shared transparent program, so this is the character
+		// slot's arm there -- and Shade's alpha, which the blend reads as coverage.
+		INFO("blended");
+		const auto* blendPng = "assets/golden/toon_cel_blend.got.png";
+		const auto* blendRef = "assets/golden/toon_cel_blend_ref.got.png";
+		const auto* emptyPng = "assets/golden/toon_cel_blend_empty.got.png";
+		shoot(
+			plane(scene->CreateSurfaceMaterial(Cel(c_Half, {}, LayerType::kBlend))),
+			second,
+			SphereCamera(),
+			blendPng);
+		shoot(
+			plane(scene->CreateSurfaceMaterial(
+				Unlit(glm::vec4(glm::vec3(c_Half) * shade2, c_Half.a), LayerType::kBlend))),
+			second,
+			SphereCamera(),
+			blendRef);
+		shoot([](ISceneView&) {}, second, SphereCamera(), emptyPng);
+		CHECK(middle(blendPng, blendRef) < c_Same);
+		CHECK(middle(blendPng, emptyPng) > c_Apart);
 	}
 
 	{
 		// Rate 0 holds the bind pose, so the skinned geometry stage emits the static one's vertices
-		// and the character surface behind both is the one record.
+		// -- normals included -- and the character surface behind both is the one record.
 		INFO("skinned");
 		const auto* quadEmptyPng = "assets/golden/toon_quad_empty.got.png";
 		const auto* staticPng    = "assets/golden/toon_quad_static.got.png";
 		const auto* skinnedPng   = "assets/golden/toon_quad_skinned.got.png";
 
-		const MaterialHandle character =
-			scene->CreateSurfaceMaterial(Toon("ToonCharacter", c_Flat));
 		const auto still   = AddQuadStaticGeom(*scene, character);
 		const auto skinned = AddSlidingQuadGeom(*scene, character);
 		REQUIRE(still.IsValid());
 		REQUIRE(skinned.IsValid());
 
-		shoot([](ISceneView&) {}, QuadCamera(), quadEmptyPng);
+		shoot([](ISceneView&) {}, first, QuadCamera(), quadEmptyPng);
 		shoot(
 			[&](ISceneView& view) {
 				view.CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(still));
 			},
+			first,
 			QuadCamera(),
 			staticPng);
 		shoot(
@@ -344,6 +442,7 @@ TEST_CASE("A toon surface draws its base colour flat", "[surface][render][toon]"
 					bgl::SkinnedMeshInstanceDesc().SetGeom(skinned).SetPlayback(
 						bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
 			},
+			first,
 			QuadCamera(),
 			skinnedPng);
 

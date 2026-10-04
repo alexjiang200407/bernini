@@ -106,10 +106,15 @@ place — and `face` says how much of the pixel takes its placement's toon shadi
 light (`ISceneView::SetToonShadingRig`, or an instance block's `toonShadingRig`; [bgl API](bgl_api.md)). No other shading model reads a rig. Every field defaults to what a surface
 that says nothing about it means. The environment's half holds a `baseColor` alone.
 
-**The lighting does not read them yet.** Both models draw `baseColor` flat:
-`lib.math.ToonShading`'s `ShadeToonCharacter` and `ShadeToonEnvironment` return it as pre-exposure
-radiance, reading nothing of the light, so exposure and tonemapping still apply after it as for
-every surface.
+**The character is lit by the sun alone.** `lib.math.ToonShading`'s `ShadeToonCharacter` takes
+the term from the reader's world normal and the sun's direction, picks the tone, and multiplies it
+by the sun's radiance: every tone, shades included, so a shade is the lit colour darkened by its
+tint and a sun's colour reaches all three. There is no environment term, no highlight and no rim —
+a cel shade is a flat painted tone, and an ambient term would grade it with the normal. Steps of
+zero keep every pixel lit, as an eye is authored. `face` is read by nothing until the rig's
+evaluation lands. The environment model still draws `baseColor` flat, reading nothing of the light.
+Both return pre-exposure radiance, so exposure and tonemapping apply after them as for every
+surface.
 
 **A toon surface draws through the lit programs.** Registration binds a toon slot to its model's
 adapter over the game's type — `ToonCharacterLit<G>` or `ToonEnvironmentLit<G>`, in
