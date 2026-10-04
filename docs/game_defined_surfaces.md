@@ -111,8 +111,13 @@ the term from the reader's world normal and the sun's direction, picks the tone,
 by the sun's radiance: every tone, shades included, so a shade is the lit colour darkened by its
 tint and a sun's colour reaches all three. There is no environment term, no highlight and no rim —
 a cel shade is a flat painted tone, and an ambient term would grade it with the normal. Steps of
-zero keep every pixel lit, as an eye is authored. `face` is read by nothing until the rig's
-evaluation lands. The environment model still draws `baseColor` flat, reading nothing of the light.
+zero keep every pixel lit, as an eye is authored. On a placement whose toon shading rig was
+evaluated this draw, a pixel that is `face` takes the rig instead, by as much as it is face: lit by
+the rig's face light rather than the sun, and its terminator moved by the rig's edits
+([Toon Shading Rig](toon_shading_rig.md) § The pixels). A character's buckets therefore draw at
+rest through programs of their own, whose vertices carry the placement's evaluated block; a
+blended character, and one dissolving between levels, shade without the rig. The environment model
+still draws `baseColor` flat, reading nothing of the light.
 Both return pre-exposure radiance, so exposure and tonemapping apply after them as for every
 surface.
 

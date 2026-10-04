@@ -96,6 +96,14 @@ namespace bgl
 		void
 		AddTransparentKernel(const PassInitContext& ctx);
 
+		/**
+		 * Marks the registered surfaces' slots that are toon characters: their buckets draw through
+		 * MSToon at rest, whose vertices carry the placement's toon shading rig block. Indexed by
+		 * slot. @pre called before any bucket kernel is requested.
+		 */
+		void
+		SetToonCharacterSlots(std::vector<bool> slots);
+
 		[[nodiscard]] bool
 		DrawBucketInitialized(uint32_t bucket) const noexcept
 		{
@@ -168,6 +176,7 @@ namespace bgl
 		bgpu::MeshletKernel m_TransparentKernel;
 
 		const DrawBucketTable* m_DrawBucketTable = nullptr;
+		std::vector<bool>      m_ToonCharacterSlots;
 
 		BucketedForwardPhase    m_World{ GeometryStage::kStaticMesh, "World" };
 		BucketedForwardPhase    m_Skinned{ GeometryStage::kSkinnedMesh, "Skinned" };

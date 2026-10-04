@@ -10,6 +10,7 @@ import idl.RawArena;
 import idl.RawEntry;
 import idl.ISurfaceEnv;
 import idl.ShadingParams;
+import idl.ToonShadingRigBlock;
 import lib.geom.vertexdecode;
 import lib.math.PbrShading;
 import lib.types.SurfaceEnv;
@@ -41,6 +42,10 @@ public struct MaterialData
     // intensity. Additive on the environment above, which integrates whatever sun its source held.
     public float3 sunDirection;
     public float3 sunRadiance;
+
+    // The view's evaluated toon shading rig blocks, which a toon character draw at rest names by its
+    // vertices' toonShadingRigSlot (see ToonVSOut). Read by those programs alone.
+    public RWStructuredBuffer<ToonShadingRigBlock>.Handle toonShadingRigBlocks;
 
     public SamplerState.Handle anisoLinearWrapSampler;
     public SamplerState.Handle linearClampSampler;

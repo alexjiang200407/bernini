@@ -1,6 +1,7 @@
 import idl.Constants;
 import lib.forward.common;
 import lib.forward.mesh_stage;
+import idl.ToonShadingRigPool;
 import lib.forward.skinned_vertex;
 
 // The skinned forward geometry stage. The shared expansion, one tier's vertex evaluation.
@@ -85,6 +86,46 @@ void MSDissolve(
     {
         let vertex = SkinnedVertex(ctx, pose, payload.instance, v);
         verts[v] = DissolveVSOut(vertex, ctx.lodDissolve);
+        if (ctx.cull)
+        {
+            RecordClip(v, vertex.position);
+        }
+    }
+
+    if (DrawCullsBackfaces())
+    {
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    for (uint t = gtid; t < ctx.meshlet.triangleCount; t += cMeshGroupSize)
+    {
+        tris[t] = CullBackface(ctx, EvaluatePrimitive(ctx, t));
+    }
+}
+
+// MSMain for a toon character bucket at rest, as programs.forward.StaticMesh's MSToon.
+[shader("mesh")]
+[numthreads(cMeshGroupSize, 1, 1)]
+[outputtopology("triangle")]
+void MSToon(
+    uint gid: SV_GroupID,
+    uint gtid: SV_GroupThreadID,
+    payload InstancedPayload payload,
+    OutputVertices<ToonVSOut, cMaxVerticesPerMeshlet> verts,
+    OutputIndices<uint3, cMaxPrimsPerMeshlet> tris
+)
+{
+    let ctx = PrepareMeshlet(payload.instance, payload.submeshEntry, payload.lodDissolve, gid);
+
+    SetMeshOutputCounts(ctx.meshlet.vertexCount, ctx.meshlet.triangleCount);
+
+    let pose = ResolveSkinnedPose(ctx, payload);
+    let rigSlot = (ctx.mesh.flags >> cToonShadingRigSlotShift) & cToonShadingRigSlotMask;
+
+    for (uint v = gtid; v < ctx.meshlet.vertexCount; v += cMeshGroupSize)
+    {
+        let vertex = SkinnedVertex(ctx, pose, payload.instance, v);
+        verts[v] = ToonVSOut(vertex, rigSlot);
         if (ctx.cull)
         {
             RecordClip(v, vertex.position);
