@@ -36,6 +36,11 @@ Two things the licence does **not** cover, because both leak out of the app:
 
 ## Startup
 
+The application icon is embedded from `resources/bernini.png` through Qt resources, so every
+window and the macOS Dock use it without a project or external asset directory. Windows also
+embeds the multi-size `resources/bernini.ico` through `editor.rc` for Explorer and shortcuts.
+These are exports of the same Bernini artwork used by Hub.
+
 `main.cpp` opens the log **first**, through `core::logging::init_file_logger`, and routes Qt's
 messages into its sinks with `InstallQtLogRouting` (`src/util/qt_logging.h`). Order is the whole
 point: the GPU context opens the log as it is created, and the first caller names the file, so

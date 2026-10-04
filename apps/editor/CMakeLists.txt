@@ -95,6 +95,18 @@ qt_add_executable(editor
 	${EDITOR_MAIN}
 )
 
+qt_add_resources(editor "editor_branding"
+	PREFIX "/branding"
+	BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources"
+	FILES "${CMAKE_CURRENT_SOURCE_DIR}/resources/bernini.png"
+)
+
+if(WIN32)
+	target_sources(editor PRIVATE resources/editor.rc)
+	set_source_files_properties(resources/editor.rc PROPERTIES
+		OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/bernini.ico")
+endif()
+
 target_link_libraries(editor PRIVATE editor_lib)
 
 # The editor reads its IBL pair, BRDF LUT and skybox from the staged asset directory at startup, so it

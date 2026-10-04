@@ -1,5 +1,6 @@
 #include <QApplication>
 #include <QDialog>
+#include <QIcon>
 #include <QMessageBox>
 #include <QProcess>
 #include <QString>
@@ -19,6 +20,7 @@
 #include <qlogging.h>
 #include <qobject.h>
 #include <qstringlist.h>
+#include <qstringliteral.h>
 #include <qtypes.h>
 #include <spdlog/common.h>
 #include <string_view>
@@ -76,6 +78,7 @@ main(int argc, char* argv[])
 	core::install_crash_handlers();
 
 	QApplication app(argc, argv);
+	QApplication::setWindowIcon(QIcon(QStringLiteral(":/branding/bernini.png")));
 	QApplication::setStyle(new EditorStyle);
 
 	const QString directory = QCoreApplication::applicationDirPath();
