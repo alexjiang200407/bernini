@@ -35,6 +35,7 @@ Bare, it renders `assets/Data`'s apples — the one project `copy_assets` stages
 | `--sun` | 0, off | an analytic sun's intensity, in the irradiance map's units — **additive** on `--env`, which already integrates whatever sun its source HDR held. It sets both of the view's suns alike, the PBR one and the toon character model's, so a headless render has one sun on screen |
 | `--sun-azimuth`, `--sun-elevation` | 35, 38 | where that sun sits, in degrees: azimuth about the up axis from +Z toward +X, elevation above the horizon |
 | `--sun-color` | `1 1 1` | its colour, as three floats |
+| `--tone-mapping` | `agx` | the display curve: `agx`, or `standard` -- the exposed colour clamped, no curve, which a toon look is authored for (`IRenderTarget::SetToneMapping`) |
 | `-w`, `-h`, `--taa` | 1280, 720, on | the output, as a viewport renders it |
 | `--render-scale` | 1 | the grid the geometry passes render on, relative to the output; below 1 the TAA resolve reconstructs the output ([Temporal Antialiasing](taa.md) § Render scale) |
 | `--bloom` | off | bloom at `bgl::BloomSettings`' defaults; its `BloomDown*`/`BloomUp*` passes join the timings |
