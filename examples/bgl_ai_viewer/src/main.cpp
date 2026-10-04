@@ -555,8 +555,7 @@ try
 			   "--tone-mapping",
 			   opts.toneMapping,
 			   "The display curve: agx (bgl's default) or standard, the exposed colour clamped, "
-			   "which "
-			   "a toon look is authored for (IRenderTarget::SetToneMapping)")
+			   "which a toon look is authored for (IRenderTarget::SetToneMapping)")
 			->check(CLI::IsMember({ "agx", "standard" }));
 		app.add_flag(
 			"--frame-clip",
