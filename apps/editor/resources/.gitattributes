@@ -1,0 +1,2 @@
+# Small compiled application resources must be available without game-asset LFS setup.
+*.png -filter -diff -merge -text
