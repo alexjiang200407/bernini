@@ -1,5 +1,6 @@
 #include "gamelib/shading_model.h"
 #include "log.h"  // IWYU pragma: keep -- carries the logger alias, which is not a symbol
+#include "toon_shading_rig.h"
 #include <algorithm>
 #include <array>
 #include <assetlib/AssetStore.h>
@@ -38,7 +39,6 @@
 #include <gamelib/AssetManager.h>
 #include <gamelib/BlendSpaceInfo.h>
 #include <gamelib/ClipInfo.h>
-#include <gamelib/toon_shading_rig.h>
 
 #include <assetlib/RegenMesh.h>
 #include <assetlib/avatar.h>

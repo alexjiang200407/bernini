@@ -128,11 +128,12 @@ namespace assetlib
 		}
 
 		/**
-		 * The document holds its source, every material its bindings and overrides name, the rig it binds,
-		 * the toon shading rig its face is shaded with and every container it produced. The last two are references like any other: nothing else
+		 * The document holds its source, every material its bindings and overrides name, the rig it binds and
+		 * every container it produced. The last two are references like any other: nothing else
 		 * records them, so a rename that missed one would leave the document naming a file that is
 		 * gone -- and an `outputs` entry naming a key that no longer exists reads as *absent* to
-		 * the producing side, which would put the old file back.
+		 * the producing side, which would put the old file back. It also names the toon shading rig
+		 * its face is shaded with, an edge like a material's.
 		 */
 		void
 		collectImportDocumentEdges(

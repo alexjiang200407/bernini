@@ -1,3 +1,4 @@
+#include "toon_shading_rig.h"
 #include <assetlib/AssetStore.h>
 #include <assetlib/import_document.h>
 #include <assetlib/skinning.h>
@@ -17,7 +18,6 @@
 #include <cstdint>
 #include <filesystem>
 #include <gamelib/AssetManager.h>
-#include <gamelib/toon_shading_rig.h>
 #include <numbers>
 #include <optional>
 #include <string>
@@ -67,9 +67,9 @@ namespace
 
 		auto rig                        = assetlib::BToonShadingRig();
 		rig.edits                       = { edit };
-		rig.faceLight.maxAzimuth        = 45.0f;
-		rig.faceLight.minElevation      = -10.0f;
-		rig.faceLight.azimuthFadeAmount = 0.75f;
+		rig.faceLight.maxAzimuth        = 60.0f;
+		rig.faceLight.minElevation      = -20.0f;
+		rig.faceLight.azimuthFadeAmount = 0.6f;
 		rig.headBone                    = std::move(headBone);
 		rig.headToBone = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.2f, 0.0f));
 		return rig;
@@ -110,9 +110,9 @@ TEST_CASE("A toon shading rig document becomes the renderer's desc", "[toonshadi
 		const bgl::ToonShadingRigDesc desc =
 			game::ToonShadingRigDescOf(MakeRig(""), nullptr, game::ToonShadingRigPose::kPosed);
 
-		CHECK(desc.faceLight.maxAzimuth == Catch::Approx(std::numbers::pi_v<float> / 4.0f));
-		CHECK(desc.faceLight.minElevation == Catch::Approx(-std::numbers::pi_v<float> / 18.0f));
-		CHECK(desc.faceLight.azimuthFadeAmount == 0.75f);
+		CHECK(desc.faceLight.maxAzimuth == Catch::Approx(std::numbers::pi_v<float> / 3.0f));
+		CHECK(desc.faceLight.minElevation == Catch::Approx(-std::numbers::pi_v<float> / 9.0f));
+		CHECK(desc.faceLight.azimuthFadeAmount == 0.6f);
 		CHECK(desc.faceLight.maxElevation == Catch::Approx(bgl::FaceLightDesc().maxElevation));
 		REQUIRE(desc.edits.size() == 1);
 		CHECK(desc.edits[0].mirrored);

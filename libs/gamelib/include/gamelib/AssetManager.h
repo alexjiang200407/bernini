@@ -3,13 +3,11 @@
 #include <assetlib/MeshBindings.h>
 #include <assetlib/RegenMesh.h>
 #include <assetlib/grass_patch.h>
-#include <assetlib/import_document.h>
 #include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/Bounds.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Mesh.h>
-#include <assetlib_structs/Skeleton.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/types/FootPlantDesc.h>
@@ -33,7 +31,6 @@
 #include <functional>
 #include <gamelib/BlendSpaceInfo.h>
 #include <gamelib/ClipInfo.h>
-#include <gamelib/toon_shading_rig.h>
 #include <memory>
 #include <optional>
 #include <span>
@@ -42,8 +39,16 @@
 #include <unordered_map>
 #include <vector>
 
+namespace assetlib
+{
+	struct ImportDocument;
+	struct Skeleton;
+}
+
 namespace game
 {
+	enum class ToonShadingRigPose : uint8_t;
+
 	/**
 	 * The texture files `material` names, relative to the data root: the nine authoring routes when
 	 * `loose`, otherwise the baked triplet. A surface's slots list one path apiece -- the whole

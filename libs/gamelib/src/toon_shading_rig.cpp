@@ -1,3 +1,4 @@
+#include "toon_shading_rig.h"
 #include <assetlib/skinning.h>
 #include <assetlib/toon_shading_rig.h>
 #include <assetlib_structs/BToonShadingRig.h>
@@ -6,7 +7,6 @@
 #include <core/err/util.h>
 #include <core/glm.h>
 #include <cstdint>
-#include <gamelib/toon_shading_rig.h>
 #include <optional>
 #include <utility>
 #include <vector>
