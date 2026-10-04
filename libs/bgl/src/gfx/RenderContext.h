@@ -21,6 +21,7 @@
 #include "passes/SkinnedPosePass.h"
 #include "passes/SkyboxPass.h"
 #include "passes/TaaResolvePass.h"
+#include "passes/ToonShadingRigPass.h"
 #include "passes/TransparentSortPass.h"
 #include "passes/WriteInstanceBlocksPass.h"
 #include "postprocess/TonemapLut.h"
@@ -381,6 +382,7 @@ namespace bgl
 		WriteInstanceBlocksPass       m_WriteInstanceBlocks;
 		RigFramesPass                 m_RigFrames;
 		SkinnedPosePass               m_SkinnedPose;
+		ToonShadingRigPass            m_ToonShadingRigs;
 		TransparentSortPass           m_TransparentSort;
 
 		bgpu::SamplerHandle m_PointClampSampler;

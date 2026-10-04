@@ -296,6 +296,12 @@ The skinned tier's blending half: four weighted slots evaluated from the clock, 
 only change the future, and the 1D blend space — one normalized phase shared by clips of different
 lengths, advancing at an integral rather than a quotient.
 
+**[Toon Shading Rig](./docs/toon_shading_rig.md)**
+
+A face's toon shading rig at runtime: which rigged placements a draw evaluates into the view's pool
+and how their draws find the block, where a head is when its pose comes from a palette, a pose-pool
+slice or a table, the face light's remap, and how an edit's keys are blended.
+
 **[Temporal Antialiasing](./docs/taa.md)**
 
 The jitter, the history ping-pong and the resolve: why the client's camera never sees the offset, why

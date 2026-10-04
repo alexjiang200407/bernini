@@ -77,6 +77,8 @@ set(IDL_CPP_SOURCES
     PlaybackType.slang
     ToonShadingRig.slang
     ToonShadingRigBlock.slang
+    ToonShadingRigRange.slang
+    ToonShadingRigPool.slang
 )
 
 # Public engine API: namespace `bgl`, emitted into include/bgl. MaterialType is named by a public

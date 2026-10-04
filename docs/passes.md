@@ -32,7 +32,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 
 `RenderContext` ([gfx/RenderContext.cpp](libs/bgl/src/gfx/RenderContext.cpp)) drives the frame and
 owns the long-lived pass objects (`m_BrdfLut`, `m_Forward`, `m_BlobShadows`, `m_Skybox`, `m_TransparentSort`,
-`m_CompactInstances`, `m_WriteInstanceBlocks`, `m_RigFrames`, `m_SkinnedPose`, `m_OutlineMask`, `m_TaaResolve`,
+`m_CompactInstances`, `m_WriteInstanceBlocks`, `m_RigFrames`, `m_SkinnedPose`, `m_ToonShadingRigs`, `m_OutlineMask`, `m_TaaResolve`,
 `m_BloomPass`, `m_PostProcess`, `m_OverlayPass`, `m_PreparePresentPass`); `Graphics` owns one context and
 forwards the frame methods to it. A frame is built between `BeginFrame` and `EndFrame`, with one `Draw` per
 view in between; the passes are added in this order and, because the graph never reorders, execute
@@ -49,7 +49,8 @@ flowchart TD
         RIG --> CI["Compact Instances (3 sub-passes, a 4th ahead of the cull with automatic placements)"]
         CI --> TS["Transparent Sort (3 sub-passes)"]
         TS --> POSE["Pose Skinned (one workgroup per skinned instance)"]
-        POSE --> FWW["Forward World (indirect dispatch per static-tier bucket)"]
+        POSE --> TSR["Toon Shading Rigs (only when a placement holds a rig; one thread per rigged placement)"]
+        TSR --> FWW["Forward World (indirect dispatch per static-tier bucket)"]
         FWW --> GRS["Forward Grass (only when a drawn geom has grass; one dispatch per grass bucket)"]
         GRS --> BLOB["Blob Shadows (only when the view has a disc; reads the depth as it stands)"]
         BLOB --> FWS["Forward Skinned (indirect dispatch per skinned-tier bucket)"]
@@ -596,6 +597,18 @@ reprojects through a pose nothing drew, which is the caller's to avoid.
   count in `scene.posePool` return at once — `bgpu` has no compute indirect dispatch.
 * **Skipped** when the view places no instance owning a palette and no automatic one. A table
   instance owns none and is posed by `Pose Rig Frames` once.
+
+### Toon Shading Rigs — [passes/ToonShadingRigPass.{h,cpp}](libs/bgl/src/passes/ToonShadingRigPass.cpp)
+
+One compute dispatch per draw, one thread per placement holding a toon shading rig, attached under
+the view's namespace after Pose Skinned and before every forward phase; absent from a view whose
+placements hold none. A thread selects its placement -- not hidden, its head sphere in this draw's
+frustum and larger on screen than the rig's `fadeEndPixels` -- into the view's pool with an atomic,
+evaluates the rig into the block it took, and writes the block's index plus one into the upper bits
+of the placement's `MeshInstance::flags`; every other rigged placement's bits it clears. Reads the
+palettes, the pose-pool slices, the dominant frames and the bone anim tables, since a head bone's
+pose is whichever the placement drew; writes the mesh buffer, the pool and the blocks. Its inputs,
+the math and the pool are in [Toon Shading Rig](toon_shading_rig.md).
 
 ### Write Instance Blocks — [passes/WriteInstanceBlocksPass.{h,cpp}](libs/bgl/src/passes/WriteInstanceBlocksPass.cpp)
 
