@@ -18,6 +18,7 @@
 #include <bgl/types/Camera.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/InstanceDesc.h>
+#include <bgl/types/LodSelectionDesc.h>
 #include <bgl/types/MeshInstanceBlockDesc.h>
 #include <bgl/types/MeshInstanceFlags.h>
 #include <bgl/types/MeshInstanceHandle.h>
@@ -33,10 +34,13 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <cmath>
 #include <cstdint>
 #include <glm/gtc/matrix_transform.hpp>
+#include <optional>
 #include <set>
+#include <utility>
 #include <vector>
 
 // The toon shading rig's per-draw selection and evaluation, read back off the GPU: every block
@@ -463,6 +467,55 @@ TEST_CASE(
 
 	const glm::vec3 sun(0.3f, 0.5f, 1.0f);
 	const float     frameSeconds = 1.0f / bgl::test::skinned_synth::c_SampleRate;
+
+	for (const auto& [time, slide] :
+	     { std::pair(0.0f, 0.0f), std::pair(frameSeconds, bgl::test::skinned_synth::c_Step) })
+	{
+		INFO("at frame " << time / frameSeconds);
+		world.Draw(sun, time);
+		const glm::mat4 bone = glm::translate(glm::mat4(1.0f), glm::vec3(slide, 0.0f, 0.0f));
+		CHECK(world.Selected() == 1u);
+		CheckBlock(world.Blocks()[0], desc, placement * bone * desc.headToBone, sun);
+	}
+}
+
+TEST_CASE(
+	"A head bone's toon shading rig follows the pose from every source",
+	"[toonshadingrig][render]")
+{
+	// The automatic source forced to each half: its pose-pool slice, then its rig's table through
+	// the cull's dominant frames.
+	const auto [source, forced] = GENERATE(
+		std::pair(bgl::PoseSource::kPerInstance, std::optional<bgl::PoseSource>()),
+		std::pair(bgl::PoseSource::kBoneAnimTable, std::optional<bgl::PoseSource>()),
+		std::pair(bgl::PoseSource::kAuto, std::optional(bgl::PoseSource::kPerInstance)),
+		std::pair(bgl::PoseSource::kAuto, std::optional(bgl::PoseSource::kBoneAnimTable)));
+	CAPTURE(source, forced.has_value(), forced.value_or(source));
+
+	Fixture world;
+
+	auto lod            = bgl::LodSelectionDesc();
+	lod.fadeSeconds     = 0.0f;
+	lod.forcePoseSource = forced;
+	world.view->SetLodSelection(lod);
+
+	const auto geom = bgl::test::skinned_synth::AddSlidingQuadGeom(*world.scene, world.material);
+	const glm::mat4 placement = glm::translate(glm::mat4(1.0f), glm::vec3(-1.0f, 0.0f, 0.0f));
+	const auto      instance  = world.view->CreateSkinnedMeshInstance(
+		bgl::SkinnedMeshInstanceDesc()
+			.SetGeom(geom)
+			.SetTransform(placement)
+			.SetPlayback(bgl::SkinnedPlaybackDesc::FromClip(bgl::test::skinned_synth::c_LoopClip))
+			.SetSource(source));
+
+	const bgl::ToonShadingRigDesc desc = TestRig().SetHeadBoneIndex(0u);
+	world.view->SetToonShadingRig(instance, world.scene->AddToonShadingRig(desc));
+
+	const glm::vec3 sun(0.3f, 0.5f, 1.0f);
+	const float     frameSeconds = 1.0f / bgl::test::skinned_synth::c_SampleRate;
+
+	// A table is filled, and a pose-pool slice granted, by the frame before the one that reads it.
+	world.Draw(sun, 0.0f);
 
 	for (const auto& [time, slide] :
 	     { std::pair(0.0f, 0.0f), std::pair(frameSeconds, bgl::test::skinned_synth::c_Step) })
