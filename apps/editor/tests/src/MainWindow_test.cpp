@@ -303,6 +303,18 @@ namespace
 		return named == actions.end() ? nullptr : *named;
 	}
 
+	// An entry of Render > Tone Mapping, whose labels other menus share.
+	QAction*
+	ToneMappingChoice(const MainWindow& window, const QString& text)
+	{
+		for (const QMenu* menu : window.findChildren<QMenu*>())
+			if (menu->title() == "Tone Mapping")
+				for (QAction* action : menu->actions())
+					if (action->text() == text)
+						return action;
+		return nullptr;
+	}
+
 	void
 	ObserveViewportTeardown(MainWindow& window, QObject& observer, std::vector<fs::path>& roots)
 	{
@@ -548,6 +560,10 @@ TEST_CASE(
 	const auto baseline = sceneSlots();
 	for (int replacementIndex = 0; replacementIndex < 3; ++replacementIndex)
 	{
+		QAction* standard = ToneMappingChoice(window, "Standard");
+		REQUIRE(standard != nullptr);
+		standard->trigger();
+
 		std::vector<fs::path> releasedRoots;
 		QObject               teardownObserver;
 		ObserveViewportTeardown(window, teardownObserver, releasedRoots);
@@ -617,6 +633,11 @@ TEST_CASE(
 			CHECK(root == second.DataRoot());
 		}
 		CHECK(sceneSlots() == baseline);
+
+		// The last project's tone-mapping choice does not carry over: Auto, and the new one's curve.
+		CHECK(ToneMappingChoice(window, "Auto")->isChecked());
+		for (const RenderTargetWindow* view : views)
+			CHECK(view->GetToneMapping() == bgl::ToneMapping::kAgX);
 	}
 }
 
@@ -2208,11 +2229,12 @@ TEST_CASE(
 	CHECK_FALSE(GrassEditorWindow::AcceptsDrop(&other));
 }
 
-// A viewport ends in the curve the user picked from the Render menu, else Standard when it shows a
-// toon asset, else the project's: a toon look is authored for Standard, and the project says what
-// the rest of its look is.
+// Render > Tone Mapping: Auto lets each viewport decide -- Standard for toon content, else the
+// project's curve -- and AgX or Standard holds every viewport to one. The checked entry is always
+// the user's choice.
 TEST_CASE(
-	"A viewport's tone mapping is the user's, the toon content's or the project's",
+	"A viewport's tone mapping is the user's choice, or Auto's: the toon content's or the "
+    "project's",
 	"[mainwindow][render]")
 {
 	const HeadlessEditor editor;
@@ -2237,17 +2259,28 @@ TEST_CASE(
 		REQUIRE(view != nullptr);
 		CHECK(view->GetToneMapping() == bgl::ToneMapping::kAgX);
 
+		QAction* autoChoice = ToneMappingChoice(window, "Auto");
+		QAction* agx        = ToneMappingChoice(window, "AgX");
+		QAction* standard   = ToneMappingChoice(window, "Standard");
+		REQUIRE(autoChoice != nullptr);
+		REQUIRE(agx != nullptr);
+		REQUIRE(standard != nullptr);
+		CHECK(autoChoice->isChecked());
+
 		view->SetShowsToonContent(true);
 		CHECK(view->GetToneMapping() == bgl::ToneMapping::kStandard);
+		CHECK(autoChoice->isChecked());
 
-		QAction* standard = ActionNamed(window, "Standard Tone Mapping");
-		REQUIRE(standard != nullptr);
-		standard->setChecked(true);
-		standard->setChecked(false);
+		agx->trigger();
+		CHECK(agx->isChecked());
+		CHECK_FALSE(autoChoice->isChecked());
 		CHECK(view->GetToneMapping() == bgl::ToneMapping::kAgX);
 
 		view->SetShowsToonContent(false);
-		standard->setChecked(true);
+		standard->trigger();
 		CHECK(view->GetToneMapping() == bgl::ToneMapping::kStandard);
+
+		autoChoice->trigger();
+		CHECK(view->GetToneMapping() == bgl::ToneMapping::kAgX);
 	}
 }

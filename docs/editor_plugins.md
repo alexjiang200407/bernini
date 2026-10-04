@@ -96,10 +96,10 @@ flowchart TD
 The diagram is the contract ownership/call topology. The production loader owns both registries.
 Each project host borrows its store, renderer and asset manager while project panels exist.
 
-A viewport's display curve is the host's to decide: the user's pick from the Render menu, else the
-project's `.bproj` `toneMapping`. A panel that shows a toon-shaded asset says so with
-`IEditorViewport::SetShowsToonContent`, and its viewport ends in Standard -- the curve a toon look is
-authored for -- until the user picks one.
+A viewport's display curve is the host's to decide, by Render > Tone Mapping: AgX or Standard for
+every viewport, or Auto, the default and where a newly opened project starts. Under Auto a viewport
+ends in the project's `.bproj` `toneMapping`, or in Standard -- the curve a toon look is authored
+for -- when the panel says it shows a toon-shaded asset, with `IEditorViewport::SetShowsToonContent`.
 
 `apps/editor/plugins/default_editor` owns Mesh, Animation, Blend Space and Grass, their authoring widgets and the
 glTF material-graph writer. It is a statically linked module registered through the same registry before local modules;

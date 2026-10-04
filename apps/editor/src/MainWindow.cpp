@@ -579,7 +579,8 @@ MainWindow::SetUpRenderMenu()
 		editor::Localize(
 			"editor.main_window.color_grade_tip",
 			"White-balance and grade the viewports ahead of the display curve. The grade is each "
-			"viewport's `colorGrade` section in config.json."));
+			"viewport's `colorGrade` section in config.json. No effect on a viewport in Standard "
+			"tone mapping."));
 
 	connect(grade, &QAction::toggled, this, [this](bool enabled) {
 		m_ColorGradeOverride = enabled;
@@ -587,23 +588,7 @@ MainWindow::SetUpRenderMenu()
 			view->SetColorGradeEnabled(enabled);
 	});
 
-	// Unchecked until the user touches it: until then each viewport ends in the project's curve,
-	// or in Standard where it shows a toon asset. Touched, the pick holds for every viewport.
-	auto* standard = render->addAction(
-		editor::Localize("editor.main_window.standard_tone_mapping", "Standard Tone Mapping"));
-	standard->setCheckable(true);
-	standard->setChecked(false);
-	standard->setStatusTip(
-		editor::Localize(
-			"editor.main_window.standard_tone_mapping_tip",
-			"End the viewports in Standard -- the colour as it is, as a toon look is authored -- "
-			"rather than AgX's filmic curve. The project's .bproj sets the default."));
-
-	connect(standard, &QAction::toggled, this, [this](bool enabled) {
-		m_ToneMappingOverride = enabled ? bgl::ToneMapping::kStandard : bgl::ToneMapping::kAgX;
-		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
-			view->SetChosenToneMapping(m_ToneMappingOverride);
-	});
+	SetUpToneMappingMenu(render);
 
 	auto* timing = render->addAction(
 		editor::Localize("editor.main_window.gpu_pass_timing", "GPU Pass Timing"));
@@ -636,6 +621,47 @@ MainWindow::SetUpRenderMenu()
 	connect(logTiming, &QAction::triggered, this, [this] { m_LogNextPassTimings = true; });
 
 	SetUpRenderScaleMenu(render);
+}
+
+// Auto lets each viewport decide -- Standard where it shows toon content, the project's curve
+// elsewhere; AgX and Standard hold every viewport to one curve. The checked entry is always the
+// user's choice, so the menu never says one curve while the viewport shows another.
+void
+MainWindow::SetUpToneMappingMenu(QMenu* render)
+{
+	QMenu* menu =
+		render->addMenu(editor::Localize("editor.main_window.tone_mapping_menu", "Tone Mapping"));
+	menu->setStatusTip(
+		editor::Localize(
+			"editor.main_window.tone_mapping_tip",
+			"The display curve the viewports end in: AgX's filmic curve, or Standard -- the colour "
+			"as it is, which a toon look is authored for. Auto is the project's curve, and "
+	        "Standard "
+			"for a viewport showing toon content."));
+
+	auto* group = new QActionGroup(menu);
+	group->setExclusive(true);
+
+	const auto addChoice = [&](const QString& label, std::optional<bgl::ToneMapping> choice) {
+		QAction* action = menu->addAction(label);
+		action->setCheckable(true);
+		action->setChecked(choice == m_ToneMappingOverride);
+		group->addAction(action);
+		connect(action, &QAction::triggered, this, [this, choice] {
+			m_ToneMappingOverride = choice;
+			for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+				view->SetChosenToneMapping(choice);
+		});
+		return action;
+	};
+	m_ToneMappingAuto =
+		addChoice(editor::Localize("editor.main_window.tone_mapping_auto", "Auto"), std::nullopt);
+	addChoice(
+		editor::Localize("editor.main_window.tone_mapping_agx", "AgX"),
+		bgl::ToneMapping::kAgX);
+	addChoice(
+		editor::Localize("editor.main_window.tone_mapping_standard", "Standard"),
+		bgl::ToneMapping::kStandard);
 }
 
 void
@@ -1341,8 +1367,15 @@ MainWindow::SetActiveProject(assetlib::Project project)
 	m_ProjectToneMapping = m_Project->GetToneMapping() == assetlib::ToneMapping::kStandard ?
 	                           bgl::ToneMapping::kStandard :
 	                           bgl::ToneMapping::kAgX;
+	// A new project starts at Auto: a choice made for the last one's look is not this one's.
+	m_ToneMappingOverride.reset();
+	if (m_ToneMappingAuto != nullptr)
+		m_ToneMappingAuto->setChecked(true);
 	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+	{
 		view->SetProjectToneMapping(m_ProjectToneMapping);
+		view->SetChosenToneMapping(std::nullopt);
+	}
 	if (m_Thumbnails)
 		m_Thumbnails->SetProjectToneMapping(m_ProjectToneMapping);
 	const auto dataDir = QString::fromStdWString(m_Project->GetDataDirectory().wstring());

@@ -166,7 +166,7 @@ public:
 	void
 	SetProjectToneMapping(bgl::ToneMapping toneMapping);
 
-	// The user's pick from the Render menu, or empty to let the project and the content decide.
+	// Empty is Auto: the project and the content decide.
 	void
 	SetChosenToneMapping(std::optional<bgl::ToneMapping> toneMapping);
 
@@ -339,7 +339,6 @@ private:
 	// backbuffers.
 	QTimer* m_ResizeTimer = nullptr;
 
-	// Hands GetToneMapping's answer to the target. GUI thread.
 	void
 	ApplyToneMapping();
 

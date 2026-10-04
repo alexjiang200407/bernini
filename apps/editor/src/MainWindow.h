@@ -214,6 +214,9 @@ private:
 	SetUpSharpnessMenu(QMenu* render);
 
 	void
+	SetUpToneMappingMenu(QMenu* render);
+
+	void
 	SetUpPluginContributions();
 
 	void
@@ -238,10 +241,11 @@ private:
 	std::optional<bool>       m_BloomOverride;
 	std::optional<bool>       m_ColorGradeOverride;
 
-	// The open project's curve, and the user's pick from the Render menu that outranks it and every
-	// viewport's content -- see RenderTargetWindow::GetToneMapping.
+	// The open project's curve, and the Render > Tone Mapping choice; empty is Auto, which a new
+	// project resets it to.
 	bgl::ToneMapping                m_ProjectToneMapping = bgl::ToneMapping::kAgX;
 	std::optional<bgl::ToneMapping> m_ToneMappingOverride;
+	QAction*                        m_ToneMappingAuto = nullptr;
 	std::optional<float>            m_RenderScaleOverride;
 	std::optional<float>            m_ReconstructionWidthOverride;
 	std::optional<float>            m_SharpnessOverride;
