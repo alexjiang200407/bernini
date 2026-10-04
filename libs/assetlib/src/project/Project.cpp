@@ -1,6 +1,4 @@
-#include "io/json_doc.h"
 #include <algorithm>
-#include <array>
 #include <assetlib/AssetKindRegistry.h>
 #include <assetlib/Project.h>
 #include <assetlib/project_layout.h>
@@ -10,7 +8,6 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
-#include <ios>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <string>
@@ -29,7 +26,6 @@ namespace assetlib
 			std::vector<std::string> plugins;
 			int                      version     = 1;
 			ToneMapping              toneMapping = ToneMapping::kAgX;
-			nlohmann::json           unknown     = nlohmann::json::object();
 		};
 
 		constexpr std::string_view c_ToneMappingKey = "toneMapping";
@@ -69,12 +65,6 @@ namespace assetlib
 							c_ToneMappingKey,
 							it->dump());
 				}
-
-				constexpr std::array<std::string_view, 5> c_KnownKeys = {
-					{ "name", "version", "dataDirectory", "plugins", c_ToneMappingKey }
-				};
-				for (const std::string_view known : c_KnownKeys) json.erase(std::string(known));
-				metadata.unknown = std::move(json);
 				return metadata;
 			}
 			catch (const nlohmann::json::exception& e)
@@ -144,7 +134,6 @@ namespace assetlib
 		project.m_PluginIds     = metadata.plugins;
 		project.m_FormatVersion = metadata.version;
 		project.m_ToneMapping   = metadata.toneMapping;
-		project.m_UnknownKeys   = metadata.unknown;
 		if (registry != nullptr)
 			project.m_Registry = std::move(registry);
 
@@ -185,18 +174,21 @@ namespace assetlib
 	void
 	Project::Save() const
 	{
-		nlohmann::json json                 = m_UnknownKeys;
-		json["name"]                        = m_Name;
-		json["version"]                     = m_FormatVersion;
-		json["dataDirectory"]               = c_DataDirectoryName;
-		json["plugins"]                     = m_PluginIds;
-		json[std::string(c_ToneMappingKey)] = std::string(toneMappingName(m_ToneMapping));
+		nlohmann::json json = {
+			{ "name", m_Name },
+			{ "version", m_FormatVersion },
+			{ "dataDirectory", c_DataDirectoryName },
+			{ "plugins", m_PluginIds },
+		};
+		// Only a project off the default names its curve: an AgX file keeps its shape.
+		if (m_ToneMapping != ToneMapping::kAgX)
+			json[std::string(c_ToneMappingKey)] = std::string(toneMappingName(m_ToneMapping));
 
-		std::ofstream stream(m_ProjectFile, std::ios::binary);
+		std::ofstream stream(m_ProjectFile);
 		if (!stream)
 			core::throw_runtime_error("Cannot write project file: {}", m_ProjectFile.string());
 
-		stream << doc::canonicalDump(json);
+		stream << json.dump(4);
 	}
 
 	void

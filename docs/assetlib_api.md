@@ -291,12 +291,12 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
 
 ### Project
 
-* **The `.bproj`** is an authored text document like the rest: written canonically (sorted keys, tab
-  indent, a trailing newline), and a key this version does not know survives a save. Its keys are
-  `name`, `version`, `dataDirectory`, `plugins` ([Editor plugins](editor_plugins.md)) and
-  `toneMapping` -- `"agx"` or `"standard"`, the display curve the project's look is authored for
-  and its renders end in (`Project::GetToneMapping`; bgl's `IRenderTarget::SetToneMapping`).
-  Absent, it is AgX; any other value refuses the file. A toon game is authored for Standard.
+* **The `.bproj`** keys are `name`, `version`, `dataDirectory`, `plugins`
+  ([Editor plugins](editor_plugins.md)) and the optional `toneMapping` -- `"agx"` or `"standard"`,
+  the display curve the project's look is authored for and its renders end in
+  (`Project::GetToneMapping`; bgl's `IRenderTarget::SetToneMapping`). Absent, it is AgX, and Save
+  writes it only when it is not, so a project that never sets it keeps its file's shape; any other
+  value refuses the file. A toon game is authored for Standard.
 
 ### Reference graph
 * **`AssetRefGraph::Scan`** — `@throws` if a *referrer* cannot be read, deliberately: an edge we

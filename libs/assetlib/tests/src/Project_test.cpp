@@ -432,13 +432,18 @@ TEST_CASE("A project's tone mapping round-trips, AgX unless it says otherwise", 
 
 	Project created = Project::Create(sandbox.ProjectFile(), "MyGame");
 	CHECK(created.GetToneMapping() == assetlib::ToneMapping::kAgX);
-	CHECK(nlohmann::json::parse(ReadText(sandbox.ProjectFile())).at("toneMapping") == "agx");
+	// Create writes what it always wrote: AgX is the absent key.
+	CHECK_FALSE(nlohmann::json::parse(ReadText(sandbox.ProjectFile())).contains("toneMapping"));
 
 	created.SetToneMapping(assetlib::ToneMapping::kStandard);
 	created.Save();
 	CHECK(nlohmann::json::parse(ReadText(sandbox.ProjectFile())).at("toneMapping") == "standard");
 	CHECK(
 		Project::Open(sandbox.ProjectFile()).GetToneMapping() == assetlib::ToneMapping::kStandard);
+
+	created.SetToneMapping(assetlib::ToneMapping::kAgX);
+	created.Save();
+	CHECK_FALSE(nlohmann::json::parse(ReadText(sandbox.ProjectFile())).contains("toneMapping"));
 
 	// A project that predates the key draws as it always did.
 	WriteText(sandbox.ProjectFile(), R"({ "name": "MyGame", "version": 1 })");
@@ -458,22 +463,4 @@ TEST_CASE("A project refuses a tone mapping it does not know", "[project]")
 				std::string(value) + " }");
 		CHECK_THROWS_AS(Project::Open(sandbox.ProjectFile()), std::runtime_error);
 	}
-}
-
-TEST_CASE("A project keeps the keys it does not know, and writes itself canonically", "[project]")
-{
-	const Sandbox sandbox("bernini_project_keeps_unknown_keys");
-
-	WriteText(
-		sandbox.ProjectFile(),
-		R"({ "name": "MyGame", "version": 1, "zeta": { "b": 2, "a": [1, 2] }, "toneMapping": "standard" })");
-	Project::Open(sandbox.ProjectFile()).Save();
-
-	const std::string text = ReadText(sandbox.ProjectFile());
-	const auto        json = nlohmann::json::parse(text);
-	CHECK(json.at("zeta") == nlohmann::json::parse(R"({ "a": [1, 2], "b": 2 })"));
-	CHECK(json.at("toneMapping") == "standard");
-
-	// Sorted, tab-indented, one trailing newline: the shape every authored document shares.
-	CHECK(text == json.dump(1, '\t') + '\n');
 }

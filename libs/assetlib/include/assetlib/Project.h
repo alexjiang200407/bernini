@@ -5,7 +5,6 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
-#include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -175,8 +174,5 @@ namespace assetlib
 		std::filesystem::path    m_ProjectFile;
 		int                      m_FormatVersion = c_FormatVersion;
 		ToneMapping              m_ToneMapping   = ToneMapping::kAgX;
-
-		// The keys the file held that this version does not know, written back by Save as read.
-		nlohmann::json m_UnknownKeys = nlohmann::json::object();
 	};
 }
