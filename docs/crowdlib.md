@@ -207,3 +207,10 @@ since a timed frame costs more on Metal. The release preset leaves examples off;
 every group's mean stands within one spacing of its goal by then (450 is enough), `--headless`
 draws offscreen, and `--screenshot <png>` writes the last frame drawn, which is how an agent looks
 at it.
+
+With `--handoff --project <data root> --import <.bimport> [--clip <name>]` every agent is that
+import's skinned character instead of a box, looping the clip, each agent a phase of its own by its
+id ([crowd_render.md](crowd_render.md)), standing on the ground at its type's height. The project's
+derived containers must be on disk (`assetlib_cli migrate`), and its surfaces are registered from
+its `Authored/Shaders`. On the test project's Rabbit at `--units 1`, debug Metal, Forward Skinned
+costs about 2.1 ms a frame, and Choose Poses and Pose Skinned 0.02 ms each.
