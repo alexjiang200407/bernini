@@ -1,0 +1,125 @@
+name: Editor release
+
+# Every master push replaces the one prerelease, v0.1.0, with the Windows editor built from it: a
+# build to hand beta testers, with no history kept. A pull request that changes how the editor is
+# packaged builds the package too, uploaded as the run's artifact and published nowhere.
+on:
+  push:
+    branches: [master]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - scripts/package_editor.py
+      - scripts/package_editor/**
+      - .github/workflows/editor-release.yml
+      - .github/actions/windows-msvc/**
+
+env:
+  TAG: v0.1.0
+  PACKAGE: bernini-editor-windows-x64
+
+jobs:
+  package:
+    name: package (windows editor, Release)
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: windows-latest
+    # Only the newest master is worth packaging; a build a later push would replace is not finished.
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: ${{ !github.event.pull_request.draft }}
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      # No `lfs: true`: it fetches from GitHub's endpoint, which holds nothing. See docs/lfs.md § CI.
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/windows-msvc
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # The editor is skipped by a configure that finds no Qt. The version is the one the editor is
+      # developed against; windeployqt, which the build runs, comes with it.
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.3
+          arch: win64_msvc2022_64
+          cache: true
+
+      - name: Put Qt on the configure's search path
+        shell: pwsh
+        run: |
+          "CMAKE_PREFIX_PATH=$env:QT_ROOT_DIR" >> $env:GITHUB_ENV
+
+      # The editor reads its environment maps and BRDF LUT from assets/ at startup, so the package
+      # needs the files rather than their pointers.
+      - name: Fetch the LFS assets
+        run: python scripts/init.py --lfs-only
+
+      # Release objects never match the Debug compile's, so they keep a store of their own.
+      - name: Restore the compiler cache
+        id: ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-msvc-release-${{ github.sha }}
+          restore-keys: ccache-msvc-release-
+
+      - name: Build and package the editor
+        run: python scripts/package_editor.py
+
+      - name: Save the compiler cache
+        if: ${{ success() && steps.ccache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-msvc-release-${{ github.sha }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE }}
+          path: dist/${{ env.PACKAGE }}.zip
+          retention-days: 7
+
+  publish:
+    name: publish v0.1.0
+    needs: package
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    # Never cancelled: between the delete and the create there is no release at all.
+    concurrency:
+      group: ${{ github.workflow }}-publish
+      cancel-in-progress: false
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.PACKAGE }}
+
+      # Deleted and made again, tag included, rather than edited: a release's tag cannot be moved
+      # onto the new commit in place.
+      - name: Replace the prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release delete "$TAG" --cleanup-tag --yes
+          fi
+          cat > notes.md <<EOF
+          A beta build of the Bernini editor for Windows, rebuilt from every push to master and
+          replaced each time. Not a release: expect rough edges, and report them.
+
+          **Download** \`$PACKAGE.zip\`, unzip it, and run \`editor.exe\` from the folder. It is
+          unsigned, so SmartScreen may ask first (More info, then Run anyway).
+
+          **Requires** 64-bit Windows 10 or 11 with a DirectX 12 GPU.
+
+          Built from \`${GITHUB_SHA::8}\`.
+          EOF
+          gh release create "$TAG" "$PACKAGE.zip" --target "$GITHUB_SHA" --prerelease \
+            --title "Bernini Editor 0.1.0 (beta)" --notes-file notes.md

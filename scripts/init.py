@@ -39,6 +39,7 @@ Usage:
     just init --no-ccache                           # skip the compiler cache check
     just init --no-lfs                              # skip the Git LFS setup
     just init --lfs-key                             # replace the stored LFS credentials
+    just init --lfs-only                            # only point Git LFS at the store and fetch (CI)
     just init --no-vcpkg                            # skip the vcpkg check
 """
 
@@ -856,7 +857,14 @@ def main():
     parser.add_argument("--lfs-key", action="store_true",
                         help="Ask for the key that uploads assets, replacing what is stored.")
     parser.add_argument("--no-vcpkg", action="store_true", help="Don't look for (or offer to clone) vcpkg.")
+    parser.add_argument("--lfs-only", action="store_true",
+                        help="Configure Git LFS and fetch its files, and nothing else; fails while a "
+                             "file is still a pointer.")
     args = parser.parse_args()
+
+    if args.lfs_only:
+        ensure_lfs()
+        return 1 if lfs.pointer_files() else 0
 
     if not args.show:
         agent_setup.instructions(ct.REPO_ROOT)
