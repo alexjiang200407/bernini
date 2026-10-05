@@ -23,66 +23,18 @@ jobs:
     permissions:
       contents: read
       packages: write
-    # vcpkg's binaries live on GitHub Packages, one NuGet package per port per ABI hash. Every run
-    # reads the one feed: an actions/cache entry is scoped to the ref that saved it, so a PR's could
-    # serve no other PR, and a key naming the runner image missed on every PR while the image pool
-    # was mixed. A package's ABI hash covers the compiler, so an image that changes it rebuilds each
-    # affected port once and every later run, on any branch, reuses it.
-    env:
-      FEED_URL: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
-      VCPKG_BINARY_SOURCES: clear;nuget,https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json,readwrite
-      # GITHUB_TOKEN may publish only a package linked to this repository; the nuspec links it.
-      VCPKG_NUGET_REPOSITORY: https://github.com/${{ github.repository }}
-      # The 794-step compile is what the minutes go to. cmake/enable_compiler_cache.cmake puts ccache
-      # in front of cl.exe only when asked, because it must also turn the precompiled headers off:
-      # ccache's MSVC PCH support can return a wrong object. See docs/build_performance.md § ccache.
-      BERNINI_MSVC_COMPILER_CACHE: "1"
-      CCACHE_DIR: ${{ github.workspace }}\.ccache
-      CCACHE_MAXSIZE: 1500M
-      CCACHE_COMPRESS: "1"
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: ./.github/actions/windows-msvc
         with:
-          python-version: "3.12"
-
-      # The vcpkg preset resolves its toolchain through $env{VCPKG_ROOT}; the runner
-      # image ships vcpkg but exports it as VCPKG_INSTALLATION_ROOT.
-      - name: Point VCPKG_ROOT at the preinstalled vcpkg
-        shell: pwsh
-        run: |
-          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
-
-      # A push the token cannot make -- a fork's pull request -- is a warning, not a failure: the
-      # run still reads the feed and builds what it misses.
-      - name: Give vcpkg's NuGet the package feed
-        shell: pwsh
-        run: |
-          $nuget = & "$env:VCPKG_ROOT\vcpkg.exe" fetch nuget | Select-Object -Last 1
-          & $nuget sources add -Source "$env:FEED_URL" -Name GitHubPackages `
-            -UserName "${{ github.repository_owner }}" -Password "${{ secrets.GITHUB_TOKEN }}" `
-            -StorePasswordInClearText
-          & $nuget setapikey "${{ secrets.GITHUB_TOKEN }}" -Source "$env:FEED_URL"
-
-      # Pinned and checksummed: the cache is trusted to return the object cl.exe would have made, so
-      # the program making that promise is not whatever a package manager serves today.
-      - name: Install ccache
-        shell: pwsh
-        run: |
-          $version = "4.14.1"
-          $sha256 = "6219f3865ca59aec41ee4b678df171d5d35855ecb2b6dbbbd20690b3a68af7b4"
-          $zip = "$env:RUNNER_TEMP\ccache.zip"
-          Invoke-WebRequest "https://github.com/ccache/ccache/releases/download/v$version/ccache-$version-windows-x86_64.zip" -OutFile $zip
-          if ((Get-FileHash $zip -Algorithm SHA256).Hash -ne $sha256.ToUpper()) { throw "ccache $version does not match its checksum" }
-          Expand-Archive $zip -DestinationPath "$env:RUNNER_TEMP\ccache"
-          "$env:RUNNER_TEMP\ccache\ccache-$version-windows-x86_64" >> $env:GITHUB_PATH
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       # An entry is addressed by what it was compiled from, not by this key: the key only chooses
       # which store to start from, so any earlier one is as good a start as the last. Entries are
-      # scoped to the ref that saved them and a PR reads its base's or master's, which is why master builds
-      # on every push.
+      # scoped to the ref that saved them and a PR reads its base's or master's, which is why master
+      # builds on every push.
       - name: Restore the compiler cache
         id: ccache
         uses: actions/cache/restore@v4
