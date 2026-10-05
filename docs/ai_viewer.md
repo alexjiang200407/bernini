@@ -35,6 +35,7 @@ Bare, it renders `assets/Data`'s apples — the one project `copy_assets` stages
 | `--sun` | 0, off | an analytic sun's intensity, in the irradiance map's units — **additive** on `--env`, which already integrates whatever sun its source HDR held. It sets both of the view's suns alike, the PBR one and the toon character model's, so a headless render has one sun on screen |
 | `--sun-azimuth`, `--sun-elevation` | 35, 38 | where that sun sits, in degrees: azimuth about the up axis from +Z toward +X, elevation above the horizon |
 | `--sun-color` | `1 1 1` | its colour, as three floats |
+| `--backdrop` | `sky` | what is drawn behind the scene: `sky`, the environment's, or `gradient`, the toon look-dev backdrop the editor's toon previews draw, pale horizon to sky blue (`ISceneView::SetBackdrop`). Only the background changes; `--env` still lights the scene |
 | `--post-process` | `filmic` | the post-process: `filmic` (AgX and the grade), or `toon` -- the exposed colour clamped, no curve, which a toon look is authored for (`IRenderTarget::SetPostProcessType`) |
 | `-w`, `-h`, `--taa` | 1280, 720, on | the output, as a viewport renders it |
 | `--render-scale` | 1 | the grid the geometry passes render on, relative to the output; below 1 the TAA resolve reconstructs the output ([Temporal Antialiasing](taa.md) § Render scale) |
