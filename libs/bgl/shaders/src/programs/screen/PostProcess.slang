@@ -1,3 +1,4 @@
+import idl.Constants;
 import lib.math.ColorGrade;
 import lib.math.hash;
 import lib.math.rcas;
@@ -72,12 +73,11 @@ ConstantBuffer<PostProcessData> gPostProcessData;
 // display curve cannot shift it.
 static const float3 c_OutlineColor = float3(1.0, 0.5, 0.0);
 
-// The width is authored at c_OutlineRefHeightPx and scaled by the mask's height, so the outline
+// The width is authored at cReferenceOutputLines and scaled by the mask's height, so the outline
 // keeps its share of the frame rather than a texel count: the mask is on the render grid and the
 // image is reconstructed onto a denser or coarser output one, and a fixed texel count would arrive
 // proportionally thicker.
 static const float c_OutlineWidthPx = 4.0;
-static const float c_OutlineRefHeightPx = 2160.0;
 
 // The dilate costs (2r+1)^2 taps, so past this the outline stops thickening rather than the frame
 // paying quadratically for a supersampled target.
@@ -93,7 +93,7 @@ float SampleOutline(float2 uv)
     }
 
     const float2 texelSize = 1.0 / gPostProcessData.maskSize;
-    const float width = c_OutlineWidthPx * gPostProcessData.maskSize.y / c_OutlineRefHeightPx;
+    const float width = c_OutlineWidthPx * gPostProcessData.maskSize.y / cReferenceOutputLines;
 
     // Floored at one texel: below it the outline would disappear, and selection feedback nobody can
     // see is worse than one that is a touch thick.

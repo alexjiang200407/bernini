@@ -121,3 +121,8 @@ public static const uint cPoseForceTable = 1;
 // level while it fades out; clear on the entry that draws its current level. Instance slots stay
 // below it.
 public static const uint cOutgoingDrawBit = 0x80000000;
+
+// The output height a screen-space distance is authored at -- the selection outline's width, the
+// colour split's displacement, film grain's pitch. Each scales with the target's own height, so it
+// keeps its share of the frame at any size.
+public static const float cReferenceOutputLines = 2160.0;

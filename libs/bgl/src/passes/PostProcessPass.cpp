@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <bgl/IRenderTarget.h>
+#include <bgl/idl/Constants.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/constants/constants.h>
 #include <bgpu/device/Device.h>
@@ -73,10 +74,6 @@ namespace bgl
 			"grainPattern"sv,
 			"grainEnabled"sv,
 		};
-
-		// The output height a look's pixel distances are authored at; they scale with the target's,
-		// so a look keeps its share of the frame.
-		constexpr float c_LookReferenceLines = 2160.0f;
 
 		/**
 		 * FSR 2's mapping from a sharpness in [0, 1] to RCAS's lobe scale: 2 - 2s stops below the
@@ -207,9 +204,10 @@ namespace bgl
 				// A distance from the centre of one is half the height, so the radial share in uv
 				// is the same number on both axes and at every output size.
 				tonemap["splitOffset"].SetIfValid(
-					args.colorSplit.offset * (outputSize.y / c_LookReferenceLines) / outputSize);
+					args.colorSplit.offset * (outputSize.y / idl::cReferenceOutputLines) /
+					outputSize);
 				tonemap["splitRadial"].SetIfValid(
-					args.colorSplit.radial / (0.5f * c_LookReferenceLines));
+					args.colorSplit.radial / (0.5f * idl::cReferenceOutputLines));
 			}
 
 			tonemap["grainEnabled"].SetIfValid(args.filmGrainEnabled ? 1u : 0u);
@@ -218,7 +216,7 @@ namespace bgl
 				const FilmGrainSettings& grain = args.filmGrain;
 
 				tonemap["grainPitch"].SetIfValid(
-					std::max(1.0f, grain.size * outputSize.y / c_LookReferenceLines));
+					std::max(1.0f, grain.size * outputSize.y / idl::cReferenceOutputLines));
 				tonemap["grainIntensity"].SetIfValid(grain.intensity);
 				tonemap["grainPattern"].SetIfValid(
 					grain.holdFrames == 0 ?
