@@ -27,7 +27,7 @@ namespace bgl
 	 * writes it afterwards, blending over this -- so the capture path, a readback of the last
 	 * presented backbuffer, still describes what was shown.
 	 *
-	 * Today that is the bloom combine, the colour grade and the display curve. Everything between a
+	 * Today that is the colour split, the bloom combine, the colour grade and the display curve. Everything between a
 	 * resolved scene and the screen belongs here as it lands -- exposure adaptation next -- so the
 	 * stage is named for the role rather than for its current steps.
 	 *
@@ -47,7 +47,7 @@ namespace bgl
 
 			// Point where the source is already on the backbuffer's grid, which is every frame the
 			// resolve ran and every unscaled one; linear is what carries a render-resolution scene
-			// colour across when it did not.
+			// colour across when it did not, and what the colour split reads between texels with.
 			bgpu::SamplerHandle sampler;
 			bgpu::Viewport      viewport;
 
@@ -80,6 +80,9 @@ namespace bgl
 			ColorGradeSettings colorGrade;
 			bool               colorGradeEnabled = false;
 			PostProcessType    postProcessType   = PostProcessType::kFilmic;
+
+			ColorSplitSettings colorSplit;
+			bool               colorSplitEnabled = false;
 		};
 
 		explicit PostProcessPass(const PassInitContext& ctx);

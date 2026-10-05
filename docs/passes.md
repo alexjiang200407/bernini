@@ -998,7 +998,8 @@ the `programs.screen.PostProcess` module (mesh + pixel, no amplification shader,
 On a TAA target rendering below a scale of 1, with a nonzero `taaSharpness` (1 by default), it
 first sharpens the resolved history with RCAS ([Temporal Antialiasing](docs/taa.md) § The sharpen),
 reading four more point taps of it. Otherwise the branch is skipped and the frame is the one it
-always was. Then it combines the [Bloom](#bloom) chain's finished level — in linear radiance, scaled by
+always was. A target with [the colour split](#the-colour-split) on reads red and blue from
+displaced taps of that. Then it combines the [Bloom](#bloom) chain's finished level — in linear radiance, scaled by
 `BloomSettings::intensity`, behind the target's flag so a bloom-less frame binds nothing; added
 under filmic, screened under toon — then
 applies the display curve — `AgX` through the LUT above, or toon's clamp — graded when the target
@@ -1067,6 +1068,28 @@ and not below it. The same `ColorGradeSettings` are therefore a different grade 
 slope of 1.1 brightens the top of a 25-stop log range under filmic and scales the encoded value
 under toon. A game is one type or the other and tunes its grade for it (`ColorGrade_test`,
 `PostProcessType_test`).
+
+#### The colour split
+
+`SetColorSplitEnabled` reads the scene's red from one side of each pixel and its blue from the
+other, green staying put: a misregistered print with `ColorSplitSettings::offset`, the same
+displacement over the whole frame, and a lens's chromatic aberration with `radial`, nothing at the
+centre and growing linearly outward. Red moves by the setting and blue by its opposite, so the two
+fringes of an edge are that far either side of it.
+
+It runs on the scene sample, **ahead of the curve** — where a lens puts it, and where Unreal's and
+Unity's run. Under toon the curve is a per-channel clamp, so the result is a split of the displayed
+image exactly; under filmic a fringe goes through AgX like any other colour. The glow is combined
+unsplit, since a blur does not show a displacement of a pixel or two, and the outline, composited
+last, is not split either.
+
+Distances are **pixels at a 2160-line output, scaled by the target's height**, as the outline's
+width is, so a look keeps its share of the frame from a thumbnail to 4K. `PostProcessPass` turns
+them into uv: the radial share, measured in half-heights from the centre, comes out as the same
+number on both axes at every size. A displaced tap lands between texels, so a frame with the split
+on reads the scene through the linear sampler even where it is on the output grid — at a texel's
+centre that is the point tap, and a split of zero is the plain frame. On an upscaled TAA target the
+sharpen runs at each of the three taps, fifteen reads in place of five (`ColorSplit_test`).
 
 ### Overlay — [passes/OverlayPass.{h,cpp}](libs/bgl/src/passes/OverlayPass.cpp)
 

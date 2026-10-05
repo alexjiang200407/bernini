@@ -1221,6 +1221,14 @@ namespace bgl
 		postProcessArgs.colorGradeEnabled = rt.IsColorGradeEnabled();
 		postProcessArgs.postProcessType   = rt.GetPostProcessType();
 
+		postProcessArgs.colorSplit        = rt.GetColorSplitSettings();
+		postProcessArgs.colorSplitEnabled = rt.IsColorSplitEnabled();
+		if (postProcessArgs.colorSplitEnabled)
+		{
+			// A displaced tap lands between texels, and at a texel's centre linear is the point tap.
+			postProcessArgs.sampler = m_LinearClampSampler;
+		}
+
 		m_PostProcess.AttachToFrameGraph(m_FrameGraph, postProcessArgs);
 
 		// Every presentable this frame leaves in kPresent: its own backbuffer first.

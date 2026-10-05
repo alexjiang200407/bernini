@@ -415,7 +415,9 @@ and portability.
   - [x] Bloom — engine pass with per-target settings; `docs/passes.md` § Bloom.
   - [ ] LUT
   - [x] Color Grading — white balance, ASC CDL, contrast and vignette per target, evaluated in the
-    post pass; `docs/passes.md` § The colour grade.
+    post pass under either post-process type; `docs/passes.md` § The colour grade.
+  - [x] Colour split — a fixed channel misregistration and a radial, lens-style share per target;
+    `docs/passes.md` § The colour split.
   - [ ] Ambient Occlusion — cost is independent of unit count, and it is the main grounding cue
     available to a crowd unit.
 - [ ] Weather

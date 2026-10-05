@@ -38,7 +38,7 @@ namespace bgl
 		// Every member Execute writes. Kept beside the code that writes them so
 		// BindingNameCheck catches a shader rename at startup: an optional write is silent, so
 		// a stale name would otherwise resolve to nothing every frame and say nothing.
-		constexpr std::array<std::string_view, 24> c_Fields = {
+		constexpr std::array<std::string_view, 27> c_Fields = {
 			"sceneColor"sv,
 			"sourceTexelSize"sv,
 			"rcasStrength"sv,
@@ -63,7 +63,14 @@ namespace bgl
 			"gradeVignetteSmoothness"sv,
 			"gradeEnabled"sv,
 			"toon"sv,
+			"splitOffset"sv,
+			"splitRadial"sv,
+			"splitEnabled"sv,
 		};
+
+		// The output height a look's pixel distances are authored at; they scale with the target's,
+		// so a look keeps its share of the frame.
+		constexpr float c_LookReferenceLines = 2160.0f;
 
 		/**
 		 * FSR 2's mapping from a sharpness in [0, 1] to RCAS's lobe scale: 2 - 2s stops below the
@@ -145,12 +152,13 @@ namespace bgl
 		{
 			auto& tonemap = *found;
 
+			const auto outputSize = glm::vec2(
+				args.viewport.maxX - args.viewport.minX,
+				args.viewport.maxY - args.viewport.minY);
+
 			tonemap["sceneColor"].SetIfValid(args.source);
 			tonemap["rcasStrength"].SetIfValid(RcasStrength(args.taaSharpness));
-			tonemap["sourceTexelSize"].SetIfValid(
-				1.0f / glm::vec2(
-						   args.viewport.maxX - args.viewport.minX,
-						   args.viewport.maxY - args.viewport.minY));
+			tonemap["sourceTexelSize"].SetIfValid(1.0f / outputSize);
 			tonemap["sampler"].SetIfValid(args.sampler);
 			tonemap["maskSampler"].SetIfValid(args.maskSampler);
 			tonemap["tonemapLut"].SetIfValid(args.tonemapLut);
@@ -185,6 +193,17 @@ namespace bgl
 				tonemap["gradeContrast"].SetIfValid(grade.contrast);
 				tonemap["gradeVignetteIntensity"].SetIfValid(grade.vignetteIntensity);
 				tonemap["gradeVignetteSmoothness"].SetIfValid(grade.vignetteSmoothness);
+			}
+
+			tonemap["splitEnabled"].SetIfValid(args.colorSplitEnabled ? 1u : 0u);
+			if (args.colorSplitEnabled)
+			{
+				// A distance from the centre of one is half the height, so the radial share in uv
+				// is the same number on both axes and at every output size.
+				tonemap["splitOffset"].SetIfValid(
+					args.colorSplit.offset * (outputSize.y / c_LookReferenceLines) / outputSize);
+				tonemap["splitRadial"].SetIfValid(
+					args.colorSplit.radial / (0.5f * c_LookReferenceLines));
 			}
 		}
 		else

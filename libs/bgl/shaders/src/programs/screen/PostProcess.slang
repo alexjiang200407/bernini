@@ -8,7 +8,8 @@ struct PostProcessData
     Texture2D.Handle sceneColor;
 
     // Point when the source is already on the backbuffer's grid, linear when a render-resolution
-    // scene colour has to be carried across -- which is only a frame the TAA resolve did not run.
+    // scene colour has to be carried across -- which is only a frame the TAA resolve did not run --
+    // or when the colour split reads it between texels.
     SamplerState.Handle sampler;
 
     // The resolved history's texel, for RCAS's cross; RCAS runs only on a frame the resolve ran, when
@@ -49,6 +50,12 @@ struct PostProcessData
 
     // The toon post-process: Blender's Standard view, the exposed value clamped and no curve.
     uint toon;
+
+    // Where red is read from, relative to green, in uv: `splitOffset` everywhere, plus
+    // `splitRadial` per unit of distance from the centre. Blue is read from the opposite side.
+    float2 splitOffset;
+    float splitRadial;
+    uint splitEnabled;
 };
 
 ConstantBuffer<PostProcessData> gPostProcessData;
@@ -146,6 +153,26 @@ void MSMain(uint gtid: SV_GroupThreadID, OutputVertices<VSOut, 3> verts, OutputI
     }
 }
 
+// The scene at `uv`, sharpened on a frame that asks for it. The sharpen is of the resolved scene,
+// not of the glow combined with it afterwards.
+float3 SampleScene(float2 uv)
+{
+    float3 scene = gPostProcessData.sceneColor.SampleLevel(gPostProcessData.sampler, uv, 0.0).rgb;
+
+    if (gPostProcessData.rcasStrength > 0.0)
+    {
+        let texel = gPostProcessData.sourceTexelSize;
+        float3 above = gPostProcessData.sceneColor.SampleLevel(gPostProcessData.sampler, uv - float2(0.0, texel.y), 0.0).rgb;
+        float3 left = gPostProcessData.sceneColor.SampleLevel(gPostProcessData.sampler, uv - float2(texel.x, 0.0), 0.0).rgb;
+        float3 right = gPostProcessData.sceneColor.SampleLevel(gPostProcessData.sampler, uv + float2(texel.x, 0.0), 0.0).rgb;
+        float3 below = gPostProcessData.sceneColor.SampleLevel(gPostProcessData.sampler, uv + float2(0.0, texel.y), 0.0).rgb;
+
+        scene = Rcas(above, left, scene, right, below, gPostProcessData.rcasStrength);
+    }
+
+    return scene;
+}
+
 // AgX and Standard leave their result linear so the sRGB target re-encodes it. Alpha is forced opaque: the
 // backbuffer is a display surface, and scene alpha is a surface's own coverage, not the pixel's --
 // a hashed or cutout survivor carries its texture alpha, and passing that through hands a capture
@@ -153,18 +180,16 @@ void MSMain(uint gtid: SV_GroupThreadID, OutputVertices<VSOut, 3> verts, OutputI
 [shader("pixel")]
 float4 PSMain(VSOut input) : SV_Target
 {
-    float4 scene = gPostProcessData.sceneColor.SampleLevel(gPostProcessData.sampler, input.uv, 0.0);
+    float3 scene = SampleScene(input.uv);
 
-    // Ahead of the bloom: the sharpen is of the resolved scene, not of the glow added to it.
-    if (gPostProcessData.rcasStrength > 0.0)
+    // Ahead of the curve, where a lens puts it; toon's curve is a per-channel clamp, so there it
+    // is a split of the displayed image exactly. The glow is too soft to show one.
+    if (gPostProcessData.splitEnabled != 0)
     {
-        let texel = gPostProcessData.sourceTexelSize;
-        float3 above = gPostProcessData.sceneColor.SampleLevel(gPostProcessData.sampler, input.uv - float2(0.0, texel.y), 0.0).rgb;
-        float3 left = gPostProcessData.sceneColor.SampleLevel(gPostProcessData.sampler, input.uv - float2(texel.x, 0.0), 0.0).rgb;
-        float3 right = gPostProcessData.sceneColor.SampleLevel(gPostProcessData.sampler, input.uv + float2(texel.x, 0.0), 0.0).rgb;
-        float3 below = gPostProcessData.sceneColor.SampleLevel(gPostProcessData.sampler, input.uv + float2(0.0, texel.y), 0.0).rgb;
+        const float2 red = gPostProcessData.splitOffset + (input.uv - 0.5) * gPostProcessData.splitRadial;
 
-        scene.rgb = Rcas(above, left, scene.rgb, right, below, gPostProcessData.rcasStrength);
+        scene.r = SampleScene(input.uv - red).r;
+        scene.b = SampleScene(input.uv + red).b;
     }
 
     // Linear radiance. Filmic adds it ahead of the curve, which rolls it off; toon has no curve.
@@ -183,7 +208,7 @@ float4 PSMain(VSOut input) : SV_Target
 
     if (gPostProcessData.toon != 0)
     {
-        color = ScreenBlend(saturate(scene.rgb), saturate(glow));
+        color = ScreenBlend(saturate(scene), saturate(glow));
 
         if (gPostProcessData.gradeEnabled != 0)
         {
@@ -192,11 +217,11 @@ float4 PSMain(VSOut input) : SV_Target
     }
     else if (gPostProcessData.gradeEnabled != 0)
     {
-        color = AgXGraded(scene.rgb + glow, input.uv, TargetGrade(), lut);
+        color = AgXGraded(scene + glow, input.uv, TargetGrade(), lut);
     }
     else
     {
-        color = AgX(scene.rgb + glow, lut);
+        color = AgX(scene + glow, lut);
     }
 
     if (gPostProcessData.outlineEnabled != 0)
