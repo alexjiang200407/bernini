@@ -4,6 +4,7 @@
 
 #include <QStringList>
 #include <QWidget>
+#include <bgl/SurfaceType.h>
 #include <filesystem>
 #include <functional>
 #include <qcontainerfwd.h>
@@ -62,6 +63,10 @@ public:
 	// Supplies the grid's thumbnails. Without one the tiles keep their shell icons.
 	void
 	SetThumbnails(AssetThumbnailCache* thumbnails);
+
+	// The surfaces the renderer registered, which a dropped glTF's materials may name.
+	void
+	SetSurfaces(std::vector<bgl::SurfaceType> surfaces);
 
 	void
 	SetPluginImporter(
@@ -215,4 +220,5 @@ private:
 	std::function<bool(const std::filesystem::path&)>                   m_AcceptsPluginImport;
 	std::function<void(const std::filesystem::path&, std::string_view)> m_PluginImport;
 	std::function<void(QMenu&, const std::vector<std::string>&)>        m_AppendPluginActions;
+	std::vector<bgl::SurfaceType>                                       m_Surfaces;
 };

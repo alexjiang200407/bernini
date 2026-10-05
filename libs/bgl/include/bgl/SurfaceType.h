@@ -131,7 +131,7 @@ namespace bgl
 	struct SurfaceType
 	{
 		// What a material names to draw with this surface, normally its module file's stem.
-		std::string name;
+		std::string surfaceName;
 
 		// What a record of this surface is tagged with: `MaterialType::kGameStart` plus its slot,
 		// and the kind a material handle of this surface carries.

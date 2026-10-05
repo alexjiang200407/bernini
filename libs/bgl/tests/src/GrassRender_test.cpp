@@ -392,14 +392,14 @@ TEST_CASE(
 		{ { "pbr", grass.green, true },
 		  { "surface",
 		    grass.scene->CreateSurfaceMaterial(
-				{ .surface = "PbrLike",
-		          .values  = { { "baseColorFactor", c_Green },
-		                       { "roughnessFactor", glm::vec4(1.0f) },
-		                       { "metallicFactor", glm::vec4(0.0f) } } }),
+				{ .surfaceName = "PbrLike",
+		          .values      = { { "baseColorFactor", c_Green },
+		                           { "roughnessFactor", glm::vec4(1.0f) },
+		                           { "metallicFactor", glm::vec4(0.0f) } } }),
 		    true },
 		  { "lit",
 		    grass.scene->CreateSurfaceMaterial(
-				{ .surface = "Unlit", .values = { { "color", c_Green } } }),
+				{ .surfaceName = "Unlit", .values = { { "color", c_Green } } }),
 		    false } }
 	};
 
@@ -478,11 +478,11 @@ TEST_CASE("A blade reads a material's geometry occlusion as absent", "[grass][re
 		return grass.scene->CreateLoosePbrMaterial(desc);
 	};
 	const auto surface = [&](const bgl::TextureAssetHandle occlusion) {
-		auto desc    = bgl::SurfaceMaterialDesc();
-		desc.surface = "PbrLike";
-		desc.values  = { { "baseColorFactor", c_Green },
-			             { "roughnessFactor", glm::vec4(1.0f) },
-			             { "metallicFactor", glm::vec4(0.0f) } };
+		auto desc        = bgl::SurfaceMaterialDesc();
+		desc.surfaceName = "PbrLike";
+		desc.values      = { { "baseColorFactor", c_Green },
+			                 { "roughnessFactor", glm::vec4(1.0f) },
+			                 { "metallicFactor", glm::vec4(0.0f) } };
 		if (occlusion.textureSlot)
 			desc.textures.push_back({ .name = "geometryOcclusion", .texture = occlusion });
 		return grass.scene->CreateSurfaceMaterial(desc);

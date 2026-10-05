@@ -155,7 +155,7 @@ TEST_CASE(
 
 	BMaterial surface              = mat;
 	surface.shadingModel           = ShadingModel::kPbrSurface;
-	surface.surface.name           = "Rim";
+	surface.surface.surfaceName    = "Rim";
 	const auto        surfaceBytes = AssetCodec<BMaterial>::Serialize(surface);
 	const std::string surfaceOut(
 		reinterpret_cast<const char*>(surfaceBytes.data()),
@@ -861,9 +861,9 @@ TEST_CASE("a preserved route outlives the channel it decorated", "[bmaterial][io
 TEST_CASE("a surface material round-trips its three keys", "[bmaterial][io][surface]")
 {
 	BMaterial mat;
-	mat.name         = "rimmed";
-	mat.shadingModel = ShadingModel::kPbrSurface;
-	mat.surface.name = "Rim";
+	mat.name                = "rimmed";
+	mat.shadingModel        = ShadingModel::kPbrSurface;
+	mat.surface.surfaceName = "Rim";
 
 	// A scalar, a triple and a quad: the count is the author's, and the renderer reads as many
 	// components as the parameter it names was declared with.
@@ -887,7 +887,7 @@ TEST_CASE("a surface material round-trips its three keys", "[bmaterial][io][surf
 	const BMaterial restored = AssetCodec<BMaterial>::Deserialize(bytes);
 
 	REQUIRE(restored.shadingModel == ShadingModel::kPbrSurface);
-	CHECK(restored.surface.name == "Rim");
+	CHECK(restored.surface.surfaceName == "Rim");
 
 	REQUIRE(restored.surface.values.size() == 3u);
 	for (const SurfaceValueBinding& value : restored.surface.values)
@@ -989,9 +989,9 @@ TEST_CASE("a surface parameter of the wrong shape is refused", "[bmaterial][io][
 TEST_CASE("a lit surface material round-trips its model", "[bmaterial][io][surface]")
 {
 	BMaterial mat;
-	mat.name         = "banded";
-	mat.shadingModel = ShadingModel::kLitSurface;
-	mat.surface.name = "Band";
+	mat.name                = "banded";
+	mat.shadingModel        = ShadingModel::kLitSurface;
+	mat.surface.surfaceName = "Band";
 
 	mat.surface.values   = { { "bands", { 4.0f } } };
 	mat.surface.textures = { { "base", "Derived/BakedTextures/band_base.ktx2" } };
@@ -1005,7 +1005,7 @@ TEST_CASE("a lit surface material round-trips its model", "[bmaterial][io][surfa
 	const BMaterial restored = AssetCodec<BMaterial>::Deserialize(bytes);
 
 	REQUIRE(restored.shadingModel == ShadingModel::kLitSurface);
-	CHECK(restored.surface.name == "Band");
+	CHECK(restored.surface.surfaceName == "Band");
 	REQUIRE(restored.surface.values.size() == 1u);
 	CHECK(restored.surface.values[0].name == "bands");
 	REQUIRE(restored.surface.textures.size() == 1u);
@@ -1032,11 +1032,11 @@ TEST_CASE("a toon surface material round-trips its model", "[bmaterial][io][surf
 	}
 
 	BMaterial mat;
-	mat.name             = "flat";
-	mat.shadingModel     = model;
-	mat.surface.name     = "Flat";
-	mat.surface.values   = { { "baseColorFactor", { 1.0f, 0.5f, 0.25f, 1.0f } } };
-	mat.surface.textures = { { "baseColor", "Derived/BakedTextures/flat_base.ktx2" } };
+	mat.name                = "flat";
+	mat.shadingModel        = model;
+	mat.surface.surfaceName = "Flat";
+	mat.surface.values      = { { "baseColorFactor", { 1.0f, 0.5f, 0.25f, 1.0f } } };
+	mat.surface.textures    = { { "baseColor", "Derived/BakedTextures/flat_base.ktx2" } };
 
 	const auto        bytes = AssetCodec<BMaterial>::Serialize(mat);
 	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
@@ -1048,7 +1048,7 @@ TEST_CASE("a toon surface material round-trips its model", "[bmaterial][io][surf
 
 	REQUIRE(restored.shadingModel == model);
 	CHECK(isSurfaceModel(restored.shadingModel));
-	CHECK(restored.surface.name == "Flat");
+	CHECK(restored.surface.surfaceName == "Flat");
 	REQUIRE(restored.surface.values.size() == 1u);
 	CHECK(restored.surface.values[0].name == "baseColorFactor");
 	REQUIRE(restored.surface.textures.size() == 1u);

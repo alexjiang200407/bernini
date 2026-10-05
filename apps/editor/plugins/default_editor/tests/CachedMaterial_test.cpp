@@ -168,12 +168,12 @@ TEST_CASE("A surface material opens as a graphless one", "[mesheditor][surface]"
 	const Sandbox sandbox;
 
 	{
-		auto material             = assetlib::BMaterial();
-		material.name             = "rim";
-		material.shadingModel     = assetlib::ShadingModel::kPbrSurface;
-		material.surface.name     = "Rim";
-		material.surface.values   = { { "rimPower", { 2.0f } } };
-		material.surface.textures = { { "baseColor", "Derived/BakedTextures/rim.ktx2" } };
+		auto material                = assetlib::BMaterial();
+		material.name                = "rim";
+		material.shadingModel        = assetlib::ShadingModel::kPbrSurface;
+		material.surface.surfaceName = "Rim";
+		material.surface.values      = { { "rimPower", { 2.0f } } };
+		material.surface.textures    = { { "baseColor", "Derived/BakedTextures/rim.ktx2" } };
 
 		assetlib::AssetStore(sandbox.Root()).Save(material, "Authored/Materials/rust.bmaterial");
 	}
@@ -184,6 +184,6 @@ TEST_CASE("A surface material opens as a graphless one", "[mesheditor][surface]"
 
 	REQUIRE(material != nullptr);
 	CHECK(material->shadingModel == assetlib::ShadingModel::kPbrSurface);
-	CHECK(material->surface.name == "Rim");
+	CHECK(material->surface.surfaceName == "Rim");
 	CHECK(material->editorGraph.empty());
 }

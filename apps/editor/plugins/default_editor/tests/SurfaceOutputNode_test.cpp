@@ -57,8 +57,8 @@ namespace
 	bgl::SurfaceType
 	RimSurface()
 	{
-		auto surface = bgl::SurfaceType();
-		surface.name = "Rim";
+		auto surface        = bgl::SurfaceType();
+		surface.surfaceName = "Rim";
 
 		auto power         = bgl::SurfaceValue();
 		power.name         = "rimPower";
@@ -291,9 +291,9 @@ TEST_CASE("A routed slot compiles to its routes, not a binding", "[materialgraph
 
 TEST_CASE("A routed document builds its board", "[materialgraph][surfacesink]")
 {
-	auto material         = assetlib::BMaterial();
-	material.shadingModel = assetlib::ShadingModel::kPbrSurface;
-	material.surface.name = "Rim";
+	auto material                = assetlib::BMaterial();
+	material.shadingModel        = assetlib::ShadingModel::kPbrSurface;
+	material.surface.surfaceName = "Rim";
 
 	auto& orm     = material.surface.textures.emplace_back();
 	orm.name      = "orm";
@@ -375,7 +375,7 @@ TEST_CASE("A surface board compiles to the surface document", "[materialgraph][s
 		CompileMaterial(model, QStringLiteral("head_rim"), c_DataRoot);
 
 	CHECK(material.shadingModel == assetlib::ShadingModel::kPbrSurface);
-	CHECK(material.surface.name == "Rim");
+	CHECK(material.surface.surfaceName == "Rim");
 
 	// Every declared value is written at its declared width -- an edited one at its edit, an
 	// untouched one at its default -- so the document says what the panel showed.
@@ -439,14 +439,14 @@ TEST_CASE("A surface document builds its board", "[materialgraph][surfacesink]")
 {
 	MaterialGraphModel model(Registry());
 
-	auto material              = assetlib::BMaterial();
-	material.name              = "head_rim";
-	material.shadingModel      = assetlib::ShadingModel::kPbrSurface;
-	material.layer.alphaMode   = assetlib::AlphaMode::kHashed;
-	material.layer.doubleSided = false;
-	material.surface.name      = "Rim";
-	material.surface.values    = { { "rimPower", { 2.5f } } };
-	material.surface.textures  = { { "baseColor", "Derived/SourceTextures/head/rim.ktx2" } };
+	auto material                = assetlib::BMaterial();
+	material.name                = "head_rim";
+	material.shadingModel        = assetlib::ShadingModel::kPbrSurface;
+	material.layer.alphaMode     = assetlib::AlphaMode::kHashed;
+	material.layer.doubleSided   = false;
+	material.surface.surfaceName = "Rim";
+	material.surface.values      = { { "rimPower", { 2.5f } } };
+	material.surface.textures    = { { "baseColor", "Derived/SourceTextures/head/rim.ktx2" } };
 
 	REQUIRE(BuildSurfaceMaterialGraph(model, material, c_DataRoot));
 
@@ -481,9 +481,9 @@ TEST_CASE(
 	// the next Save.
 	MaterialGraphModel model(MakeMaterialNodeRegistry(c_Language, nullptr, nullptr, {}));
 
-	auto material         = assetlib::BMaterial();
-	material.shadingModel = assetlib::ShadingModel::kPbrSurface;
-	material.surface.name = "Rim";
+	auto material                = assetlib::BMaterial();
+	material.shadingModel        = assetlib::ShadingModel::kPbrSurface;
+	material.surface.surfaceName = "Rim";
 
 	CHECK_FALSE(BuildSurfaceMaterialGraph(model, material, c_DataRoot));
 	CHECK(model.allNodeIds().empty());
@@ -495,11 +495,11 @@ TEST_CASE("A binding the surface does not declare is skipped", "[materialgraph][
 	// the stray binding, and the rest of the material still opens.
 	MaterialGraphModel model(Registry());
 
-	auto material             = assetlib::BMaterial();
-	material.shadingModel     = assetlib::ShadingModel::kPbrSurface;
-	material.surface.name     = "Rim";
-	material.surface.textures = { { "glitter", "Derived/SourceTextures/head/glitter.ktx2" },
-		                          { "baseColor", "Derived/SourceTextures/head/rim.ktx2" } };
+	auto material                = assetlib::BMaterial();
+	material.shadingModel        = assetlib::ShadingModel::kPbrSurface;
+	material.surface.surfaceName = "Rim";
+	material.surface.textures    = { { "glitter", "Derived/SourceTextures/head/glitter.ktx2" },
+		                             { "baseColor", "Derived/SourceTextures/head/rim.ktx2" } };
 
 	REQUIRE(BuildSurfaceMaterialGraph(model, material, c_DataRoot));
 
@@ -514,11 +514,11 @@ TEST_CASE("Two slots sharing one file share one texture node", "[materialgraph][
 {
 	MaterialGraphModel model(Registry());
 
-	auto material             = assetlib::BMaterial();
-	material.shadingModel     = assetlib::ShadingModel::kPbrSurface;
-	material.surface.name     = "Rim";
-	material.surface.textures = { { "baseColor", "Derived/SourceTextures/head/rim.ktx2" },
-		                          { "mask", "Derived/SourceTextures/head/rim.ktx2" } };
+	auto material                = assetlib::BMaterial();
+	material.shadingModel        = assetlib::ShadingModel::kPbrSurface;
+	material.surface.surfaceName = "Rim";
+	material.surface.textures    = { { "baseColor", "Derived/SourceTextures/head/rim.ktx2" },
+		                             { "mask", "Derived/SourceTextures/head/rim.ktx2" } };
 
 	REQUIRE(BuildSurfaceMaterialGraph(model, material, c_DataRoot));
 
@@ -596,8 +596,8 @@ TEST_CASE("A colour value carries a swatch, and picking writes it", "[materialgr
 	// than the width. A marked value is the swatch alone -- no spins beside it -- so the spin
 	// count is the unmarked value's. The picker's own dialog is modal and cannot run headless;
 	// SetValue is the write it lands, so it is what the case drives.
-	auto surface = bgl::SurfaceType();
-	surface.name = "Swatch";
+	auto surface        = bgl::SurfaceType();
+	surface.surfaceName = "Swatch";
 
 	auto glow         = bgl::SurfaceValue();
 	glow.name         = "glowColor";

@@ -1023,6 +1023,61 @@ Ten rules, each of which is a way to get this wrong:
 The import runs no bake, so there is no triplet, and the maps are sampled straight from the routes until
 someone bakes it.
 
+### A surface named in a material's extras
+
+glTF has no way to say a material draws with a [game-defined surface](game_defined_surfaces.md), so
+the material's `extras` say it, in the flat keys a Blender material's Custom Properties export as
+(with **Include → Custom Properties** ticked):
+
+| Key | Value | Means |
+|---|---|---|
+| `bernini_surface` | a string | the surface's name, as a `.bmaterial`'s `surface` writes it (`"ToonCharacter"`) |
+| `bernini_<field>` | a number, or an array of 1–4 numbers | a value the surface declares |
+| `bernini_<field>` | a string | a slot the surface declares, bound to the file's image of that name |
+
+`loadFromGltf` reads them into `imp::BMaterialImport::surface`, and `probeGltfMaterials` reports the
+surface's name; [libs/assetlib_structs/include/assetlib_structs/BMaterialImport.h](libs/assetlib_structs/include/assetlib_structs/BMaterialImport.h)
+holds the rules. Keys without the prefix are not ours and are skipped, and so are fields when no
+`bernini_surface` names a surface for them. A key of ours that cannot be a field (a bool, an
+object, five numbers, an image the file does not have) is dropped with a warning naming the
+material and the key, and the rest of the material still reads.
+
+assetlib holds no project's surfaces, so it checks nothing against one. Whether a field exists and
+is as wide as given is for the importer to decide.
+
+**The editor's import writes the material on that surface** when the project registers it
+(`editor::WriteImportedMaterials`, handed the renderer's `GetSurfaceTypes()`). It writes the same
+graph the Mesh Editor reopens, built by `BuildSurfaceMaterialGraph` from a document assembled in
+this order:
+
+1. The glTF's own base colour. `baseColorFactor` fills a `float4` value of that name, and
+   `baseColorTexture` fills a slot named `baseColor`, wherever the surface declares them. This is
+   what Blender exports from a Principled BSDF's Base Color, so an artist sets it there once.
+2. The extras, over that. A field the surface does not declare, a value of another width, or a slot
+   it does not have is dropped with a warning naming the material, and that value keeps the
+   surface's default.
+3. The glTF's alpha mode, cutoff and `doubleSided` become the layer, as for PBR.
+
+Three more rules:
+
+* **A surface the project does not register falls back to PBR**, with a warning naming it, so a
+  misspelt `bernini_surface` still produces a material. A material that is not PBR (one marked
+  `KHR_materials_unlit`) is still written when it names a registered surface, because the extras
+  say what it is, and the dialog gives it a file name to match.
+* **Values are not snapped to three decimals** the way imported PBR factors are. A toon feather
+  defaults to 0.0001, and snapping would make it 0. The sink's spin box rounds what it *shows*,
+  and the file keeps what the extras said until someone edits the field.
+* **The import seeds the `.bmaterial` once.** `Reimport` never writes a `.bmaterial`, and an
+  import refuses a material file that already exists, so after the first import the document is
+  the authority. A later change to the extras does not reach it. To take one, delete the
+  material and import again.
+
+**An image that only an extras string names is decoded as data.** Colour space is decided at decode
+from what glTF calls colour (`baseColorTexture`, a specular-glossiness diffuse). That decode also
+runs in `assetlib_cli` and in texture refresh, and neither holds a surface's slot types. So a colour
+map reaches a surface through the glTF's own base colour: in Blender, wire it into a Principled
+BSDF's Base Color for the export.
+
 ## Pruning unused baked maps
 
 A re-bake orphans the map its old routing named (see [Texture standards](#texture-standards)), so

@@ -345,7 +345,7 @@ BuildSurfaceMaterialGraph(
 	const std::filesystem::path& dataRoot)
 {
 	const QtNodes::NodeId outputId =
-		model.addNode(SurfaceOutputNode::ModelNameFor(material.surface.name));
+		model.addNode(SurfaceOutputNode::ModelNameFor(material.surface.surfaceName));
 	if (outputId == QtNodes::InvalidNodeId)
 		return false;
 
@@ -374,7 +374,7 @@ BuildSurfaceMaterialGraph(
 				"MeshEditor: '%s' binds '%s', which surface '%s' does not declare",
 				material.name.c_str(),
 				binding.name.c_str(),
-				material.surface.name.c_str());
+				material.surface.surfaceName.c_str());
 			continue;
 		}
 

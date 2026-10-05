@@ -61,7 +61,7 @@ namespace bgl
 	struct SurfaceMaterialDesc
 	{
 		// Which registered surface draws it: a name from IGraphics::GetSurfaceTypes().
-		std::string surface;
+		std::string surfaceName;
 
 		// Which contract the caller expects that surface to conform to; a mismatch against what
 		// reflection read off the module is refused. A document says which model it was authored

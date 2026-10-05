@@ -3,6 +3,8 @@
 #include "Import/import_pipeline.h"
 
 #include <QString>
+#include <bgl/SurfaceType.h>
+#include <span>
 
 class QMimeData;
 class QWidget;
@@ -32,7 +34,11 @@ namespace editor
 	 * @param parent Parents the dialog, the loading screen and every message box.
 	 */
 	[[nodiscard]] MeshImport
-	RunMeshImport(QWidget* parent, const QString& dataRoot, const QString& sourceFile);
+	RunMeshImport(
+		QWidget*                          parent,
+		const QString&                    dataRoot,
+		const QString&                    sourceFile,
+		std::span<const bgl::SurfaceType> surfaces);
 
 	/** Whether `localFile` names a mesh source the importer accepts. */
 	[[nodiscard]] bool
@@ -61,5 +67,9 @@ namespace editor
 	 * user's "stop" by immediately putting the next options dialog in front of them.
 	 */
 	void
-	RunImportDrop(QWidget* parent, const QString& dataRoot, const QMimeData& mime);
+	RunImportDrop(
+		QWidget*                          parent,
+		const QString&                    dataRoot,
+		const QMimeData&                  mime,
+		std::span<const bgl::SurfaceType> surfaces);
 }

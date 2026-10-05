@@ -384,8 +384,8 @@ TEST_CASE("FindUnusedBakedTextures keeps a lit surface material's baked slot", "
 	WriteSource(root.path / "mask.ktx2", 16, { { 200, 200, 200, 255 } });
 
 	BMaterial material;
-	material.shadingModel = ShadingModel::kLitSurface;
-	material.surface.name = "Toon";
+	material.shadingModel        = ShadingModel::kLitSurface;
+	material.surface.surfaceName = "Toon";
 
 	SurfaceTextureBinding wear;
 	wear.name                 = "wear";

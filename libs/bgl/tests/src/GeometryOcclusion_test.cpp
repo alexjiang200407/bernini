@@ -324,12 +324,12 @@ namespace
 			  } },
 			{ "surface",
 			  [](bgl::IScene& scene, bgl::TextureAssetHandle map) {
-				  auto desc    = bgl::SurfaceMaterialDesc();
-				  desc.surface = "PbrLike";
-				  desc.values  = { { "baseColorFactor",
-				                     glm::vec4(c_Albedo, c_Albedo, c_Albedo, 1.0f) },
-				                   { "roughnessFactor", glm::vec4(1.0f) },
-				                   { "metallicFactor", glm::vec4(0.0f) } };
+				  auto desc        = bgl::SurfaceMaterialDesc();
+				  desc.surfaceName = "PbrLike";
+				  desc.values      = { { "baseColorFactor",
+				                         glm::vec4(c_Albedo, c_Albedo, c_Albedo, 1.0f) },
+				                       { "roughnessFactor", glm::vec4(1.0f) },
+				                       { "metallicFactor", glm::vec4(0.0f) } };
 				  // A surface takes the map through a slot it declares, bound by name like any other.
 				  if (map.textureSlot)
 					  desc.textures.push_back({ .name = "geometryOcclusion", .texture = map });

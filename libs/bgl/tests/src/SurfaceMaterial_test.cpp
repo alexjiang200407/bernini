@@ -118,10 +118,10 @@ TEST_CASE("A surface material draws what the engine's own PBR path draws", "[sur
 	// The same numbers PbrRender_test gives CreatePbrMaterial, by name instead of by field.
 	auto material = scene->CreateSurfaceMaterial(
 		{
-			.surface = "PbrLike",
-			.values  = { { "baseColorFactor", glm::vec4(1.0f) },
-	                     { "roughnessFactor", glm::vec4(0.3f) },
-	                     { "metallicFactor", glm::vec4(0.6f) } },
+			.surfaceName = "PbrLike",
+			.values      = { { "baseColorFactor", glm::vec4(1.0f) },
+	                         { "roughnessFactor", glm::vec4(0.3f) },
+	                         { "metallicFactor", glm::vec4(0.6f) } },
 		});
 
 	// Slot 1: the staged directory is filename-ordered and Band sits ahead of PbrLike.
@@ -172,10 +172,10 @@ TEST_CASE("Two surfaces draw side by side across three layers", "[surface][rende
 	// only just clears that is a rim nobody can see.
 	auto rimOpaque = scene->CreateSurfaceMaterial(
 		{
-			.surface = "Rim",
-			.values  = { { "rimColor", glm::vec4(10.0f, 3.0f, 1.0f, 0.0f) },
-	                     { "rimPower", glm::vec4(2.0f) },
-	                     { "baseColorFactor", glm::vec4(0.05f, 0.05f, 0.06f, 1.0f) } },
+			.surfaceName = "Rim",
+			.values      = { { "rimColor", glm::vec4(10.0f, 3.0f, 1.0f, 0.0f) },
+	                         { "rimPower", glm::vec4(2.0f) },
+	                         { "baseColorFactor", glm::vec4(0.05f, 0.05f, 0.06f, 1.0f) } },
 		});
 
 	// Middle: the rim again, blended, and taking every default it declares -- so the two differ by
@@ -185,7 +185,7 @@ TEST_CASE("Two surfaces draw side by side across three layers", "[surface][rende
 	// terminator over the front, and the faceting of it is what the golden would then pin.
 	auto rimBlend = scene->CreateSurfaceMaterial(
 		{
-			.surface     = "Rim",
+			.surfaceName = "Rim",
 			.layerType   = LayerType::kBlend,
 			.doubleSided = false,
 		});
@@ -195,7 +195,7 @@ TEST_CASE("Two surfaces draw side by side across three layers", "[surface][rende
 	// record it names.
 	auto tintBlend = scene->CreateSurfaceMaterial(
 		{
-			.surface     = "Tint",
+			.surfaceName = "Tint",
 			.layerType   = LayerType::kBlend,
 			.doubleSided = false,
 			.values      = { { "tint", glm::vec4(1.0f, 0.0f, 0.0f, 1.0f) } },
@@ -204,7 +204,7 @@ TEST_CASE("Two surfaces draw side by side across three layers", "[surface][rende
 	scene->UpdateSurfaceMaterial(
 		tintBlend,
 		{
-			.surface     = "Tint",
+			.surfaceName = "Tint",
 			.layerType   = LayerType::kBlend,
 			.doubleSided = false,
 			.values      = { { "tint", glm::vec4(0.2f, 0.9f, 0.4f, 0.6f) } },
@@ -216,7 +216,7 @@ TEST_CASE("Two surfaces draw side by side across three layers", "[surface][rende
 	// alpha-test rows drawing.
 	auto tintMask = scene->CreateSurfaceMaterial(
 		{
-			.surface     = "Tint",
+			.surfaceName = "Tint",
 			.layerType   = LayerType::kMask,
 			.alphaCutoff = 0.5f,
 			.values      = { { "tint", glm::vec4(0.9f, 0.7f, 0.1f, 1.0f) } },
@@ -350,9 +350,9 @@ TEST_CASE("More than four surfaces draw, opaque and blended", "[surface][render]
 		const std::string name = std::format("Flat{}", i);
 		const float       x    = -12.5f + 5.0f * static_cast<float>(i);
 
-		const auto opaque = scene->CreateSurfaceMaterial({ .surface = name });
+		const auto opaque = scene->CreateSurfaceMaterial({ .surfaceName = name });
 		const auto blend  = scene->CreateSurfaceMaterial(
-			{ .surface = name, .layerType = LayerType::kBlend, .doubleSided = false });
+			{ .surfaceName = name, .layerType = LayerType::kBlend, .doubleSided = false });
 
 		for (const auto& [material, y] : { std::pair{ opaque, 4.0f }, std::pair{ blend, -4.0f } })
 		{
@@ -424,7 +424,7 @@ TEST_CASE("A surface material the engine cannot pack is refused", "[surface][ren
 	SECTION("a surface nothing registered")
 	{
 		CHECK_THROWS_MATCHES(
-			scene->CreateSurfaceMaterial({ .surface = "Nowhere" }),
+			scene->CreateSurfaceMaterial({ .surfaceName = "Nowhere" }),
 			SceneError,
 			MessageMatches(ContainsSubstring("no surface named 'Nowhere' is registered")));
 	}
@@ -435,25 +435,25 @@ TEST_CASE("A surface material the engine cannot pack is refused", "[surface][ren
 	{
 		CHECK_THROWS_MATCHES(
 			scene->CreateSurfaceMaterial(
-				{ .surface = "Unlit", .shading = SurfaceShading::kPbrSurface }),
+				{ .surfaceName = "Unlit", .shading = SurfaceShading::kPbrSurface }),
 			SceneError,
 			MessageMatches(ContainsSubstring("surface 'Unlit' owns its lighting")));
 
 		CHECK_THROWS_MATCHES(
-			scene->CreateSurfaceMaterial({ .surface = "Rim", .shading = SurfaceShading::kLit }),
+			scene->CreateSurfaceMaterial({ .surfaceName = "Rim", .shading = SurfaceShading::kLit }),
 			SceneError,
 			MessageMatches(ContainsSubstring("surface 'Rim' is lit by the engine")));
 
 		// The stated expectation that matches is not a refusal.
-		CHECK_NOTHROW(
-			scene->CreateSurfaceMaterial({ .surface = "Unlit", .shading = SurfaceShading::kLit }));
+		CHECK_NOTHROW(scene->CreateSurfaceMaterial(
+			{ .surfaceName = "Unlit", .shading = SurfaceShading::kLit }));
 	}
 
 	SECTION("a value the surface does not declare")
 	{
 		CHECK_THROWS_MATCHES(
 			scene->CreateSurfaceMaterial(
-				{ .surface = "Rim", .values = { { "rimWidth", glm::vec4(1.0f) } } }),
+				{ .surfaceName = "Rim", .values = { { "rimWidth", glm::vec4(1.0f) } } }),
 			SceneError,
 			MessageMatches(ContainsSubstring("surface 'Rim' declares no value named 'rimWidth'")));
 	}
@@ -461,7 +461,8 @@ TEST_CASE("A surface material the engine cannot pack is refused", "[surface][ren
 	SECTION("a texture the surface does not declare")
 	{
 		CHECK_THROWS_MATCHES(
-			scene->CreateSurfaceMaterial({ .surface = "Rim", .textures = { { "detail", {} } } }),
+			scene->CreateSurfaceMaterial(
+				{ .surfaceName = "Rim", .textures = { { "detail", {} } } }),
 			SceneError,
 			MessageMatches(ContainsSubstring("surface 'Rim' declares no texture named 'detail'")));
 	}
@@ -473,7 +474,7 @@ TEST_CASE("A surface material the engine cannot pack is refused", "[surface][ren
 	{
 		CHECK_THROWS_MATCHES(
 			scene->CreateSurfaceMaterial(
-				{ .surface = "Rim", .values = { { "baseColor", glm::vec4(1.0f) } } }),
+				{ .surfaceName = "Rim", .values = { { "baseColor", glm::vec4(1.0f) } } }),
 			SceneError,
 			MessageMatches(
 				ContainsSubstring("surface 'Rim' declares 'baseColor' as a texture, not a value")));
@@ -482,7 +483,8 @@ TEST_CASE("A surface material the engine cannot pack is refused", "[surface][ren
 	SECTION("a texture bound to a name the surface declared as a value")
 	{
 		CHECK_THROWS_MATCHES(
-			scene->CreateSurfaceMaterial({ .surface = "Rim", .textures = { { "rimColor", {} } } }),
+			scene->CreateSurfaceMaterial(
+				{ .surfaceName = "Rim", .textures = { { "rimColor", {} } } }),
 			SceneError,
 			MessageMatches(
 				ContainsSubstring("surface 'Rim' declares 'rimColor' as a value, not a texture")));
@@ -497,8 +499,8 @@ TEST_CASE("A surface material the engine cannot pack is refused", "[surface][ren
 	{
 		CHECK_THROWS_MATCHES(
 			scene->CreateSurfaceMaterial(
-				{ .surface  = "Rim",
-		          .textures = { { .name = "baseColor", .routes = { { { fake, 0 } } } } } }),
+				{ .surfaceName = "Rim",
+		          .textures    = { { .name = "baseColor", .routes = { { { fake, 0 } } } } } }),
 			SceneError,
 			MessageMatches(ContainsSubstring("routes compose data slots only")));
 	}
@@ -507,10 +509,10 @@ TEST_CASE("A surface material the engine cannot pack is refused", "[surface][ren
 	{
 		CHECK_THROWS_MATCHES(
 			scene->CreateSurfaceMaterial(
-				{ .surface  = "PbrLike",
-		          .textures = { { .name    = "orm",
-		                          .texture = fake,
-		                          .routes  = { { { fake, 0 } } } } } }),
+				{ .surfaceName = "PbrLike",
+		          .textures    = { { .name    = "orm",
+		                             .texture = fake,
+		                             .routes  = { { { fake, 0 } } } } } }),
 			SceneError,
 			MessageMatches(ContainsSubstring("one or the other")));
 	}
@@ -519,8 +521,8 @@ TEST_CASE("A surface material the engine cannot pack is refused", "[surface][ren
 	{
 		CHECK_THROWS_MATCHES(
 			scene->CreateSurfaceMaterial(
-				{ .surface  = "PbrLike",
-		          .textures = { { .name = "orm", .routes = { { { fake, 7 } } } } } }),
+				{ .surfaceName = "PbrLike",
+		          .textures    = { { .name = "orm", .routes = { { { fake, 7 } } } } } }),
 			SceneError,
 			MessageMatches(ContainsSubstring("channels 0..3")));
 	}
@@ -529,10 +531,10 @@ TEST_CASE("A surface material the engine cannot pack is refused", "[surface][ren
 	// change -- and the handle is checked before the desc, as UpdatePbrMaterial checks it.
 	SECTION("an update naming a surface the material was not created with")
 	{
-		auto material = scene->CreateSurfaceMaterial({ .surface = "Rim" });
+		auto material = scene->CreateSurfaceMaterial({ .surfaceName = "Rim" });
 
 		CHECK_THROWS_MATCHES(
-			scene->UpdateSurfaceMaterial(material, { .surface = "Tint" }),
+			scene->UpdateSurfaceMaterial(material, { .surfaceName = "Tint" }),
 			SceneError,
 			MessageMatches(ContainsSubstring("was not created with surface 'Tint'")));
 	}
@@ -542,7 +544,7 @@ TEST_CASE("A surface material the engine cannot pack is refused", "[surface][ren
 		CHECK_THROWS_MATCHES(
 			scene->UpdateSurfaceMaterial(
 				MaterialHandle{ MaterialType::kGameStart, LayerType::kOpaque, 1u << 20u },
-				{ .surface = "Rim" }),
+				{ .surfaceName = "Rim" }),
 			SceneError,
 			MessageMatches(ContainsSubstring("is invalid or expired")));
 	}
@@ -553,7 +555,8 @@ TEST_CASE("A surface material the engine cannot pack is refused", "[surface][ren
 	SECTION("hashed alpha on a surface with nothing to measure coverage against")
 	{
 		CHECK_THROWS_MATCHES(
-			scene->CreateSurfaceMaterial({ .surface = "Tint", .layerType = LayerType::kHashed }),
+			scene->CreateSurfaceMaterial(
+				{ .surfaceName = "Tint", .layerType = LayerType::kHashed }),
 			SceneError,
 			MessageMatches(ContainsSubstring("declares no coverage carrier")));
 	}
@@ -572,12 +575,12 @@ TEST_CASE("A surface declaring a carrier takes the hashed layer", "[surface][car
 	REQUIRE(scene != nullptr);
 
 	CHECK_NOTHROW(
-		scene->CreateSurfaceMaterial({ .surface = "Rim", .layerType = LayerType::kHashed }));
+		scene->CreateSurfaceMaterial({ .surfaceName = "Rim", .layerType = LayerType::kHashed }));
 
 	CHECK_NOTHROW(
-		scene->CreateSurfaceMaterial({ .surface = "Tint", .layerType = LayerType::kMask }));
+		scene->CreateSurfaceMaterial({ .surfaceName = "Tint", .layerType = LayerType::kMask }));
 	CHECK_NOTHROW(
-		scene->CreateSurfaceMaterial({ .surface = "Tint", .layerType = LayerType::kBlend }));
+		scene->CreateSurfaceMaterial({ .surfaceName = "Tint", .layerType = LayerType::kBlend }));
 }
 
 // The skinned tier's own gate, and the whole of what a tier costs a surface. The two tiers differ
@@ -610,10 +613,10 @@ TEST_CASE("A surface material draws on skinned geometry", "[surface][render][ski
 
 	auto rim = scene->CreateSurfaceMaterial(
 		{
-			.surface = "Rim",
-			.values  = { { "rimColor", glm::vec4(10.0f, 3.0f, 1.0f, 0.0f) },
-	                     { "rimPower", glm::vec4(2.0f) },
-	                     { "baseColorFactor", glm::vec4(0.05f, 0.05f, 0.06f, 1.0f) } },
+			.surfaceName = "Rim",
+			.values      = { { "rimColor", glm::vec4(10.0f, 3.0f, 1.0f, 0.0f) },
+	                         { "rimPower", glm::vec4(2.0f) },
+	                         { "baseColorFactor", glm::vec4(0.05f, 0.05f, 0.06f, 1.0f) } },
 		});
 
 	auto job     = bgl::RenderJob();
@@ -676,7 +679,7 @@ TEST_CASE("A surface material draws on skinned geometry", "[surface][render][ski
 
 	auto blend = scene->CreateSurfaceMaterial(
 		{
-			.surface     = "Rim",
+			.surfaceName = "Rim",
 			.layerType   = LayerType::kBlend,
 			.doubleSided = false,
 		});
@@ -738,9 +741,9 @@ TEST_CASE("A routed data slot draws what its composited map draws", "[surface][r
 	const auto mr        = scene->AddTextureAsset(FlatImage(8, { { 3, 60, 90, 255 } }), "mr");
 	const auto composite = scene->AddTextureAsset(FlatImage(8, { { 200, 60, 90, 255 } }), "whole");
 
-	auto whole     = bgl::SurfaceMaterialDesc();
-	whole.surface  = "PbrLike";
-	whole.textures = { { .name = "orm", .texture = composite } };
+	auto whole        = bgl::SurfaceMaterialDesc();
+	whole.surfaceName = "PbrLike";
+	whole.textures    = { { .name = "orm", .texture = composite } };
 
 	auto material = scene->CreateSurfaceMaterial(whole);
 	auto sphere   = scene->AddSphereGeom(32, 32, 5.0f, material);
@@ -823,7 +826,7 @@ TEST_CASE("A double-sided surface shades its back face as its front", "[surface]
 	// side-by-side case sets it.
 	auto material = scene->CreateSurfaceMaterial(
 		{
-			.surface     = "Rim",
+			.surfaceName = "Rim",
 			.layerType   = LayerType::kMask,
 			.alphaCutoff = 0.5f,
 			.doubleSided = true,
@@ -898,13 +901,13 @@ TEST_CASE("A lit surface draws its own lighting", "[surface][lit][render]")
 
 	auto unlit = scene->CreateSurfaceMaterial(
 		{
-			.surface = "Unlit",
-			.values  = { { "color", glm::vec4(0.9f, 0.3f, 0.1f, 0.0f) } },
+			.surfaceName = "Unlit",
+			.values      = { { "color", glm::vec4(0.9f, 0.3f, 0.1f, 0.0f) } },
 		});
 
 	// Every parameter left at the defaults the surface declared, so a default that failed to land
 	// shows as the wrong ramp.
-	auto band = scene->CreateSurfaceMaterial({ .surface = "Band" });
+	auto band = scene->CreateSurfaceMaterial({ .surfaceName = "Band" });
 
 	view->CreateStaticMeshInstance(
 		bgl::StaticMeshInstanceDesc()
@@ -953,21 +956,21 @@ TEST_CASE("A lit surface draws beside PBR across layers", "[surface][lit][render
 
 	auto pbrOpaque = scene->CreateSurfaceMaterial(
 		{
-			.surface = "PbrLike",
-			.values  = { { "baseColorFactor", glm::vec4(1.0f) },
-	                     { "roughnessFactor", glm::vec4(0.3f) },
-	                     { "metallicFactor", glm::vec4(0.6f) } },
+			.surfaceName = "PbrLike",
+			.values      = { { "baseColorFactor", glm::vec4(1.0f) },
+	                         { "roughnessFactor", glm::vec4(0.3f) },
+	                         { "metallicFactor", glm::vec4(0.6f) } },
 		});
 
 	auto unlitOpaque = scene->CreateSurfaceMaterial(
 		{
-			.surface = "Unlit",
-			.values  = { { "color", glm::vec4(0.1f, 0.6f, 0.9f, 0.0f) } },
+			.surfaceName = "Unlit",
+			.values      = { { "color", glm::vec4(0.1f, 0.6f, 0.9f, 0.0f) } },
 		});
 
 	auto unlitBlend = scene->CreateSurfaceMaterial(
 		{
-			.surface     = "Unlit",
+			.surfaceName = "Unlit",
 			.layerType   = LayerType::kBlend,
 			.doubleSided = false,
 			.values      = { { "color", glm::vec4(0.9f, 0.8f, 0.1f, 0.0f) },
@@ -976,7 +979,7 @@ TEST_CASE("A lit surface draws beside PBR across layers", "[surface][lit][render
 
 	auto rimBlend = scene->CreateSurfaceMaterial(
 		{
-			.surface     = "Rim",
+			.surfaceName = "Rim",
 			.layerType   = LayerType::kBlend,
 			.doubleSided = false,
 		});

@@ -6,6 +6,7 @@
 #include "Windows/ContentExplorer/asset_rules.h"
 #include "Windows/ContentExplorer/content_explorer_ui.h"
 #include "util/editor_language.h"
+#include <bgl/SurfaceType.h>
 #include <editor_sdk/asset_paths.h>
 #include <editor_sdk/source_mesh.h>
 
@@ -175,6 +176,12 @@ void
 ContentExplorerWindow::SetThumbnails(AssetThumbnailCache* thumbnails)
 {
 	m_FileModel->SetThumbnails(thumbnails);
+}
+
+void
+ContentExplorerWindow::SetSurfaces(std::vector<bgl::SurfaceType> surfaces)
+{
+	m_Surfaces = std::move(surfaces);
 }
 
 void
@@ -607,7 +614,7 @@ ContentExplorerWindow::dropEvent(QDropEvent* event)
 	if (m_RootPath.isEmpty() || !editor::IsEditableMode(m_Mode))
 		return;
 
-	editor::RunImportDrop(this, m_RootPath, *event->mimeData());
+	editor::RunImportDrop(this, m_RootPath, *event->mimeData(), m_Surfaces);
 	if (m_PluginImport)
 	{
 		std::error_code             error;

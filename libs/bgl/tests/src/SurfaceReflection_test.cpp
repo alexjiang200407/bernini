@@ -182,7 +182,7 @@ TEST_CASE("A surface's parameters are reflected at their target's offsets", "[su
 	// The binding module writes a typealias to this, so it is the struct and not the file.
 	CHECK(reflected->sourceTypeName == "GateSurface");
 
-	CHECK(surface.name == "Gate");
+	CHECK(surface.surfaceName == "Gate");
 	// Registration's to assign, not reflection's.
 	CHECK(surface.kind == MaterialType::kInvalid);
 	CHECK(surface.shading == SurfaceShading::kPbrSurface);
@@ -321,7 +321,7 @@ struct ToonSurface : ILitSurfaceSource
 	const SurfaceType& surface = reflected->type;
 
 	CHECK(reflected->sourceTypeName == "ToonSurface");
-	CHECK(surface.name == "Toon");
+	CHECK(surface.surfaceName == "Toon");
 	CHECK(surface.kind == MaterialType::kInvalid);
 	CHECK(surface.shading == SurfaceShading::kLit);
 

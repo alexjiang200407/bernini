@@ -65,7 +65,9 @@ AssetImporterDialog::AssetImporterDialog(
 	m_Identity    = assetlib::makeImportIdentity(
 		("Authored/Meshes/" + QFileInfo(sourceFile).fileName()).toStdString());
 	m_DataRoot        = dataRoot;
-	m_HasPbrMaterials = std::ranges::any_of(materials, &assetlib::GltfMaterial::isPbr);
+	m_HasPbrMaterials = std::ranges::any_of(materials, [](const assetlib::GltfMaterial& material) {
+		return material.isPbr || !material.surfaceName.empty();
+	});
 
 	auto* layout = new QVBoxLayout(this);
 

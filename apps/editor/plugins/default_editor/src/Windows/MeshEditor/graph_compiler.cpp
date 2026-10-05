@@ -119,7 +119,7 @@ namespace editor
 		const bgl::SurfaceType& surface = sink.Surface();
 
 		auto desc        = bgl::SurfaceMaterialDesc();
-		desc.surface     = surface.name;
+		desc.surfaceName = surface.surfaceName;
 		desc.layerType   = ToLayerType(sink.GetAlphaMode());
 		desc.alphaCutoff = sink.GetAlphaCutoff();
 		desc.doubleSided = sink.GetDoubleSided();

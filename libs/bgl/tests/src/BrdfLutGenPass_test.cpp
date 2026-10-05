@@ -261,7 +261,7 @@ TEST_CASE("The BRDF LUT is generated only when PBR shading is drawn", "[brdflut]
 	auto scene = gfx->CreateScene(sceneDesc);
 	auto view  = gfx->CreateSceneView(scene, 4);
 
-	auto unlit = scene->CreateSurfaceMaterial({ .surface = "Unlit" });
+	auto unlit = scene->CreateSurfaceMaterial({ .surfaceName = "Unlit" });
 	view->CreateStaticMeshInstance(
 		bgl::StaticMeshInstanceDesc().SetGeom(scene->AddSphereGeom(16, 16, 3.0f, unlit)));
 

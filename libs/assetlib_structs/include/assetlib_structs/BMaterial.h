@@ -204,7 +204,7 @@ namespace assetlib
 	 */
 	struct SurfaceParams
 	{
-		std::string                        name;
+		std::string                        surfaceName;
 		std::vector<SurfaceValueBinding>   values;
 		std::vector<SurfaceTextureBinding> textures;
 	};

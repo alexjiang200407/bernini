@@ -114,12 +114,12 @@ struct RimSurface : ISurfaceSource
 	void
 	WriteRimMaterial(const std::filesystem::path& root, const char* file, glm::vec3 rimColor)
 	{
-		auto material           = assetlib::BMaterial();
-		material.name           = "rim";
-		material.shadingModel   = assetlib::ShadingModel::kPbrSurface;
-		material.surface.name   = "Rim";
-		material.surface.values = { { "rimColor", { rimColor.r, rimColor.g, rimColor.b } },
-			                        { "rimPower", { 2.0f } } };
+		auto material                = assetlib::BMaterial();
+		material.name                = "rim";
+		material.shadingModel        = assetlib::ShadingModel::kPbrSurface;
+		material.surface.surfaceName = "Rim";
+		material.surface.values      = { { "rimColor", { rimColor.r, rimColor.g, rimColor.b } },
+			                             { "rimPower", { 2.0f } } };
 
 		SaveAt(material, root / assetlib::c_MaterialsDirectoryName / file);
 	}
@@ -166,7 +166,7 @@ TEST_CASE("A project's own surface draws the material that names it", "[gamelib]
 
 	// Read off the game's own module, so the name the document writes is the file's stem.
 	REQUIRE(gfx->GetSurfaceTypes().size() == 1u);
-	CHECK(gfx->GetSurfaceTypes()[0].name == "Rim");
+	CHECK(gfx->GetSurfaceTypes()[0].surfaceName == "Rim");
 
 	auto targetDesc     = bgl::RenderTargetDesc();
 	targetDesc.width    = 256;
@@ -338,10 +338,10 @@ TEST_CASE("A routed slot draws through its routes when its bake is absent", "[ga
 		assetlib::Ktx2Compression::kNone);
 
 	// The angelica shape: AO in one map's R, roughness/metallic in another's G/B. Never baked.
-	auto material         = assetlib::BMaterial();
-	material.name         = "routed";
-	material.shadingModel = assetlib::ShadingModel::kPbrSurface;
-	material.surface.name = "Rim";
+	auto material                = assetlib::BMaterial();
+	material.name                = "routed";
+	material.shadingModel        = assetlib::ShadingModel::kPbrSurface;
+	material.surface.surfaceName = "Rim";
 
 	auto& orm     = material.surface.textures.emplace_back();
 	orm.name      = "orm";
@@ -417,10 +417,10 @@ struct GlowSurface : ILitSurfaceSource
 		assetlib::ShadingModel       model,
 		const char*                  surface)
 	{
-		auto material         = assetlib::BMaterial();
-		material.name         = "lit";
-		material.shadingModel = model;
-		material.surface.name = surface;
+		auto material                = assetlib::BMaterial();
+		material.name                = "lit";
+		material.shadingModel        = model;
+		material.surface.surfaceName = surface;
 
 		SaveAt(material, root / assetlib::c_MaterialsDirectoryName / file);
 	}
@@ -571,11 +571,11 @@ struct FlatEnvironment : IToonEnvironmentSurfaceSource
 		const char*                  surface,
 		const std::vector<float>&    factor)
 	{
-		auto material           = assetlib::BMaterial();
-		material.name           = file;
-		material.shadingModel   = model;
-		material.surface.name   = surface;
-		material.surface.values = { { "baseColorFactor", factor } };
+		auto material                = assetlib::BMaterial();
+		material.name                = file;
+		material.shadingModel        = model;
+		material.surface.surfaceName = surface;
+		material.surface.values      = { { "baseColorFactor", factor } };
 
 		SaveAt(material, root / assetlib::c_MaterialsDirectoryName / file);
 	}

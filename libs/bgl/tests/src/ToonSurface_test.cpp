@@ -204,9 +204,9 @@ struct FlatEnvironment : IToonEnvironmentSurfaceSource
 	Toon(std::string_view surface, glm::vec4 factor, LayerType layer = LayerType::kOpaque)
 	{
 		return SurfaceMaterialDesc{
-			.surface   = std::string(surface),
-			.layerType = layer,
-			.values    = { { "baseColorFactor", factor } },
+			.surfaceName = std::string(surface),
+			.layerType   = layer,
+			.values      = { { "baseColorFactor", factor } },
 		};
 	}
 
@@ -228,10 +228,10 @@ struct FlatEnvironment : IToonEnvironmentSurfaceSource
 	Unlit(glm::vec4 color, LayerType layer = LayerType::kOpaque)
 	{
 		return SurfaceMaterialDesc{
-			.surface   = "Unlit",
-			.layerType = layer,
-			.values    = { { "color", glm::vec4(glm::vec3(color), 0.0f) },
-			               { "opacity", glm::vec4(color.a) } },
+			.surfaceName = "Unlit",
+			.layerType   = layer,
+			.values      = { { "color", glm::vec4(glm::vec3(color), 0.0f) },
+			                 { "opacity", glm::vec4(color.a) } },
 		};
 	}
 }
@@ -246,12 +246,12 @@ TEST_CASE("A toon surface registers under its own model", "[surface][registry][t
 	const std::span<const SurfaceType> types = gfx->GetSurfaceTypes();
 	REQUIRE(types.size() == 3u);
 
-	CHECK(types[0].name == "ToonCharacter");
+	CHECK(types[0].surfaceName == "ToonCharacter");
 	CHECK(types[0].kind == MaterialType::kGameStart);
 	CHECK(types[0].shading == SurfaceShading::kToonCharacter);
-	CHECK(types[1].name == "ToonEnvironment");
+	CHECK(types[1].surfaceName == "ToonEnvironment");
 	CHECK(types[1].shading == SurfaceShading::kToonEnvironment);
-	CHECK(types[2].name == "Unlit");
+	CHECK(types[2].surfaceName == "Unlit");
 	CHECK(types[2].shading == SurfaceShading::kLit);
 
 	REQUIRE(types[0].params.values.size() == 4u);
@@ -813,11 +813,11 @@ TEST_CASE("A toon material is refused a surface on another model", "[surface][to
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(ToonScene());
 
-	auto expectsEnvironment    = SurfaceMaterialDesc{ .surface = "ToonCharacter" };
+	auto expectsEnvironment    = SurfaceMaterialDesc{ .surfaceName = "ToonCharacter" };
 	expectsEnvironment.shading = SurfaceShading::kToonEnvironment;
-	auto expectsCharacter      = SurfaceMaterialDesc{ .surface = "Unlit" };
+	auto expectsCharacter      = SurfaceMaterialDesc{ .surfaceName = "Unlit" };
 	expectsCharacter.shading   = SurfaceShading::kToonCharacter;
-	auto expectsItsOwn         = SurfaceMaterialDesc{ .surface = "ToonEnvironment" };
+	auto expectsItsOwn         = SurfaceMaterialDesc{ .surfaceName = "ToonEnvironment" };
 	expectsItsOwn.shading      = SurfaceShading::kToonEnvironment;
 
 	CHECK_THROWS_MATCHES(
