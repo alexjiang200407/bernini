@@ -100,6 +100,12 @@ A viewport's post-process is the host's to decide, by Render > Post Process: Fil
 every viewport, or Auto, the default and where a newly opened project starts. Under Auto a viewport
 ends in the project's `.bproj` `postProcess`, or in Toon -- what a toon look is authored for --
 when the panel says it shows a toon-shaded asset, with `IEditorViewport::SetShowsToonContent`.
+That call also swaps the viewport's sky for its `ViewportDesc::toonBackdrop` gradient, whatever
+the post-process pick: the background follows what is shown. The host reads the gradient from the
+viewport's `config.json` section, `toonBackdrop` (`bottom` and `top`, each `{ "r", "g", "b" }`,
+scene-linear), and defaults it to the toon look-dev one, pale horizon to sky blue. The asset
+thumbnails follow the same rule per shot -- a toon mesh or material against the `thumbnails`
+section's `toonBackdrop`, anything else against the sky -- so a thumbnail matches its preview.
 
 `apps/editor/plugins/default_editor` owns Mesh, Animation, Blend Space and Grass, their authoring widgets and the
 glTF material-graph writer. It is a statically linked module registered through the same registry before local modules;

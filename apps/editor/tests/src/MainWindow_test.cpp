@@ -39,6 +39,7 @@
 #include <bgl/ISceneView.h>
 #include <bgl/LodLevel.h>
 #include <bgl/glm.h>
+#include <bgl/types/BackdropGradient.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/InstanceDesc.h>
 #include <bgl/types/MaterialHandle.h>
@@ -1083,6 +1084,62 @@ TEST_CASE(
 	grade->setChecked(false);
 	CHECK_FALSE(materialView->IsColorGradeEnabled());
 	CHECK(materialView->GetColorGradeSettings().saturation == Catch::Approx(1.3f));
+}
+
+// The toon backdrop is what is shown deciding the background, not the post-process: a pick of Filmic
+// keeps it on toon content, a pick of Toon puts nothing behind a PBR asset but its sky. Its colours are
+// config.json's per viewport, defaulting to the toon look-dev gradient, and clamped like the bloom.
+TEST_CASE(
+	"A viewport draws its toon backdrop for toon content alone, whatever the post-process",
+	"[mainwindow][backdrop][render]")
+{
+	const HeadlessEditor editor;
+
+	const std::string config = R"({
+  "headless": true,
+  "materialEditor":  { "temporalAA": false,
+                       "toonBackdrop": { "bottom": { "r": 0.5 }, "top": { "g": -1.0 } } },
+  "animationEditor": { "temporalAA": false }
+})";
+	core::file::write_atomic(editor.ConfigFile(), config);
+
+	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+
+	auto* materialView = window.findChild<MeshEditorWindow*>()->findChild<RenderTargetWindow*>();
+	auto* animationView =
+		window.findChild<AnimationEditorWindow*>()->findChild<RenderTargetWindow*>();
+	REQUIRE(materialView != nullptr);
+	REQUIRE(animationView != nullptr);
+
+	CHECK_FALSE(materialView->GetBackdrop().has_value());
+
+	materialView->SetShowsToonContent(true);
+	const std::optional<bgl::BackdropGradient> named = materialView->GetBackdrop();
+	REQUIRE(named.has_value());
+	CHECK(named->bottom.r == Catch::Approx(0.5f));
+	CHECK(named->bottom.g == Catch::Approx(bgl::BackdropGradient().bottom.g));
+	CHECK(named->top.g == Catch::Approx(0.0f));
+	CHECK(named->top.b == Catch::Approx(bgl::BackdropGradient().top.b));
+
+	animationView->SetShowsToonContent(true);
+	const std::optional<bgl::BackdropGradient> unnamed = animationView->GetBackdrop();
+	REQUIRE(unnamed.has_value());
+	CHECK(unnamed->bottom == bgl::BackdropGradient().bottom);
+	CHECK(unnamed->top == bgl::BackdropGradient().top);
+
+	QAction* filmic = PostProcessChoice(window, "Filmic");
+	QAction* toon   = PostProcessChoice(window, "Toon");
+	REQUIRE(filmic != nullptr);
+	REQUIRE(toon != nullptr);
+
+	filmic->trigger();
+	CHECK(materialView->GetPostProcessType() == bgl::PostProcessType::kFilmic);
+	CHECK(materialView->GetBackdrop().has_value());
+
+	materialView->SetShowsToonContent(false);
+	toon->trigger();
+	CHECK(materialView->GetPostProcessType() == bgl::PostProcessType::kToon);
+	CHECK_FALSE(materialView->GetBackdrop().has_value());
 }
 
 // Which tab is up decides which viewport is in the frame loop, so the tab a project opens on is

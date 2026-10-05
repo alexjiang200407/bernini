@@ -8,8 +8,11 @@
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <bgl/ISceneView.h>
+#include <bgl/types/BackdropGradient.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgpu/GpuContext.h>
+#include <catch2/catch_approx.hpp>
+#include <cmath>
 #include <editor_plugin_api/IEditorViewport.h>
 #include <editor_plugin_api/IThumbnailProvider.h>
 #include <editor_sdk/StampedPixmapCache.h>
@@ -21,6 +24,7 @@
 #include <QPixmap>
 #include <QPointer>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 
 #include <assetlib_structs/BMaterial.h>
 #include <bgl/IGraphics.h>
@@ -102,10 +106,12 @@ namespace
 		std::optional<Renderer>           renderer;
 		std::optional<game::AssetManager> assets;
 
-		Fixture()
+		// `shaderDir` is the client shader directory, for a surface the test registers itself.
+		explicit Fixture(std::filesystem::path shaderDir = {})
 		{
 			auto ctxDesc             = bgpu::GpuContextDesc();
 			ctxDesc.enableDebugLayer = true;
+			ctxDesc.clientShaderDir  = std::move(shaderDir);
 
 			renderer.emplace(ctxDesc, bgl::GraphicsOptions(), MakeSceneDesc());
 
@@ -608,6 +614,122 @@ TEST_CASE("A .bmaterial renders to a thumbnail on a sphere", "[thumbnails][rende
 	const QImage image = thumbnail.toImage();
 	REQUIRE(image.save(c_MaterialGot));
 	REQUIRE(DistinctColours(image) > 1);
+}
+
+namespace
+{
+	// A toon character surface drawing its colour flat, so the sphere is one tone and the corners
+	// are background.
+	constexpr std::string_view c_FlatToon = R"(import bgl.MaterialReader;
+import bgl.ToonCharacterSurface;
+
+struct FlatToonParams
+{
+    [Color]
+    [Default(0.8, 0.35, 0.1, 1.0)]
+    float4 baseColorFactor;
+};
+
+struct FlatToon : IToonCharacterSurfaceSource
+{
+    typealias MaterialParams = FlatToonParams;
+
+    static float Coverage<R : IMaterialReader>(R reader, FlatToonParams params) { return 1.0; }
+
+    static ToonCharacterSurface Evaluate<R : IMaterialReader>(R reader, FlatToonParams params)
+    {
+        ToonCharacterSurface surface = ToonCharacterSurface();
+        surface.baseColor = params.baseColorFactor;
+        return surface;
+    }
+};
+)";
+
+	float
+	SrgbEncode(float linear)
+	{
+		return linear <= 0.0031308f ? 12.92f * linear :
+		                              1.055f * std::pow(linear, 1.0f / 2.4f) - 0.055f;
+	}
+
+	// The mean colour of a 4x4 box, each channel in [0,1].
+	glm::vec3
+	MeanColour(const QImage& image, int x, int y)
+	{
+		auto sum = glm::vec3(0.0f);
+		for (int dy = 0; dy < 4; ++dy)
+			for (int dx = 0; dx < 4; ++dx)
+			{
+				const QColor c = image.pixelColor(x + dx, y + dy);
+				sum += glm::vec3(c.redF(), c.greenF(), c.blueF());
+			}
+		return sum / 16.0f;
+	}
+}
+
+// A toon asset's thumbnail stands against the toon backdrop, as its preview does, and anything else
+// against the sky: the background follows what is shown. Read at the corners, which the sphere does
+// not reach -- through the toon post-process the gradient lands there as its own sRGB encoding.
+TEST_CASE(
+	"A toon material thumbnails against the toon backdrop, and a PBR one against the sky",
+	"[thumbnails][backdrop][render]")
+{
+	QTemporaryDir temp;
+	REQUIRE(temp.isValid());
+	const std::filesystem::path root = std::filesystem::path(temp.path().toStdWString());
+
+	const std::filesystem::path shaders = root / "shaders";
+	std::filesystem::create_directories(shaders);
+	std::ofstream(shaders / "FlatToon.slang", std::ios::binary) << c_FlatToon;
+	std::filesystem::create_directories(root / "Data");
+
+	auto toon                = assetlib::BMaterial();
+	toon.name                = "toon";
+	toon.shadingModel        = assetlib::ShadingModel::kToonCharacterSurface;
+	toon.surface.surfaceName = "FlatToon";
+	toon.surface.values      = { { "baseColorFactor", { 0.8f, 0.35f, 0.1f, 1.0f } } };
+	auto toonStore           = assetlib::AssetStore(root / "Data");
+	toonStore.Save(toon, "Authored/Materials/toon.bmaterial");
+	const QString toonPath =
+		QString::fromStdString((root / "Data/Authored/Materials/toon.bmaterial").string());
+
+	Fixture fixture(shaders);
+
+	auto desc = fixture.Desc();
+	REQUIRE(desc.toonBackdrop == bgl::BackdropGradient());
+	AssetThumbnailCache cache(desc);
+	REQUIRE(cache.IsReady());
+
+	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
+
+	cache.SetStore(&toonStore);
+	cache.Request(toonPath);
+	REQUIRE(WaitFor([&] { return ready.count() == 1; }));
+	const QImage toonImage = cache.Lookup(toonPath).toImage();
+	REQUIRE(!toonImage.isNull());
+
+	// The corner rows sit within 2% of the frame's edges, so the gradient there is its end colour to
+	// well inside this margin.
+	constexpr float c_Margin = 0.03f;
+	const int       last     = toonImage.height() - 4;
+	const glm::vec3 top      = MeanColour(toonImage, 0, 0);
+	const glm::vec3 bottom   = MeanColour(toonImage, 0, last);
+	const auto      gradient = bgl::BackdropGradient();
+	for (int i = 0; i < 3; ++i)
+	{
+		INFO("channel " << i);
+		CHECK(top[i] == Catch::Approx(SrgbEncode(gradient.top[i])).margin(c_Margin));
+		CHECK(bottom[i] == Catch::Approx(SrgbEncode(gradient.bottom[i])).margin(c_Margin));
+	}
+
+	cache.SetStore(&fixture.store);
+	cache.Request(c_MaterialPath);
+	REQUIRE(WaitFor([&] { return ready.count() == 2; }));
+	const QImage pbrImage = cache.Lookup(c_MaterialPath).toImage();
+	REQUIRE(!pbrImage.isNull());
+
+	const glm::vec3 pbrTop = MeanColour(pbrImage, 0, 0);
+	CHECK(glm::abs(pbrTop.b - SrgbEncode(gradient.top.b)) > 0.1f);
 }
 
 // What makes a stochastic material safe to thumbnail, and the gate on the cache's reroute: it

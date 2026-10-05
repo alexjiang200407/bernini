@@ -10,6 +10,7 @@
 #include <assetlib/AssetStore.h>
 #include <assetlib/RegenMesh.h>
 #include <assetlib_structs/ImageData.h>
+#include <bgl/types/BackdropGradient.h>
 #include <bgl/types/Camera.h>
 #include <editor_sdk/StampedPixmapCache.h>
 #include <editor_sdk/environment.h>
@@ -54,6 +55,9 @@ struct AssetThumbnailDesc
 	// The same block the Mesh Editor's preview takes, defaults included, so a thumbnail and the preview
 	// it was generated from cannot stand against different backdrops.
 	editor::EnvironmentApplyDesc env;
+
+	// What a toon asset's thumbnail is drawn against instead of the sky, as its preview is.
+	bgl::BackdropGradient toonBackdrop;
 
 	ThumbnailProviderLookup pluginProvider;
 };

@@ -5,6 +5,7 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/types/BackdropGradient.h>
 #include <bgl/types/Camera.h>
 #include <cstdint>
 #include <functional>
@@ -36,6 +37,10 @@ namespace editor
 		bgl::BloomSettings      bloom;
 		bool                    colorGradeEnabled = false;
 		bgl::ColorGradeSettings colorGrade;
+
+		// Drawn in place of the sky while the viewport shows toon content (SetShowsToonContent).
+		bgl::BackdropGradient toonBackdrop;
+
 		template <typename Self>
 		Self&&
 		SetInitialInstances(this Self&& self, uint32_t value) noexcept
@@ -107,6 +112,14 @@ namespace editor
 			self.colorGrade = value;
 			return std::forward<Self>(self);
 		}
+
+		template <typename Self>
+		Self&&
+		SetToonBackdrop(this Self&& self, bgl::BackdropGradient value) noexcept
+		{
+			self.toonBackdrop = value;
+			return std::forward<Self>(self);
+		}
 	};
 
 	/** GUI-thread widget; destruction drains its render work before releasing its view. */
@@ -143,7 +156,8 @@ namespace editor
 		 * Whether what the viewport shows is toon-shaded -- a mesh with a toon material, say. A toon
 		 * look is authored to be seen without a filmic curve, so such a viewport ends in the toon
 		 * post-process (bgl::PostProcessType::kToon) rather than the project's, until the user picks
-		 * one for the viewports; then the user's pick holds.
+		 * one for the viewports; then the user's pick holds. Whatever the pick, it draws
+		 * ViewportDesc::toonBackdrop instead of its sky: the background follows what is shown.
 		 */
 		virtual void
 		SetShowsToonContent(bool toon) = 0;

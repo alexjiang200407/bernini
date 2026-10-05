@@ -343,8 +343,9 @@ viewport in `config.json` — `skyMipLevel`, `backdropOpacity`, `backdropGrey`, 
 `EnvOrientation_test` pins that a following sky keeps its lit side on screen from either side of the
 world, and that a fade leaves the sphere in front of it alone.
 A view can also draw a screen-fixed gradient instead of the sky altogether
-(`ISceneView::SetBackdrop`, [bgl API](bgl_api.md)), which the editor does for a preview of toon
-content; the environment still lights it.
+(`ISceneView::SetBackdrop`, [bgl API](bgl_api.md)), which the editor does for a preview or thumbnail
+of toon content, coloured by the viewport's `toonBackdrop` ([Editor plugins](editor_plugins.md)); the
+environment still lights it.
 
 ### Longitude is Blender's
 
