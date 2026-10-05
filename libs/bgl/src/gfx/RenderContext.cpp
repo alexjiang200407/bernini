@@ -1229,6 +1229,10 @@ namespace bgl
 			postProcessArgs.sampler = m_LinearClampSampler;
 		}
 
+		postProcessArgs.filmGrain        = rt.GetFilmGrainSettings();
+		postProcessArgs.filmGrainEnabled = rt.IsFilmGrainEnabled();
+		postProcessArgs.frameCount       = rt.GetFrameCount();
+
 		m_PostProcess.AttachToFrameGraph(m_FrameGraph, postProcessArgs);
 
 		// Every presentable this frame leaves in kPresent: its own backbuffer first.

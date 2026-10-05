@@ -7,6 +7,7 @@
 #include <bgpu/resource/Sampler.h>
 #include <bgpu/resource/Srv.h>
 #include <bgpu/types/ViewportState.h>
+#include <cstdint>
 #include <spdlog/spdlog.h>
 #include <string>
 
@@ -27,7 +28,8 @@ namespace bgl
 	 * writes it afterwards, blending over this -- so the capture path, a readback of the last
 	 * presented backbuffer, still describes what was shown.
 	 *
-	 * Today that is the colour split, the bloom combine, the colour grade and the display curve. Everything between a
+	 * Today that is the colour split, the bloom combine, the colour grade, the display curve and
+	 * film grain. Everything between a
 	 * resolved scene and the screen belongs here as it lands -- exposure adaptation next -- so the
 	 * stage is named for the role rather than for its current steps.
 	 *
@@ -83,6 +85,12 @@ namespace bgl
 
 			ColorSplitSettings colorSplit;
 			bool               colorSplitEnabled = false;
+
+			FilmGrainSettings filmGrain;
+			bool              filmGrainEnabled = false;
+
+			// How many frames have begun on the target, which is what a grain pattern is held by.
+			uint64_t frameCount = 0;
 		};
 
 		explicit PostProcessPass(const PassInitContext& ctx);

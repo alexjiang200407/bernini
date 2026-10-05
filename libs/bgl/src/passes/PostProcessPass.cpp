@@ -4,6 +4,7 @@
 #include "gfx/frame_constants.h"
 #include "passes/BindingNameCheck.h"
 #include "postprocess/color_grade.h"
+#include <algorithm>
 #include <array>
 #include <bgl/IRenderTarget.h>
 #include <bgpu/cmd/CommandList.h>
@@ -21,6 +22,7 @@
 #include <cmath>
 #include <core/err/util.h>
 #include <core/glm.h>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -38,7 +40,7 @@ namespace bgl
 		// Every member Execute writes. Kept beside the code that writes them so
 		// BindingNameCheck catches a shader rename at startup: an optional write is silent, so
 		// a stale name would otherwise resolve to nothing every frame and say nothing.
-		constexpr std::array<std::string_view, 27> c_Fields = {
+		constexpr std::array<std::string_view, 31> c_Fields = {
 			"sceneColor"sv,
 			"sourceTexelSize"sv,
 			"rcasStrength"sv,
@@ -66,6 +68,10 @@ namespace bgl
 			"splitOffset"sv,
 			"splitRadial"sv,
 			"splitEnabled"sv,
+			"grainPitch"sv,
+			"grainIntensity"sv,
+			"grainPattern"sv,
+			"grainEnabled"sv,
 		};
 
 		// The output height a look's pixel distances are authored at; they scale with the target's,
@@ -204,6 +210,20 @@ namespace bgl
 					args.colorSplit.offset * (outputSize.y / c_LookReferenceLines) / outputSize);
 				tonemap["splitRadial"].SetIfValid(
 					args.colorSplit.radial / (0.5f * c_LookReferenceLines));
+			}
+
+			tonemap["grainEnabled"].SetIfValid(args.filmGrainEnabled ? 1u : 0u);
+			if (args.filmGrainEnabled)
+			{
+				const FilmGrainSettings& grain = args.filmGrain;
+
+				tonemap["grainPitch"].SetIfValid(
+					std::max(1.0f, grain.size * outputSize.y / c_LookReferenceLines));
+				tonemap["grainIntensity"].SetIfValid(grain.intensity);
+				tonemap["grainPattern"].SetIfValid(
+					grain.holdFrames == 0 ?
+						0u :
+						static_cast<uint32_t>(args.frameCount / grain.holdFrames));
 			}
 		}
 		else

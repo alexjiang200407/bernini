@@ -1,4 +1,5 @@
 import lib.math.ColorGrade;
+import lib.math.hash;
 import lib.math.rcas;
 import lib.math.Tonemap;
 import lib.screen.TonemapLut;
@@ -56,6 +57,13 @@ struct PostProcessData
     float2 splitOffset;
     float splitRadial;
     uint splitEnabled;
+
+    // Film grain: the pattern's pitch in output pixels, at least one; the largest share of its value
+    // a pixel moves by; and which pattern this frame shows.
+    float grainPitch;
+    float grainIntensity;
+    uint grainPattern;
+    uint grainEnabled;
 };
 
 ConstantBuffer<PostProcessData> gPostProcessData;
@@ -110,6 +118,29 @@ float SampleOutline(float2 uv)
 float3 ScreenBlend(float3 base, float3 layer)
 {
     return base + layer * (1.0 - base);
+}
+
+// Triangular in (-1, 1): the sum of two uniforms, which has film grain's soft-shouldered
+// distribution where one uniform is flat to its edges.
+float GrainCell(int2 cell, uint pattern)
+{
+    const uint h = HashUint(uint(cell.x) ^ HashUint(uint(cell.y) ^ HashUint(pattern)));
+    return HashFloat(h) + HashFloat(h ^ 0x9e3779b9u) - 1.0;
+}
+
+// Bilinear between cells `pitch` pixels apart, so a pitch above one is soft rather than blocky. At
+// a pitch of one a pixel's centre is its cell's and the weights are exactly one and zero.
+float Grain(float2 pixelCentre, float pitch, uint pattern)
+{
+    const float2 p = pixelCentre / pitch - 0.5;
+    const float2 base = floor(p);
+    const float2 f = p - base;
+    const int2 cell = int2(base);
+
+    const float top = lerp(GrainCell(cell, pattern), GrainCell(cell + int2(1, 0), pattern), f.x);
+    const float bottom = lerp(GrainCell(cell + int2(0, 1), pattern), GrainCell(cell + int2(1, 1), pattern), f.x);
+
+    return lerp(top, bottom, f.y);
 }
 
 ColorGrade TargetGrade()
@@ -222,6 +253,13 @@ float4 PSMain(VSOut input) : SV_Target
     else
     {
         color = AgX(scene + glow, lut);
+    }
+
+    // A share of the displayed value, so black stays black and a lifted black carries a little.
+    if (gPostProcessData.grainEnabled != 0)
+    {
+        color *=
+            1.0 + gPostProcessData.grainIntensity * Grain(input.position.xy, gPostProcessData.grainPitch, gPostProcessData.grainPattern);
     }
 
     if (gPostProcessData.outlineEnabled != 0)

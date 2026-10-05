@@ -1003,8 +1003,9 @@ displaced taps of that. Then it combines the [Bloom](#bloom) chain's finished le
 `BloomSettings::intensity`, behind the target's flag so a bloom-less frame binds nothing; added
 under filmic, screened under toon — then
 applies the display curve — `AgX` through the LUT above, or toon's clamp — graded when the target
-has `SetColorGradeEnabled` (see [the colour grade](#the-colour-grade) below), then — on a frame where a [Outline Mask](#outline-mask) pass ran —
-composites the selection outline: a pixel outside the mask but within the outline width of it
+has `SetColorGradeEnabled` (see [the colour grade](#the-colour-grade) below), then
+[film grain](#film-grain) when the target has `SetFilmGrainEnabled`, then — on a frame where a
+[Outline Mask](#outline-mask) pass ran — composites the selection outline: a pixel outside the mask but within the outline width of it
 takes the display-space outline colour instead of the tonemapped result. Compositing after the
 curve is deliberate: the outline is editor feedback rather than radiance, so exposure and AgX must
 not shift it, and TAA (which resolves earlier) can neither eat nor ghost it. The pass is named for
@@ -1090,6 +1091,36 @@ number on both axes at every size. A displaced tap lands between texels, so a fr
 on reads the scene through the linear sampler even where it is on the output grid — at a texel's
 centre that is the point tap, and a split of zero is the plain frame. On an upscaled TAA target the
 sharpen runs at each of the three taps, fifteen reads in place of five (`ColorSplit_test`).
+
+#### Film grain
+
+`SetFilmGrainEnabled` multiplies the displayed value by `1 + intensity * n`, `n` a triangular
+noise in (-1, 1): the sum of two uniform hashes, which has a film grain's soft-shouldered
+distribution where one uniform is flat to its edges. It is **a share of the pixel's value**, so
+black stays black, a bright region carries the most, and a black the grade lifted carries a
+little — the shape measured off a film-look reference, whose grain's deviation tracked the pixel's
+level from the shadows to the lit screens. It is monochrome, and it runs after the curve and the
+grade, in display-linear light, under either post-process type; the outline is composited over it.
+
+**There is no headroom above display white.** The backbuffer clamps at 1, so a pixel brighter
+than `1 / (1 + intensity)` — 0.8 at the default — loses the top of its upward swing, and the mean
+holds only below that. At 1 the whole upward half is gone: a pure white region darkens by
+`intensity / 6` on average, 4% at the default, and its grain is one-sided. A grade whose slope
+leaves white short of that level — the cream white of a print — gives the swing back.
+
+The noise is hashed per cell (`lib.math.hash`) rather than read from a texture: nothing to
+allocate, upload or tile. Cells are `FilmGrainSettings::size` apart — pixels at a 2160-line output,
+scaled by the target's height like the colour split's distances and floored at one output pixel —
+and the value is bilinear between them, so a pitch above one is soft rather than blocky and a pitch
+of one is each pixel's own cell exactly. A coarser pitch is therefore also a weaker grain: the
+interpolation averages cells, and nothing renormalizes it.
+
+**Which pattern a frame shows is the target's frame count over `holdFrames`** — the count the TAA
+jitter and the alpha hash advance on — so frame N of a target has the same grain every run, and a
+target drawn every other frame still holds a pattern for that many of *its* frames. Zero never
+changes it. There is no rate in seconds because the renderer has no clock of its own:
+`RenderJob::time` belongs to a draw, and a target's frame carries several draws or none. Grain is
+added after the TAA resolve and never enters the history (`FilmGrain_test`).
 
 ### Overlay — [passes/OverlayPass.{h,cpp}](libs/bgl/src/passes/OverlayPass.cpp)
 

@@ -30,6 +30,12 @@ namespace bgl::test
 		                              1.055f * std::pow(linear, 1.0f / 2.4f) - 0.055f;
 	}
 
+	float
+	DecodeSrgb(float encoded) noexcept
+	{
+		return encoded <= 0.04045f ? encoded / 12.92f : std::pow((encoded + 0.055f) / 1.055f, 2.4f);
+	}
+
 	namespace
 	{
 		/**

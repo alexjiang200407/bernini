@@ -14,6 +14,10 @@ namespace bgl::test
 	[[nodiscard]] float
 	EncodeSrgb(float linear) noexcept;
 
+	/** Its inverse: what a value sampled off a screenshot was before the backbuffer encoded it. */
+	[[nodiscard]] float
+	DecodeSrgb(float encoded) noexcept;
+
 	/**
 	 * AgX(grey) as the shipped tone map computes it, in scene-linear output: one dispatch of the
 	 * suite's CSAgxCalibration kernel on `gfx`.

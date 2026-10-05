@@ -418,6 +418,8 @@ and portability.
     post pass under either post-process type; `docs/passes.md` § The colour grade.
   - [x] Colour split — a fixed channel misregistration and a radial, lens-style share per target;
     `docs/passes.md` § The colour split.
+  - [x] Film grain — monochrome, a share of the displayed value, hashed per cell and held per
+    frame count; `docs/passes.md` § Film grain.
   - [ ] Ambient Occlusion — cost is independent of unit count, and it is the main grounding cue
     available to a crowd unit.
 - [ ] Weather
