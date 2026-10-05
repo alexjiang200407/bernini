@@ -768,8 +768,8 @@ TEST_CASE(
 	"A non-PBR material naming a registered surface is written on it",
 	"[importedmaterials][extras]")
 {
-	// The extras are the author's word for what the material is; KHR_materials_unlit is only how
-	// Blender exported an Emission-ended material.
+	// The extras are the author's word for what the material is, whatever shading model glTF
+	// could express for it.
 	const TempProject      project;
 	const bgl::SurfaceType toon = ToonSurface();
 

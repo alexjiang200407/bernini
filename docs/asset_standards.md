@@ -1061,10 +1061,9 @@ this order:
 Three more rules:
 
 * **A surface the project does not register falls back to PBR**, with a warning naming it, so a
-  misspelt `bernini_surface` still produces a material. A material that is not PBR
-  (`KHR_materials_unlit`, which Blender writes for a material ending in an Emission shader) is still
-  written when it names a registered surface. The extras say what it is, and the dialog gives it a
-  file name to match.
+  misspelt `bernini_surface` still produces a material. A material that is not PBR (one marked
+  `KHR_materials_unlit`) is still written when it names a registered surface, because the extras
+  say what it is, and the dialog gives it a file name to match.
 * **Values are not snapped to three decimals** the way imported PBR factors are. A toon feather
   defaults to 0.0001, and snapping would make it 0. The sink's spin box rounds what it *shows*,
   and the file keeps what the extras said until someone edits the field.
