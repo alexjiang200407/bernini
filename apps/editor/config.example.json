@@ -54,7 +54,7 @@
         },
         "filmGrain": {
             "enabled": false,
-            "intensity": 0.25,
+            "intensity": 0.12,
             "size": 2.0,
             "holdFrames": 1
         },
@@ -101,7 +101,7 @@
         },
         "filmGrain": {
             "enabled": false,
-            "intensity": 0.25,
+            "intensity": 0.12,
             "size": 2.0,
             "holdFrames": 1
         },

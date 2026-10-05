@@ -111,7 +111,7 @@ namespace bgl
 	{
 		// The largest share of its display-linear value a pixel moves by. The display clamps at
 		// white, so a pixel above 1 / (1 + intensity) loses the top of its upward swing.
-		float intensity = 0.25f;
+		float intensity = 0.12f;
 
 		// The grain's pitch in pixels at a 2160-line output, scaled with the output's height and
 		// floored at one output pixel.

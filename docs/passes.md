@@ -1103,9 +1103,9 @@ level from the shadows to the lit screens. It is monochrome, and it runs after t
 grade, in display-linear light, under either post-process type; the outline is composited over it.
 
 **There is no headroom above display white.** The backbuffer clamps at 1, so a pixel brighter
-than `1 / (1 + intensity)` — 0.8 at the default — loses the top of its upward swing, and the mean
+than `1 / (1 + intensity)` — 0.89 at the default — loses the top of its upward swing, and the mean
 holds only below that. At 1 the whole upward half is gone: a pure white region darkens by
-`intensity / 6` on average, 4% at the default, and its grain is one-sided. A grade whose slope
+`intensity / 6` on average, 2% at the default, and its grain is one-sided. A grade whose slope
 leaves white short of that level — the cream white of a print — gives the swing back.
 
 The noise is hashed per cell (`lib.math.hash`) rather than read from a texture: nothing to
