@@ -275,6 +275,7 @@ set(BGPU_CONTEXT_HEADERS
 	MemoryTag.h
 	ProgramCache.h
 	SlangErrorChecker.h
+	SystemRequirements.h
 	d3d12/D3d12ErrorChecker.h
 )
 if(RENDERER_BACKEND STREQUAL "METAL")
