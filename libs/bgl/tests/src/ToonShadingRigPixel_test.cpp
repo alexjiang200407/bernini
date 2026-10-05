@@ -1,4 +1,5 @@
 #include "scene/SceneView.h"
+#include "scene/toon_shading_rig_record.h"
 #include "util/DispatchReport.h"
 #include "util/GoldenImage.h"
 #include "util/PaletteReadback.h"
@@ -35,6 +36,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <glm/gtc/matrix_transform.hpp>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -280,6 +282,35 @@ struct FaceCharacter : IToonCharacterSurfaceSource
 
 		return slot.positionAndGain.w * front * smooth * ndot * fall;
 	}
+
+	// The CPU twin of ToonFaceNormal, line for line; `headFromWorld` is the matrix, not its rows.
+	glm::vec3
+	FaceNormal(
+		const glm::vec3& normal,
+		const glm::vec3& headPos,
+		const glm::mat4& headFromWorld,
+		const glm::vec4& faceEllipsoid,
+		const float      weight)
+	{
+		const glm::vec3 gradient = headPos * glm::vec3(faceEllipsoid);
+		if (glm::length(gradient) < 1e-6f)
+		{
+			return normal;
+		}
+
+		const glm::vec3 ellipsoid =
+			glm::normalize(glm::transpose(glm::mat3(headFromWorld)) * gradient);
+		const glm::vec3 pulled = glm::mix(normal, ellipsoid, faceEllipsoid.w * weight);
+		return glm::length(pulled) > 1e-6f ? glm::normalize(pulled) : normal;
+	}
+
+	/** The block's row for a face normal, as the pack writes it. */
+	glm::vec4
+	FaceEllipsoid(const bgl::FaceNormalDesc& desc)
+	{
+		return bgl::PackToonShadingRig(bgl::ToonShadingRigDesc().SetFaceNormal(desc))
+		    .record.faceEllipsoid;
+	}
 }
 
 TEST_CASE("An edit's shadow follows its keys across the face", "[toonshadingrig][render][toon]")
@@ -486,4 +517,231 @@ TEST_CASE("The face light fades with the edits, back to the sun", "[toonshadingr
 	// A hundredth of the swing moves the terminator a pixel or so, not the face into the light.
 	CHECK(middle(plain, whole) > 1e-3f);
 	CHECK(middle(plain, barely) < 0.05f * middle(plain, whole));
+}
+
+TEST_CASE(
+	"A face's base normal is the surface's, pulled toward the head ellipsoid's",
+	"[toonshadingrig][compute]")
+{
+	// A head scaled unevenly, turned and moved: the case a normal taken through the matrix itself,
+	// rather than through its transpose, gets wrong.
+	const glm::mat4 headWorld = glm::translate(glm::mat4(1.0f), glm::vec3(2.0f, -1.0f, 0.5f)) *
+	                            glm::rotate(
+									glm::mat4(1.0f),
+									glm::radians(40.0f),
+									glm::normalize(glm::vec3(1.0f, 2.0f, 3.0f))) *
+	                            glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 1.0f, 0.5f));
+	const glm::mat4 skewed    = glm::inverse(headWorld);
+	const glm::mat4 identity  = glm::mat4(1.0f);
+
+	const glm::vec4 sphere    = glm::vec4(1.0f);
+	const glm::vec4 ellipsoid = FaceEllipsoid(
+		bgl::FaceNormalDesc().SetSmoothing(1.0f).SetRadii(glm::vec3(0.5f, 1.0f, 2.0f)));
+	const glm::vec3 front    = glm::vec3(0.0f, 0.0f, 1.0f);
+	const glm::vec3 onSkewed = glm::vec3(0.3f, -0.2f, 0.6f);
+
+	struct Case
+	{
+		glm::vec3 normal;
+		glm::vec3 headPos;
+		glm::mat4 headFromWorld;
+		glm::vec4 faceEllipsoid;
+		float     weight;
+	};
+	const std::array<Case, 7> cases = { {
+		{ front, glm::vec3(0.3f, 0.4f, 0.0f), identity, sphere, 1.0f },
+		{ front, glm::vec3(0.3f, 0.4f, 0.0f), identity, sphere, 0.0f },
+		{ front, glm::vec3(0.3f, 0.4f, 0.0f), identity, glm::vec4(1.0f, 1.0f, 1.0f, 0.0f), 1.0f },
+		{ front, glm::vec3(0.0f), identity, sphere, 1.0f },
+		{ front, onSkewed, skewed, ellipsoid, 1.0f },
+		{ glm::normalize(glm::vec3(0.2f, 0.1f, 1.0f)),
+		  onSkewed,
+		  skewed,
+		  glm::vec4(glm::vec3(ellipsoid), 0.6f),
+		  0.5f },
+		{ glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 0.0f, 0.7f), identity, sphere, 0.5f },
+	} };
+
+	constexpr uint32_t c_Stride = 112;
+	auto               bytes    = std::vector<std::byte>(cases.size() * c_Stride);
+	for (size_t i = 0; i < cases.size(); ++i)
+	{
+		const glm::mat4                rows   = glm::transpose(cases[i].headFromWorld);
+		const std::array<glm::vec4, 7> record = {
+			glm::vec4(cases[i].normal, 0.0f),
+			glm::vec4(cases[i].headPos, 0.0f),
+			rows[0],
+			rows[1],
+			rows[2],
+			cases[i].faceEllipsoid,
+			glm::vec4(cases[i].weight, 0.0f, 0.0f, 0.0f),
+		};
+		static_assert(sizeof(record) == c_Stride);
+		std::memcpy(bytes.data() + i * c_Stride, record.data(), sizeof(record));
+	}
+
+	const auto got = bgl::test::DispatchReport(
+		"CSToonFaceNormal",
+		bytes,
+		static_cast<uint32_t>(cases.size()),
+		[&](bgpu::ComputeKernel& kernel) {
+			kernel["gUniforms"]["caseCount"] = static_cast<uint32_t>(cases.size());
+		});
+	REQUIRE(got.size() == cases.size());
+
+	const auto same = [](const glm::vec4& actual, const glm::vec3& expected) {
+		CHECK(actual.x == Catch::Approx(expected.x).margin(1e-4));
+		CHECK(actual.y == Catch::Approx(expected.y).margin(1e-4));
+		CHECK(actual.z == Catch::Approx(expected.z).margin(1e-4));
+	};
+
+	for (size_t i = 0; i < cases.size(); ++i)
+	{
+		INFO("case " << i);
+		const Case& c = cases[i];
+		same(got[i], FaceNormal(c.normal, c.headPos, c.headFromWorld, c.faceEllipsoid, c.weight));
+	}
+
+	{
+		INFO("fully smoothed toward a sphere: the direction from the head's origin");
+		same(got[0], glm::vec3(0.6f, 0.8f, 0.0f));
+	}
+	{
+		INFO("no weight, no smoothing and the head's origin all leave the surface's normal");
+		same(got[1], front);
+		same(got[2], front);
+		same(got[3], front);
+	}
+	{
+		// Independent of the twin: the ellipsoid's world-space normal is perpendicular to the level
+		// set through the point, whose tangents go to world space through the head's own matrix,
+		// and it points away from the head's origin.
+		INFO("on a skewed head, the normal of the ellipsoid as the world sees it");
+		const glm::vec3 normal(got[4]);
+		const glm::vec3 gradient = onSkewed * glm::vec3(ellipsoid);
+		const glm::vec3 tangentA =
+			glm::normalize(glm::cross(gradient, glm::vec3(0.0f, 1.0f, 0.0f)));
+		const glm::vec3 tangentB = glm::normalize(glm::cross(gradient, tangentA));
+		const glm::mat3 toWorld(headWorld);
+		CHECK(glm::length(normal) == Catch::Approx(1.0f).margin(1e-4));
+		CHECK(
+			glm::dot(normal, glm::normalize(toWorld * tangentA)) ==
+			Catch::Approx(0.0f).margin(1e-4));
+		CHECK(
+			glm::dot(normal, glm::normalize(toWorld * tangentB)) ==
+			Catch::Approx(0.0f).margin(1e-4));
+		CHECK(glm::dot(normal, toWorld * onSkewed) > 0.0f);
+		// And it is not what the matrix itself would have made of the gradient.
+		CHECK(glm::dot(normal, glm::normalize(toWorld * gradient)) < 0.99f);
+	}
+	{
+		INFO("a pull that cancels the normal exactly leaves it");
+		same(got[6], glm::vec3(0.0f, 0.0f, -1.0f));
+	}
+}
+
+TEST_CASE(
+	"A face's shadow edge follows its rig's ellipsoid rather than its mesh",
+	"[toonshadingrig][render][toon]")
+{
+	World world;
+
+	// An ellipsoid three times as long out of the face as across it has normals flattened toward
+	// the face's plane, so under a light from the front right the shadow edge on the left cheek
+	// swings in toward the nose: from 45 degrees off the front to about 6 at full smoothing.
+	const glm::vec3 radii(1.0f, 1.0f, 3.0f);
+	const glm::vec3 toLight = glm::normalize(glm::vec3(1.0f, 0.0f, 1.0f));
+	const auto      rigOf   = [&](const float smoothing) {
+		return Rig({}).SetFaceNormal(bgl::FaceNormalDesc().SetSmoothing(smoothing).SetRadii(radii));
+	};
+	const auto around = [](const float degrees) {
+		return glm::vec3(std::sin(glm::radians(degrees)), 0.0f, std::cos(glm::radians(degrees)));
+	};
+
+	const auto  face  = world.Face(1.0f);
+	const auto* plain = "assets/golden/toon_rig_normal_plain.got.png";
+	world.Shoot(face, std::nullopt, toLight, plain);
+	const float lit = LumaAround(plain, ScreenOf(toLight));
+
+	// Whether the model lights the point `degrees` round the face from its front, or nothing when
+	// the point is too near the shadow edge for a 5x5 mean to say.
+	const auto lights = [&](const bgl::FaceNormalDesc& normal,
+	                        const float                degrees,
+	                        const float                weight) -> std::optional<bool> {
+		const glm::vec3 direction = around(degrees);
+		const glm::vec3 shaded    = FaceNormal(
+			direction,
+			c_HeadRadius * direction,
+			glm::mat4(1.0f),
+			FaceEllipsoid(normal),
+			weight);
+		const float halfLambert = 0.5f * glm::dot(shaded, toLight) + 0.5f;
+		if (std::abs(halfLambert - 0.5f) < 0.05f)
+		{
+			return std::nullopt;
+		}
+		return halfLambert > 0.5f;
+	};
+
+	for (const float smoothing : { 0.0f, 0.5f, 1.0f })
+	{
+		const std::string png =
+			"assets/golden/toon_rig_normal_" + std::to_string(int(smoothing * 10.0f)) + ".got.png";
+		const auto rig = rigOf(smoothing);
+		CHECK(world.Shoot(face, rig, toLight, png.c_str()) == 1u);
+
+		auto checked = 0;
+		auto moved   = 0;
+		for (float degrees = -60.0f; degrees <= 50.0f; degrees += 5.0f)
+		{
+			const auto expected = lights(rig.faceNormal, degrees, 1.0f);
+			if (!expected.has_value())
+			{
+				continue;
+			}
+			INFO("smoothing " << smoothing << ", " << degrees << " degrees round the face");
+			const float luma = LumaAround(png, ScreenOf(around(degrees)));
+			if (*expected)
+			{
+				CHECK(luma == Catch::Approx(lit).margin(1e-3));
+			}
+			else
+			{
+				CHECK(luma < lit - 0.03f);
+			}
+			++checked;
+			moved += *expected != lights(rig.faceNormal, degrees, 0.0f).value_or(*expected) ? 1 : 0;
+		}
+		CHECK(checked >= 15);
+		// Without smoothing every point shades as its mesh normal does; with it, several do not.
+		CHECK((smoothing == 0.0f ? moved == 0 : moved >= 3));
+	}
+
+	{
+		// 25 degrees round the left cheek: lit on the mesh's normal, in shade on the ellipsoid's.
+		INFO("the pull fades with the rig");
+		const auto at = ScreenOf(around(-25.0f));
+		REQUIRE(lights(rigOf(1.0f).faceNormal, -25.0f, 0.0f) == true);
+		REQUIRE(lights(rigOf(1.0f).faceNormal, -25.0f, 1.0f) == false);
+
+		// The head spans about 156 pixels: a hundredth of the way into a fade from 150 to 750.
+		const auto* barely = "assets/golden/toon_rig_normal_barely.got.png";
+		CHECK(
+			world.Shoot(
+				face,
+				rigOf(1.0f).SetFadeStartPixels(750.0f).SetFadeEndPixels(150.0f),
+				toLight,
+				barely) == 1u);
+		CHECK(LumaAround(barely, at) == Catch::Approx(lit).margin(1e-3));
+	}
+
+	{
+		INFO("a surface that is no face keeps its mesh normal");
+		const auto  body      = world.Face(0.0f);
+		const auto* bodyPlain = "assets/golden/toon_rig_normal_body_plain.got.png";
+		const auto* bodyRig   = "assets/golden/toon_rig_normal_body.got.png";
+		world.Shoot(body, std::nullopt, toLight, bodyPlain);
+		CHECK(world.Shoot(body, rigOf(1.0f), toLight, bodyRig) == 1u);
+		CHECK(bgl::test::MaxChannelDelta(bodyPlain, bodyRig) == 0.0f);
+	}
 }

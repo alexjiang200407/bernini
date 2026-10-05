@@ -48,4 +48,7 @@ void main()
     let slot = block.slots[cMaxToonShadingRigSlots - 1];
     gUniforms.outValues[10] = float4(float(block.slotCount), slot.bendBulgeRotation.w, slot.axisZAndSharpness.w, 0.0);
     gUniforms.outValues[11] = slot.radiusSmoothingMirror;
+
+    gUniforms.outValues[12] = rig.faceEllipsoid;
+    gUniforms.outValues[13] = block.faceEllipsoid;
 }

@@ -1,4 +1,5 @@
 #include "scene/toon_shading_rig_record.h"
+#include <algorithm>
 #include <bgl/glm.h>
 #include <bgl/idl/ToonShadingRig.h>
 #include <bgl/types/ToonShadingRigDesc.h>
@@ -83,6 +84,11 @@ namespace bgl
 		record.azimuthFadeStart  = desc.faceLight.azimuthFadeStart;
 		record.azimuthFadeEnd    = desc.faceLight.azimuthFadeEnd;
 		record.azimuthFadeAmount = desc.faceLight.azimuthFadeAmount;
+
+		// Against the smallest radius rather than as 1 / r^2, which a small radius overflows.
+		const glm::vec3& radii = desc.faceNormal.radii;
+		const glm::vec3  ratio = std::min({ radii.x, radii.y, radii.z }) / radii;
+		record.faceEllipsoid   = glm::vec4(ratio * ratio, desc.faceNormal.smoothing);
 
 		return packed;
 	}

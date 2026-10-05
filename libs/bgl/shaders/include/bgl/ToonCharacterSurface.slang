@@ -30,8 +30,9 @@ public struct ToonCharacterSurface
     // an under-jaw in shade or a cheekbone lit whatever the light.
     public float shadeOffset = 0.0;
 
-    // How much of this pixel is face, in [0, 1]: a face takes the remapped face light and the edits
-    // of its placement's toon shading rig, the rest of the character the sun.
+    // How much of this pixel is face, in [0, 1]: a face takes the remapped face light, the smoothed
+    // normal and the edits of its placement's toon shading rig, the rest of the character the sun
+    // on its own normal.
     public float face = 0.0;
 };
 

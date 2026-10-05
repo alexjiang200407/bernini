@@ -174,12 +174,24 @@ TEST_CASE("AddToonShadingRig refuses a rig no pass could evaluate", "[toonshadin
 		  } },
 		{ "an azimuth fade amount above one",
 		  [](bgl::ToonShadingRigDesc& d) { d.faceLight.azimuthFadeAmount = 1.5f; } },
+		{ "a face-normal smoothing above one",
+		  [](bgl::ToonShadingRigDesc& d) { d.faceNormal.smoothing        = 1.5f; } },
+		{ "a NaN face-normal smoothing",
+		  [nan](bgl::ToonShadingRigDesc& d) { d.faceNormal.smoothing     = nan; } },
+		{ "a zero face-normal radius",
+		  [](bgl::ToonShadingRigDesc& d) { d.faceNormal.radii.y          = 0.0f; } },
+		{ "a negative face-normal radius",
+		  [](bgl::ToonShadingRigDesc& d) { d.faceNormal.radii.x          = -0.1f; } },
+		{ "an infinite face-normal radius",
+		  [](bgl::ToonShadingRigDesc& d) {
+			  d.faceNormal.radii.z = std::numeric_limits<float>::infinity();
+		  } },
 		{ "a projective head transform",
-		  [](bgl::ToonShadingRigDesc& d) { d.headToBone[0][3]            = 0.5f; } },
+		  [](bgl::ToonShadingRigDesc& d) { d.headToBone[0][3] = 0.5f; } },
 		{ "a singular head transform",
-		  [](bgl::ToonShadingRigDesc& d) { d.headToBone[1]               = glm::vec4(0.0f); } },
+		  [](bgl::ToonShadingRigDesc& d) { d.headToBone[1]    = glm::vec4(0.0f); } },
 		{ "the no-bone sentinel as a head bone",
-		  [](bgl::ToonShadingRigDesc& d) { d.headBoneIndex = bgl::idl::cNoHeadBone; } },
+		  [](bgl::ToonShadingRigDesc& d) { d.headBoneIndex    = bgl::idl::cNoHeadBone; } },
 		{ "a NaN head transform", [nan](bgl::ToonShadingRigDesc& d) { d.headToBone[3][0] = nan; } },
 	};
 
@@ -421,6 +433,8 @@ TEST_CASE("AddToonShadingRig packs what the evaluation pass reads", "[toonshadin
 		bgl::ToonShadingRigDesc()
 			.SetHeadBoneIndex(4u)
 			.SetHeadToBone(headToBone)
+			.SetFaceNormal(
+				bgl::FaceNormalDesc().SetSmoothing(0.75f).SetRadii(glm::vec3(0.5f, 1.0f, 2.0f)))
 			.SetEdits(
 				{ bgl::ToonShadingRigEditDesc()
 	                  .SetKeys({ key(-0.5f), key(0.0f) })
@@ -474,9 +488,23 @@ TEST_CASE("AddToonShadingRig packs what the evaluation pass reads", "[toonshadin
 	CHECK(record.headToBone[1] == glm::vec4(0.5f, 1.0f, 0.0f, 2.0f));
 	CHECK(record.headToBone[2] == glm::vec4(0.0f, 0.0f, 1.0f, 3.0f));
 
-	CHECK(
-		bgl::PackToonShadingRig(bgl::ToonShadingRigDesc()).record.headBoneIndex ==
-		bgl::idl::cNoHeadBone);
+	// Each axis's (smallest radius / radius) squared, then the smoothing.
+	CHECK(record.faceEllipsoid == glm::vec4(1.0f, 0.25f, 0.0625f, 0.75f));
+
+	const bgl::idl::ToonShadingRig plain =
+		bgl::PackToonShadingRig(bgl::ToonShadingRigDesc()).record;
+	CHECK(plain.headBoneIndex == bgl::idl::cNoHeadBone);
+	CHECK(plain.faceEllipsoid == glm::vec4(1.0f, 1.0f, 1.0f, 0.6f));
+
+	// A radius whose inverse square overflows a float still packs finite: the row is a ratio.
+	const bgl::idl::ToonShadingRig thin =
+		bgl::PackToonShadingRig(
+			bgl::ToonShadingRigDesc().SetFaceNormal(
+				bgl::FaceNormalDesc().SetRadii(glm::vec3(1e-30f, 1.0f, 1.0f))))
+			.record;
+	CHECK(thin.faceEllipsoid.x == 1.0f);
+	CHECK(thin.faceEllipsoid.y == 0.0f);
+	CHECK(thin.faceEllipsoid.z == 0.0f);
 }
 
 /**
@@ -492,16 +520,16 @@ TEST_CASE(
 	constexpr uint32_t c_KeyOffset   = c_RigOffset + 256;
 	constexpr uint32_t c_BlockOffset = c_KeyOffset + 64;
 	constexpr uint32_t c_BufferBytes = c_BlockOffset + 896;
-	constexpr uint32_t c_OutValues   = 12;
+	constexpr uint32_t c_OutValues   = 14;
 
 	static_assert(c_RigOffset + sizeof(bgl::idl::ToonShadingRig) <= c_KeyOffset);
 	static_assert(c_KeyOffset + sizeof(bgl::idl::ToonShadingRigKey) <= c_BlockOffset);
 	static_assert(c_BlockOffset + sizeof(bgl::idl::ToonShadingRigBlock) <= c_BufferBytes);
-	static_assert(sizeof(bgl::idl::ToonShadingRig) == 240);
+	static_assert(sizeof(bgl::idl::ToonShadingRig) == 256);
 	static_assert(sizeof(bgl::idl::ToonShadingRigKey) == 64);
 	static_assert(sizeof(bgl::idl::ToonShadingRigSlot) == 96);
 	static_assert(
-		sizeof(bgl::idl::ToonShadingRigBlock) == 80 + bgl::cMaxToonShadingRigSlots * 96,
+		sizeof(bgl::idl::ToonShadingRigBlock) == 96 + bgl::cMaxToonShadingRigSlots * 96,
 		"a block is its header and its slots, unpadded");
 
 	constexpr uint32_t c_Last = bgl::cMaxToonShadingRigSlots - 1;
@@ -521,6 +549,7 @@ TEST_CASE(
 	rig.azimuthFadeStart           = 0.5f;
 	rig.azimuthFadeEnd             = 1.5f;
 	rig.azimuthFadeAmount          = 0.625f;
+	rig.faceEllipsoid              = glm::vec4(31.0f, 32.0f, 33.0f, 34.0f);
 	rig.keys.offsetStart           = 9;
 	rig.edits[c_Last].firstKey     = 10;
 	rig.edits[c_Last].keyCount     = 11;
@@ -535,6 +564,7 @@ TEST_CASE(
 	auto block                                = bgl::idl::ToonShadingRigBlock();
 	block.headFromWorld[1]                    = glm::vec4(21.0f, 22.0f, 23.0f, 24.0f);
 	block.faceLight                           = glm::vec4(0.0f, 0.0f, 1.0f, 0.375f);
+	block.faceEllipsoid                       = glm::vec4(41.0f, 42.0f, 43.0f, 44.0f);
 	block.slotCount                           = 8;
 	block.slots[c_Last].bendBulgeRotation     = glm::vec4(0.0f, 0.0f, 0.0f, 0.875f);
 	block.slots[c_Last].axisZAndSharpness     = glm::vec4(0.0f, 0.0f, 0.0f, 0.3125f);
@@ -582,6 +612,8 @@ TEST_CASE(
 	same(got[9], block.faceLight);
 	same(got[10], glm::vec4(8.0f, 0.875f, 0.3125f, 0.0f));
 	same(got[11], block.slots[c_Last].radiusSmoothingMirror);
+	same(got[12], rig.faceEllipsoid);
+	same(got[13], block.faceEllipsoid);
 }
 
 /**

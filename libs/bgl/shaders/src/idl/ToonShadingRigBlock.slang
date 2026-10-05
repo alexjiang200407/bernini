@@ -24,6 +24,9 @@ public struct ToonShadingRigBlock
     // the head's projected size leaves, in [0, 1].
     public float4 faceLight;
 
+    // The rig's ToonShadingRig::faceEllipsoid, head space.
+    public float4 faceEllipsoid;
+
     public uint slotCount;
 
     // The MeshInstance entry the block was evaluated for.

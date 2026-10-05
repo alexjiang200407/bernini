@@ -283,6 +283,7 @@ void main(uint thread: SV_DispatchThreadID)
         normalize(axisX * face.x + axisY * face.y + axisZ * face.z),
         saturate((pixels - toon.fadeEndPixels) / (toon.fadeStartPixels - toon.fadeEndPixels))
     );
+    block.faceEllipsoid = toon.faceEllipsoid;
     block.placement = placement;
     block.pad[0] = 0u;
     block.pad[1] = 0u;

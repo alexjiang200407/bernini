@@ -17,7 +17,8 @@ namespace bgl
 
 	/**
 	 * Flattens `desc` into what the evaluation pass reads: each key's light normalized, each edit's
-	 * sign lock read off its keys' gains and its mirrored flag set, `headToBone` as rows.
+	 * sign lock read off its keys' gains and its mirrored flag set, `headToBone` as rows, the face
+	 * normal's radii as what its ellipsoid's normal multiplies a point by.
 	 *
 	 * @pre `desc` passed AddToonShadingRig's validation.
 	 */

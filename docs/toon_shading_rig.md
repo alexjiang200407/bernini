@@ -55,6 +55,11 @@ azimuth swung toward the front by `azimuthFadeAmount` as the elevation rises fro
 to `azimuthFadeEnd` (a smoothstep), then both clamped. The block keeps that light in world space, and
 in its `w` the fade, `saturate((pixels - fadeEndPixels) / (fadeStartPixels - fadeEndPixels))`.
 
+The block also carries the rig's face normal (`FaceNormalDesc`) as the rig's record holds it
+(`faceEllipsoid`), since a pixel reads its placement's block and never the rig: each axis's
+`(smallest radius / radius)²`, the scale the ellipsoid's gradient applies to a head-space point, and
+the smoothing. A ratio rather than `1 / radius²`, so a small radius cannot overflow it.
+
 ## The edits
 
 Each edit's keys are blended for the face light by normalized spherical-Gaussian weights,
@@ -84,6 +89,17 @@ is `face`, each by as much as it is:
 - **The light** is the block's face light rather than the sun, blended toward it by `face` times
   the block's fade, so a head crossing the fade's end, or dropping out of the pool, returns to the
   sun without a step.
+- **The normal** the base tone shades with (`ToonFaceNormal`) is the surface's pulled toward the
+  outward normal of the rig's ellipsoid about the head's origin, by the rig's smoothing times the
+  same weight: `normalize(lerp(n, e, smoothing * weight))`, the paper's normal smoothing with an
+  ellipsoid where it has a sphere. `e` is the gradient of the ellipsoid's implicit form at the
+  pixel's head-space position -- the position times the block's row -- taken to world space through
+  the transpose of `headFromWorld`, so a head scaled unevenly needs no case of its own. A hard cel
+  step on a face's own normals flips once per crease; on this one it draws a single shadow shape,
+  and the edits put the nose and the brow back. The ellipsoid's half is per pixel and reads nothing
+  of the mesh but the position, so it is the same shape at every level of detail. The other half is
+  `1 - smoothing` of whatever normal the mesh carries, creases included: at the same smoothing, a
+  face exported with a relaxed normal draws a rounder edge than one exported with its raw normals.
 - **The terminator** moves by the sum of every slot's push, times the same weight. The
   pixel goes into head space through `headFromWorld`, its normal through the same rotation, both
   with X flipped on a mirrored slot. A slot's push (`ToonShadingRigSlotOffset`) is the Shading Rig's
@@ -92,13 +108,18 @@ is `face`, each by as much as it is:
   `10 * (bulge * x + bend * y)` radians, and fallen off as `exp(-(e x² + |y|^(2 - sharpness) / e))`
   with `e = 1 - anisotropy`; then faded out over the last quarter of its radius, cut where the twist
   passes a quarter turn, and scaled by how far the pixel's normal -- pulled toward the head's
-  sphere by its normal smoothing -- faces the edit.
+  sphere by its normal smoothing -- faces the edit. That is the surface's own normal under the
+  key's own smoothing, whatever the rig's face normal is.
+
+A face with no block -- under the fade's end, past the pool, dissolving or blended -- shades on its
+mesh normals under the sun, with no light remap, no smoothing and no edits; all three fade in
+together.
 
 ## The document
 
 A rig is authored as a `.btoonrig` ([BToonShadingRig.h](../libs/assetlib_structs/include/assetlib_structs/BToonShadingRig.h)),
 an authored text document like a `.bgrass`: canonical JSON, unknown keys kept at every depth -- the
-top, `faceLight`, each edit and each key -- and a known key of the wrong shape refused. A character's
+top, `faceLight`, `faceNormal`, each edit and each key -- and a known key of the wrong shape refused. A character's
 `.bimport` names it under `toonShadingRig`, one per character whatever its materials, so a delete,
 a rename, `refs` and `pack` see the edge ([Asset Containers](asset_containers.md)).
 
@@ -111,6 +132,7 @@ a rename, `refs` and `pack` see the edge ([Asset Containers](asset_containers.md
 	                         "rotation": 30, "sharpness": 0.25, "size": 0.2 } ] } ],
 	"faceLight": { "azimuthFadeAmount": 0.6, "azimuthFadeEnd": 70, "azimuthFadeStart": 30,
 	               "maxAzimuth": 60, "maxElevation": 15, "minElevation": -20 },
+	"faceNormal": { "radii": [0.08, 0.115, 0.1], "smoothing": 0.6 },
 	"fadeEndPixels": 48.0, "fadeStartPixels": 96.0, "headBone": "head", "headRadius": 0.12,
 	"headToBone": [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
 }
@@ -125,9 +147,13 @@ Each value is the `ToonShadingRigDesc` field of its name, with three differences
   head. Absent, the placement's own frame is the head; an empty name is refused.
 - **`headToBone` is four rows of four**, as a matrix is written: the translation is the last column.
 
+`faceNormal`'s `radii` are the head's half-extents along head-space X, Y and Z. Only their
+proportions reach the shading, so any unit does and three equal numbers are a sphere.
+
 A key needs `light` and `position`, and an edit needs `keys`; every other value takes the desc's
-default when absent, and `faceLight` absent remaps nothing. An edit's `name` is the author's label
-and nothing reads it. Ranges are not checked on read: `IScene::AddToonShadingRig` states them once.
+default when absent: `faceLight` absent remaps nothing, and `faceNormal` absent pulls the normal 0.6
+of the way toward a sphere. An edit's `name` is the author's label and nothing reads it. Ranges are
+not checked on read: `IScene::AddToonShadingRig` states them once.
 
 ## Loading
 
@@ -161,4 +187,4 @@ Per pixel of a face, every slot of its block; nothing on a pixel that is no face
 other surface. Per rigged placement per draw, one thread: a binary search over the ranges, the head's frame, the
 sun's remap, and for a selected one every key of every edit -- at most `cMaxToonShadingRigSlots`
 slots of `cMaxToonShadingRigKeysPerEdit` keys. A view's pool is `cToonShadingRigPoolCapacity` blocks of
-848 bytes, allocated with its first range.
+864 bytes, allocated with its first range.

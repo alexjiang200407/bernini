@@ -65,6 +65,7 @@ namespace
 			                    .azimuthFadeStart  = 30.0f,
 			                    .azimuthFadeEnd    = 70.0f,
 			                    .azimuthFadeAmount = 0.6f };
+		rig.faceNormal      = { .smoothing = 0.45f, .radii = glm::vec3(0.08f, 0.115f, 0.1f) };
 		rig.headBone        = "neck_top";
 		rig.headToBone      = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.1f, 0.02f)) *
 		                      glm::rotate(glm::mat4(1.0f), 0.5f, glm::vec3(0.0f, 1.0f, 0.0f));
@@ -142,6 +143,14 @@ TEST_CASE("A toon shading rig document is canonical JSON", "[toonshadingrig][cod
 	REQUIRE(rows.size() == 4);
 	CHECK(rows[1][3].get<float>() == 0.1f);
 	CHECK(rows[3] == nlohmann::json::array({ 0, 0, 0, 1 }));
+
+	// The face normal is an object beside faceLight: its amount, and its radii as X, Y, Z.
+	const auto& normal = json.at("faceNormal");
+	CHECK(normal.at("smoothing").get<float>() == 0.45f);
+	REQUIRE(normal.at("radii").size() == 3);
+	CHECK(normal.at("radii")[1].get<float>() == 0.115f);
+	CHECK(text.find("0.115") != std::string::npos);
+	CHECK(text.find("0.1149") == std::string::npos);
 }
 
 TEST_CASE(
@@ -150,6 +159,15 @@ TEST_CASE(
 {
 	CHECK(Parse("{}") == BToonShadingRig());
 	CHECK(Parse(R"({"faceLight": {}})") == BToonShadingRig());
+	CHECK(Parse(R"({"faceNormal": {}})") == BToonShadingRig());
+
+	// A face normal that names one of its two values keeps the other's default.
+	const ToonFaceNormal amount = Parse(R"({"faceNormal": {"smoothing": 0.8}})").faceNormal;
+	CHECK(amount.smoothing == 0.8f);
+	CHECK(amount.radii == ToonFaceNormal().radii);
+	const ToonFaceNormal shape = Parse(R"({"faceNormal": {"radii": [1, 2, 3]}})").faceNormal;
+	CHECK(shape.smoothing == ToonFaceNormal().smoothing);
+	CHECK(shape.radii == glm::vec3(1.0f, 2.0f, 3.0f));
 
 	const BToonShadingRig sparse = Parse(R"({
 		"edits": [ { "keys": [ { "light": [1, 0, 0], "position": [0, 0, 0.1] } ] } ],
@@ -175,6 +193,7 @@ TEST_CASE(
 	const BToonShadingRig read = Parse(R"({
 		"futureTopLevel": [1, 2],
 		"faceLight": { "maxAzimuth": 40, "futureFaceKey": "kept" },
+		"faceNormal": { "smoothing": 0.3, "futureNormalKey": [4] },
 		"edits": [ {
 			"futureEditKey": 3,
 			"keys": [ { "light": [0, 0, 1], "position": [0, 0, 0], "futureKeyKey": { "x": 1 } } ]
@@ -189,6 +208,8 @@ TEST_CASE(
 	CHECK(written.at("futureTopLevel") == nlohmann::json::array({ 1, 2 }));
 	CHECK(written.at("faceLight").at("futureFaceKey").get<std::string>() == "kept");
 	CHECK(written.at("faceLight").at("maxAzimuth").get<float>() == 40.0f);
+	CHECK(written.at("faceNormal").at("futureNormalKey") == nlohmann::json::array({ 4 }));
+	CHECK(written.at("faceNormal").at("smoothing").get<float>() == 0.3f);
 	CHECK(written.at("edits")[0].at("futureEditKey").get<int>() == 3);
 	CHECK(written.at("edits")[0].at("keys")[0].at("futureKeyKey").at("x").get<int>() == 1);
 	CHECK(written.at("edits")[0].at("keys")[0].at("gain").get<float>() == -0.5f);
@@ -204,6 +225,10 @@ TEST_CASE("A toon shading rig document refuses what it cannot read", "[toonshadi
 		CHECK_THROWS(Parse(R"({"headRadius": "big"})"));
 		CHECK_THROWS(Parse(R"({"faceLight": 3})"));
 		CHECK_THROWS(Parse(R"({"faceLight": {"maxAzimuth": "wide"}})"));
+		CHECK_THROWS(Parse(R"({"faceNormal": 3})"));
+		CHECK_THROWS(Parse(R"({"faceNormal": {"smoothing": "soft"}})"));
+		CHECK_THROWS(Parse(R"({"faceNormal": {"radii": 0.1}})"));
+		CHECK_THROWS(Parse(R"({"faceNormal": {"radii": [1, 2]}})"));
 		CHECK_THROWS(Parse(R"({"edits": {}})"));
 		CHECK_THROWS(Parse(R"({"edits": [3]})"));
 		CHECK_THROWS(Parse(R"({"edits": [{"keys": 1}]})"));
@@ -238,9 +263,11 @@ TEST_CASE("A toon shading rig leaves range checks to the renderer", "[toonshadin
 {
 	auto rig                   = BToonShadingRig();
 	rig.headRadius             = -1.0f;
+	rig.faceNormal             = { .smoothing = 2.0f, .radii = glm::vec3(0.0f, -1.0f, 1.0f) };
 	rig.edits                  = { ToonShadingRigEdit() };
 	const BToonShadingRig back = Parse(Text(rig));
 	CHECK(back.headRadius == -1.0f);
+	CHECK(back.faceNormal == rig.faceNormal);
 	CHECK(back.edits.size() == 1);
 	CHECK(back.edits[0].keys.empty());
 }

@@ -31,7 +31,11 @@ namespace game
 								.SetMaxAzimuth(glm::radians(rig.faceLight.maxAzimuth))
 								.SetAzimuthFadeStart(glm::radians(rig.faceLight.azimuthFadeStart))
 								.SetAzimuthFadeEnd(glm::radians(rig.faceLight.azimuthFadeEnd))
-								.SetAzimuthFadeAmount(rig.faceLight.azimuthFadeAmount));
+								.SetAzimuthFadeAmount(rig.faceLight.azimuthFadeAmount))
+		                .SetFaceNormal(
+							bgl::FaceNormalDesc()
+								.SetSmoothing(rig.faceNormal.smoothing)
+								.SetRadii(rig.faceNormal.radii));
 
 		if (!rig.headBone.empty())
 		{

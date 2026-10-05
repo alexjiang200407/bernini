@@ -114,7 +114,8 @@ tint and a sun's colour reaches all three. There is no environment term, no high
 a cel shade is a flat painted tone, and an ambient term would grade it with the normal. Steps of
 zero keep every pixel lit, as an eye is authored. On a placement whose toon shading rig was
 evaluated this draw, a pixel that is `face` takes the rig instead, by as much as it is face: lit by
-the rig's face light rather than the sun, and its terminator moved by the rig's edits
+the rig's face light rather than the sun, its base tone shaded on the rig's smoothed normal rather
+than the mesh's, and its terminator moved by the rig's edits
 ([Toon Shading Rig](toon_shading_rig.md) § The pixels). A character's buckets therefore draw at
 rest through programs of their own, whose vertices carry the placement's evaluated block; a
 blended character, and one dissolving between levels, shade without the rig. The environment model
