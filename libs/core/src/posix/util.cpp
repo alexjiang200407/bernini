@@ -1,9 +1,15 @@
+#include <CoreFoundation/CFBase.h>
+#include <CoreFoundation/CFString.h>
+#include <CoreFoundation/CFUserNotification.h>
+#include <MacTypes.h>
 #include <core/platform/util.h>
 
 #include <cstdint>
 #include <fcntl.h>
+#include <iostream>
 #include <mach-o/dyld.h>
 #include <string>
+#include <string_view>
 #include <sys/fcntl.h>
 #include <unistd.h>
 
@@ -53,5 +59,43 @@ namespace core
 	sync_directory(const std::filesystem::path& directory) noexcept
 	{
 		return sync_fd(directory, O_RDONLY | O_DIRECTORY);
+	}
+
+	void
+	show_fatal_message(const std::string_view title, const std::string_view message) noexcept
+	{
+		std::cerr << title << ": " << message << '\n';
+
+		const auto toCf = [](const std::string_view text) {
+			return CFStringCreateWithBytes(
+				kCFAllocatorDefault,
+				reinterpret_cast<const UInt8*>(text.data()),
+				static_cast<CFIndex>(text.size()),
+				kCFStringEncodingUTF8,
+				false);
+		};
+		CFStringRef cfTitle   = toCf(title);
+		CFStringRef cfMessage = toCf(message);
+
+		// CoreFoundation's alert rather than NSAlert: it needs no NSApplication, so a game that has
+		// not made a window yet can still show it.
+		CFOptionFlags response = 0;
+		CFUserNotificationDisplayAlert(
+			0,
+			kCFUserNotificationStopAlertLevel,
+			nullptr,
+			nullptr,
+			nullptr,
+			cfTitle,
+			cfMessage,
+			nullptr,
+			nullptr,
+			nullptr,
+			&response);
+
+		if (cfTitle != nullptr)
+			CFRelease(cfTitle);
+		if (cfMessage != nullptr)
+			CFRelease(cfMessage);
 	}
 }

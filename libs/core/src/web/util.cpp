@@ -1,4 +1,6 @@
 #include <core/platform/util.h>
+#include <iostream>
+#include <string_view>
 
 namespace core
 {
@@ -21,5 +23,11 @@ namespace core
 	sync_directory(const std::filesystem::path&) noexcept
 	{
 		return true;
+	}
+
+	void
+	show_fatal_message(const std::string_view title, const std::string_view message) noexcept
+	{
+		std::cerr << title << ": " << message << '\n';
 	}
 }

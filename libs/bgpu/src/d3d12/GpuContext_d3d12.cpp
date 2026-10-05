@@ -2,16 +2,19 @@
 #include "native_device_d3d12.h"
 #include <atomic>
 #include <bgpu/GpuContext.h>
+#include <bgpu/SystemRequirements.h>
 #include <bgpu/d3d12/D3d12ErrorChecker.h>
 #include <core/err/util.h>
 #include <core/log/log.h>
 #include <core/ref/SharedRef.h>
+#include <core/str/str.h>
 #include <cstddef>
 #include <cstdint>
 #include <map>
 #include <mutex>
 #include <slang.h>
 #include <spdlog/spdlog.h>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -35,6 +38,61 @@ namespace bgpu
 		// successor that reports "off" while running instrumented would have its owners cache
 		// driver pipelines built without the instrumentation.
 		std::atomic<bool> g_GpuValidationActive = false;
+
+		// D3D12CreateDevice with no adapter takes DXGI's first, so that is the GPU a player is told of.
+		[[nodiscard]] std::string
+		DefaultAdapterName()
+		{
+			wrl::ComPtr<IDXGIFactory1> factory;
+			wrl::ComPtr<IDXGIAdapter1> adapter;
+			auto                       desc = DXGI_ADAPTER_DESC1();
+			if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))) ||
+			    FAILED(factory->EnumAdapters1(0, &adapter)) || FAILED(adapter->GetDesc1(&desc)))
+				return {};
+			return core::str::wide_to_string(desc.Description);
+		}
+
+		// A query the runtime does not know leaves its feature at zero, which reads as unsupported.
+		[[nodiscard]] D3d12SystemFacts
+		ReadSystemFacts(ID3D12Device* device)
+		{
+			auto facts    = D3d12SystemFacts();
+			facts.gpuName = DefaultAdapterName();
+			if (device == nullptr)
+				return facts;
+			facts.device = true;
+
+			auto shaderModel               = D3D12_FEATURE_DATA_SHADER_MODEL();
+			shaderModel.HighestShaderModel = D3D_SHADER_MODEL_6_6;
+			if (SUCCEEDED(device->CheckFeatureSupport(
+					D3D12_FEATURE_SHADER_MODEL,
+					&shaderModel,
+					sizeof(shaderModel))))
+				facts.shaderModel = static_cast<uint32_t>(shaderModel.HighestShaderModel);
+
+			auto options = D3D12_FEATURE_DATA_D3D12_OPTIONS();
+			if (SUCCEEDED(device->CheckFeatureSupport(
+					D3D12_FEATURE_D3D12_OPTIONS,
+					&options,
+					sizeof(options))))
+				facts.resourceBindingTier = static_cast<uint32_t>(options.ResourceBindingTier);
+
+			auto options7 = D3D12_FEATURE_DATA_D3D12_OPTIONS7();
+			if (SUCCEEDED(device->CheckFeatureSupport(
+					D3D12_FEATURE_D3D12_OPTIONS7,
+					&options7,
+					sizeof(options7))))
+				facts.meshShaderTier = static_cast<uint32_t>(options7.MeshShaderTier);
+
+			auto options12 = D3D12_FEATURE_DATA_D3D12_OPTIONS12();
+			if (SUCCEEDED(device->CheckFeatureSupport(
+					D3D12_FEATURE_D3D12_OPTIONS12,
+					&options12,
+					sizeof(options12))))
+				facts.enhancedBarriers = options12.EnhancedBarriersSupported == TRUE;
+
+			return facts;
+		}
 
 		class Context final : public ContextBase
 		{
@@ -76,11 +134,25 @@ namespace bgpu
 
 				const HRESULT created =
 					D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_Device));
-				if (FAILED(created))
+				// Only "unsupported" says the machine is below the bar; anything else is a fault in a
+				// driver that could create one, and telling the player to replace the GPU would be wrong.
+				if (FAILED(created) && created != DXGI_ERROR_UNSUPPORTED &&
+				    created != E_NOINTERFACE)
 				{
 					core::throw_runtime_error(
 						"no D3D12 device at feature level 12_0 (0x{:08X})",
 						static_cast<uint32_t>(created));
+				}
+
+				// Below the bar the first mesh pipeline is where it would fail, with nothing a player
+				// could act on.
+				std::vector<UnmetRequirement> unmet =
+					CheckSystemRequirements(ReadSystemFacts(m_Device.Get()));
+				if (!unmet.empty())
+				{
+					auto error = UnsupportedSystem(std::move(unmet));
+					spdlog::critical("{}", error.what());
+					throw error;
 				}
 
 				// Debug-layer and GPU-based-validation messages otherwise only reach an attached

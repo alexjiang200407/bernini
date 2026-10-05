@@ -147,6 +147,9 @@ elseif (PLATFORM STREQUAL "MACOS")
 
     target_sources(core PRIVATE ${POSIX_SOURCES})
 
+    # CFUserNotificationDisplayAlert, for core::show_fatal_message.
+    target_link_libraries(core PRIVATE "-framework CoreFoundation")
+
     source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${POSIX_SOURCES})
 elseif (PLATFORM STREQUAL "WEB")
     target_compile_definitions(core PRIVATE PLATFORM_WEB)

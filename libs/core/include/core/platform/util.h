@@ -51,4 +51,13 @@ namespace core
 	 */
 	[[nodiscard]] bool
 	sync_directory(const std::filesystem::path& directory) noexcept;
+
+	/**
+	 * Tells the person at the machine why the program is about to stop, where a console is not
+	 * watched: a native dialog on Windows and macOS, which blocks until it is dismissed, and stderr
+	 * everywhere as well. For a failure before any window exists -- the machine below the engine's
+	 * requirements, say -- and never for one a test or a tool could meet, since it waits on a click.
+	 */
+	void
+	show_fatal_message(std::string_view title, std::string_view message) noexcept;
 }

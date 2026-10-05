@@ -4,7 +4,9 @@
 #include <core/str/str.h>
 #include <cstdint>
 #include <filesystem>
+#include <iostream>
 #include <string>
+#include <string_view>
 
 namespace core::win32
 {
@@ -89,5 +91,19 @@ namespace core
 	sync_directory(const std::filesystem::path&) noexcept
 	{
 		return true;
+	}
+
+	void
+	show_fatal_message(const std::string_view title, const std::string_view message) noexcept
+	{
+		std::cerr << title << ": " << message << '\n';
+		try
+		{
+			const std::wstring wideTitle   = str::string_to_wide(title);
+			const std::wstring wideMessage = str::string_to_wide(message);
+			MessageBoxW(nullptr, wideMessage.c_str(), wideTitle.c_str(), MB_ICONERROR | MB_OK);
+		}
+		catch (...)
+		{}
 	}
 }

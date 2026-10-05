@@ -97,6 +97,43 @@ rm->RegisterQueue(queue.Get());
   `libs/bgpu/CMakeLists.txt`) into a tree of their own and compiles each against it, so an include
   of an RHI header fails to resolve. A new context header joins that list.
 
+## Minimum system requirements
+
+The engine has one hardware bar, bindless resource access plus a mesh stage, and no lower tier.
+`CreateGpuContext` checks the machine against it as soon as it has the native device, before any
+owner builds anything on it. Below the bar it throws `bgpu::UnsupportedSystem`
+([SystemRequirements.h](../libs/bgpu/include/bgpu/SystemRequirements.h)) instead of letting the
+first mesh pipeline fail. Every client creates its device there, so the editor, every game and
+every test get the check without asking for it, and nothing can turn it off.
+
+| | Needs | Checked as |
+|---|---|---|
+| macOS | a Mac with Apple silicon (M1 or later) | `hw.optional.arm64`, so an x86_64 build under Rosetta passes |
+| | macOS 13 Ventura or later | `NSProcessInfo.operatingSystemVersion` |
+| | a Metal 3 GPU with a mesh stage and bindless | `MTLGPUFamilyMetal3`, `MTLGPUFamilyApple7`, `MTLArgumentBuffersTier2` |
+| Windows | a D3D12 device at feature level 12_0 | `D3D12CreateDevice` on DXGI's first adapter, the one every owner draws on |
+| | a mesh stage and bindless | `MeshShaderTier` 1 (`OPTIONS7`), `ResourceBindingTier` 3 (`OPTIONS`) |
+| | a driver new enough for the shaders and barriers | shader model 6.6, the profile the sessions compile to; `EnhancedBarriersSupported` (`OPTIONS12`) |
+
+An Intel Mac is refused even when its GPU supports Metal 3: the engine is built and tested on Apple
+silicon only.
+On Windows that is NVIDIA Turing (GTX 1660, RTX 2060) and newer, AMD RDNA2 (Radeon RX 6000) and
+newer, and Intel Arc. A machine whose first adapter is an integrated GPU without mesh shaders is
+refused, even when a second GPU would pass, because the engine does not choose an adapter.
+
+* **The error is for a player, and the data is for the client.** `what()` says that this computer
+  does not meet the minimum requirements. It then names each thing to replace or update once, with
+  what the machine has instead, in English. `Unmet()` is the same list as `Requirement`s, so a
+  client can write its own words or localize them. bgpu never shows UI: it is linked by headless
+  tests and tools. The editor shows the text in its "could not start" dialog. A game must show it
+  itself, because a Steam player never sees stderr and Steam cannot enforce hardware requirements.
+  `core::show_fatal_message` (`core/platform/util.h`) is the native dialog for a game's `main` to
+  call in its catch.
+* **The checks are separate from the reading.** Each backend reads plain facts off its device
+  (`AppleSystemFacts`, `D3d12SystemFacts`), and `CheckSystemRequirements` decides on them. So
+  `bgpu_tests` `[sysreq]` pins both backends' checks on any machine, including the machines that
+  fail them, which no test machine is.
+
 ## Threading & Synchronization
 
 * **Sessions are per thread.** A thread's first compile creates its own global session and session,

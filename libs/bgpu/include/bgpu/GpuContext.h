@@ -190,7 +190,9 @@ namespace bgpu
 	 * enabling the debug layer once it exists removes it -- so the application creates it once and
 	 * hands it to every owner. Another may follow once the last holder has dropped it.
 	 *
-	 * @throws std::runtime_error if no device can be created, or a context is already live.
+	 * @throws UnsupportedSystem if the machine is below the engine's minimum requirements
+	 *         (SystemRequirements.h); std::runtime_error if no device can be created, or a context
+	 *         is already live.
 	 */
 	BGPU_API GpuContextRef
 	CreateGpuContext(const GpuContextDesc& desc);
