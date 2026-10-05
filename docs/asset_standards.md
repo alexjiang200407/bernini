@@ -1023,6 +1023,34 @@ Ten rules, each of which is a way to get this wrong:
 The import runs no bake, so there is no triplet, and the maps are sampled straight from the routes until
 someone bakes it.
 
+### A surface named in a material's extras
+
+glTF has no way to say a material draws with a [game-defined surface](game_defined_surfaces.md), so
+the material's `extras` say it, in the flat keys a Blender material's Custom Properties export as
+(with **Include → Custom Properties** ticked):
+
+| Key | Value | Means |
+|---|---|---|
+| `bernini_surface` | a string | the surface's name, as a `.bmaterial`'s `surface` writes it (`"ToonCharacter"`) |
+| `bernini_<field>` | a number, or an array of 1–4 numbers | a value the surface declares |
+| `bernini_<field>` | a string | a slot the surface declares, bound to the file's image of that name |
+
+`loadFromGltf` reads them into `imp::BMaterialImport::surface`, and `probeGltfMaterials` reports the
+surface's name; [libs/assetlib_structs/include/assetlib_structs/BMaterialImport.h](libs/assetlib_structs/include/assetlib_structs/BMaterialImport.h)
+holds the rules. Keys without the prefix are not ours and are skipped, and so are fields when no
+`bernini_surface` names a surface for them. A key of ours that cannot be a field (a bool, an
+object, five numbers, an image the file does not have) is dropped with a warning naming the
+material and the key, and the rest of the material still reads.
+
+assetlib holds no project's surfaces, so it checks nothing against one. Whether a field exists and
+is as wide as given is for the importer to decide.
+
+**An image that only an extras string names is decoded as data.** Colour space is decided at decode
+from what glTF calls colour (`baseColorTexture`, a specular-glossiness diffuse). That decode also
+runs in `assetlib_cli` and in texture refresh, and neither holds a surface's slot types. So a colour
+map reaches a surface through the glTF's own base colour: in Blender, wire it into a Principled
+BSDF's Base Color for the export.
+
 ## Pruning unused baked maps
 
 A re-bake orphans the map its old routing named (see [Texture standards](#texture-standards)), so

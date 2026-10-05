@@ -1434,6 +1434,133 @@ namespace assetlib
 				material.occlusionTexture = texture;
 		}
 
+		// The prefix that makes a key of a material's extras ours, and the one field that is not the
+		// surface's but names it. Flat keys because that is what a Blender Custom Property exports as
+		// -- its UI cannot author a nested group.
+		constexpr std::string_view c_ExtrasPrefix  = "bernini_";
+		constexpr std::string_view c_SurfaceKey    = "bernini_surface";
+		constexpr size_t           c_MaxValueWidth = 4;  // glm::vec4, SurfaceValueImport's width
+
+		// The surface `material`'s extras name, or empty: also what probeGltfMaterials reports.
+		std::string
+		extrasSurfaceName(const tinygltf::Material& material)
+		{
+			if (!material.extras.IsObject() || !material.extras.Has(std::string(c_SurfaceKey)))
+				return {};
+
+			const tinygltf::Value& name = material.extras.Get(std::string(c_SurfaceKey));
+			if (!name.IsString())
+			{
+				spdlog::warn(
+					"material '{}': {} is not a string, so the material names no surface",
+					material.name,
+					c_SurfaceKey);
+				return {};
+			}
+			return name.Get<std::string>();
+		}
+
+		// The extracted texture of the image called `name`, by the name the extract gives it -- the
+		// image's own, else its URI's stem -- or c_InvalidIndex.
+		uint32_t
+		findNamedImage(
+			const tinygltf::Model&       model,
+			std::string_view             name,
+			const std::vector<uint32_t>& imageToTexture)
+		{
+			for (size_t i = 0; i < model.images.size() && i < imageToTexture.size(); ++i)
+			{
+				const tinygltf::Image& image = model.images[i];
+				const std::string imageName  = !image.name.empty() ?
+				                                   image.name :
+				                                   std::filesystem::path(image.uri).stem().string();
+				if (imageName == name)
+					return imageToTexture[i];
+			}
+			return c_InvalidIndex;
+		}
+
+		/**
+		 * The surface a material's extras name and the fields they set, as imp::SurfaceImport
+		 * describes. A key of ours that cannot be a field -- an object, a bool, an empty or overlong
+		 * array, an image the file does not have -- is dropped with a warning naming it; the rest of
+		 * the material still imports.
+		 */
+		void
+		readSurface(
+			const tinygltf::Material&    gltfMat,
+			const tinygltf::Model&       model,
+			const std::vector<uint32_t>& imageToTexture,
+			SurfaceImport&               out)
+		{
+			out.name = extrasSurfaceName(gltfMat);
+			if (out.name.empty())
+				return;
+
+			for (const std::string& key : gltfMat.extras.Keys())
+			{
+				if (!key.starts_with(c_ExtrasPrefix) || key == c_SurfaceKey)
+					continue;
+
+				const std::string      field = key.substr(c_ExtrasPrefix.size());
+				const tinygltf::Value& value = gltfMat.extras.Get(key);
+
+				if (value.IsNumber())
+				{
+					out.values.push_back(
+						{ .field = field,
+					      .value = glm::vec4(
+							  static_cast<float>(value.GetNumberAsDouble()),
+							  0.0f,
+							  0.0f,
+							  0.0f),
+					      .width = 1 });
+					continue;
+				}
+
+				if (value.IsString())
+				{
+					const std::string& image   = value.Get<std::string>();
+					const uint32_t     texture = findNamedImage(model, image, imageToTexture);
+					if (texture == c_InvalidIndex)
+					{
+						spdlog::warn(
+							"material '{}': {} dropped, the file has no image '{}'",
+							gltfMat.name,
+							key,
+							image);
+						continue;
+					}
+					out.textures.push_back({ .field = field, .texture = texture });
+					continue;
+				}
+
+				const size_t width = value.IsArray() ? value.ArrayLen() : 0;
+				const bool   numeric =
+					width >= 1 && width <= c_MaxValueWidth &&
+					std::ranges::all_of(std::views::iota(size_t{ 0 }, width), [&](size_t i) {
+						return value.Get(i).IsNumber();
+					});
+				if (!numeric)
+				{
+					spdlog::warn(
+						"material '{}': {} dropped, a field is a number, 1 to {} numbers, or an "
+						"image's name",
+						gltfMat.name,
+						key,
+						c_MaxValueWidth);
+					continue;
+				}
+
+				auto entry =
+					SurfaceValueImport{ .field = field, .width = static_cast<uint32_t>(width) };
+				for (size_t i = 0; i < width; ++i)
+					entry.value[static_cast<glm::length_t>(i)] =
+						static_cast<float>(value.Get(i).GetNumberAsDouble());
+				out.values.push_back(std::move(entry));
+			}
+		}
+
 		AlphaMode
 		toAlphaMode(const std::string& gltfAlphaMode)
 		{
@@ -1494,6 +1621,8 @@ namespace assetlib
 				// Outside that block on purpose: occlusionTexture is a sibling of
 				// pbrMetallicRoughness, so a specular-glossiness material can carry one.
 				readOcclusion(gltfMat, model, imageToTexture, material);
+
+				readSurface(gltfMat, model, imageToTexture, material.surface);
 
 				material.nameOffset = mesh.stringPool.add(gltfMat.name);
 
@@ -1772,7 +1901,9 @@ namespace assetlib
 		loadModel(loader, model, path);
 
 		return model.materials | std::views::transform([](const auto& gltfMat) {
-				   return GltfMaterial{ .name = gltfMat.name, .isPbr = isPbrMaterial(gltfMat) };
+				   return GltfMaterial{ .name    = gltfMat.name,
+				                        .isPbr   = isPbrMaterial(gltfMat),
+				                        .surface = extrasSurfaceName(gltfMat) };
 			   }) |
 		       std::ranges::to<std::vector>();
 	}

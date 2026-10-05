@@ -13,6 +13,7 @@
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/VertexLayout.h>
+#include <assetlib_structs/VkFormat.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <core/glm.h>
@@ -26,6 +27,7 @@
 #include <ios>
 #include <span>
 #include <stdexcept>
+#include <string_view>
 #include <vector>
 
 using namespace assetlib;
@@ -814,4 +816,137 @@ TEST_CASE("A glossiness map on a second UV set is refused", "[bmesh][gltf][specg
 
 	CHECK(second.ormTexture == c_InvalidIndex);
 	CHECK(second.roughnessFactor == 0.0f);
+}
+
+namespace
+{
+	/**
+	 * Materials whose extras name a surface, as Blender exports a material's Custom Properties: flat
+	 * keys, numbers, arrays and strings. `albedo` is the glTF's own base colour and `threshold` an
+	 * image only an extras string names.
+	 */
+	constexpr const char* c_SurfaceExtrasGltf = R"({
+  "asset": { "version": "2.0" },
+  "images": [
+    { "name": "albedo", "uri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC" },
+    { "name": "threshold", "uri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNwYGAAAADEAEG9pK30AAAAAElFTkSuQmCC" }
+  ],
+  "textures": [ { "source": 0 }, { "source": 1 } ],
+  "materials": [
+    { "name": "skin",
+      "pbrMetallicRoughness": { "baseColorTexture": { "index": 0 } },
+      "extras": { "bernini_surface": "ToonCharacter", "bernini_baseStep": 0.65,
+                  "bernini_firstShade": [ 0.76, 0.6, 0.57 ], "bernini_shadeOffsetMap": "threshold",
+                  "authoredIn": "blender" } },
+    { "name": "plain", "extras": { "bernini_baseStep": 0.65 } },
+    { "name": "broken",
+      "extras": { "bernini_surface": "ToonCharacter", "bernini_face": true,
+                  "bernini_tint": [ 1, 2, 3, 4, 5 ], "bernini_mask": "nowhere",
+                  "bernini_shadeStep": [ 0.5 ] } },
+    { "name": "unnamed", "extras": { "bernini_surface": 3 } }
+  ]
+})";
+
+	BMeshImport
+	LoadSurfaceExtrasGltf()
+	{
+		const auto path = WriteTempGltf(c_SurfaceExtrasGltf, "bmesh_surface_extras_test.gltf");
+		auto       mesh = loadFromGltf(path);
+		std::filesystem::remove(path);
+		return mesh;
+	}
+
+	const SurfaceValueImport*
+	FindValue(const SurfaceImport& surface, std::string_view field)
+	{
+		const auto it = std::ranges::find(surface.values, field, &SurfaceValueImport::field);
+		return it == surface.values.end() ? nullptr : &*it;
+	}
+}
+
+TEST_CASE("A material's extras name its surface and set its fields", "[bmesh][gltf][extras]")
+{
+	const BMeshImport mesh = LoadSurfaceExtrasGltf();
+	REQUIRE(mesh.materials.size() == 4);
+
+	const SurfaceImport& skin = mesh.materials[0].surface;
+	CHECK(skin.name == "ToonCharacter");
+
+	// A key without the prefix is somebody else's, not a field the surface lacks.
+	REQUIRE(skin.values.size() == 2);
+
+	const SurfaceValueImport* step = FindValue(skin, "baseStep");
+	REQUIRE(step != nullptr);
+	CHECK(step->width == 1);
+	CHECK(step->value.x == Catch::Approx(0.65f));
+
+	const SurfaceValueImport* shade = FindValue(skin, "firstShade");
+	REQUIRE(shade != nullptr);
+	CHECK(shade->width == 3);
+	CHECK(shade->value.x == Catch::Approx(0.76f));
+	CHECK(shade->value.y == Catch::Approx(0.6f));
+	CHECK(shade->value.z == Catch::Approx(0.57f));
+
+	REQUIRE(skin.textures.size() == 1);
+	CHECK(skin.textures[0].field == "shadeOffsetMap");
+	CHECK(skin.textures[0].texture == 1);
+
+	// The glTF's own fields are still read beside the surface, for an importer that falls back.
+	CHECK(mesh.materials[0].baseColorTexture == 0);
+	CHECK(mesh.materials[0].isPbr);
+}
+
+TEST_CASE("An image only an extras slot names is decoded as data", "[bmesh][gltf][extras]")
+{
+	// assetlib cannot see the surface's slot types, so colour is only ever what glTF calls colour.
+	const BMeshImport mesh = LoadSurfaceExtrasGltf();
+	REQUIRE(mesh.textures.size() == 2);
+
+	CHECK(mesh.textures[0].vkFormat == VkFormat::R8G8B8A8_SRGB);
+	CHECK(mesh.textures[1].vkFormat == VkFormat::R8G8B8A8_UNORM);
+}
+
+TEST_CASE("Extras that name no surface set nothing", "[bmesh][gltf][extras]")
+{
+	const BMeshImport mesh = LoadSurfaceExtrasGltf();
+
+	// A field with no surface to belong to is not read at all: it would be a value for nothing.
+	const SurfaceImport& plain = mesh.materials[1].surface;
+	CHECK(plain.name.empty());
+	CHECK(plain.values.empty());
+
+	const SurfaceImport& unnamed = mesh.materials[3].surface;
+	CHECK(unnamed.name.empty());
+	CHECK(unnamed.values.empty());
+}
+
+TEST_CASE("An extras key that cannot be a field is dropped alone", "[bmesh][gltf][extras]")
+{
+	const BMeshImport    mesh   = LoadSurfaceExtrasGltf();
+	const SurfaceImport& broken = mesh.materials[2].surface;
+
+	CHECK(broken.name == "ToonCharacter");
+
+	// A bool, five numbers and an image the file does not have are each dropped; the one-element
+	// array beside them is a value of width 1 like a bare number.
+	REQUIRE(broken.values.size() == 1);
+	CHECK(broken.values[0].field == "shadeStep");
+	CHECK(broken.values[0].width == 1);
+	CHECK(broken.values[0].value.x == Catch::Approx(0.5f));
+	CHECK(broken.textures.empty());
+}
+
+TEST_CASE(
+	"probeGltfMaterials reports the surface a material's extras name",
+	"[bmesh][gltf][extras]")
+{
+	const auto path   = WriteTempGltf(c_SurfaceExtrasGltf, "bmesh_surface_probe_test.gltf");
+	const auto probed = probeGltfMaterials(path);
+	std::filesystem::remove(path);
+
+	REQUIRE(probed.size() == 4);
+	CHECK(probed[0].surface == "ToonCharacter");
+	CHECK(probed[1].surface.empty());
+	CHECK(probed[2].surface == "ToonCharacter");
+	CHECK(probed[3].surface.empty());
 }

@@ -67,6 +67,9 @@ namespace assetlib
 	{
 		std::string name;           // free text, and frequently empty
 		bool        isPbr = false;  // whether an import derives a material from it
+
+		// The surface its extras name (`bernini_surface`), empty for none; see imp::SurfaceImport.
+		std::string surface;
 	};
 
 	/**
