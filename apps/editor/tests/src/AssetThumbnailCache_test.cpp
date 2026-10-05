@@ -18,6 +18,7 @@
 #include "util/QtSupport.h"
 
 #include <QImage>
+#include <QPixmap>
 #include <QPointer>
 #include <QSignalSpy>
 
@@ -26,6 +27,7 @@
 #include <catch2/catch_message.hpp>
 #include <condition_variable>
 #include <core/file/file.h>
+#include <core/glm.h>
 #include <core/settings/Settings.h>
 #include <cstddef>
 #include <filesystem>
@@ -44,7 +46,9 @@
 #include <qobject.h>
 #include <qrgb.h>
 #include <set>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -181,6 +185,40 @@ namespace
 		SaveAt(material, std::filesystem::path(c_DataRoot) / relative);
 		return relative;
 	}
+
+	// Writes an opaque `.bmaterial` of one flat colour under the shared data root and returns its key.
+	std::string
+	WriteFlatMaterial(const std::string& name, const glm::vec4& colour)
+	{
+		auto material                = assetlib::BMaterial();
+		material.name                = name;
+		material.pbr.baseColorFactor = colour;
+		material.pbr.metallicFactor  = 0.0f;
+		material.pbr.roughnessFactor = 0.6f;
+
+		const std::string key = "Authored/Materials/" + name + ".bmaterial";
+		SaveAt(material, std::filesystem::path(c_DataRoot) / key);
+		return key;
+	}
+
+	// The path the Content Explorer would ask for the asset at `key`.
+	QString
+	PathOf(const std::string& key)
+	{
+		return QString::fromStdString(std::string(c_DataRoot) + "/" + key);
+	}
+
+	// Whether the middle of a material's sphere reads blue rather than red.
+	bool
+	LooksBlue(const QPixmap& thumbnail)
+	{
+		const QColor middle =
+			thumbnail.toImage().pixelColor(thumbnail.width() / 2, thumbnail.height() / 2);
+		return middle.blueF() > middle.redF();
+	}
+
+	const auto c_Red  = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+	const auto c_Blue = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
 
 	// How many distinct colours an image holds, capped -- a render that produced nothing (a cleared
 	// buffer, geometry that never made it into the scene) is one flat colour.
@@ -394,13 +432,60 @@ TEST_CASE(
 	REQUIRE(WaitFor([&] { return ready.count() == 1; }));
 	CHECK(cache.Lookup(c_MeshPath).toImage().pixelColor(0, 0) == QColor(Qt::red));
 
+	// A key the thumbnail never names: a provider describes from whatever it reads in the store, so
+	// any write may have changed what it would say.
 	state->colour = Qt::blue;
-	cache.Invalidate();
+	cache.Invalidate("Authored/Materials/unrelated.bmaterial");
 	CHECK(cache.Lookup(c_MeshPath).isNull());
 	cache.Request(c_MeshPath);
 	REQUIRE(WaitFor([&] { return ready.count() == 2; }));
 	CHECK(state->calls == 2);
 	CHECK(cache.Lookup(c_MeshPath).toImage().pixelColor(0, 0) == QColor(Qt::blue));
+}
+
+TEST_CASE("Any write retries a plugin thumbnail that failed", "[thumbnails][plugins]")
+{
+	Fixture              fixture;
+	assetlib::AssetStore store(c_DataRoot);
+	class FailOnceProvider final : public editor::IThumbnailProvider
+	{
+	public:
+		explicit FailOnceProvider(std::shared_ptr<int> calls) : m_Calls(std::move(calls)) {}
+		editor::Thumbnail
+		Describe(const assetlib::AssetStore&, std::string_view) const override
+		{
+			if ((*m_Calls)++ == 0)
+				throw std::runtime_error("what it describes from is not written yet");
+			QImage image(8, 8, QImage::Format_RGBA8888);
+			image.fill(Qt::green);
+			return editor::Thumbnail(std::move(image));
+		}
+
+	private:
+		std::shared_ptr<int> m_Calls;
+	};
+	auto       calls    = std::make_shared<int>(0);
+	const auto provider = editor::ThumbnailProviderDesc()
+	                          .SetId("sample.thumbnail")
+	                          .AddExtension(".bmesh")
+	                          .AddProvider<FailOnceProvider>(calls);
+	auto       desc     = fixture.Desc();
+	desc.pluginProvider = [&](const std::string_view extension) {
+		return extension == ".bmesh" ? &provider : nullptr;
+	};
+	AssetThumbnailCache cache(std::move(desc));
+	cache.SetStore(&store);
+	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
+	QSignalSpy rejected(&cache, &StampedPixmapCache::Rejected);
+
+	cache.Request(c_MeshPath);
+	REQUIRE(WaitFor([&] { return rejected.count() == 1; }));
+
+	// The mesh file itself is unchanged, so only the write can be what lets it through.
+	cache.Invalidate("Authored/Materials/unrelated.bmaterial");
+	cache.Request(c_MeshPath);
+	REQUIRE(WaitFor([&] { return ready.count() == 1; }));
+	CHECK(*calls == 2);
 }
 
 TEST_CASE("A plugin scene thumbnail releases its preview geometry", "[thumbnails][plugins][render]")
@@ -683,6 +768,105 @@ TEST_CASE("A second request for an unchanged asset does not re-render", "[thumbn
 	// folder repaints its tiles constantly.
 	cache.Request(c_MeshPath);
 	REQUIRE(!WaitFor([&] { return ready.count() == 2; }, 500));
+}
+
+TEST_CASE(
+	"A write refreshes that asset's thumbnail and keeps every other one",
+	"[thumbnails][render]")
+{
+	Fixture fixture;
+
+	AssetThumbnailCache cache(fixture.Desc());
+	REQUIRE(cache.IsReady());
+	cache.SetStore(&fixture.store);
+
+	const std::string written = WriteFlatMaterial("refresh_written", c_Red);
+	const std::string kept    = WriteFlatMaterial("refresh_kept", c_Red);
+
+	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
+	cache.Request(PathOf(written));
+	cache.Request(PathOf(kept));
+	REQUIRE(WaitFor([&] { return ready.count() == 2; }));
+
+	cache.Invalidate(written);
+
+	CHECK(cache.Lookup(PathOf(written)).isNull());
+	CHECK_FALSE(cache.Lookup(PathOf(kept)).isNull());
+
+	// Served as it was, with no second read or render behind it.
+	cache.Request(PathOf(kept));
+	CHECK_FALSE(WaitFor([&] { return ready.count() == 3; }, 500));
+}
+
+TEST_CASE("A material write refreshes the meshes drawn wearing it", "[thumbnails][render]")
+{
+	Fixture fixture;
+
+	AssetThumbnailCache cache(fixture.Desc());
+	REQUIRE(cache.IsReady());
+	cache.SetStore(&fixture.store);
+
+	const std::string kept = WriteFlatMaterial("wearer_kept", c_Red);
+
+	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
+	cache.Request(c_MeshPath);
+	cache.Request(PathOf(kept));
+	REQUIRE(WaitFor([&] { return ready.count() == 2; }));
+
+	// apples.bmesh binds this material; the mesh file itself is untouched.
+	cache.Invalidate("Authored/Materials/apples/Apple1.bmaterial");
+
+	CHECK(cache.Lookup(c_MeshPath).isNull());
+	CHECK_FALSE(cache.Lookup(PathOf(kept)).isNull());
+}
+
+TEST_CASE(
+	"A write landing while a thumbnail is produced stores the new look, not the one read before it",
+	"[thumbnails][render]")
+{
+	Fixture fixture;
+
+	AssetThumbnailCache cache(fixture.Desc());
+	REQUIRE(cache.IsReady());
+	cache.SetStore(&fixture.store);
+
+	const std::string key = WriteFlatMaterial("midflight", c_Red);
+
+	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
+	cache.Request(PathOf(key));
+
+	// The read's result is queued to this thread, which has not turned yet, so the write always
+	// lands after the claim and before anything is stored.
+	WriteFlatMaterial("midflight", c_Blue);
+	cache.Invalidate(key);
+
+	REQUIRE(WaitFor([&] { return ready.count() == 1; }));
+	CHECK(LooksBlue(cache.Lookup(PathOf(key))));
+}
+
+TEST_CASE(
+	"A rewritten material draws its new look, not the upload the cache already made",
+	"[thumbnails][render]")
+{
+	Fixture fixture;
+
+	AssetThumbnailCache cache(fixture.Desc());
+	REQUIRE(cache.IsReady());
+	cache.SetStore(&fixture.store);
+
+	const std::string key = WriteFlatMaterial("reupload", c_Red);
+
+	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
+	cache.Request(PathOf(key));
+	REQUIRE(WaitFor([&] { return ready.count() == 1; }));
+	REQUIRE_FALSE(LooksBlue(cache.Lookup(PathOf(key))));
+
+	WriteFlatMaterial("reupload", c_Blue);
+	cache.Invalidate(key);
+	cache.Request(PathOf(key));
+
+	REQUIRE(WaitFor([&] { return ready.count() == 2; }));
+	CHECK(LooksBlue(cache.Lookup(PathOf(key))));
 }
 
 TEST_CASE("An asset that cannot be read yields no thumbnail", "[thumbnails][render]")

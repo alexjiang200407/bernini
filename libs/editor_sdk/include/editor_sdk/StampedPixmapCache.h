@@ -90,6 +90,10 @@ protected:
 	void
 	Reject(const QString& path, qint64 stamp, const QString& reason = {});
 
+	// Drops what is cached for `path`, a pixmap or a rejection, and leaves a claim on it standing.
+	void
+	Remove(const QString& path);
+
 	// Drops every cached pixmap and every claim.
 	void
 	Clear();

@@ -92,6 +92,12 @@ StampedPixmapCache::Reject(const QString& path, qint64 stamp, const QString& rea
 }
 
 void
+StampedPixmapCache::Remove(const QString& path)
+{
+	m_Cache.remove(path);
+}
+
+void
 StampedPixmapCache::Clear()
 {
 	m_Cache.clear();
