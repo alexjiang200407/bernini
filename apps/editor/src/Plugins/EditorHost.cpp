@@ -68,8 +68,9 @@ namespace editor::plugins
 		                            .taaReconstructionWidth = desc.taaReconstructionWidth,
 		                            .taaSharpness           = desc.taaSharpness,
 		                            .bloom                  = { desc.bloomEnabled, desc.bloom },
-		                            .colorGrade = { desc.colorGradeEnabled, desc.colorGrade },
-		                            .headless   = m_Headless });
+		                            .colorGrade   = { desc.colorGradeEnabled, desc.colorGrade },
+		                            .toonBackdrop = desc.toonBackdrop,
+		                            .headless     = m_Headless });
 		if (m_Dispatch.viewportCreated)
 			m_Dispatch.viewportCreated(*viewport);
 		return viewport.release();

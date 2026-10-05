@@ -2,6 +2,7 @@
 #include <bgl/IMeshInstanceWriter.h>
 #include <bgl/IScene.h>
 #include <bgl/api.h>
+#include <bgl/types/BackdropGradient.h>
 #include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/DirectionalLightDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
@@ -385,6 +386,20 @@ namespace bgl
 		 */
 		virtual void
 		SetSkyBox(SkyboxDesc desc) = 0;
+
+		/**
+		 * Draws `backdrop` behind the scene in place of the skybox until ClearBackdrop. Only what is
+		 * drawn behind changes: the environment lights the scene as before, and a SetSkyBox while it
+		 * is up is the sky ClearBackdrop shows. A view with no skybox draws it too.
+		 *
+		 * @throws SceneError if a colour component is not finite or is negative.
+		 */
+		virtual void
+		SetBackdrop(const BackdropGradient& backdrop) = 0;
+
+		/** Draws the skybox behind the scene again, if the view has one; a no-op with no backdrop. */
+		virtual void
+		ClearBackdrop() noexcept = 0;
 
 		/**
 		 * Sets this view's photographic exposure: a linear scale applied to the shaded radiance just

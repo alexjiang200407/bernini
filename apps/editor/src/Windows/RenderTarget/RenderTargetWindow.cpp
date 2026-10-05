@@ -1,6 +1,7 @@
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 
 #include "Render/Renderer.h"
+#include "util/toon_backdrop.h"
 #include "util/toon_light.h"
 #include <algorithm>
 #include <cmath>
@@ -29,6 +30,7 @@
 #include <QTimer>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
+#include <bgl/types/BackdropGradient.h>
 #include <bgl/types/PassTiming.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/Viewport.h>
@@ -196,6 +198,7 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	m_RenderScale            = ClampRenderScale(m_Desc.renderScale);
 	m_TaaReconstructionWidth = ClampReconstructionWidth(m_Desc.taaReconstructionWidth);
 	m_TaaSharpness           = ClampSharpness(m_Desc.taaSharpness);
+	m_Desc.toonBackdrop      = editor::ClampToonBackdrop(m_Desc.toonBackdrop, "RenderTarget");
 
 	if (m_Desc.headless)
 	{
@@ -503,6 +506,7 @@ RenderTargetWindow::SetShowsToonContent(bool toon)
 {
 	m_ShowsToonContent = toon;
 	ApplyPostProcessType();
+	ApplyBackdrop();
 }
 
 bgl::PostProcessType
@@ -521,6 +525,29 @@ RenderTargetWindow::ApplyPostProcessType()
 
 	const bgl::PostProcessType postProcessType = GetPostProcessType();
 	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetPostProcessType(postProcessType); });
+}
+
+void
+RenderTargetWindow::ApplyBackdrop()
+{
+	if (m_SceneView == nullptr || m_Desc.renderer == nullptr)
+		return;
+
+	const std::optional<bgl::BackdropGradient> backdrop = GetBackdrop();
+	m_Desc.renderer->Invoke([&] {
+		if (backdrop.has_value())
+			m_SceneView->SetBackdrop(*backdrop);
+		else
+			m_SceneView->ClearBackdrop();
+	});
+}
+
+std::optional<bgl::BackdropGradient>
+RenderTargetWindow::GetBackdrop() const noexcept
+{
+	if (!m_ShowsToonContent)
+		return std::nullopt;
+	return m_Desc.toonBackdrop;
 }
 
 void

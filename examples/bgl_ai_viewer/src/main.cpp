@@ -19,6 +19,7 @@
 #include <bgl/ISceneView.h>
 #include <bgl/LodLevel.h>
 #include <bgl/glm.h>
+#include <bgl/types/BackdropGradient.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/DirectionalLightDesc.h>
 #include <bgl/types/GeomHandle.h>
@@ -87,6 +88,9 @@ namespace
 
 		// The post-process, "filmic" or "toon".
 		std::string postProcessType = "filmic";
+
+		// What is drawn behind the scene: "sky", the environment's, or "gradient", the toon backdrop.
+		std::string backdrop = "sky";
 
 		// The camera frames the box every clip's poses fill unless asked for the playing clip's
 		// alone: a clip set with root motion walks that box far past any one pose.
@@ -562,6 +566,12 @@ try
 			   "colour clamped, which a toon look is authored for "
 			   "(IRenderTarget::SetPostProcessType)")
 			->check(CLI::IsMember({ "filmic", "toon" }));
+		app.add_option(
+			   "--backdrop",
+			   opts.backdrop,
+			   "What is drawn behind the scene: sky, the environment's, or gradient, the toon "
+			   "look-dev backdrop (ISceneView::SetBackdrop); the lighting is the same either way")
+			->check(CLI::IsMember({ "sky", "gradient" }));
 		app.add_flag(
 			"--frame-clip",
 			opts.frameClip,
@@ -666,6 +676,8 @@ try
 		opts.envRoot.empty() ? dataRoot : std::filesystem::path(opts.envRoot));
 
 	const bool envLit = headless::LightView(view, envAssets, opts.env);
+	if (opts.backdrop == "gradient")
+		view->SetBackdrop(bgl::BackdropGradient());
 
 	// Additive on the environment above, which already integrates whatever sun its source HDR held
 	// -- so a model measured under both is measured under two suns. One sun on screen: the PBR

@@ -25,6 +25,7 @@
 #include <bgl/idl/MeshInstance.h>
 #include <bgl/idl/PlaybackType.h>
 #include <bgl/idl/PosedInstance.h>
+#include <bgl/types/BackdropGradient.h>
 #include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/DirectionalLightDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
@@ -248,6 +249,12 @@ namespace bgl
 		SetSkyBox(SkyboxDesc desc) override;
 
 		void
+		SetBackdrop(const BackdropGradient& backdrop) override;
+
+		void
+		ClearBackdrop() noexcept override;
+
+		void
 		SetExposure(float exposure) override;
 
 		[[nodiscard]] const EnvironmentMap&
@@ -310,6 +317,12 @@ namespace bgl
 		GetSkybox() const noexcept
 		{
 			return m_Skybox;
+		}
+
+		[[nodiscard]] const std::optional<BackdropGradient>&
+		GetBackdrop() const noexcept
+		{
+			return m_Backdrop;
 		}
 
 		/**
@@ -833,13 +846,14 @@ namespace bgl
 		// RebuildBlobShadowList clears it. The same authoring-time bargain as m_PosedDirty.
 		bool m_BlobShadowsDirty = false;
 
-		EnvironmentMap            m_EnvironmentMap;
-		std::optional<SkyboxDesc> m_Skybox;
-		DirectionalLightDesc      m_PbrDirectionalLight;
-		DirectionalLightDesc      m_ToonDirectionalLight;
-		float                     m_Exposure = 1.0f;
-		WindDesc                  m_Wind;
-		LodSelectionDesc          m_LodSelection;
+		EnvironmentMap                  m_EnvironmentMap;
+		std::optional<SkyboxDesc>       m_Skybox;
+		std::optional<BackdropGradient> m_Backdrop;
+		DirectionalLightDesc            m_PbrDirectionalLight;
+		DirectionalLightDesc            m_ToonDirectionalLight;
+		float                           m_Exposure = 1.0f;
+		WindDesc                        m_Wind;
+		LodSelectionDesc                m_LodSelection;
 
 		core::slot_vector<MeshInstanceBlock> m_InstanceBlocks;
 

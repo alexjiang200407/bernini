@@ -6,9 +6,11 @@
 #include <bgl/IScene.h>
 #include <bgl/MaterialType.h>
 #include <bgl/MeshInstanceFlag.h>
+#include <bgl/types/BackdropGradient.h>
 #include <bgl/types/MeshInstanceFlags.h>
 #include <bgl/types/SceneDesc.h>
 #include <catch2/catch_test_macros.hpp>
+#include <optional>
 
 // The temporal epoch: what a view reports to the frame drawing it when it has changed in a way no
 // motion vector describes, so the TAA resolve takes that frame whole instead of reprojecting into
@@ -172,5 +174,39 @@ TEST_CASE("Moving the ground breaks the temporal continuity", "[scene][taa][grou
 	CHECK_THROWS_AS(
 		scene->SetGround({ glm::vec3(0.0f), glm::vec3(0.0f, -1.0f, 0.0f) }),
 		bgl::SceneError);
+	CHECK_FALSE(view->AdvanceTemporalEpoch());
+}
+
+TEST_CASE(
+	"Changing the backdrop breaks the temporal continuity, restating it does not",
+	"[scene][taa][backdrop]")
+{
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(SmallSceneDesc());
+	auto  viewHandle  = gfx->CreateSceneView(sceneHandle, 8);
+	auto* view        = viewHandle->As<bgl::SceneView>();
+	REQUIRE(view != nullptr);
+
+	Consume(view);
+	REQUIRE_FALSE(view->AdvanceTemporalEpoch());
+
+	// The background under every pixel nothing covers changes at once: no motion vector says so.
+	view->SetBackdrop(bgl::BackdropGradient());
+	CHECK(view->AdvanceTemporalEpoch());
+
+	// A panel re-asserting what it shows must not throw away a converged history.
+	view->SetBackdrop(bgl::BackdropGradient());
+	CHECK_FALSE(view->AdvanceTemporalEpoch());
+
+	view->ClearBackdrop();
+	CHECK(view->AdvanceTemporalEpoch());
+	view->ClearBackdrop();
+	CHECK_FALSE(view->AdvanceTemporalEpoch());
+
+	auto refused  = bgl::BackdropGradient();
+	refused.top.r = -1.0f;
+	CHECK_THROWS_AS(view->SetBackdrop(refused), bgl::SceneError);
 	CHECK_FALSE(view->AdvanceTemporalEpoch());
 }

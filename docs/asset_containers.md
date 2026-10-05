@@ -245,7 +245,7 @@ regimes were always pointing at is available:
 
 It is a rule about **projects**. This repository's own `assets/` tree is not one: it is a fixture
 tree that `bgl_tests`, `assetlib_tests` and `editor_tests` read directly — `assets/Data` is opened
-as a store, a baked `.ktx2` is loaded by its content-hashed name, `assets/Data/Derived/Meshes/apples.bmesh`
+as a store, a baked `.ktx2` is loaded by its content-hashed name, `assets/Data/Derived/Meshes/apples.glb-ae5e794c8602242e.bmesh`
 is read as a file — so those files are test inputs no import here produces, and they stay committed.
 
 The `forest` environment shows what an environment's authored half looks like. Its source lives in

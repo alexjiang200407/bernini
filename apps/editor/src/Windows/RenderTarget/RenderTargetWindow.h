@@ -4,6 +4,7 @@
 #include <QString>
 #include <QWidget>
 #include <bgl/IRenderTarget.h>
+#include <bgl/types/BackdropGradient.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/PassTiming.h>
 #include <cstddef>
@@ -89,6 +90,9 @@ struct RenderTargetWindowDesc
 	BloomConfig      bloom;
 	ColorGradeConfig colorGrade;
 
+	// What the viewport draws behind toon content instead of its sky; clamped like the bloom.
+	bgl::BackdropGradient toonBackdrop;
+
 	// Renders to offscreen backbuffers at headlessWidth x headlessHeight, presenting nothing, and
 	// never asks the widget for a native window. A widget that is never shown has no winId() to
 	// give, and realising one is what a test cannot do.
@@ -162,7 +166,8 @@ public:
 	GetColorGradeSettings() const;
 
 	// The post-process this viewport ends in is the user's pick if there is one, else toon for
-	// toon content, else the project's. Each setter re-derives it.
+	// toon content, else the project's. Each setter re-derives it. Toon content also swaps the sky
+	// for the desc's toonBackdrop, whatever the pick.
 	void
 	SetProjectPostProcessType(bgl::PostProcessType postProcessType);
 
@@ -175,6 +180,10 @@ public:
 
 	[[nodiscard]] bgl::PostProcessType
 	GetPostProcessType() const noexcept;
+
+	// What the viewport draws in place of its sky: empty draws the sky.
+	[[nodiscard]] std::optional<bgl::BackdropGradient>
+	GetBackdrop() const noexcept;
 
 	// Times every pass of this viewport's frames on the GPU; the rows ride FrameStatsUpdated as the
 	// table Log GPU Pass Timings writes. Off by default: a timed frame is not free.
@@ -341,6 +350,9 @@ private:
 
 	void
 	ApplyPostProcessType();
+
+	void
+	ApplyBackdrop();
 
 	RenderTargetWindowDesc m_Desc;
 	bgl::RenderTargetRef   m_RenderTarget;

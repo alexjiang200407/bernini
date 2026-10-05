@@ -1,5 +1,6 @@
 #include "Thumbnails/AssetThumbnailCache.h"
 #include "util/editor_language.h"
+#include "util/toon_backdrop.h"
 #include "util/toon_light.h"
 #include <algorithm>
 #include <assetlib/bmesh.h>
@@ -271,6 +272,7 @@ namespace
 AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* parent) :
 	StampedPixmapCache(c_BudgetKb, parent), m_Desc(std::move(desc))
 {
+	m_Desc.toonBackdrop = editor::ClampToonBackdrop(m_Desc.toonBackdrop, "AssetThumbnail");
 	// The reads are the bound, not the GPU: a shot retires milliseconds after its read lands.
 	m_Pool.setMaxThreadCount(4);
 
@@ -1059,6 +1061,10 @@ AssetThumbnailCache::BuildShot(Shot& shot)
 		shot.item.type == ThumbnailType::kMesh ? BuildMesh(shot) : BuildMaterial(shot);
 	m_RenderTarget->SetPostProcessType(
 		toon ? bgl::PostProcessType::kToon : m_ProjectPostProcessType);
+	if (toon)
+		m_SceneView->SetBackdrop(m_Desc.toonBackdrop);
+	else
+		m_SceneView->ClearBackdrop();
 	if (shot.item.camera.has_value())
 		shot.job.camera = *shot.item.camera;
 }

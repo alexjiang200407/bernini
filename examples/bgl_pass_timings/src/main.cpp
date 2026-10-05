@@ -35,7 +35,7 @@ namespace
 	struct Options
 	{
 		std::string project = "assets/Data";
-		std::string mesh    = "Derived/Meshes/apples.bmesh";
+		std::string mesh    = "Derived/Meshes/apples.glb-ae5e794c8602242e.bmesh";
 		std::string env     = "Authored/Environments/forest.benv";
 
 		// Its own root: a project is free to have no environment of its own -- the test project has

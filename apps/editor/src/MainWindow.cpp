@@ -74,6 +74,7 @@
 
 #include <QDebug>
 #include <QKeySequence>
+#include <bgl/types/BackdropGradient.h>
 #include <bgl/types/PassTiming.h>
 #include <core/str/str.h>
 #include <memory>
@@ -248,6 +249,15 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 			return rgb;
 		};
 
+		// Defaults to bgl's look-dev gradient; a partial section overrides only what it names.
+		const auto readToonBackdrop = [&readRgb](const auto& section) {
+			auto       gradient = bgl::BackdropGradient();
+			const auto node     = section["toonBackdrop"];
+			gradient.bottom     = readRgb(node["bottom"], gradient.bottom);
+			gradient.top        = readRgb(node["top"], gradient.top);
+			return gradient;
+		};
+
 		const auto readColorGrade = [&readRgb](const auto& section) {
 			auto       grade     = ColorGradeConfig();
 			const auto node      = section["colorGrade"];
@@ -282,6 +292,7 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 			viewport.bloom                  = bloom.settings;
 			viewport.colorGradeEnabled      = grade.enabled;
 			viewport.colorGrade             = grade.settings;
+			viewport.toonBackdrop           = readToonBackdrop(section);
 			return viewport;
 		};
 
@@ -306,6 +317,7 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 		thumbDesc.env.environmentMap = thumbSettings["environmentMap"].GetOrDefault(std::string());
 		thumbDesc.env.dataRoot       = thumbSettings["dataRoot"].GetOrDefault(std::string());
 		thumbDesc.env.sky            = readSky(thumbSettings, editor::SkyPresentation());
+		thumbDesc.toonBackdrop       = readToonBackdrop(thumbSettings);
 		thumbDesc.pluginProvider     = [this](const std::string_view extension) {
 			return m_Plugins->Contributions().FindThumbnailProvider(extension);
 		};

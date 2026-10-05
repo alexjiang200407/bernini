@@ -1,6 +1,7 @@
 #pragma once
 #include "types/EnvironmentMap.h"
 #include <bgl/idl/CullView.h>
+#include <bgl/types/BackdropGradient.h>
 #include <bgl/types/SkyboxDesc.h>
 #include <bgl/types/Viewport.h>
 #include <bgpu/resource/Buffer.h>
@@ -100,6 +101,9 @@ namespace bgl
 		std::optional<SkyboxDesc> skybox;
 		glm::mat4                 skyboxClipToWorld{ 1.0f };
 		glm::mat4                 skyboxPrevWorldToClip{ 1.0f };
+
+		// Drawn in the sky's place when present; the sky's lighting stands either way.
+		std::optional<BackdropGradient> backdrop;
 
 		// What the skybox pass draws at: the view's exposure with the sky's own gain on top, so the
 		// backdrop and the geometry are exposed alike.

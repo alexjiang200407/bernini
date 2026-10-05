@@ -31,7 +31,7 @@ source of truth; when this doc disagrees, trust the header, then fix this doc.
 ## The frame
 
 `RenderContext` ([gfx/RenderContext.cpp](libs/bgl/src/gfx/RenderContext.cpp)) drives the frame and
-owns the long-lived pass objects (`m_BrdfLut`, `m_Forward`, `m_BlobShadows`, `m_Skybox`, `m_TransparentSort`,
+owns the long-lived pass objects (`m_BrdfLut`, `m_Forward`, `m_BlobShadows`, `m_Skybox`, `m_Backdrop`, `m_TransparentSort`,
 `m_CompactInstances`, `m_WriteInstanceBlocks`, `m_RigFrames`, `m_SkinnedPose`, `m_ToonShadingRigs`, `m_OutlineMask`, `m_TaaResolve`,
 `m_BloomPass`, `m_PostProcess`, `m_OverlayPass`, `m_PreparePresentPass`); `Graphics` owns one context and
 forwards the frame methods to it. A frame is built between `BeginFrame` and `EndFrame`, with one `Draw` per
@@ -43,7 +43,7 @@ flowchart TD
     BF["BeginFrame"] --> CLR["Clear (scene colour + motion vectors + outline mask + depth)"]
     CLR --> D["per Draw(view)"]
     subgraph D["per Draw(view) — resources imported under the view's namespace"]
-        IMP["Scene / SceneView import their buffers"] --> SKY["Skybox (only if the view has one)"]
+        IMP["Scene / SceneView import their buffers"] --> SKY["Skybox or Backdrop (the backdrop when the view has one, else its sky if any)"]
         SKY --> PB["Write Instance Blocks (only when an instance block has a writer; one dispatch per block)"]
         PB --> RIG["Pose Rig Frames (only when a rig wants its bone anim table)"]
         RIG --> CI["Compact Instances (3 sub-passes, a 4th ahead of the cull with automatic placements)"]
@@ -65,7 +65,7 @@ flowchart TD
     PP --> EF["EndFrame → Compile → Execute"]
 ```
 
-`Clear`, `Skybox`, and `Forward` take the imported `sceneColor` and `motionVectors` textures as
+`Clear`, `Skybox`, `Backdrop` and `Forward` take the imported `sceneColor` and `motionVectors` textures as
 render targets and the imported `depth` texture as their depth attachment — **every pass that binds
 the DSV declares `depth` in its `PassDesc`** (`kDepthStencil` / `kDepthWrite`), which is what lets a
 later pass read it as a shader resource and have the graph derive the write → read → write cycle;
@@ -414,7 +414,18 @@ culling, so it fills only where nothing has been drawn.
   folded in — at a 960×540 target with a 45° field of view a still sky reported 0.25 texel of
   motion on average and 0.5 at worst, phase by phase, which the TAA resolve turned into a blur along
   every silhouette against it. `MotionVectors_test` pins the composed form at that size.
-* Attached per draw, before `Compact Instances` and `Forward`.
+* Attached per draw, before `Compact Instances` and `Forward` — unless the view has a backdrop, which
+  is drawn instead. The sky's matrices and `envRotation` are still resolved then, so the lighting
+  does not notice the swap.
+
+### Backdrop — [passes/BackdropPass.{h,cpp}](libs/bgl/src/passes/BackdropPass.cpp)
+
+The view's `BackdropGradient` (`ISceneView::SetBackdrop`) in the sky's place: the same covering
+triangle, depth state and attachments as `Skybox`, from `programs.env.Backdrop`. The `gBackdropData`
+cbuffer carries `bottom` and `top`, mixed by screen height and written as they are — scene-linear
+presentation, no exposure. Fixed to the screen, so its motion is zero.
+
+* **No-op** when the view has no backdrop (`DrawData::lighting.backdrop` is empty).
 
 ### Compact Instances — [passes/CompactInstancesPass.{h,cpp}](libs/bgl/src/passes/CompactInstancesPass.cpp)
 

@@ -7,6 +7,7 @@
 #include "gfx/RenderTargetBase.h"
 #include "gfx/frame_constants.h"
 #include "overlay/Overlay.h"
+#include "passes/BackdropPass.h"
 #include "passes/BlobShadowPass.h"
 #include "passes/BloomPass.h"
 #include "passes/BrdfLutGenPass.h"
@@ -373,6 +374,7 @@ namespace bgl
 		ForwardPhases                 m_Forward;
 		BlobShadowPass                m_BlobShadows;
 		SkyboxPass                    m_Skybox;
+		BackdropPass                  m_Backdrop;
 		PostProcessPass               m_PostProcess;
 		BloomPass                     m_BloomPass;
 		OverlayPass                   m_OverlayPass;

@@ -229,7 +229,7 @@ namespace bgl
 		m_ResourceManager(std::move(resourceManager)), m_EnableDebug(enableDebug),
 		m_TonemapLut(m_ResourceManager, c_TonemapLutFile), m_BlackEnvironment(m_ResourceManager),
 		m_Forward(startup.context), m_BlobShadows(startup.context), m_Skybox(startup.context),
-		m_PostProcess(startup.context), m_BloomPass(startup.context),
+		m_Backdrop(startup.context), m_PostProcess(startup.context), m_BloomPass(startup.context),
 		m_OverlayPass(startup.context), m_OutlineMask(startup.context),
 		m_TaaResolve(startup.context), m_CompactInstances(startup.context),
 		m_RigFrames(startup.context), m_SkinnedPose(startup.context),
@@ -267,6 +267,7 @@ namespace bgl
 		m_Forward.CheckBindings();
 		m_BlobShadows.CheckBindings();
 		m_Skybox.CheckBindings();
+		m_Backdrop.CheckBindings();
 		m_PostProcess.CheckBindings();
 		m_BloomPass.CheckBindings();
 		m_OverlayPass.CheckBindings();
@@ -893,7 +894,8 @@ namespace bgl
 			m_ActiveTarget->IsTaaEnabled() ?
 				static_cast<float>(m_ActiveTarget->GetFrameCount() % c_AlphaHashPeriod) :
 				0.0f;
-		draw.lighting.skybox = view->GetSkybox();
+		draw.lighting.skybox   = view->GetSkybox();
+		draw.lighting.backdrop = view->GetBackdrop();
 
 		if (draw.lighting.skybox.has_value())
 		{
@@ -912,8 +914,12 @@ namespace bgl
 			draw.lighting.skyboxPrevWorldToClip =
 				prevCamera.rotationOnlyViewProj * glm::inverse(prevCamera.envRotation);
 
-			m_Skybox.AttachToFrameGraph(m_FrameGraph, draw);
+			// A backdrop replaces the sky's draw and nothing else: the lighting still turns with it.
+			if (!draw.lighting.backdrop.has_value())
+				m_Skybox.AttachToFrameGraph(m_FrameGraph, draw);
 		}
+
+		m_Backdrop.AttachToFrameGraph(m_FrameGraph, draw);
 
 		// First: every pass below reads a placement, and a block's are written here.
 		m_WriteInstanceBlocks.AttachToFrameGraph(m_FrameGraph, draw);
@@ -921,7 +927,7 @@ namespace bgl
 		// Before the pose pass and the forward pass, both of which may read a table filled here.
 		m_RigFrames.AttachToFrameGraph(m_FrameGraph, draw);
 
-		// The skybox above names only globals; the cull below writes cull outputs.
+		// The background above names only globals; the cull below writes cull outputs.
 		m_FrameGraph.SetResourceNamespace(view->GetCullNamespace(draw.cullIdx));
 
 		// Cull first (a sub-pass of CompactInstances writes the visibility word), then the transparent
