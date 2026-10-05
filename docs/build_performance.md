@@ -191,6 +191,12 @@ saw through the PCH but no compile ccache sees uses one — turning PCHs off out
 because sources lean on what their PCHs include. `/Zi` becomes `/Z7`, because a `/Zi` object names a
 PDB the compiler writes as a side effect and no cache can replay that; `/MP` is dropped, which ccache
 refuses and Ninja makes redundant; and the compiler is keyed by its content rather than its mtime.
+And ccache runs in **depend mode**, keying an object on the source and the bytes of every header
+`/showIncludes` reports, with its preprocessor fallback never taken. The fallback hashes preprocessed
+text, which carries no comments, while a `/Z7` object's CodeView records a checksum of every file the
+compile read — so a header edited only in a comment hit the entry made from the old header and came
+back with the old header's checksum, a wrong object by the definition below. A comment edit now
+misses, which costs a compile and is right.
 It is off by default — a developer's build keeps its real PCHs, which are faster uncached — and
 Windows CI turns it on, since CI compiles every file from nothing on every run.
 `scripts/verify_compiler_cache.py` is the proof CI runs: it has the cache serve a seeded sample of

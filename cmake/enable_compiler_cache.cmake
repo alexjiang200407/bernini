@@ -53,7 +53,7 @@ macro(_bernini_emulate_precompiled_headers)
     endfunction()
 endmacro()
 
-function(_bernini_write_cache_wrapper ccache sloppiness basedir out_var)
+function(_bernini_write_cache_wrapper ccache sloppiness basedir depend out_var)
     set(cache_dir "${CMAKE_BINARY_DIR}/compiler-cache")
     file(MAKE_DIRECTORY "${cache_dir}")
 
@@ -70,6 +70,15 @@ function(_bernini_write_cache_wrapper ccache sloppiness basedir out_var)
     # enough on its own for a debug build -- the working directory reaches the object through DWARF,
     # and hashing it is what keeps a cached object's debug info pointing at the tree it was built
     # from.
+    # A boolean ccache setting is on when its variable is set at all, whatever the value, so depend
+    # mode is a line written or not rather than a 0.
+    set(depend_bat "")
+    set(depend_sh "")
+    if (depend)
+        set(depend_bat "set CCACHE_DEPEND=1\r\n")
+        set(depend_sh "CCACHE_DEPEND=1\nexport CCACHE_DEPEND\n")
+    endif()
+
     if (WIN32)
         set(wrapper "${cache_dir}/ccache-wrapper-${basedir_key}.bat")
         file(WRITE "${wrapper}"
@@ -77,6 +86,7 @@ function(_bernini_write_cache_wrapper ccache sloppiness basedir out_var)
             "set CCACHE_SLOPPINESS=${sloppiness}\r\n"
             "set CCACHE_COMPILERCHECK=content\r\n"
             "set CCACHE_BASEDIR=${basedir}\r\n"
+            "${depend_bat}"
             "\"${ccache}\" %*\r\n")
     else()
         set(wrapper "${cache_dir}/ccache-wrapper-${basedir_key}.sh")
@@ -85,6 +95,7 @@ function(_bernini_write_cache_wrapper ccache sloppiness basedir out_var)
             "CCACHE_SLOPPINESS=${sloppiness}\n"
             "CCACHE_BASEDIR='${basedir}'\n"
             "export CCACHE_SLOPPINESS CCACHE_BASEDIR\n"
+            "${depend_sh}"
             "exec '${ccache}' \"$@\"\n")
         file(CHMOD "${wrapper}" PERMISSIONS
             OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
@@ -118,6 +129,7 @@ function(enable_compiler_cache)
     # and ccache can return a wrong object for one; opting in removes the PCHs rather than the risk.
     set(sloppiness "pch_defines,time_macros")
     set(basedir "${BERNINI_ROOT}")
+    set(depend OFF)
     if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         if (NOT BERNINI_MSVC_COMPILER_CACHE)
             message(STATUS "Compiler cache: skipped -- MSVC precompiled headers can hit wrongly "
@@ -133,6 +145,13 @@ function(enable_compiler_cache)
         set(basedir "")
         _bernini_emulate_precompiled_headers()
 
+        # Depend mode: an object is keyed on the source and the bytes of every header /showIncludes
+        # names, and the preprocessor fallback is never taken. That fallback hashes preprocessed
+        # text, which has no comments, while /Z7's CodeView records a checksum of each file read --
+        # so a header edited only in a comment hit the old entry and returned an object whose
+        # checksums named the old header (scripts/verify_compiler_cache.py caught it).
+        set(depend ON)
+
         foreach(lang C CXX)
             foreach(config DEBUG RELWITHDEBINFO)
                 string(REGEX REPLACE "/Z[iI]" "/Z7" flags "${CMAKE_${lang}_FLAGS_${config}}")
@@ -146,7 +165,7 @@ function(enable_compiler_cache)
         set(CMAKE_CXX_FLAGS "${flags}" PARENT_SCOPE)
     endif()
 
-    _bernini_write_cache_wrapper("${BERNINI_CCACHE_PROGRAM}" "${sloppiness}" "${basedir}" wrapper)
+    _bernini_write_cache_wrapper("${BERNINI_CCACHE_PROGRAM}" "${sloppiness}" "${basedir}" "${depend}" wrapper)
 
     set(CMAKE_C_COMPILER_LAUNCHER   "${wrapper}" PARENT_SCOPE)
     set(CMAKE_CXX_COMPILER_LAUNCHER "${wrapper}" PARENT_SCOPE)
