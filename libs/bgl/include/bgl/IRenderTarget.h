@@ -101,6 +101,40 @@ namespace bgl
 	};
 
 	/**
+	 * A target's film grain: monochrome noise scaled by the pixel's displayed value, so black stays
+	 * black. Applied after the display curve under either post-process type. Per-frame constants: a
+	 * change reallocates nothing.
+	 */
+	struct FilmGrainSettings
+	{
+		// The largest share of its display-linear value a pixel moves by.
+		float intensity = 0.25f;
+
+		// The grain's pitch in pixels at a 2160-line output, scaled with the output's height and
+		// floored at one output pixel.
+		float size = 2.0f;
+
+		// How many of the target's frames one pattern is held for; zero never changes it.
+		uint32_t holdFrames = 1;
+	};
+
+	/**
+	 * A target's colour split: red and blue displaced from green, as a misregistered print or a
+	 * lens does it. Applied to the scene ahead of the display curve under either post-process type;
+	 * the selection outline is not split. Distances are in pixels at a 2160-line output and scale
+	 * with the output's height. Per-frame constants: a change reallocates nothing.
+	 */
+	struct ColorSplitSettings
+	{
+		// Red's displacement over the whole frame, +x right and +y down; blue takes the opposite.
+		glm::vec2 offset{ -2.0f, 0.0f };
+
+		// A lens's share: red's outward displacement at the middle of the top and bottom edges,
+		// zero at the centre and linear in the distance from it. Negative pulls red inward.
+		float radial = 0.0f;
+	};
+
+	/**
 	 * A render output: a swapchain (windowed) or offscreen backbuffers (headless),
 	 * plus depth, owned independently of the renderer. One Graphics can drive many
 	 * RenderTargets. Created with IGraphics::CreateRenderTarget and passed to
@@ -242,6 +276,39 @@ namespace bgl
 		 */
 		virtual void
 		SetColorGradeSettings(const ColorGradeSettings& settings) = 0;
+
+		/** Whether film grain runs on this target. Off by default. */
+		[[nodiscard]] virtual bool
+		IsFilmGrainEnabled() const noexcept = 0;
+
+		/** Turns film grain on or off for subsequent frames. Nothing is allocated either way. */
+		virtual void
+		SetFilmGrainEnabled(bool enabled) noexcept = 0;
+
+		[[nodiscard]] virtual FilmGrainSettings
+		GetFilmGrainSettings() const noexcept = 0;
+
+		/**
+		 * @throws GraphicsError if `intensity` is outside [0, 1], or `size` is not positive and
+		 *         finite.
+		 */
+		virtual void
+		SetFilmGrainSettings(const FilmGrainSettings& settings) = 0;
+
+		/** Whether the colour split runs on this target. Off by default. */
+		[[nodiscard]] virtual bool
+		IsColorSplitEnabled() const noexcept = 0;
+
+		/** Turns the colour split on or off for subsequent frames. Nothing is allocated either way. */
+		virtual void
+		SetColorSplitEnabled(bool enabled) noexcept = 0;
+
+		[[nodiscard]] virtual ColorSplitSettings
+		GetColorSplitSettings() const noexcept = 0;
+
+		/** @throws GraphicsError if an `offset` component or `radial` is not finite. */
+		virtual void
+		SetColorSplitSettings(const ColorSplitSettings& settings) = 0;
 
 		[[nodiscard]] virtual PostProcessType
 		GetPostProcessType() const noexcept = 0;

@@ -298,6 +298,74 @@ namespace bgl
 			m_ColorGradeSettings = settings;
 		}
 
+		[[nodiscard]] bool
+		IsFilmGrainEnabled() const noexcept final
+		{
+			return m_FilmGrainEnabled;
+		}
+
+		void
+		SetFilmGrainEnabled(bool enabled) noexcept final
+		{
+			m_FilmGrainEnabled = enabled;
+		}
+
+		[[nodiscard]] FilmGrainSettings
+		GetFilmGrainSettings() const noexcept final
+		{
+			return m_FilmGrainSettings;
+		}
+
+		void
+		SetFilmGrainSettings(const FilmGrainSettings& settings) final
+		{
+			if (!(settings.intensity >= 0.0f && settings.intensity <= 1.0f))
+			{
+				throw GraphicsError("FilmGrainSettings::intensity must be within [0, 1]");
+			}
+
+			if (!(settings.size > 0.0f) || !std::isfinite(settings.size))
+			{
+				throw GraphicsError("FilmGrainSettings::size must be positive and finite");
+			}
+
+			m_FilmGrainSettings = settings;
+		}
+
+		[[nodiscard]] bool
+		IsColorSplitEnabled() const noexcept final
+		{
+			return m_ColorSplitEnabled;
+		}
+
+		void
+		SetColorSplitEnabled(bool enabled) noexcept final
+		{
+			m_ColorSplitEnabled = enabled;
+		}
+
+		[[nodiscard]] ColorSplitSettings
+		GetColorSplitSettings() const noexcept final
+		{
+			return m_ColorSplitSettings;
+		}
+
+		void
+		SetColorSplitSettings(const ColorSplitSettings& settings) final
+		{
+			if (!std::isfinite(settings.offset.x) || !std::isfinite(settings.offset.y))
+			{
+				throw GraphicsError("ColorSplitSettings::offset must be finite");
+			}
+
+			if (!std::isfinite(settings.radial))
+			{
+				throw GraphicsError("ColorSplitSettings::radial must be finite");
+			}
+
+			m_ColorSplitSettings = settings;
+		}
+
 		/**
 		 * Re-derives the render size and recreates every attachment sized by it. The output size,
 		 * the swapchain and the frame ring are untouched; the accumulation is discarded, since a
@@ -540,6 +608,11 @@ namespace bgl
 		bool               m_ColorGradeEnabled = false;
 		PostProcessType    m_PostProcessType   = PostProcessType::kFilmic;
 		ColorGradeSettings m_ColorGradeSettings;
+
+		bool               m_FilmGrainEnabled = false;
+		FilmGrainSettings  m_FilmGrainSettings;
+		bool               m_ColorSplitEnabled = false;
+		ColorSplitSettings m_ColorSplitSettings;
 
 		bool                                           m_GpuTimingEnabled = false;
 		bgpu::TimestampHeapRef                         m_TimingHeap;

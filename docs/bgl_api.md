@@ -319,6 +319,15 @@ flowchart TD
   it runs once on the output; `RenderTargetDesc::postProcessType` starts it. Exposure, RCAS, bloom and the outline apply under both.
   See
   [Passes](passes.md) § Scene colour.
+* **`SetFilmGrainEnabled` / `SetFilmGrainSettings(settings)`** — monochrome grain scaled by the
+  pixel's displayed value, under either post-process type. @throws `GraphicsError` for an
+  `intensity` outside [0, 1] or a `size` that is not positive and finite; a refused set keeps the
+  settings the target had. `holdFrames` counts the target's own frames, so a target drawn every
+  other frame still holds a pattern for that many of its frames.
+* **`SetColorSplitEnabled` / `SetColorSplitSettings(settings)`** — red and blue displaced from
+  green, under either post-process type. @throws `GraphicsError` for an `offset` component or a
+  `radial` that is not finite. Distances are in pixels at a 2160-line output, so a look keeps its
+  share of the frame across output sizes.
 
 ### IOverlay
 
