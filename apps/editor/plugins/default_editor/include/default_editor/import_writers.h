@@ -40,5 +40,5 @@ namespace editor
 		const std::filesystem::path&      materialDir,
 		const std::filesystem::path&      textureDir,
 		std::span<const QString>          stems,
-		std::span<const bgl::SurfaceType> surfaces = {});
+		std::span<const bgl::SurfaceType> surfaces);
 }

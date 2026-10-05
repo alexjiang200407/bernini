@@ -68,13 +68,8 @@ namespace editor
 		}
 
 		/**
-		 * The document a material's extras describe on `surface`. glTF's own base colour fills the
-		 * surface's `baseColorFactor` value and `baseColor` slot where it declares them, and the
-		 * extras are applied over that. A field the surface does not declare, or a value of another
-		 * width, is dropped with a warning naming it.
-		 *
-		 * Values are not snapped to the sink's three decimals as an imported PBR factor is: a toon
-		 * feather is 0.0001 by default, and snapping would make it 0.
+		 * The document a material's extras describe on `surface`, in the order and by the rules
+		 * docs/asset_standards.md § A surface named in a material's extras gives.
 		 *
 		 * @param textureKey The data-root-relative key of an imported texture index, empty for none.
 		 */
@@ -144,8 +139,7 @@ namespace editor
 
 			for (const assetlib::imp::SurfaceSlotImport& texture : source.surface.textures)
 			{
-				const std::string key = textureKey(texture.texture);
-				if (key.empty() || !declaresTexture(texture.field))
+				if (!declaresTexture(texture.field))
 				{
 					qWarning(
 						"Import: material '%.*s' binds '%s', which surface '%s' does not declare; "
@@ -154,6 +148,18 @@ namespace editor
 						materialName.data(),
 						texture.field.c_str(),
 						surface.surfaceName.c_str());
+					continue;
+				}
+
+				const std::string key = textureKey(texture.texture);
+				if (key.empty())
+				{
+					qWarning(
+						"Import: material '%.*s' binds '%s' to an image this import extracted no "
+						"texture for; dropped",
+						static_cast<int>(materialName.size()),
+						materialName.data(),
+						texture.field.c_str());
 					continue;
 				}
 				BindTexture(material.surface, texture.field, key);

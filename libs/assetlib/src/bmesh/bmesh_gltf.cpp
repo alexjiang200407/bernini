@@ -1434,9 +1434,7 @@ namespace assetlib
 				material.occlusionTexture = texture;
 		}
 
-		// The prefix that makes a key of a material's extras ours, and the one field that is not the
-		// surface's but names it. Flat keys because that is what a Blender Custom Property exports as
-		// -- its UI cannot author a nested group.
+		// Flat keys, as a Blender Custom Property exports: docs/asset_standards.md.
 		constexpr std::string_view c_ExtrasPrefix  = "bernini_";
 		constexpr std::string_view c_SurfaceKey    = "bernini_surface";
 		constexpr size_t           c_MaxValueWidth = 4;  // glm::vec4, SurfaceValueImport's width

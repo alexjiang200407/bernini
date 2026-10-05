@@ -164,7 +164,8 @@ TEST_CASE("An imported PBR material is written and bound to its submesh", "[impo
 		project.Data(),
 		project.MaterialDir(),
 		project.TextureDir(),
-		StemsFor(imported));
+		StemsFor(imported),
+		{});
 
 	// Named from the glTF, not by index: matN.bmaterial tells nobody anything.
 	const std::filesystem::path file = project.MaterialDir() / "Rust.bmaterial";
@@ -207,7 +208,8 @@ TEST_CASE("A non-PBR material is left behind, and its submesh unassigned", "[imp
 		project.Data(),
 		project.MaterialDir(),
 		project.TextureDir(),
-		StemsFor(imported));
+		StemsFor(imported),
+		{});
 
 	CHECK(std::filesystem::exists(project.MaterialDir() / "Metal.bmaterial"));
 
@@ -270,7 +272,8 @@ TEST_CASE("Imported material names are made safe and unique", "[importedmaterial
 		project.Data(),
 		project.MaterialDir(),
 		project.TextureDir(),
-		StemsFor(imported));
+		StemsFor(imported),
+		{});
 
 	CHECK(std::filesystem::exists(project.MaterialDir() / "Rust.bmaterial"));
 	CHECK(std::filesystem::exists(project.MaterialDir() / "Rust_2.bmaterial"));
@@ -305,7 +308,8 @@ TEST_CASE("A stem list that no longer fits the source is refused", "[importedmat
 			project.Data(),
 			project.MaterialDir(),
 			project.TextureDir(),
-			QStringList{ "fur_brown" }),
+			QStringList{ "fur_brown" },
+			{}),
 		std::runtime_error);
 
 	CHECK_FALSE(std::filesystem::exists(project.MaterialDir() / "fur_brown.bmaterial"));
@@ -324,7 +328,8 @@ TEST_CASE("A material is written under the stem it was handed", "[importedmateri
 		project.Data(),
 		project.MaterialDir(),
 		project.TextureDir(),
-		QStringList{ "fur_brown" });
+		QStringList{ "fur_brown" },
+		{});
 
 	// The name the dialog showed, not the one the glTF carried. Deriving it here as well is what
 	// would let a preview and a file disagree, so the derived name must not appear at all.
@@ -353,7 +358,8 @@ TEST_CASE("A material with no stem is left behind", "[importedmaterials]")
 		project.Data(),
 		project.MaterialDir(),
 		project.TextureDir(),
-		QStringList{ "Kept", QString() });
+		QStringList{ "Kept", QString() },
+		{});
 
 	CHECK(std::filesystem::exists(project.MaterialDir() / "Kept.bmaterial"));
 	CHECK_FALSE(std::filesystem::exists(project.MaterialDir() / "Dropped.bmaterial"));
@@ -377,7 +383,8 @@ TEST_CASE(
 		project.Data(),
 		project.MaterialDir(),
 		project.TextureDir(),
-		QStringList{ "fur_brown" });
+		QStringList{ "fur_brown" },
+		{});
 
 	// A second one into the same folder -- what naming the files is for -- which then fails.
 	const auto second     = ImportWith({ PbrMaterial() }, { "Fur" });
@@ -389,7 +396,8 @@ TEST_CASE(
 		project.Data(),
 		project.MaterialDir(),
 		project.TextureDir(),
-		QStringList{ "fur_grey" });
+		QStringList{ "fur_grey" },
+		{});
 
 	const std::array<assetlib::ImportedFile, 1> written = { {
 		{ project.MaterialDir() / "fur_grey.bmaterial", false },
@@ -423,7 +431,8 @@ TEST_CASE("Two submeshes cut from one glTF material share its file", "[importedm
 		project.Data(),
 		project.MaterialDir(),
 		project.TextureDir(),
-		StemsFor(imported));
+		StemsFor(imported),
+		{});
 
 	// Each submesh names the same authored file.
 	REQUIRE(bindings.size() == 2);
@@ -450,7 +459,8 @@ TEST_CASE("A mesh with levels of detail binds each submesh once", "[importedmate
 		project.Data(),
 		project.MaterialDir(),
 		project.TextureDir(),
-		StemsFor(imported));
+		StemsFor(imported),
+		{});
 
 	REQUIRE(bindings.size() == 1);
 	CHECK(bindings[0].submesh == "part0");
@@ -473,7 +483,8 @@ TEST_CASE("A cutout import survives the round-trip to disk", "[importedmaterials
 		project.Data(),
 		project.MaterialDir(),
 		project.TextureDir(),
-		StemsFor(imported));
+		StemsFor(imported),
+		{});
 
 	const assetlib::BMaterial material =
 		assetlib::AssetStore(project.MaterialDir()).Load<assetlib::BMaterial>("Leaves.bmaterial");
@@ -509,7 +520,8 @@ TEST_CASE("An import's specular factors survive the round-trip to disk", "[impor
 		project.Data(),
 		project.MaterialDir(),
 		project.TextureDir(),
-		StemsFor(imported));
+		StemsFor(imported),
+		{});
 
 	const assetlib::BMaterial material =
 		assetlib::AssetStore(project.MaterialDir()).Load<assetlib::BMaterial>("Fur.bmaterial");
@@ -540,7 +552,8 @@ TEST_CASE("One texture used as two maps routes both at the same file", "[importe
 		project.Data(),
 		project.MaterialDir(),
 		project.TextureDir(),
-		StemsFor(imported));
+		StemsFor(imported),
+		{});
 
 	const assetlib::BMaterial material =
 		assetlib::AssetStore(project.MaterialDir()).Load<assetlib::BMaterial>("Shared.bmaterial");
