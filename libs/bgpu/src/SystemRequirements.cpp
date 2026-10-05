@@ -18,9 +18,8 @@ namespace bgpu
 		constexpr auto     c_NeedsAMetal3Gpu =
 			std::string_view("A graphics processor that supports Metal 3");
 		constexpr auto c_NeedsAMeshShadingGpu = std::string_view(
-			"A graphics card that supports DirectX 12 Ultimate: NVIDIA GeForce GTX 1660 or RTX "
-			"2060 and "
-			"newer, AMD Radeon RX 6000 series and newer, or Intel Arc");
+			"A graphics card with mesh shaders: NVIDIA GeForce GTX 1660, RTX 2060 or newer, AMD "
+			"Radeon RX 6000 series or newer, or Intel Arc");
 		constexpr auto c_NeedsACurrentDriver = std::string_view(
 			"An up-to-date graphics driver -- install the latest one from your graphics card's "
 			"maker");
@@ -64,6 +63,8 @@ namespace bgpu
 				{ Requirement::kMacOs13,
 			      std::format("macOS {}.{}.{}", facts.osMajor, facts.osMinor, facts.osPatch) });
 		}
+		if (!facts.device)
+			return unmet;
 		if (!facts.metal3)
 			unmet.push_back({ Requirement::kMetal3, facts.gpuName });
 		if (!facts.meshShaders)

@@ -52,6 +52,9 @@ namespace bgpu
 		uint32_t osMinor = 0;
 		uint32_t osPatch = 0;
 
+		// A Metal device exists. Without one the GPU's requirements are unknown rather than unmet: the
+		// machine may be fine and the fault elsewhere, so they are not checked.
+		bool        device = false;
 		std::string gpuName;
 		bool        metal3 = false;
 

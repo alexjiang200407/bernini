@@ -60,6 +60,7 @@ namespace bgpu
 			if (device == nullptr)
 				return facts;
 
+			facts.device      = true;
 			facts.gpuName     = device->name()->utf8String();
 			facts.metal3      = device->supportsFamily(MTL::GPUFamilyMetal3);
 			facts.meshShaders = device->supportsFamily(MTL::GPUFamilyApple7);
@@ -98,6 +99,8 @@ namespace bgpu
 					spdlog::critical("{}", error.what());
 					throw error;
 				}
+				if (!m_Device)
+					core::throw_runtime_error("no Metal device available");
 
 				spdlog::info("Metal device: {}", m_Device->name()->utf8String());
 

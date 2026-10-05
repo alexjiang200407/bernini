@@ -131,7 +131,7 @@ defect.
 | `core/str/str.h` | `split_once`, UTF conversions, transparent string hash/compare for heterogeneous lookup |
 | `core/io/ByteReader.h`, `ByteWriter.h` | binary container reads and writes |
 | `core/file/file.h` | `read_file_bytes`, executable and library paths |
-| `core/platform/util.h` | `expand_home`, `process_id`, `get_executable_name` |
+| `core/platform/util.h` | `expand_home`, `process_id`, `get_executable_name`, `show_fatal_message` |
 | `core/containers/` | `static_vector`, `packed_vector`, `slot_vector`, `multi_slot_vector`, `ordered_map`, `enum_set`, `fixed_buffer`, and the handle types |
 | `core/ref/` | `Ref`, `SharedRef`, `RefCounter` |
 | `core/log/log.h`, `core/settings/Settings.h`, `core/stats/RollingWindow.h`, `core/type_traits.h` | logging, settings, rolling statistics, trait concepts |

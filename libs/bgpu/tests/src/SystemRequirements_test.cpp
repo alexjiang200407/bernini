@@ -21,6 +21,7 @@ namespace
 		facts.processor            = "Apple M1";
 		facts.osMajor              = 14;
 		facts.osMinor              = 4;
+		facts.device               = true;
 		facts.gpuName              = "Apple M1";
 		facts.metal3               = true;
 		facts.meshShaders          = true;
@@ -80,6 +81,7 @@ TEST_CASE("A Mac misses every requirement it falls short of, not only the first"
 	old.osMajor   = 12;
 	old.osMinor   = 6;
 	old.osPatch   = 1;
+	old.device    = true;
 	old.gpuName   = "Intel Iris Graphics 6100";
 
 	const std::vector<bgpu::UnmetRequirement> unmet = bgpu::CheckSystemRequirements(old);
@@ -90,6 +92,21 @@ TEST_CASE("A Mac misses every requirement it falls short of, not only the first"
 	                                        bgpu::Requirement::kMetalMeshShaders,
 	                                        bgpu::Requirement::kMetalArgumentBuffersTier2 });
 	CHECK(unmet[1].found == "macOS 12.6.1");
+}
+
+TEST_CASE("A Mac with no Metal device is not told to replace its GPU", "[sysreq]")
+{
+	// A supported Mac whose device could not be created has a fault, which CreateGpuContext reports
+	// as a runtime_error; only what is known without a device can be unmet.
+	auto noDevice   = M1OnSonoma();
+	noDevice.device = false;
+	noDevice.metal3 = false;
+	CHECK(bgpu::CheckSystemRequirements(noDevice).empty());
+
+	noDevice.appleSilicon = false;
+	CHECK(
+		Requirements(bgpu::CheckSystemRequirements(noDevice)) ==
+		std::vector{ bgpu::Requirement::kAppleSilicon });
 }
 
 TEST_CASE("A D3D12 GPU with mesh shaders and bindless meets every requirement", "[sysreq]")
@@ -146,12 +163,14 @@ TEST_CASE(
 	const std::string message = bgpu::DescribeUnmetRequirements(unmet);
 
 	CHECK_THAT(message, ContainsSubstring("does not meet the minimum system requirements"));
-	CHECK_THAT(message, ContainsSubstring("DirectX 12 Ultimate"));
+	CHECK_THAT(message, ContainsSubstring("graphics card with mesh shaders"));
 	CHECK_THAT(message, ContainsSubstring("graphics driver"));
 	CHECK_THAT(message, ContainsSubstring("This computer has: AMD Radeon RX 5700 XT."));
 
 	// The two GPU requirements read as one line, the driver as another.
-	CHECK(message.find("DirectX 12 Ultimate") == message.rfind("DirectX 12 Ultimate"));
+	CHECK(
+		message.find("graphics card with mesh shaders") ==
+		message.rfind("graphics card with mesh shaders"));
 	CHECK(std::ranges::count(message, '\n') == 3);
 }
 
