@@ -579,7 +579,7 @@ namespace
 		const auto material = cardMaterial == CardMaterial::kSurface ?
 		                          scene->CreateSurfaceMaterial(
 									  {
-										  .surface     = "PbrLike",
+										  .surfaceName = "PbrLike",
 										  .layerType   = layer,
 										  .doubleSided = true,
 										  .values      = { { "roughnessFactor", glm::vec4(0.6f) },

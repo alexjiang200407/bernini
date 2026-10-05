@@ -17,14 +17,16 @@ namespace
 	Surfaces()
 	{
 		std::vector<bgl::SurfaceType> surfaces(4);
-		surfaces[0] = { .name = "pbr", .kind = c_Pbr, .shading = bgl::SurfaceShading::kPbrSurface };
-		surfaces[1] = { .name    = "character",
-			            .kind    = c_Character,
-			            .shading = bgl::SurfaceShading::kToonCharacter };
-		surfaces[2] = { .name    = "scenery",
-			            .kind    = c_Scenery,
-			            .shading = bgl::SurfaceShading::kToonEnvironment };
-		surfaces[3] = { .name = "lit", .kind = c_Lit, .shading = bgl::SurfaceShading::kLit };
+		surfaces[0] = { .surfaceName = "pbr",
+			            .kind        = c_Pbr,
+			            .shading     = bgl::SurfaceShading::kPbrSurface };
+		surfaces[1] = { .surfaceName = "character",
+			            .kind        = c_Character,
+			            .shading     = bgl::SurfaceShading::kToonCharacter };
+		surfaces[2] = { .surfaceName = "scenery",
+			            .kind        = c_Scenery,
+			            .shading     = bgl::SurfaceShading::kToonEnvironment };
+		surfaces[3] = { .surfaceName = "lit", .kind = c_Lit, .shading = bgl::SurfaceShading::kLit };
 		return surfaces;
 	}
 

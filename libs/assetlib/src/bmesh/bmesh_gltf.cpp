@@ -1493,8 +1493,8 @@ namespace assetlib
 			const std::vector<uint32_t>& imageToTexture,
 			SurfaceImport&               out)
 		{
-			out.name = extrasSurfaceName(gltfMat);
-			if (out.name.empty())
+			out.surfaceName = extrasSurfaceName(gltfMat);
+			if (out.surfaceName.empty())
 				return;
 
 			for (const std::string& key : gltfMat.extras.Keys())
@@ -1901,9 +1901,9 @@ namespace assetlib
 		loadModel(loader, model, path);
 
 		return model.materials | std::views::transform([](const auto& gltfMat) {
-				   return GltfMaterial{ .name    = gltfMat.name,
-				                        .isPbr   = isPbrMaterial(gltfMat),
-				                        .surface = extrasSurfaceName(gltfMat) };
+				   return GltfMaterial{ .name        = gltfMat.name,
+				                        .isPbr       = isPbrMaterial(gltfMat),
+				                        .surfaceName = extrasSurfaceName(gltfMat) };
 			   }) |
 		       std::ranges::to<std::vector>();
 	}

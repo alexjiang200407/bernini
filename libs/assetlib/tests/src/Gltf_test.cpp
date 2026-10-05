@@ -870,7 +870,7 @@ TEST_CASE("A material's extras name its surface and set its fields", "[bmesh][gl
 	REQUIRE(mesh.materials.size() == 4);
 
 	const SurfaceImport& skin = mesh.materials[0].surface;
-	CHECK(skin.name == "ToonCharacter");
+	CHECK(skin.surfaceName == "ToonCharacter");
 
 	// A key without the prefix is somebody else's, not a field the surface lacks.
 	REQUIRE(skin.values.size() == 2);
@@ -912,11 +912,11 @@ TEST_CASE("Extras that name no surface set nothing", "[bmesh][gltf][extras]")
 
 	// A field with no surface to belong to is not read at all: it would be a value for nothing.
 	const SurfaceImport& plain = mesh.materials[1].surface;
-	CHECK(plain.name.empty());
+	CHECK(plain.surfaceName.empty());
 	CHECK(plain.values.empty());
 
 	const SurfaceImport& unnamed = mesh.materials[3].surface;
-	CHECK(unnamed.name.empty());
+	CHECK(unnamed.surfaceName.empty());
 	CHECK(unnamed.values.empty());
 }
 
@@ -925,7 +925,7 @@ TEST_CASE("An extras key that cannot be a field is dropped alone", "[bmesh][gltf
 	const BMeshImport    mesh   = LoadSurfaceExtrasGltf();
 	const SurfaceImport& broken = mesh.materials[2].surface;
 
-	CHECK(broken.name == "ToonCharacter");
+	CHECK(broken.surfaceName == "ToonCharacter");
 
 	// A bool, five numbers and an image the file does not have are each dropped; the one-element
 	// array beside them is a value of width 1 like a bare number.
@@ -945,8 +945,8 @@ TEST_CASE(
 	std::filesystem::remove(path);
 
 	REQUIRE(probed.size() == 4);
-	CHECK(probed[0].surface == "ToonCharacter");
-	CHECK(probed[1].surface.empty());
-	CHECK(probed[2].surface == "ToonCharacter");
-	CHECK(probed[3].surface.empty());
+	CHECK(probed[0].surfaceName == "ToonCharacter");
+	CHECK(probed[1].surfaceName.empty());
+	CHECK(probed[2].surfaceName == "ToonCharacter");
+	CHECK(probed[3].surfaceName.empty());
 }

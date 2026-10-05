@@ -61,8 +61,8 @@ namespace
 	RoutedMaterial()
 	{
 		BMaterial mat;
-		mat.shadingModel = ShadingModel::kPbrSurface;
-		mat.surface.name = "Rim";
+		mat.shadingModel        = ShadingModel::kPbrSurface;
+		mat.surface.surfaceName = "Rim";
 
 		auto& baseColor       = mat.surface.textures.emplace_back();
 		baseColor.name        = "baseColor";

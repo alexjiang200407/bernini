@@ -179,8 +179,8 @@ struct FaceCharacter : IToonCharacterSurfaceSource
 		Face(float face)
 		{
 			return scene->CreateSurfaceMaterial(
-				bgl::SurfaceMaterialDesc{ .surface = "FaceCharacter",
-			                              .values  = { { "face", glm::vec4(face) } } });
+				bgl::SurfaceMaterialDesc{ .surfaceName = "FaceCharacter",
+			                              .values      = { { "face", glm::vec4(face) } } });
 		}
 
 		/**

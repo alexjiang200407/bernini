@@ -392,7 +392,7 @@ namespace bgl
 
 		/**
 		 * The surface counterpart of UpdatePbrMaterial. The surface itself cannot change -- it is
-		 * what the record's kind and its size were fixed by -- so `desc.surface` must name the one
+		 * what the record's kind and its size were fixed by -- so `desc.surfaceName` must name the one
 		 * the material was created with.
 		 */
 		virtual void

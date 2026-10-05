@@ -461,7 +461,7 @@ namespace assetlib
 				return;
 			}
 
-			json["surface"] = surface.name;
+			json["surface"] = surface.surfaceName;
 
 			auto parameters = nlohmann::json::object();
 			for (const SurfaceValueBinding& value : surface.values)
@@ -597,7 +597,7 @@ namespace assetlib
 
 			// Taken whatever the model is, so a surface's keys never ride `extraJson` back out
 			// beside the ones written from the struct.
-			taker.Take("surface", material.surface.name);
+			taker.Take("surface", material.surface.surfaceName);
 			takeSurfaceValues(json, material.surface.values);
 			takeSurfaceTextures(json, material.surface.textures);
 

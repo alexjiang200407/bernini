@@ -2150,7 +2150,7 @@ namespace game
 		const assetlib::SurfaceParams& surface = record.source.surface;
 
 		auto desc        = bgl::SurfaceMaterialDesc();
-		desc.surface     = surface.name;
+		desc.surfaceName = surface.surfaceName;
 		desc.layerType   = ToLayerType(layer.alphaMode, m_Options.hashedAsBlend);
 		desc.alphaCutoff = layer.alphaCutoff;
 		desc.doubleSided = layer.doubleSided;

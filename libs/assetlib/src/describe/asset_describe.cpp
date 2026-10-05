@@ -241,7 +241,7 @@ namespace assetlib
 			const SurfaceParams&           surface,
 			const core::file::IFileSystem* fileSystem)
 		{
-			out += std::format("  surface           {}\n", surface.name);
+			out += std::format("  surface           {}\n", surface.surfaceName);
 
 			out += "\n  parameters\n";
 			if (surface.values.empty())

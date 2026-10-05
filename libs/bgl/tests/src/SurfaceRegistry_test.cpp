@@ -103,17 +103,17 @@ TEST_CASE("A surface directory fills slots in filename order", "[surface][regist
 
 	// Filename order, so the directory alone decides which slot a surface lands in -- and the two
 	// contracts share the one namespace, so a lit surface takes a slot exactly as a PBR one does.
-	CHECK(types[0].name == "Band");
+	CHECK(types[0].surfaceName == "Band");
 	CHECK(types[0].kind == MaterialType::kGameStart);
 	CHECK(types[0].shading == SurfaceShading::kLit);
-	CHECK(types[1].name == "PbrLike");
+	CHECK(types[1].surfaceName == "PbrLike");
 	CHECK(types[1].shading == SurfaceShading::kPbrSurface);
-	CHECK(types[2].name == "Rim");
-	CHECK(types[3].name == "Tint");
+	CHECK(types[2].surfaceName == "Rim");
+	CHECK(types[3].surfaceName == "Tint");
 	CHECK(
 		types[3].kind ==
 		static_cast<MaterialType>(std::to_underlying(MaterialType::kGameStart) + 3u));
-	CHECK(types[4].name == "Unlit");
+	CHECK(types[4].surfaceName == "Unlit");
 	CHECK(types[4].shading == SurfaceShading::kLit);
 
 	const SurfaceParams& rim = types[2].params;
@@ -163,7 +163,7 @@ TEST_CASE("More than four surfaces register, each a kind of its own", "[surface]
 			types[slot].shading ==
 			(slot % 2 == 0 ? SurfaceShading::kPbrSurface : SurfaceShading::kLit));
 	}
-	CHECK(types[5].name == "F");
+	CHECK(types[5].surfaceName == "F");
 }
 
 // Naming no directory is not an error -- it is what every client that has no surfaces does, which
@@ -257,7 +257,7 @@ TEST_CASE("A module beside the surfaces is not one of them", "[surface][registry
 
 	const std::span<const SurfaceType> types = gfx->GetSurfaceTypes();
 	REQUIRE(types.size() == 1u);
-	CHECK(types[0].name == "Only");
+	CHECK(types[0].surfaceName == "Only");
 	CHECK(types[0].kind == MaterialType::kGameStart);
 }
 

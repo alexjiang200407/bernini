@@ -203,9 +203,9 @@ TEST_CASE("describe(BMaterial) reports bake staleness against the data root", "[
 TEST_CASE("describe(BMaterial) names the shading model a document takes", "[describe][surface]")
 {
 	BMaterial material;
-	material.name         = "rim";
-	material.shadingModel = ShadingModel::kPbrSurface;
-	material.surface.name = "Rim";
+	material.name                = "rim";
+	material.shadingModel        = ShadingModel::kPbrSurface;
+	material.surface.surfaceName = "Rim";
 	material.surface.values.emplace_back("rimPower", std::vector<float>{ 2.5f });
 	material.surface.textures.emplace_back("baseColor", "Derived/SourceTextures/bear.ktx2");
 
@@ -234,9 +234,9 @@ TEST_CASE("describe(BMaterial) names the shading model a document takes", "[desc
 TEST_CASE("describe(BMaterial) names the lit model the parser accepts", "[describe][surface]")
 {
 	BMaterial material;
-	material.name         = "banded";
-	material.shadingModel = ShadingModel::kLitSurface;
-	material.surface.name = "Toon";
+	material.name                = "banded";
+	material.shadingModel        = ShadingModel::kLitSurface;
+	material.surface.surfaceName = "Toon";
 
 	const std::string text = describe(material);
 
@@ -267,9 +267,9 @@ TEST_CASE(
 	SECTION("environment") { model = ShadingModel::kToonEnvironmentSurface; }
 
 	BMaterial material;
-	material.name         = "flat";
-	material.shadingModel = model;
-	material.surface.name = "Flat";
+	material.name                = "flat";
+	material.shadingModel        = model;
+	material.surface.surfaceName = "Flat";
 
 	const std::string text = describe(material);
 

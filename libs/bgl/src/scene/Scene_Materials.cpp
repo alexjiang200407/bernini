@@ -91,7 +91,8 @@ namespace bgl
 	Scene::BuiltSurfaceMaterial
 	Scene::BuildSurfaceMaterial(const SurfaceMaterialDesc& desc) const
 	{
-		const auto found = std::ranges::find(m_Surfaces, desc.surface, &SurfaceType::name);
+		const auto found =
+			std::ranges::find(m_Surfaces, desc.surfaceName, &SurfaceType::surfaceName);
 		if (found == m_Surfaces.end())
 		{
 			throw SceneError(
@@ -99,7 +100,7 @@ namespace bgl
 					"no surface named '{}' is registered; a surface is read from the client's "
 					"shader "
 					"directory when the graphics is created",
-					desc.surface));
+					desc.surfaceName));
 		}
 
 		const SurfaceType&   surface = *found;
@@ -127,7 +128,7 @@ namespace bgl
 			throw SceneError(
 				std::format(
 					"surface '{}' {}, but the material expects one that {}",
-					desc.surface,
+					desc.surfaceName,
 					name(surface.shading),
 					name(*desc.shading)));
 		}
@@ -144,7 +145,7 @@ namespace bgl
 					"surface '{}' is asked for hashed alpha but declares no coverage carrier: "
 					"hashed measures minification against a CoverageSlot, or a ColorSlot where "
 					"alpha rides in the colour",
-					desc.surface));
+					desc.surfaceName));
 		}
 
 		std::vector<std::byte> payload(sizeof(idl::GameSurfaceRecord) + params.byteSize);
@@ -186,11 +187,11 @@ namespace bgl
 				throw SceneError(
 					isTexture ? std::format(
 									"surface '{}' declares '{}' as a texture, not a value",
-									desc.surface,
+									desc.surfaceName,
 									binding.name) :
 								std::format(
 									"surface '{}' declares no value named '{}'",
-									desc.surface,
+									desc.surfaceName,
 									binding.name));
 			}
 
@@ -253,11 +254,11 @@ namespace bgl
 				throw SceneError(
 					isValue ? std::format(
 								  "surface '{}' declares '{}' as a value, not a texture",
-								  desc.surface,
+								  desc.surfaceName,
 								  binding.name) :
 							  std::format(
 								  "surface '{}' declares no texture named '{}'",
-								  desc.surface,
+								  desc.surfaceName,
 								  binding.name));
 			}
 
@@ -272,7 +273,7 @@ namespace bgl
 					std::format(
 						"surface '{}' declares '{}' as a slot that binds whole; routes compose "
 						"data slots only",
-						desc.surface,
+						desc.surfaceName,
 						binding.name));
 			}
 
@@ -373,7 +374,7 @@ namespace bgl
 				std::format(
 					"MaterialHandle passed to UpdateSurfaceMaterial was not created with surface "
 					"'{}'",
-					desc.surface));
+					desc.surfaceName));
 		}
 
 		m_Materials.SetRecordPayload(bgpu::idl::RawEntry{ material.byteOffset }, built.payload);

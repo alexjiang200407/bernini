@@ -31,11 +31,11 @@ namespace assetlib::imp
 	 *
 	 * Nothing here is checked against the surface: assetlib does not hold the surfaces a project
 	 * registers, so whether `field` exists, and is as wide as `width`, is its importer's question.
-	 * An empty `name` means the material names no surface and imports as glTF describes it.
+	 * An empty `surfaceName` means the material names no surface and imports as glTF describes it.
 	 */
 	struct SurfaceImport
 	{
-		std::string                     name;
+		std::string                     surfaceName;
 		std::vector<SurfaceValueImport> values;
 		std::vector<SurfaceSlotImport>  textures;  // `textures`, not `slots`: Qt defines that
 	};

@@ -388,7 +388,7 @@ namespace bgl
 				{ BindingModuleName(slot),
 			      BindingModuleSource(
 					  slot,
-					  types[slot].name,
+					  types[slot].surfaceName,
 					  sourceTypes[slot],
 					  types[slot].shading) });
 
@@ -398,7 +398,10 @@ namespace bgl
 				device.AddSourceModule(program);
 			}
 
-			spdlog::info("surface '{}' registered into game slot {}", types[slot].name, slot);
+			spdlog::info(
+				"surface '{}' registered into game slot {}",
+				types[slot].surfaceName,
+				slot);
 		}
 
 		if (!types.empty())

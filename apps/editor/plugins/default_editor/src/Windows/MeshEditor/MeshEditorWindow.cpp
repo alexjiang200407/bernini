@@ -1819,7 +1819,7 @@ MeshEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool int
 	// the surface's or nothing -- the fallback PBR seed would be compiled into a demotion.
 	if (assetlib::isSurfaceModel(material.shadingModel))
 	{
-		const QString sinkName = SurfaceOutputNode::ModelNameFor(material.surface.name);
+		const QString sinkName = SurfaceOutputNode::ModelNameFor(material.surface.surfaceName);
 		if (m_Registry->registeredModelCreators().count(sinkName) == 0)
 		{
 			// Surfaces are registered once, inside CreateGraphics, from the startup project's
@@ -1828,7 +1828,7 @@ MeshEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool int
 			qWarning(
 				"MeshEditor: cannot open '%s': surface '%s' is not registered in this session",
 				qPrintable(path),
-				material.surface.name.c_str());
+				material.surface.surfaceName.c_str());
 			if (interactive)
 			{
 				QMessageBox::warning(
@@ -1840,7 +1840,7 @@ MeshEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool int
 					editor::Localize(
 						m_Host.GetLanguageResolver(),
 						"bernini.material.surface_not_registered",
-						{ path, material.surface.name },
+						{ path, material.surface.surfaceName },
 						"'{0}' is drawn by surface '{1}', which this session has not "
 						"registered. Open the project that provides it and relaunch."));
 			}

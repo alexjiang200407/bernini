@@ -310,18 +310,18 @@ TEST_CASE("A surface board's save writes the board, not the disk", "[mesheditor]
 	const QString               path = temp.filePath("Authored/Materials/rim.bmaterial");
 
 	{
-		auto material           = assetlib::BMaterial();
-		material.name           = "rim";
-		material.shadingModel   = assetlib::ShadingModel::kPbrSurface;
-		material.surface.name   = "Rim";
-		material.surface.values = { { "rimPower", { 2.0f } } };
-		material.extraJson      = R"({"studio":"keep"})";
+		auto material                = assetlib::BMaterial();
+		material.name                = "rim";
+		material.shadingModel        = assetlib::ShadingModel::kPbrSurface;
+		material.surface.surfaceName = "Rim";
+		material.surface.values      = { { "rimPower", { 2.0f } } };
+		material.extraJson           = R"({"studio":"keep"})";
 
 		assetlib::AssetStore(root).Save(material, "Authored/Materials/rim.bmaterial");
 	}
 
 	auto surface          = bgl::SurfaceType();
-	surface.name          = "Rim";
+	surface.surfaceName   = "Rim";
 	auto power            = bgl::SurfaceValue();
 	power.name            = "rimPower";
 	power.defaultValue    = glm::vec4(8.0f, 0.0f, 0.0f, 0.0f);
@@ -343,7 +343,7 @@ TEST_CASE("A surface board's save writes the board, not the disk", "[mesheditor]
 		editor::BuildMaterial(model, path, assetlib::AssetStore(root));
 
 	CHECK(saved.shadingModel == assetlib::ShadingModel::kPbrSurface);
-	CHECK(saved.surface.name == "Rim");
+	CHECK(saved.surface.surfaceName == "Rim");
 	REQUIRE(saved.surface.values.size() == 1u);
 	CHECK(saved.surface.values[0].name == "rimPower");
 	REQUIRE(saved.surface.values[0].value.size() == 1u);
@@ -380,17 +380,17 @@ TEST_CASE("A toon surface board saves its own model", "[mesheditor][surface][too
 	const QString               path = temp.filePath("Authored/Materials/flat.bmaterial");
 
 	{
-		auto material           = assetlib::BMaterial();
-		material.name           = "flat";
-		material.shadingModel   = expected;
-		material.surface.name   = "Flat";
-		material.surface.values = { { "baseColorFactor", { 0.8f, 0.35f, 0.1f, 1.0f } } };
+		auto material                = assetlib::BMaterial();
+		material.name                = "flat";
+		material.shadingModel        = expected;
+		material.surface.surfaceName = "Flat";
+		material.surface.values      = { { "baseColorFactor", { 0.8f, 0.35f, 0.1f, 1.0f } } };
 
 		assetlib::AssetStore(root).Save(material, "Authored/Materials/flat.bmaterial");
 	}
 
 	auto surface          = bgl::SurfaceType();
-	surface.name          = "Flat";
+	surface.surfaceName   = "Flat";
 	surface.shading       = shading;
 	auto factor           = bgl::SurfaceValue();
 	factor.name           = "baseColorFactor";
@@ -410,7 +410,7 @@ TEST_CASE("A toon surface board saves its own model", "[mesheditor][surface][too
 		editor::BuildMaterial(model, path, assetlib::AssetStore(root));
 
 	CHECK(saved.shadingModel == expected);
-	CHECK(saved.surface.name == "Flat");
+	CHECK(saved.surface.surfaceName == "Flat");
 	REQUIRE(saved.surface.values.size() == 1u);
 	CHECK(saved.surface.values[0].name == "baseColorFactor");
 	REQUIRE(saved.surface.values[0].value.size() == 4u);
@@ -429,10 +429,10 @@ TEST_CASE("A save keeps a routed slot's bake state", "[mesheditor][surface]")
 	const QString               path = temp.filePath("Authored/Materials/rim.bmaterial");
 
 	{
-		auto material         = assetlib::BMaterial();
-		material.name         = "rim";
-		material.shadingModel = assetlib::ShadingModel::kPbrSurface;
-		material.surface.name = "Rim";
+		auto material                = assetlib::BMaterial();
+		material.name                = "rim";
+		material.shadingModel        = assetlib::ShadingModel::kPbrSurface;
+		material.surface.surfaceName = "Rim";
 
 		auto& orm          = material.surface.textures.emplace_back();
 		orm.name           = "orm";
@@ -445,7 +445,7 @@ TEST_CASE("A save keeps a routed slot's bake state", "[mesheditor][surface]")
 	}
 
 	auto surface            = bgl::SurfaceType();
-	surface.name            = "Rim";
+	surface.surfaceName     = "Rim";
 	auto orm                = bgl::SurfaceTexture();
 	orm.name                = "orm";
 	orm.kind                = bgl::SurfaceTextureKind::kData;
@@ -527,8 +527,8 @@ TEST_CASE(
 // translation that does it, bar the texture upload the Texture nodes own.
 TEST_CASE("A surface board previews through its own surface", "[mesheditor][surface]")
 {
-	auto surface = bgl::SurfaceType();
-	surface.name = "Rim";
+	auto surface        = bgl::SurfaceType();
+	surface.surfaceName = "Rim";
 
 	auto colour         = bgl::SurfaceValue();
 	colour.name         = "rimColor";
@@ -547,14 +547,14 @@ TEST_CASE("A surface board previews through its own surface", "[mesheditor][surf
 	surface.params.values   = { colour, power };
 	surface.params.textures = { base, mask };
 
-	auto material              = assetlib::BMaterial();
-	material.shadingModel      = assetlib::ShadingModel::kPbrSurface;
-	material.layer.alphaMode   = assetlib::AlphaMode::kMask;
-	material.layer.alphaCutoff = 0.25f;
-	material.layer.doubleSided = false;
-	material.surface.name      = "Rim";
-	material.surface.values    = { { "rimColor", { 5.0f, 2.0f, 0.7f } } };
-	material.surface.textures  = { { "baseColor", "Derived/SourceTextures/Dog/coat.ktx2" } };
+	auto material                = assetlib::BMaterial();
+	material.shadingModel        = assetlib::ShadingModel::kPbrSurface;
+	material.layer.alphaMode     = assetlib::AlphaMode::kMask;
+	material.layer.alphaCutoff   = 0.25f;
+	material.layer.doubleSided   = false;
+	material.surface.surfaceName = "Rim";
+	material.surface.values      = { { "rimColor", { 5.0f, 2.0f, 0.7f } } };
+	material.surface.textures    = { { "baseColor", "Derived/SourceTextures/Dog/coat.ktx2" } };
 
 	MaterialGraphModel model(
 		MakeMaterialNodeRegistry(c_Language, nullptr, nullptr, { &surface, 1 }));
@@ -565,7 +565,7 @@ TEST_CASE("A surface board previews through its own surface", "[mesheditor][surf
 
 	const bgl::SurfaceMaterialDesc desc = editor::SurfaceDescOfBoard(*sink);
 
-	CHECK(desc.surface == "Rim");
+	CHECK(desc.surfaceName == "Rim");
 
 	// The layer keys decide the bucket, and they are the board's own widgets.
 	CHECK(desc.layerType == bgl::LayerType::kMask);
@@ -591,10 +591,10 @@ TEST_CASE("A surface board previews through its own surface", "[mesheditor][surf
 
 TEST_CASE("The Output selector lists the four PBR sinks, then every surface", "[mesheditor]")
 {
-	auto rim = bgl::SurfaceType();
-	rim.name = "Rim";
-	auto fur = bgl::SurfaceType();
-	fur.name = "Fur";
+	auto rim        = bgl::SurfaceType();
+	rim.surfaceName = "Rim";
+	auto fur        = bgl::SurfaceType();
+	fur.surfaceName = "Fur";
 
 	const bgl::SurfaceType surfaces[] = { rim, fur };
 
@@ -645,8 +645,8 @@ TEST_CASE("FillLayerSection shows a surface sink's layer and hides for a PBR boa
 
 	const editor::MeshEditorWidgets ui = editor::BuildMeshEditorUi(c_Language, &parent);
 
-	auto rim = bgl::SurfaceType();
-	rim.name = "Rim";
+	auto rim        = bgl::SurfaceType();
+	rim.surfaceName = "Rim";
 	SurfaceOutputNode sink(c_Language, rim);
 	sink.SetAlphaMode(assetlib::AlphaMode::kMask);
 	sink.SetAlphaCutoff(0.25f);

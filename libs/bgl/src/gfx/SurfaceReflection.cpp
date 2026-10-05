@@ -277,7 +277,7 @@ namespace bgl
 		slang::TypeLayoutReflection* paramsLayout = ParamsLayoutOf(layout, params, surfaceName);
 
 		SurfaceType reflected;
-		reflected.name            = std::string(surfaceName);
+		reflected.surfaceName     = std::string(surfaceName);
 		reflected.shading         = found->contract->shading;
 		reflected.params.byteSize = static_cast<uint32_t>(paramsLayout->getStride());
 

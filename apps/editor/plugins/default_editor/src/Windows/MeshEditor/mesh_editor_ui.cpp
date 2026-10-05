@@ -161,8 +161,8 @@ namespace editor
 		for (const bgl::SurfaceType& surface : surfaces)
 		{
 			types.emplace_back(
-				QString::fromStdString(surface.name),
-				SurfaceOutputNode::ModelNameFor(surface.name));
+				QString::fromStdString(surface.surfaceName),
+				SurfaceOutputNode::ModelNameFor(surface.surfaceName));
 		}
 
 		return types;

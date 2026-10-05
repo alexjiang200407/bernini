@@ -106,14 +106,14 @@ SurfaceOutputNode::caption() const
 	return editor::Localize(
 		m_Language,
 		"bernini.material_nodes.surface_output_caption",
-		{ m_Surface.name },
+		{ m_Surface.surfaceName },
 		"{0} Surface Output");
 }
 
 QString
 SurfaceOutputNode::name() const
 {
-	return ModelNameFor(m_Surface.name);
+	return ModelNameFor(m_Surface.surfaceName);
 }
 
 QString
@@ -588,7 +588,7 @@ SurfaceOutputNode::load(const QJsonObject& json)
 			qWarning(
 				"MeshEditor: value '%s' is not declared by surface '%s'",
 				qPrintable(it.key()),
-				m_Surface.name.c_str());
+				m_Surface.surfaceName.c_str());
 		}
 	}
 
@@ -641,7 +641,7 @@ SurfaceOutputNode::CompileInto(assetlib::BMaterial& material, const std::filesys
 	material.layer.doubleSided = m_DoubleSided;
 
 	assetlib::SurfaceParams& surface = material.surface;
-	surface.name                     = m_Surface.name;
+	surface.surfaceName              = m_Surface.surfaceName;
 
 	surface.values.clear();
 	surface.values.reserve(m_Surface.params.values.size());

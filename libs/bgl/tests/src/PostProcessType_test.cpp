@@ -70,9 +70,9 @@ namespace
 		Shoot(const glm::vec3& radiance, float exposure, const std::string& png)
 		{
 			const auto material = scene->CreateSurfaceMaterial(
-				bgl::SurfaceMaterialDesc{ .surface = "Unlit",
-			                              .values  = { { "color", glm::vec4(radiance, 0.0f) },
-			                                           { "opacity", glm::vec4(1.0f) } } });
+				bgl::SurfaceMaterialDesc{ .surfaceName = "Unlit",
+			                              .values      = { { "color", glm::vec4(radiance, 0.0f) },
+			                                               { "opacity", glm::vec4(1.0f) } } });
 			auto view = gfx->CreateSceneView(scene, 4);
 			view->SetExposure(exposure);
 			view->CreateStaticMeshInstance(

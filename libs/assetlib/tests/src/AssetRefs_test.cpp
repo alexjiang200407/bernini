@@ -851,8 +851,8 @@ TEST_CASE("A lit surface material's textures are references", "[assetrefs][surfa
 	WriteSource(root.path / "Derived/SourceTextures" / "mask.ktx2", { { 255, 255, 255, 255 } });
 
 	BMaterial material;
-	material.shadingModel = ShadingModel::kLitSurface;
-	material.surface.name = "Toon";
+	material.shadingModel        = ShadingModel::kLitSurface;
+	material.surface.surfaceName = "Toon";
 
 	SurfaceTextureBinding base;
 	base.name        = "baseColor";
