@@ -64,7 +64,7 @@ namespace
 	// The shared asset directory doubles as a data root: apples.bmesh names its materials by paths
 	// relative to it ("Authored/Materials/apples/Apple1.bmaterial"), and they are there.
 	constexpr auto c_DataRoot     = "assets/Data";
-	constexpr auto c_MeshPath     = "assets/Data/Derived/Meshes/apples.bmesh";
+	constexpr auto c_MeshPath     = "assets/Data/Derived/Meshes/apples.glb-ae5e794c8602242e.bmesh";
 	constexpr auto c_MaterialPath = "assets/Data/Authored/Materials/apples/Apple1.bmaterial";
 
 	// Where the renders are left for a human to look at, following bgl_tests' convention of writing a

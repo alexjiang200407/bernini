@@ -1,8 +1,8 @@
 {
 	"exposureOverride": 1.0,
-	"lighting": "Derived/EnvLighting/forest.benvl",
+	"lighting": "Derived/EnvLighting/forest.hdr-59ff5df65db31290.benvl",
 	"name": "forest",
-	"sky": "Derived/Sky/forest.bsky",
+	"sky": "Derived/Sky/forest.hdr-59ff5df65db31290.bsky",
 	"skyMipLevel": 0,
 	"skyRotationY": 0.0
 }

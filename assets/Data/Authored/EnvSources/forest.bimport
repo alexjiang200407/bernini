@@ -5,9 +5,13 @@
 	"envSourceBakeToken": 10183196526404056724,
 	"envSourceStampHash": 1908233242519146849,
 	"envSourceStampSize": 1881948,
+	"identity": {
+		"id": "59ff5df65db31290",
+		"label": "forest.hdr"
+	},
 	"outputs": [
-		"Derived/EnvLighting/forest.benvl",
-		"Derived/Sky/forest.bsky"
+		"Derived/EnvLighting/forest.hdr-59ff5df65db31290.benvl",
+		"Derived/Sky/forest.hdr-59ff5df65db31290.bsky"
 	],
 	"parameters": {
 		"environment": {

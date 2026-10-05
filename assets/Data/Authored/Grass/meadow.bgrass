@@ -1,8 +1,17 @@
 {
 	"blade": {
+		"curvature": 0.3,
+		"farSegments": 1,
+		"lean": 0.2,
 		"maxHeight": 0.55,
 		"minHeight": 0.3,
-		"rootWidth": 0.035
+		"nearSegments": 5,
+		"rootWidth": 0.035,
+		"tipWidth": 0.0
+	},
+	"clump": {
+		"bladesPerClump": 8,
+		"radius": 0.15
 	},
 	"color": {
 		"rootTint": [
@@ -17,8 +26,26 @@
 		],
 		"variation": 0.3
 	},
-	"lighting": {
-		"translucency": 0.4
+	"density": {
+		"fadeEnd": 60.0,
+		"fadeStart": 10.0,
+		"widening": 1.0
 	},
-	"material": "Authored/Materials/grass/meadow.bmaterial"
+	"lighting": {
+		"groundNormalFar": 0.8,
+		"groundNormalNear": 0.0,
+		"normalRounding": 0.5,
+		"rootOcclusion": 0.6,
+		"translucency": 0.4,
+		"translucencyColor": [
+			1.0,
+			1.0,
+			1.0
+		]
+	},
+	"material": "Authored/Materials/grass/meadow.bmaterial",
+	"response": {
+		"gustResponse": 1.0,
+		"stiffness": 0.5
+	}
 }

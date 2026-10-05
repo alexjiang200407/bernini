@@ -370,7 +370,7 @@ composes and whether those files are there.
 
 ```bash
 assetlib_cli describe -p <project> Authored/Environments/forest.benv
-assetlib_cli describe -p <project> Derived/Sky/forest.bsky
+assetlib_cli describe -p <project> Derived/Sky/forest.hdr-<id>.bsky
 assetlib_cli refs -p <project> Derived/BakedTextures/sky_<hash>.bc7srgb-<hash>.ktx2   # what holds a baked map alive
 ```
 

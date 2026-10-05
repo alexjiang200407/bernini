@@ -1295,7 +1295,7 @@ assetlib_cli obj -p <project> Derived/Meshes/model.bmesh -o model.obj
 assetlib_cli tangents -p <project> Derived/Meshes/model.bmesh
 
 # Convolve an HDRI into the project's split environment set: the source copied into Authored/EnvSources/
-# with its .bimport, a baked Derived/Sky/forest.bsky + Derived/EnvLighting/forest.benvl, and an
+# with its .bimport, a baked Derived/Sky/forest.hdr-<id>.bsky + Derived/EnvLighting/forest.hdr-<id>.benvl, and an
 # Authored/Environments/forest.benv naming the pair
 assetlib_cli envmap -p <project> forest.hdr --name forest
 
@@ -1305,8 +1305,8 @@ assetlib_cli envmap -p <project> forest.hdr --name forest
 assetlib_cli describe -p <project> Derived/Meshes/model.bmesh          # hierarchy, submeshes, layouts, original material slots
 assetlib_cli describe -p <project> Derived/Meshes/model.bmesh --brief  # summary + material table only
 assetlib_cli describe -p <project> Authored/Materials/skin.bmaterial    # factors, triplet, routes, bake state
-assetlib_cli describe -p <project> Derived/Sky/forest.bsky             # the radiance route and its bake state
-assetlib_cli describe -p <project> Derived/EnvLighting/forest.benvl    # exposure + the prefilter/irradiance pair
+assetlib_cli describe -p <project> Derived/Sky/forest.hdr-<id>.bsky    # the radiance route and its bake state
+assetlib_cli describe -p <project> Derived/EnvLighting/forest.hdr-<id>.benvl  # exposure + the prefilter/irradiance pair
 assetlib_cli describe -p <project> Authored/Environments/forest.benv    # the .bsky and .benvl it composes
 assetlib_cli describe -p <project> Derived/Skeletons/soldier.bskel     # bones, parents, bind pose, signature
 assetlib_cli describe -p <project> Derived/Animations/soldier.banim    # clips, and the rig they bind to
