@@ -219,6 +219,8 @@ namespace
 					glm::radians(10.0f),
 					glm::vec3(0.0f, 1.0f, 0.0f)))
 		    .SetFaceLight(faceLight)
+		    .SetFaceNormal(
+				bgl::FaceNormalDesc().SetSmoothing(0.7f).SetRadii(glm::vec3(0.08f, 0.115f, 0.1f)))
 		    .SetHeadRadius(0.5f)
 		    .SetFadeStartPixels(10.0f)
 		    .SetFadeEndPixels(5.0f)
@@ -340,6 +342,10 @@ namespace
 			CheckNear(block.headFromWorld[r], rows[r]);
 		}
 		CheckNear(block.faceLight, glm::vec4(glm::normalize(rotation * face), 1.0f));
+
+		const glm::vec3& radii = rig.faceNormal.radii;
+		const glm::vec3  ratio = std::min({ radii.x, radii.y, radii.z }) / radii;
+		CheckNear(block.faceEllipsoid, glm::vec4(ratio * ratio, rig.faceNormal.smoothing), 1e-6f);
 
 		uint32_t slot = 0;
 		for (size_t e = 0; e < rig.edits.size(); ++e)

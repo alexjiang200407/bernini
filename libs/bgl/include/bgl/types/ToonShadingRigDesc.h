@@ -260,10 +260,45 @@ namespace bgl
 	};
 
 	/**
+	 * The normal a face shades its base tone with instead of its mesh's: the surface normal pulled
+	 * toward the outward normal of an ellipsoid about the head's origin, so a hard cel step draws
+	 * one shadow shape across the face rather than one per crease.
+	 *
+	 * Only face pixels shade with it. An edit falls off against the surface normal under its own
+	 * key's `normalSmoothing`, whatever this is.
+	 */
+	struct FaceNormalDesc
+	{
+		// How far the normal is pulled, in [0, 1]: zero is the mesh's own, one the ellipsoid's.
+		float smoothing = 0.6f;
+
+		// The ellipsoid's radii along head-space X, Y and Z: the head's half-extents. Positive. Only
+		// their proportions matter, and equal radii are a sphere.
+		glm::vec3 radii = glm::vec3(1.0f);
+
+		template <typename Self>
+		Self&&
+		SetSmoothing(this Self&& self, float value) noexcept
+		{
+			self.smoothing = value;
+			return std::forward<Self>(self);
+		}
+
+		template <typename Self>
+		Self&&
+		SetRadii(this Self&& self, const glm::vec3& value) noexcept
+		{
+			self.radii = value;
+			return std::forward<Self>(self);
+		}
+	};
+
+	/**
 	 * A face's toon shading rig -- the Shading Rig of Petikam, Anjyo & Rhee 2021: art-directed
 	 * shadow and light edits on a toon character's face, each keyed on the light's direction in head
-	 * space and blended between its keys as the light moves, plus the remapped light the face shades
-	 * with. One per character, shared by every placement and every block that takes it.
+	 * space and blended between its keys as the light moves, plus the remapped light and the
+	 * smoothed normal the face shades with. One per character, shared by every placement and every
+	 * block that takes it.
 	 *
 	 * Only the toon character model reads it, and only on pixels whose surface sets
 	 * `ToonCharacterSurface::face`; no other shading model sees it.
@@ -283,6 +318,8 @@ namespace bgl
 		glm::mat4 headToBone = glm::mat4(1.0f);
 
 		FaceLightDesc faceLight;
+
+		FaceNormalDesc faceNormal;
 
 		// At most cMaxToonShadingRigSlots slots between them.
 		std::vector<ToonShadingRigEditDesc> edits;
@@ -317,6 +354,14 @@ namespace bgl
 		SetFaceLight(this Self&& self, const FaceLightDesc& value) noexcept
 		{
 			self.faceLight = value;
+			return std::forward<Self>(self);
+		}
+
+		template <typename Self>
+		Self&&
+		SetFaceNormal(this Self&& self, const FaceNormalDesc& value) noexcept
+		{
+			self.faceNormal = value;
 			return std::forward<Self>(self);
 		}
 

@@ -63,6 +63,11 @@ public struct ToonShadingRig
     public float azimuthFadeEnd;
     public float azimuthFadeAmount;
 
+    // The ellipsoid a face's base normal is pulled toward, about the head's origin: xyz each axis's
+    // (smallest radius / radius) squared, the scale its gradient applies to a head-space point; w
+    // how far the normal is pulled, in [0, 1].
+    public float4 faceEllipsoid;
+
     public Range<ToonShadingRigKey> keys;
     public uint pad[3];
 

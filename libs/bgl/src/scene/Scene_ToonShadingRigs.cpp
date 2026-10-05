@@ -161,6 +161,17 @@ namespace bgl
 				Refuse("the face light's azimuthFadeAmount must be in [0, 1]");
 			}
 
+			const FaceNormalDesc& normal = desc.faceNormal;
+			if (!IsUnit(normal.smoothing))
+			{
+				Refuse("the face normal's smoothing must be in [0, 1]");
+			}
+			if (!core::is_finite(normal.radii) ||
+			    !glm::all(glm::greaterThan(normal.radii, glm::vec3(0.0f))))
+			{
+				Refuse("the face normal's radii must be finite and positive");
+			}
+
 			if (desc.headBoneIndex == idl::cNoHeadBone)
 			{
 				Refuse(

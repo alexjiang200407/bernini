@@ -55,6 +55,11 @@ azimuth swung toward the front by `azimuthFadeAmount` as the elevation rises fro
 to `azimuthFadeEnd` (a smoothstep), then both clamped. The block keeps that light in world space, and
 in its `w` the fade, `saturate((pixels - fadeEndPixels) / (fadeStartPixels - fadeEndPixels))`.
 
+The block also carries the rig's face normal (`FaceNormalDesc`) as the rig's record holds it
+(`faceEllipsoid`), since a pixel reads its placement's block and never the rig: each axis's
+`(smallest radius / radius)²`, the scale the ellipsoid's gradient applies to a head-space point, and
+the smoothing. A ratio rather than `1 / radius²`, so a small radius cannot overflow it.
+
 ## The edits
 
 Each edit's keys are blended for the face light by normalized spherical-Gaussian weights,
@@ -161,4 +166,4 @@ Per pixel of a face, every slot of its block; nothing on a pixel that is no face
 other surface. Per rigged placement per draw, one thread: a binary search over the ranges, the head's frame, the
 sun's remap, and for a selected one every key of every edit -- at most `cMaxToonShadingRigSlots`
 slots of `cMaxToonShadingRigKeysPerEdit` keys. A view's pool is `cToonShadingRigPoolCapacity` blocks of
-848 bytes, allocated with its first range.
+864 bytes, allocated with its first range.
