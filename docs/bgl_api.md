@@ -313,12 +313,13 @@ flowchart TD
 ### IRenderTarget
 
 * **`SetPostProcessType(type)` / `GetPostProcessType()`** — the post-process pipeline the output
-  ends in, a `PostProcessType`: `kFilmic` (the default), AgX and the colour grade, or `kToon`,
-  Blender's Standard view -- the exposed value clamped, no curve and no colour grade, so none of the
-  grade's white balance, saturation, contrast or vignette either. A target's and not a view's, since
-  it runs once on the output; `RenderTargetDesc::postProcessType` starts it. Exposure, RCAS, bloom and the outline apply under both.
-  See
-  [Passes](passes.md) § Scene colour.
+  ends in, a `PostProcessType`: `kFilmic` (the default), AgX, or `kToon`, Blender's Standard view --
+  the exposed value clamped and no curve. A target's and not a view's, since it runs once on the
+  output; `RenderTargetDesc::postProcessType` starts it. Exposure, RCAS, bloom, the colour grade and
+  the outline apply under both, but the type picks what two of them mean: bloom is added ahead of
+  AgX and screened over toon, and `ColorGradeSettings`' CDL and contrast act in AgX's log encoding
+  under filmic and on the sRGB-encoded value under toon, so one grade is not the same look under
+  both. See [Passes](passes.md) § Scene colour.
 * **`SetFilmGrainEnabled` / `SetFilmGrainSettings(settings)`** — monochrome grain scaled by the
   pixel's displayed value, under either post-process type. @throws `GraphicsError` for an
   `intensity` outside [0, 1] or a `size` that is not positive and finite; a refused set keeps the

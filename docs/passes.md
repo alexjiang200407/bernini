@@ -107,14 +107,14 @@ fold it in, while the display curve — `AgX` in
 
 **The post-process is the target's: filmic, or toon.** `IRenderTarget::SetPostProcessType` (and
 `RenderTargetDesc::postProcessType`) picks it per output, `PostProcessType::kFilmic` by default:
-AgX and the colour grade. `kToon` is Blender's Standard view: the exposed value clamped to [0, 1]
-and nothing else, so a colour authored to be seen as it is -- a toon look -- reaches the screen as
-authored, after the same sRGB encoding. The colour grade works in AgX's log encoding and is not
-applied under toon -- with it go its white balance, saturation, contrast and vignette, so the Color
-Grade toggle has no effect on a target in toon. RCAS, bloom and the editor's outline come before or
-after the curve and apply under both -- bloom by a combine of its own under toon, which has no
-curve to roll a glow off ([Bloom](#bloom)). A toon effect added later joins the `kToon` branch.
-Everything below is the filmic path.
+AgX. `kToon` is Blender's Standard view: the exposed value clamped to [0, 1]
+and no curve, so a colour authored to be seen as it is -- a toon look -- reaches the screen as
+authored, after the same sRGB encoding. RCAS, bloom, the colour grade and the editor's outline
+apply under both. Two of them do so by maths of their own under toon, which has no curve to roll a
+glow off and no log encoding to grade in: bloom is screened rather than added ([Bloom](#bloom)), and
+the grade's CDL and contrast act on the sRGB-encoded value ([the colour grade](#the-colour-grade)).
+The settings are the same under both; the type picks what they mean. The rest of this section is
+the filmic curve.
 
 **The curve is Blender 5.2's AgX, and the LUT is Blender's own file.** Blender's `AgX Base sRGB`
 view is a 57³ formation LUT applied in FilmLight E-Gamut log2 space, then a Rec.1886 decode, and
@@ -1001,8 +1001,8 @@ reading four more point taps of it. Otherwise the branch is skipped and the fram
 always was. Then it combines the [Bloom](#bloom) chain's finished level — in linear radiance, scaled by
 `BloomSettings::intensity`, behind the target's flag so a bloom-less frame binds nothing; added
 under filmic, screened under toon — then
-applies `AgX` through the LUT above, graded when the target has `SetColorGradeEnabled` (see
-[the colour grade](#the-colour-grade) below), then — on a frame where a [Outline Mask](#outline-mask) pass ran —
+applies the display curve — `AgX` through the LUT above, or toon's clamp — graded when the target
+has `SetColorGradeEnabled` (see [the colour grade](#the-colour-grade) below), then — on a frame where a [Outline Mask](#outline-mask) pass ran —
 composites the selection outline: a pixel outside the mask but within the outline width of it
 takes the display-space outline colour instead of the tonemapped result. Compositing after the
 curve is deliberate: the outline is editor feedback rather than radiance, so exposure and AgX must
@@ -1054,6 +1054,19 @@ CDL in this coordinate reproduces, and a game authors its grade from the control
 grade is evaluated per pixel rather than baked into a per-frame LUT as Unreal's CombineLUTs and
 Unity's LutBuilder do, because a baked LUT is a per-target allocation and a pass of its own for
 work this pass does in a few dozen ALU.
+
+**Under toon the same steps run around no curve** — `ToonGraded`, in the same module. Its input is
+the clamped scene with the glow already screened over it, which is display-linear: toon's scene and
+display coincide, so white balance and the vignette act on it as they do above. The CDL and
+contrast then act on its **sRGB encoding** rather than a log one, which makes two of the CDL's
+numbers readable off the screen: `offset` is the black the display shows, per channel, and `slope`
+the white. A film print's lifted, tinted black is an offset of a few hundredths in two channels and
+none in the third. Contrast pivots at middle grey's encoding there, 0.461, so 0.18 holds as it does
+under filmic. The lift follows the vignette, so a darkened corner bottoms out at the lifted black
+and not below it. The same `ColorGradeSettings` are therefore a different grade under each type: a
+slope of 1.1 brightens the top of a 25-stop log range under filmic and scales the encoded value
+under toon. A game is one type or the other and tunes its grade for it (`ColorGrade_test`,
+`PostProcessType_test`).
 
 ### Overlay — [passes/OverlayPass.{h,cpp}](libs/bgl/src/passes/OverlayPass.cpp)
 

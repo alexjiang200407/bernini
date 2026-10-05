@@ -1,9 +1,10 @@
 import idl.ITonemapLut;
+import lib.math.Srgb;
 import lib.math.Tonemap;
 
-// A frame grade around AgX: white balance and a vignette in scene linear, then the ASC CDL and
-// contrast in the log coordinate the formation LUT reads. Every field's neutral value is the
-// identity. See docs/passes.md.
+// A frame grade: white balance and a vignette in linear light, then the ASC CDL and contrast in the
+// encoding the display is formed through -- AgX's log coordinate under filmic, the sRGB-encoded
+// value under toon. Every field's neutral value is the identity. See docs/passes.md.
 public struct ColorGrade
 {
     // CAT02 LMS gains, derived from temperature and tint on the CPU.
@@ -51,10 +52,10 @@ public float3 ApplyCdl(float3 coord, float3 slope, float3 offset, float3 power, 
     return luma + saturation * (graded - luma);
 }
 
-// About middle grey's coordinate, so a contrast change leaves the image's exposure where it was.
-public float3 ApplyContrast(float3 coord, float contrast)
+// `pivot` is middle grey's coordinate in the encoding `coord` is in, so a contrast change leaves
+// the image's exposure where it was.
+public float3 ApplyContrast(float3 coord, float contrast, float pivot)
 {
-    const float pivot = AgXLogEncode(float3(0.18, 0.18, 0.18)).g;
     return (coord - pivot) * contrast + pivot;
 }
 
@@ -65,7 +66,21 @@ public float3 AgXGraded<L : ITonemapLut>(float3 color, float2 uv, ColorGrade gra
 
     float3 coord = AgXLogEncode(sceneLinear);
     coord = ApplyCdl(coord, grade.slope, grade.offset, grade.power, grade.saturation);
-    coord = ApplyContrast(coord, grade.contrast);
+    coord = ApplyContrast(coord, grade.contrast, AgXLogEncode(float3(0.18, 0.18, 0.18)).g);
 
     return AgXFormation(coord, lut);
+}
+
+// The grade with no curve to wrap. `color` is display-linear in [0, 1], which under toon is the
+// clamped scene, so the linear-light steps act on it directly.
+public float3 ToonGraded(float3 color, float2 uv, ColorGrade grade)
+{
+    float3 displayLinear = WhiteBalance(color, grade.whiteBalance);
+    displayLinear *= Vignette(uv, grade.vignetteIntensity, grade.vignetteSmoothness);
+
+    float3 coord = LinearToSrgb(saturate(displayLinear));
+    coord = ApplyCdl(coord, grade.slope, grade.offset, grade.power, grade.saturation);
+    coord = ApplyContrast(coord, grade.contrast, LinearToSrgb(float3(0.18, 0.18, 0.18)).g);
+
+    return SrgbToLinear(saturate(coord));
 }

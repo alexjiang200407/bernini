@@ -14,7 +14,7 @@ namespace assetlib
 {
 	/**
 	 * The post-process pipeline a project's look is authored for, which its renders end in: filmic
-	 * (AgX and the grade), or toon (Blender's Standard view, no grade). `.bproj` key `postProcess`,
+	 * (AgX), or toon (Blender's Standard view, no curve). `.bproj` key `postProcess`,
 	 * "filmic" or "toon".
 	 */
 	enum class PostProcessType : uint8_t

@@ -20,12 +20,15 @@ struct Uniforms
     float contrast;
     float vignetteIntensity;
     float vignetteSmoothness;
+
+    // Nonzero runs the toon grade, whose input is display-linear and which reads no LUT.
+    uint toon;
 };
 
 ConstantBuffer<Uniforms> gUniforms;
 
-// The graded tone map PostProcess runs, over one colour at one output position, so each control's
-// direction can be read off a number rather than a screenshot.
+// The grade PostProcess runs under either post-process type, over one colour at one output
+// position, so each control's direction can be read off a number rather than a screenshot.
 [shader("compute")]
 [numthreads(1, 1, 1)]
 void main(uint3 id: SV_DispatchThreadID)
@@ -43,5 +46,13 @@ void main(uint3 id: SV_DispatchThreadID)
     TonemapLut lut;
     lut.strip = gUniforms.lut;
     lut.sampler = gUniforms.lutSampler;
-    gUniforms.outColor[0] = float4(AgXGraded(gUniforms.sceneLinear, gUniforms.uv, grade, lut), 1.0);
+
+    if (gUniforms.toon != 0)
+    {
+        gUniforms.outColor[0] = float4(ToonGraded(gUniforms.sceneLinear, gUniforms.uv, grade), 1.0);
+    }
+    else
+    {
+        gUniforms.outColor[0] = float4(AgXGraded(gUniforms.sceneLinear, gUniforms.uv, grade, lut), 1.0);
+    }
 }

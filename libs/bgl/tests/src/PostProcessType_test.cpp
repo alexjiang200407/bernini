@@ -214,3 +214,38 @@ TEST_CASE(
 	CHECK(orange.g < 0.95f);
 	CHECK(orange.g < orange.r - 0.02f);
 }
+
+// The grade reaches a toon frame through the target, and a black plane makes the frame the grade's
+// answer for black: its offset, which no curve stands between.
+TEST_CASE("A toon target is graded on the value it displays", "[tonemap][colorgrade][render]")
+{
+	Plane plane;
+	plane.target->SetPostProcessType(bgl::PostProcessType::kToon);
+
+	constexpr float c_Margin = 1.5f / 255.0f;
+
+	const auto* plain   = "assets/golden/tonemap_toon_grade_plain.got.png";
+	const auto* neutral = "assets/golden/tonemap_toon_grade_neutral.got.png";
+	const auto* lifted  = "assets/golden/tonemap_toon_grade_lifted.got.png";
+	const auto* off     = "assets/golden/tonemap_toon_grade_off.got.png";
+
+	const glm::vec3 teal(0.1f, 0.4f, 0.6f);
+
+	plane.Shoot(teal, 1.0f, plain);
+	plane.target->SetColorGradeEnabled(true);
+	plane.Shoot(teal, 1.0f, neutral);
+	CHECK(bgl::test::MaxChannelDelta(plain, neutral) <= 1.0f / 255.0f);
+
+	auto grade   = bgl::ColorGradeSettings();
+	grade.offset = glm::vec3(0.0f, 0.055f, 0.05f);
+	plane.target->SetColorGradeSettings(grade);
+
+	const auto got = plane.Shoot(glm::vec3(0.0f), 1.0f, lifted);
+	CHECK(got.r == Catch::Approx(0.0f).margin(c_Margin));
+	CHECK(got.g == Catch::Approx(0.055f).margin(c_Margin));
+	CHECK(got.b == Catch::Approx(0.05f).margin(c_Margin));
+
+	plane.target->SetColorGradeEnabled(false);
+	const auto black = plane.Shoot(glm::vec3(0.0f), 1.0f, off);
+	CHECK(black.g == Catch::Approx(0.0f).margin(c_Margin));
+}

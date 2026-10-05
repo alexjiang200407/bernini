@@ -26,7 +26,8 @@
 // The colour grade: its settings are validated where every target setting is, a neutral grade is
 // the ungraded image, and each control moves the output the way its name says. The directions are
 // read through CSColorGradeProbe, which runs the post pass's own grade code on one colour; the
-// render cases prove the settings reach that code through the target.
+// render cases prove the settings reach that code through the target. The toon cases read the same
+// controls where no curve wraps them: the CDL and contrast act on the sRGB-encoded value there.
 
 namespace
 {
@@ -54,6 +55,21 @@ namespace
 	Graded(bgl::IGraphics& gfx, glm::vec3 color, const bgl::ColorGradeSettings& settings)
 	{
 		return glm::vec3(bgl::test::RunGradedAgX(gfx, color, c_Centre, settings));
+	}
+
+	glm::vec3
+	ToonGraded(bgl::IGraphics& gfx, glm::vec3 color, const bgl::ColorGradeSettings& settings)
+	{
+		return glm::vec3(bgl::test::RunGradedToon(gfx, color, c_Centre, settings));
+	}
+
+	glm::vec3
+	Encoded(glm::vec3 linear)
+	{
+		return glm::vec3(
+			bgl::test::EncodeSrgb(linear.r),
+			bgl::test::EncodeSrgb(linear.g),
+			bgl::test::EncodeSrgb(linear.b));
 	}
 
 	float
@@ -337,6 +353,134 @@ TEST_CASE(
 		s.vignetteSmoothness = 1.0f;
 		const auto smooth    = glm::vec3(bgl::test::RunGradedAgX(*gfx, grey, midway, s));
 		CHECK(Luma(smooth) < Luma(sharp) - c_Moved);
+	}
+}
+
+TEST_CASE("A neutral grade leaves a toon value where it was", "[colorgrade][tonemap]")
+{
+	auto gfx = MakeGraphics();
+
+	const std::array<glm::vec3, 5> sweep = { {
+		glm::vec3(0.0f),
+		glm::vec3(0.002f),
+		glm::vec3(0.18f),
+		glm::vec3(0.9f, 0.35f, 0.08f),
+		glm::vec3(1.0f),
+	} };
+
+	for (const glm::vec3& v : sweep)
+	{
+		const glm::vec3 graded = ToonGraded(*gfx, v, bgl::ColorGradeSettings());
+
+		INFO("display-linear " << v.r << " " << v.g << " " << v.b);
+		CHECK(graded.r == Catch::Approx(v.r).margin(1e-4));
+		CHECK(graded.g == Catch::Approx(v.g).margin(1e-4));
+		CHECK(graded.b == Catch::Approx(v.b).margin(1e-4));
+	}
+}
+
+TEST_CASE(
+	"Under toon the CDL and contrast act on the encoded display value",
+	"[colorgrade][tonemap]")
+{
+	auto gfx = MakeGraphics();
+
+	const auto neutral = bgl::ColorGradeSettings();
+	const auto black   = glm::vec3(0.0f);
+	const auto white   = glm::vec3(1.0f);
+	const auto grey    = glm::vec3(0.18f);
+	const auto orange  = glm::vec3(0.6f, 0.25f, 0.08f);
+
+	// An offset is the black the screen shows, channel by channel: the lifted, tinted black of a
+	// film print is three numbers read straight off it. A negative one stays at zero.
+	{
+		auto s       = neutral;
+		s.offset     = glm::vec3(-0.02f, 0.055f, 0.05f);
+		const auto c = Encoded(ToonGraded(*gfx, black, s));
+		INFO("lifted black, encoded: " << c.r << " " << c.g << " " << c.b);
+		CHECK(c.r == Catch::Approx(0.0f).margin(1e-4));
+		CHECK(c.g == Catch::Approx(0.055f).margin(1e-3));
+		CHECK(c.b == Catch::Approx(0.05f).margin(1e-3));
+	}
+
+	// A slope is the white it shows.
+	{
+		auto s       = neutral;
+		s.slope      = glm::vec3(1.0f, 0.95f, 0.85f);
+		const auto c = Encoded(ToonGraded(*gfx, white, s));
+		CHECK(c.r == Catch::Approx(1.0f).margin(1e-3));
+		CHECK(c.g == Catch::Approx(0.95f).margin(1e-3));
+		CHECK(c.b == Catch::Approx(0.85f).margin(1e-3));
+	}
+
+	// Power above one lowers the middle and holds both ends.
+	{
+		auto s  = neutral;
+		s.power = glm::vec3(1.2f);
+		CHECK(Luma(ToonGraded(*gfx, grey, s)) < Luma(grey) - c_Moved);
+		CHECK(ToonGraded(*gfx, white, s).g == Catch::Approx(1.0f).margin(1e-4));
+		CHECK(ToonGraded(*gfx, black, s).g == Catch::Approx(0.0f).margin(1e-4));
+	}
+
+	// Saturation: none leaves a colour grey, more pushes its channels apart.
+	{
+		auto s       = neutral;
+		s.saturation = 0.0f;
+		CHECK(Spread(Encoded(ToonGraded(*gfx, orange, s))) < c_Moved);
+
+		s.saturation = 1.5f;
+		CHECK(Spread(ToonGraded(*gfx, orange, s)) > Spread(orange) + c_Moved);
+	}
+
+	// Contrast pivots at middle grey's encoding: 0.18 holds, the shadows fall, the highlights rise.
+	{
+		auto s     = neutral;
+		s.contrast = 1.3f;
+
+		CHECK(ToonGraded(*gfx, grey, s).g == Catch::Approx(0.18f).margin(1e-4));
+		CHECK(Luma(ToonGraded(*gfx, glm::vec3(0.03f), s)) < 0.03f - 0.002f);
+		CHECK(Luma(ToonGraded(*gfx, glm::vec3(0.6f), s)) > 0.6f + c_Moved);
+	}
+}
+
+TEST_CASE(
+	"Under toon white balance and the vignette act as they do under filmic",
+	"[colorgrade][tonemap]")
+{
+	auto gfx = MakeGraphics();
+
+	const auto grey    = glm::vec3(0.18f);
+	const auto neutral = bgl::ColorGradeSettings();
+
+	{
+		auto s        = neutral;
+		s.temperature = 50.0f;
+		const auto w  = ToonGraded(*gfx, grey, s);
+		CHECK(w.r > w.b + c_Moved);
+
+		s.temperature = 0.0f;
+		s.tint        = 50.0f;
+		const auto m  = ToonGraded(*gfx, grey, s);
+		CHECK(m.g < glm::min(m.r, m.b) - c_Moved);
+	}
+
+	{
+		auto s              = neutral;
+		s.vignetteIntensity = 0.3f;
+
+		const auto centre = glm::vec3(bgl::test::RunGradedToon(*gfx, grey, c_Centre, s));
+		const auto corner = glm::vec3(bgl::test::RunGradedToon(*gfx, grey, glm::vec2(0.1f), s));
+
+		CHECK(centre.g == Catch::Approx(0.18f).margin(1e-4));
+		CHECK(Luma(corner) < Luma(centre) - c_Moved);
+
+		// The lift follows the vignette, so a darkened corner still bottoms out at the lifted
+		// black rather than below it.
+		s.vignetteIntensity = 1.0f;
+		s.offset            = glm::vec3(0.05f);
+		const auto floor =
+			Encoded(glm::vec3(bgl::test::RunGradedToon(*gfx, grey, glm::vec2(0.0f), s)));
+		CHECK(floor.g == Catch::Approx(0.05f).margin(1e-3));
 	}
 }
 

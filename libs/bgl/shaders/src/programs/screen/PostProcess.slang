@@ -47,7 +47,7 @@ struct PostProcessData
     float gradeVignetteSmoothness;
     uint gradeEnabled;
 
-    // The toon post-process: Blender's Standard view, the exposed value clamped, no curve and no grade.
+    // The toon post-process: Blender's Standard view, the exposed value clamped and no curve.
     uint toon;
 };
 
@@ -103,6 +103,20 @@ float SampleOutline(float2 uv)
 float3 ScreenBlend(float3 base, float3 layer)
 {
     return base + layer * (1.0 - base);
+}
+
+ColorGrade TargetGrade()
+{
+    ColorGrade grade;
+    grade.whiteBalance = gPostProcessData.gradeWhiteBalance;
+    grade.slope = gPostProcessData.gradeSlope;
+    grade.offset = gPostProcessData.gradeOffset;
+    grade.power = gPostProcessData.gradePower;
+    grade.saturation = gPostProcessData.gradeSaturation;
+    grade.contrast = gPostProcessData.gradeContrast;
+    grade.vignetteIntensity = gPostProcessData.gradeVignetteIntensity;
+    grade.vignetteSmoothness = gPostProcessData.gradeVignetteSmoothness;
+    return grade;
 }
 
 struct VSOut
@@ -170,20 +184,15 @@ float4 PSMain(VSOut input) : SV_Target
     if (gPostProcessData.toon != 0)
     {
         color = ScreenBlend(saturate(scene.rgb), saturate(glow));
+
+        if (gPostProcessData.gradeEnabled != 0)
+        {
+            color = ToonGraded(color, input.uv, TargetGrade());
+        }
     }
     else if (gPostProcessData.gradeEnabled != 0)
     {
-        ColorGrade grade;
-        grade.whiteBalance = gPostProcessData.gradeWhiteBalance;
-        grade.slope = gPostProcessData.gradeSlope;
-        grade.offset = gPostProcessData.gradeOffset;
-        grade.power = gPostProcessData.gradePower;
-        grade.saturation = gPostProcessData.gradeSaturation;
-        grade.contrast = gPostProcessData.gradeContrast;
-        grade.vignetteIntensity = gPostProcessData.gradeVignetteIntensity;
-        grade.vignetteSmoothness = gPostProcessData.gradeVignetteSmoothness;
-
-        color = AgXGraded(scene.rgb + glow, input.uv, grade, lut);
+        color = AgXGraded(scene.rgb + glow, input.uv, TargetGrade(), lut);
     }
     else
     {

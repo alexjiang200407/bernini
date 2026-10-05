@@ -596,9 +596,9 @@ MainWindow::SetUpRenderMenu()
 	grade->setStatusTip(
 		editor::Localize(
 			"editor.main_window.color_grade_tip",
-			"White-balance and grade the viewports ahead of the display curve. The grade is each "
-			"viewport's `colorGrade` section in config.json. No effect on a viewport in Toon "
-			"post-process."));
+			"White-balance and grade the viewports. The grade is each viewport's `colorGrade` "
+			"section in config.json; its CDL and contrast act in AgX's log encoding under Filmic "
+			"and on the displayed value under Toon."));
 
 	connect(grade, &QAction::toggled, this, [this](bool enabled) {
 		m_ColorGradeOverride = enabled;
@@ -652,9 +652,9 @@ MainWindow::SetUpPostProcessMenu(QMenu* render)
 	menu->setStatusTip(
 		editor::Localize(
 			"editor.main_window.post_process_tip",
-			"The post-process the viewports end in: Filmic (AgX and the colour grade), or Toon -- "
-			"the colour as it is, which a toon look is authored for. Auto is the project's, and "
-			"Toon for a viewport showing toon content."));
+			"The post-process the viewports end in: Filmic (AgX), or Toon -- the colour as it is, "
+			"which a toon look is authored for. Auto is the project's, and Toon for a viewport "
+			"showing toon content."));
 
 	auto* group = new QActionGroup(menu);
 	group->setExclusive(true);

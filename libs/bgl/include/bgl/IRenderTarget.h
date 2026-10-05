@@ -9,18 +9,18 @@ namespace bgl
 {
 	/**
 	 * The post-process pipeline a target turns its exposed linear HDR into the display with.
-	 * Exposure, bloom, RCAS and the outline run under both, and the backbuffer's sRGB encoding
-	 * follows either way.
+	 * Exposure, bloom, the colour grade, RCAS and the outline run under both, and the backbuffer's
+	 * sRGB encoding follows either way.
 	 */
 	enum class PostProcessType : uint8_t
 	{
-		// Blender's AgX, a filmic curve that rolls highlights off and desaturates toward white,
-		// then the colour grade.
+		// Blender's AgX, a filmic curve that rolls highlights off and desaturates toward white.
+		// Bloom is added ahead of it and the colour grade runs in its log encoding.
 		kFilmic,
 
 		// Blender's Standard view: no curve, the exposed value clamped to [0, 1], so a toon look
-		// reaches the display as authored. The colour grade, which works in AgX's log encoding, is
-		// not applied.
+		// reaches the display as authored. Bloom is screened over it and the colour grade runs on
+		// the sRGB-encoded value.
 		kToon,
 	};
 
@@ -76,8 +76,10 @@ namespace bgl
 	};
 
 	/**
-	 * How a target grades its image on the way to the display curve. Per-frame constants: a change
-	 * reallocates nothing. Every default is neutral. See docs/passes.md for where each step runs.
+	 * How a target grades its image on the way to the display. Per-frame constants: a change
+	 * reallocates nothing. Every default is neutral. The CDL and contrast run in the encoding the
+	 * post-process type forms the display through -- AgX's log under filmic, the sRGB-encoded value
+	 * under toon -- so the same numbers are a different grade under each. See docs/passes.md.
 	 */
 	struct ColorGradeSettings
 	{
@@ -85,14 +87,14 @@ namespace bgl
 		float temperature = 0.0f;
 		float tint        = 0.0f;
 
-		// The ASC CDL, applied in the tone map's log encoding: (x * slope + offset) ^ power, then
-		// saturation about Rec.709 luma.
+		// The ASC CDL: (x * slope + offset) ^ power, then saturation about Rec.709 luma. Under toon
+		// an offset is the black the display shows and a slope the white.
 		glm::vec3 slope{ 1.0f };
 		glm::vec3 offset{ 0.0f };
 		glm::vec3 power{ 1.0f };
 		float     saturation = 1.0f;
 
-		// About middle grey in the same encoding, so 0.18 stays where the curve put it.
+		// About middle grey in the same encoding, so 0.18 stays where it was.
 		float contrast = 1.0f;
 
 		// How far a frame corner darkens, and how gradually from the centre.

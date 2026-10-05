@@ -125,6 +125,33 @@ namespace bgl::test
 		});
 	}
 
+	namespace
+	{
+		glm::vec4
+		RunGradeProbe(
+			bgl::IGraphics&                gfx,
+			glm::vec3                      color,
+			glm::vec2                      uv,
+			const bgl::ColorGradeSettings& settings,
+			bool                           toon)
+		{
+			return RunProbe(gfx, "CSColorGradeProbe", [&](bgpu::Uniforms& uniforms) {
+				uniforms["sceneLinear"] = color;
+				uniforms["uv"]          = uv;
+				uniforms["whiteBalance"] =
+					WhiteBalanceLmsScale(settings.temperature, settings.tint);
+				uniforms["slope"]              = settings.slope;
+				uniforms["offset"]             = settings.offset;
+				uniforms["power"]              = settings.power;
+				uniforms["saturation"]         = settings.saturation;
+				uniforms["contrast"]           = settings.contrast;
+				uniforms["vignetteIntensity"]  = settings.vignetteIntensity;
+				uniforms["vignetteSmoothness"] = settings.vignetteSmoothness;
+				uniforms["toon"]               = toon ? 1u : 0u;
+			});
+		}
+	}
+
 	glm::vec4
 	RunGradedAgX(
 		bgl::IGraphics&                gfx,
@@ -132,17 +159,16 @@ namespace bgl::test
 		glm::vec2                      uv,
 		const bgl::ColorGradeSettings& settings)
 	{
-		return RunProbe(gfx, "CSColorGradeProbe", [&](bgpu::Uniforms& uniforms) {
-			uniforms["sceneLinear"]  = sceneLinear;
-			uniforms["uv"]           = uv;
-			uniforms["whiteBalance"] = WhiteBalanceLmsScale(settings.temperature, settings.tint);
-			uniforms["slope"]        = settings.slope;
-			uniforms["offset"]       = settings.offset;
-			uniforms["power"]        = settings.power;
-			uniforms["saturation"]   = settings.saturation;
-			uniforms["contrast"]     = settings.contrast;
-			uniforms["vignetteIntensity"]  = settings.vignetteIntensity;
-			uniforms["vignetteSmoothness"] = settings.vignetteSmoothness;
-		});
+		return RunGradeProbe(gfx, sceneLinear, uv, settings, false);
+	}
+
+	glm::vec4
+	RunGradedToon(
+		bgl::IGraphics&                gfx,
+		glm::vec3                      displayLinear,
+		glm::vec2                      uv,
+		const bgl::ColorGradeSettings& settings)
+	{
+		return RunGradeProbe(gfx, displayLinear, uv, settings, true);
 	}
 }
