@@ -3,7 +3,8 @@
 #include "postprocess/TonemapLut.h"
 #include "postprocess/color_grade.h"
 #include <bgl/IGraphics.h>
-#include <bgl/IRenderTarget.h>
+#include <bgl/types/ColorGradeSettings.h>
+#include <bgl/types/ToonGradeSettings.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
@@ -131,33 +132,6 @@ namespace bgl::test
 		});
 	}
 
-	namespace
-	{
-		glm::vec4
-		RunGradeProbe(
-			bgl::IGraphics&                gfx,
-			glm::vec3                      color,
-			glm::vec2                      uv,
-			const bgl::ColorGradeSettings& settings,
-			bool                           toon)
-		{
-			return RunProbe(gfx, "CSColorGradeProbe", [&](bgpu::Uniforms& uniforms) {
-				uniforms["sceneLinear"] = color;
-				uniforms["uv"]          = uv;
-				uniforms["whiteBalance"] =
-					WhiteBalanceLmsScale(settings.temperature, settings.tint);
-				uniforms["slope"]              = settings.slope;
-				uniforms["offset"]             = settings.offset;
-				uniforms["power"]              = settings.power;
-				uniforms["saturation"]         = settings.saturation;
-				uniforms["contrast"]           = settings.contrast;
-				uniforms["vignetteIntensity"]  = settings.vignetteIntensity;
-				uniforms["vignetteSmoothness"] = settings.vignetteSmoothness;
-				uniforms["toon"]               = toon ? 1u : 0u;
-			});
-		}
-	}
-
 	glm::vec4
 	RunGradedAgX(
 		bgl::IGraphics&                gfx,
@@ -165,16 +139,40 @@ namespace bgl::test
 		glm::vec2                      uv,
 		const bgl::ColorGradeSettings& settings)
 	{
-		return RunGradeProbe(gfx, sceneLinear, uv, settings, false);
+		return RunProbe(gfx, "CSColorGradeProbe", [&](bgpu::Uniforms& uniforms) {
+			uniforms["sceneLinear"]  = sceneLinear;
+			uniforms["uv"]           = uv;
+			uniforms["whiteBalance"] = WhiteBalanceLmsScale(settings.temperature, settings.tint);
+			uniforms["slope"]        = settings.slope;
+			uniforms["offset"]       = settings.offset;
+			uniforms["power"]        = settings.power;
+			uniforms["saturation"]   = settings.saturation;
+			uniforms["contrast"]     = settings.contrast;
+			uniforms["vignetteIntensity"]  = settings.vignette.intensity;
+			uniforms["vignetteSmoothness"] = settings.vignette.smoothness;
+			uniforms["toon"]               = 0u;
+		});
 	}
 
 	glm::vec4
 	RunGradedToon(
-		bgl::IGraphics&                gfx,
-		glm::vec3                      displayLinear,
-		glm::vec2                      uv,
-		const bgl::ColorGradeSettings& settings)
+		bgl::IGraphics&               gfx,
+		glm::vec3                     displayLinear,
+		glm::vec2                     uv,
+		const bgl::ToonGradeSettings& settings)
 	{
-		return RunGradeProbe(gfx, displayLinear, uv, settings, true);
+		return RunProbe(gfx, "CSColorGradeProbe", [&](bgpu::Uniforms& uniforms) {
+			uniforms["sceneLinear"]  = displayLinear;
+			uniforms["uv"]           = uv;
+			uniforms["whiteBalance"] = WhiteBalanceLmsScale(settings.temperature, settings.tint);
+			uniforms["black"]        = settings.black;
+			uniforms["white"]        = settings.white;
+			uniforms["gamma"]        = settings.gamma;
+			uniforms["saturation"]   = settings.saturation;
+			uniforms["contrast"]     = settings.contrast;
+			uniforms["vignetteIntensity"]  = settings.vignette.intensity;
+			uniforms["vignetteSmoothness"] = settings.vignette.smoothness;
+			uniforms["toon"]               = 1u;
+		});
 	}
 }

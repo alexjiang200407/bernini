@@ -1,29 +1,12 @@
 #pragma once
 #include <bgl/api.h>
-#include <bgl/glm.h>
+#include <bgl/types/PostProcess.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
 
 namespace bgl
 {
-	/**
-	 * The post-process pipeline a target turns its exposed linear HDR into the display with.
-	 * Exposure, bloom, the colour grade, RCAS and the outline run under both, and the backbuffer's
-	 * sRGB encoding follows either way.
-	 */
-	enum class PostProcessType : uint8_t
-	{
-		// Blender's AgX, a filmic curve that rolls highlights off and desaturates toward white.
-		// Bloom is added ahead of it and the colour grade runs in its log encoding.
-		kFilmic,
-
-		// Blender's Standard view: no curve, the exposed value clamped to [0, 1], so a toon look
-		// reaches the display as authored. Bloom is screened over it and the colour grade runs on
-		// the sRGB-encoded value.
-		kToon,
-	};
-
 	/**
 	 * Describes a render output. A windowed target presents to `wnd`'s swapchain; a
 	 * headless target renders to offscreen backbuffers (used by tests / asset cooking).
@@ -49,92 +32,14 @@ namespace bgl
 		// the sharpen, and so does a render scale of 1 or more; see IRenderTarget::SetTaaSharpness.
 		float taaSharpness = 1.0f;
 
-		// The post-process pipeline; see IRenderTarget::SetPostProcessType.
-		PostProcessType postProcessType = PostProcessType::kFilmic;
+		// What the target's frames end in; see IRenderTarget::SetPostProcess.
+		PostProcess postProcess = FilmicPostProcess();
 
 		// The native surface a windowed target presents into: an HWND on D3D12, a CAMetalLayer
 		// on Metal. Ignored when headless. The Metal layer and its window are the caller's: the
 		// backbuffer is sRGB-encoded, and the window's colour space must be set to sRGB explicitly
 		// or the layer is composited unmatched (docs/known_issues.md).
 		void* wnd = nullptr;
-	};
-
-	/** How a target blooms. Per-frame constants: a change reallocates nothing. */
-	struct BloomSettings
-	{
-		// The glow's weight: added to the scene under filmic, screened over it under toon.
-		float intensity = 0.25f;
-
-		// Linear radiance after exposure, which puts a scene's average near 0.18.
-		float threshold = 0.5f;
-
-		// The threshold's fade-in, as a share of it: 0 is a hard cut.
-		float softKnee = 0.5f;
-
-		// How far the glow spreads: the coarser level's weight at each upsample.
-		float scatter = 0.7f;
-	};
-
-	/**
-	 * How a target grades its image on the way to the display. Per-frame constants: a change
-	 * reallocates nothing. Every default is neutral. The CDL and contrast run in the encoding the
-	 * post-process type forms the display through -- AgX's log under filmic, the sRGB-encoded value
-	 * under toon -- so the same numbers are a different grade under each. See docs/passes.md.
-	 */
-	struct ColorGradeSettings
-	{
-		// Within [-100, 100]. Positive is warmer, and positive tint is more magenta than green.
-		float temperature = 0.0f;
-		float tint        = 0.0f;
-
-		// The ASC CDL: (x * slope + offset) ^ power, then saturation about Rec.709 luma. Under toon
-		// an offset is the black the display shows and a slope the white.
-		glm::vec3 slope{ 1.0f };
-		glm::vec3 offset{ 0.0f };
-		glm::vec3 power{ 1.0f };
-		float     saturation = 1.0f;
-
-		// About middle grey in the same encoding, so 0.18 stays where it was.
-		float contrast = 1.0f;
-
-		// How far a frame corner darkens, and how gradually from the centre.
-		float vignetteIntensity  = 0.0f;
-		float vignetteSmoothness = 0.2f;
-	};
-
-	/**
-	 * A target's film grain: monochrome noise scaled by the pixel's displayed value, so black stays
-	 * black. Applied after the display curve under either post-process type. Per-frame constants: a
-	 * change reallocates nothing.
-	 */
-	struct FilmGrainSettings
-	{
-		// The largest share of its display-linear value a pixel moves by. The display clamps at
-		// white, so a pixel above 1 / (1 + intensity) loses the top of its upward swing.
-		float intensity = 0.12f;
-
-		// The grain's pitch in pixels at a 2160-line output, scaled with the output's height and
-		// floored at one output pixel.
-		float size = 2.0f;
-
-		// How many of the target's frames one pattern is held for; zero never changes it.
-		uint32_t holdFrames = 1;
-	};
-
-	/**
-	 * A target's colour split: red and blue displaced from green, as a misregistered print or a
-	 * lens does it. Applied to the scene ahead of the display curve under either post-process type;
-	 * the selection outline is not split. Distances are in pixels at a 2160-line output and scale
-	 * with the output's height. Per-frame constants: a change reallocates nothing.
-	 */
-	struct ColorSplitSettings
-	{
-		// Red's displacement over the whole frame, +x right and +y down; blue takes the opposite.
-		glm::vec2 offset{ -2.0f, 0.0f };
-
-		// A lens's share: red's outward displacement at the middle of the top and bottom edges,
-		// zero at the centre and linear in the distance from it. Negative pulls red inward.
-		float radial = 0.0f;
 	};
 
 	/**
@@ -239,89 +144,27 @@ namespace bgl
 		virtual void
 		SetOutlineEnabled(bool enabled) noexcept = 0;
 
-		/** Whether bloom runs on this target. Off by default. */
-		[[nodiscard]] virtual bool
-		IsBloomEnabled() const noexcept = 0;
+		[[nodiscard]] virtual PostProcess
+		GetPostProcess() const = 0;
 
 		/**
-		 * Turns bloom on or off for subsequent frames. The chain is allocated at the first frame
-		 * that blooms and kept when turned off (~11 MiB at 1080p, ~44 MiB at 4K).
+		 * What subsequent frames end in: the curve, and the effects that curve has. A target's, not
+		 * a view's: it runs once on the output, however many views draw into it. Turning bloom on
+		 * allocates its chain at the first frame that blooms and keeps it when it is turned off
+		 * (~11 MiB at 1080p, ~44 MiB at 4K); nothing else allocates.
+		 *
+		 * @throws GraphicsError naming the first field outside its documented range, and keeps the
+		 *         post-process the target had: BloomSettings' intensity or threshold negative or not
+		 *         finite, softKnee or scatter outside [0, 1]; a grade's temperature or tint outside
+		 *         [-100, 100], a vignette intensity outside [0, 1] or smoothness outside (0, 1]; a
+		 *         ColorGradeSettings slope, saturation or contrast negative or not finite, an offset
+		 *         outside [-1, 1], a power not positive and finite; a ToonGradeSettings black or
+		 *         white outside [0, 1], a gamma not positive and finite, a saturation or contrast
+		 *         negative or not finite; a FilmGrainSettings intensity outside [0, 1] or a size not
+		 *         positive and finite; a ColorSplitSettings offset or radial not finite.
 		 */
 		virtual void
-		SetBloomEnabled(bool enabled) noexcept = 0;
-
-		[[nodiscard]] virtual BloomSettings
-		GetBloomSettings() const noexcept = 0;
-
-		/**
-		 * @throws GraphicsError if `intensity` or `threshold` is negative or not finite, or
-		 *         `softKnee` or `scatter` is outside [0, 1].
-		 */
-		virtual void
-		SetBloomSettings(const BloomSettings& settings) = 0;
-
-		/** Whether the colour grade runs on this target. Off by default. */
-		[[nodiscard]] virtual bool
-		IsColorGradeEnabled() const noexcept = 0;
-
-		/** Turns the grade on or off for subsequent frames. Nothing is allocated either way. */
-		virtual void
-		SetColorGradeEnabled(bool enabled) noexcept = 0;
-
-		[[nodiscard]] virtual ColorGradeSettings
-		GetColorGradeSettings() const noexcept = 0;
-
-		/**
-		 * @throws GraphicsError if `temperature` or `tint` is outside [-100, 100], a `slope`
-		 *         component or `saturation` or `contrast` is negative or not finite, an `offset`
-		 *         component is outside [-1, 1], a `power` component is not positive and finite,
-		 *         `vignetteIntensity` is outside [0, 1], or `vignetteSmoothness` is outside (0, 1].
-		 */
-		virtual void
-		SetColorGradeSettings(const ColorGradeSettings& settings) = 0;
-
-		/** Whether film grain runs on this target. Off by default. */
-		[[nodiscard]] virtual bool
-		IsFilmGrainEnabled() const noexcept = 0;
-
-		/** Turns film grain on or off for subsequent frames. Nothing is allocated either way. */
-		virtual void
-		SetFilmGrainEnabled(bool enabled) noexcept = 0;
-
-		[[nodiscard]] virtual FilmGrainSettings
-		GetFilmGrainSettings() const noexcept = 0;
-
-		/**
-		 * @throws GraphicsError if `intensity` is outside [0, 1], or `size` is not positive and
-		 *         finite.
-		 */
-		virtual void
-		SetFilmGrainSettings(const FilmGrainSettings& settings) = 0;
-
-		/** Whether the colour split runs on this target. Off by default. */
-		[[nodiscard]] virtual bool
-		IsColorSplitEnabled() const noexcept = 0;
-
-		/** Turns the colour split on or off for subsequent frames. Nothing is allocated either way. */
-		virtual void
-		SetColorSplitEnabled(bool enabled) noexcept = 0;
-
-		[[nodiscard]] virtual ColorSplitSettings
-		GetColorSplitSettings() const noexcept = 0;
-
-		/** @throws GraphicsError if an `offset` component or `radial` is not finite. */
-		virtual void
-		SetColorSplitSettings(const ColorSplitSettings& settings) = 0;
-
-		[[nodiscard]] virtual PostProcessType
-		GetPostProcessType() const noexcept = 0;
-
-		/**
-		 * The post-process pipeline subsequent frames end in. A target's, not a view's: it runs once
-		 * on the output, however many views draw into it. Nothing is allocated either way.
-		 */
-		virtual void
-		SetPostProcessType(PostProcessType postProcessType) noexcept = 0;
+		SetPostProcess(const PostProcess& postProcess) = 0;
 
 		/** Whether every pass of a frame drawn to this target is timed on the GPU. Off by default. */
 		[[nodiscard]] virtual bool

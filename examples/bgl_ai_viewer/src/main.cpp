@@ -575,7 +575,7 @@ try
 			   opts.postProcessType,
 			   "The post-process: filmic (bgl's default, AgX) or toon, the exposed colour clamped, "
 			   "which a toon look is authored for and which screens bloom rather than adding it "
-			   "(IRenderTarget::SetPostProcessType)")
+			   "(bgl::FilmicPostProcess or bgl::ToonPostProcess)")
 			->check(CLI::IsMember({ "filmic", "toon" }));
 		app.add_option(
 			   "--backdrop",
@@ -674,12 +674,19 @@ try
 		opts.height,
 		opts.taa,
 		opts.renderScale);
-	target->SetBloomEnabled(opts.bloom);
-	target->SetFilmGrainEnabled(opts.filmGrain);
-	target->SetColorSplitEnabled(opts.colorSplit);
-	target->SetPostProcessType(
-		opts.postProcessType == "toon" ? bgl::PostProcessType::kToon :
-										 bgl::PostProcessType::kFilmic);
+	// The flags turn on each effect at bgl's defaults, in whichever type --post-process picks.
+	const auto withEffects = [&](auto postProcess) {
+		if (opts.bloom)
+			postProcess.bloom = bgl::BloomSettings();
+		if (opts.filmGrain)
+			postProcess.grain = bgl::FilmGrainSettings();
+		if (opts.colorSplit)
+			postProcess.split = bgl::ColorSplitSettings();
+		return bgl::PostProcess(postProcess);
+	};
+	target->SetPostProcess(
+		opts.postProcessType == "toon" ? withEffects(bgl::ToonPostProcess()) :
+										 withEffects(bgl::FilmicPostProcess()));
 
 	auto scene     = headless::CreateHeadlessScene(graphics);
 	auto view      = graphics->CreateSceneView(scene, std::max(128u, 64u * opts.crowd));

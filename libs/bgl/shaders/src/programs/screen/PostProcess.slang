@@ -50,6 +50,12 @@ struct PostProcessData
     float gradeVignetteSmoothness;
     uint gradeEnabled;
 
+    // lib.math.ToonGrade's levels; its white balance, saturation, contrast and vignette are the
+    // fields above.
+    float3 gradeBlack;
+    float3 gradeWhite;
+    float3 gradeGamma;
+
     // The toon post-process: Blender's Standard view, the exposed value clamped and no curve.
     uint toon;
 
@@ -141,6 +147,20 @@ float Grain(float2 pixelCentre, float pitch, uint pattern)
     const float bottom = lerp(GrainCell(cell + int2(0, 1), pattern), GrainCell(cell + int2(1, 1), pattern), f.x);
 
     return lerp(top, bottom, f.y);
+}
+
+ToonGrade TargetToonGrade()
+{
+    ToonGrade grade;
+    grade.whiteBalance = gPostProcessData.gradeWhiteBalance;
+    grade.black = gPostProcessData.gradeBlack;
+    grade.white = gPostProcessData.gradeWhite;
+    grade.gamma = gPostProcessData.gradeGamma;
+    grade.saturation = gPostProcessData.gradeSaturation;
+    grade.contrast = gPostProcessData.gradeContrast;
+    grade.vignetteIntensity = gPostProcessData.gradeVignetteIntensity;
+    grade.vignetteSmoothness = gPostProcessData.gradeVignetteSmoothness;
+    return grade;
 }
 
 ColorGrade TargetGrade()
@@ -243,7 +263,7 @@ float4 PSMain(VSOut input) : SV_Target
 
         if (gPostProcessData.gradeEnabled != 0)
         {
-            color = ToonGraded(color, input.uv, TargetGrade());
+            color = ToonGraded(color, input.uv, TargetToonGrade());
         }
     }
     else if (gPostProcessData.gradeEnabled != 0)

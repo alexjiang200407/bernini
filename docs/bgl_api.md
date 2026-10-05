@@ -312,23 +312,19 @@ flowchart TD
 
 ### IRenderTarget
 
-* **`SetPostProcessType(type)` / `GetPostProcessType()`** — the post-process pipeline the output
-  ends in, a `PostProcessType`: `kFilmic` (the default), AgX, or `kToon`, Blender's Standard view --
-  the exposed value clamped and no curve. A target's and not a view's, since it runs once on the
-  output; `RenderTargetDesc::postProcessType` starts it. Exposure, RCAS, bloom, the colour grade and
-  the outline apply under both, but the type picks what two of them mean: bloom is added ahead of
-  AgX and screened over toon, and `ColorGradeSettings`' CDL and contrast act in AgX's log encoding
-  under filmic and on the sRGB-encoded value under toon, so one grade is not the same look under
-  both. See [Passes](passes.md) § Scene colour.
-* **`SetFilmGrainEnabled` / `SetFilmGrainSettings(settings)`** — monochrome grain scaled by the
-  pixel's displayed value, under either post-process type. @throws `GraphicsError` for an
-  `intensity` outside [0, 1] or a `size` that is not positive and finite; a refused set keeps the
-  settings the target had. `holdFrames` counts the target's own frames, so a target drawn every
-  other frame still holds a pattern for that many of its frames.
-* **`SetColorSplitEnabled` / `SetColorSplitSettings(settings)`** — red and blue displaced from
-  green, under either post-process type. @throws `GraphicsError` for an `offset` component or a
-  `radial` that is not finite. Distances are in pixels at a 2160-line output, so a look keeps its
-  share of the frame across output sizes.
+* **`SetPostProcess(postProcess)` / `GetPostProcess()`** — what the output ends in, one
+  `bgl::PostProcess` (`types/PostProcess.h`): a `FilmicPostProcess`, AgX and the default, or a
+  `ToonPostProcess`, Blender's Standard view -- the exposed value clamped and no curve. Each holds
+  only the effects its curve has, an `optional` apiece that is off when absent: `bloom`, `grade`,
+  `grain` and `split`. The grades are separate types because they are separate maths --
+  `ColorGradeSettings`, a CDL in AgX's log encoding, and `ToonGradeSettings`, the black and white the
+  screen shows -- so a grade cannot be set where it would not run. A target's and not a view's,
+  since it runs once on the output; `RenderTargetDesc::postProcess` starts it. @throws
+  `GraphicsError` naming the first field outside its range and keeps the value the target had, so
+  a refused set changes nothing, not even the type. Bloom's chain is allocated at the first frame
+  with `bloom` and kept when it goes. `FilmGrainSettings::holdFrames` counts the target's own
+  frames, and `ColorSplitSettings`' distances are pixels at a 2160-line output. See
+  [Passes](passes.md) § Scene colour.
 
 ### IOverlay
 

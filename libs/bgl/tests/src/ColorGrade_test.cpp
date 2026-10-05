@@ -9,10 +9,13 @@
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/types/Camera.h>
+#include <bgl/types/ColorGradeSettings.h>
 #include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/PostProcess.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/SkyboxDesc.h>
+#include <bgl/types/ToonGradeSettings.h>
 #include <bgl/types/Viewport.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
@@ -22,6 +25,7 @@
 #include <cstdio>
 #include <limits>
 #include <string>
+#include <variant>
 
 // The colour grade: its settings are validated where every target setting is, a neutral grade is
 // the ungraded image, and each control moves the output the way its name says. The directions are
@@ -58,7 +62,7 @@ namespace
 	}
 
 	glm::vec3
-	ToonGraded(bgl::IGraphics& gfx, glm::vec3 color, const bgl::ColorGradeSettings& settings)
+	ToonGraded(bgl::IGraphics& gfx, glm::vec3 color, const bgl::ToonGradeSettings& settings)
 	{
 		return glm::vec3(bgl::test::RunGradedToon(gfx, color, c_Centre, settings));
 	}
@@ -159,7 +163,7 @@ namespace
 	};
 }
 
-TEST_CASE("Colour grade settings outside their documented ranges are refused", "[colorgrade]")
+TEST_CASE("Grade settings outside their documented ranges are refused", "[colorgrade]")
 {
 	auto gfx = MakeGraphics();
 
@@ -170,11 +174,11 @@ TEST_CASE("Colour grade settings outside their documented ranges are refused", "
 	auto target         = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
 
-	CHECK(!target->IsColorGradeEnabled());
+	CHECK(!std::get<bgl::FilmicPostProcess>(target->GetPostProcess()).grade);
 
 	auto kept     = bgl::ColorGradeSettings();
 	kept.contrast = 1.2f;
-	target->SetColorGradeSettings(kept);
+	target->SetPostProcess(bgl::FilmicPostProcess{ .grade = kept });
 
 	constexpr float c_Nan = std::numeric_limits<float>::quiet_NaN();
 	constexpr float c_Inf = std::numeric_limits<float>::infinity();
@@ -182,7 +186,9 @@ TEST_CASE("Colour grade settings outside their documented ranges are refused", "
 	const auto refuses = [&](auto mutate) {
 		auto bad = bgl::ColorGradeSettings();
 		mutate(bad);
-		CHECK_THROWS_AS(target->SetColorGradeSettings(bad), bgl::GraphicsError);
+		CHECK_THROWS_AS(
+			target->SetPostProcess(bgl::FilmicPostProcess{ .grade = bad }),
+			bgl::GraphicsError);
 	};
 
 	refuses([](auto& s) { s.temperature = 100.5f; });
@@ -196,23 +202,51 @@ TEST_CASE("Colour grade settings outside their documented ranges are refused", "
 	refuses([](auto& s) { s.power.g = c_Inf; });
 	refuses([](auto& s) { s.saturation = -0.5f; });
 	refuses([](auto& s) { s.contrast = c_Nan; });
-	refuses([](auto& s) { s.vignetteIntensity = 1.1f; });
-	refuses([](auto& s) { s.vignetteSmoothness = 0.0f; });
+	refuses([](auto& s) { s.vignette.intensity = 1.1f; });
+	refuses([](auto& s) { s.vignette.smoothness = 0.0f; });
 
-	// A refused set leaves the settings the target had.
-	CHECK(target->GetColorGradeSettings().contrast == 1.2f);
+	const auto refusesToon = [&](auto mutate) {
+		auto bad = bgl::ToonGradeSettings();
+		mutate(bad);
+		CHECK_THROWS_AS(
+			target->SetPostProcess(bgl::ToonPostProcess{ .grade = bad }),
+			bgl::GraphicsError);
+	};
+
+	refusesToon([](auto& s) { s.temperature = -100.5f; });
+	refusesToon([](auto& s) { s.black.g = -0.01f; });
+	refusesToon([](auto& s) { s.white.r = 1.01f; });
+	refusesToon([](auto& s) { s.white.b = c_Nan; });
+	refusesToon([](auto& s) { s.gamma.g = 0.0f; });
+	refusesToon([](auto& s) { s.saturation = c_Inf; });
+	refusesToon([](auto& s) { s.contrast = -1.0f; });
+	refusesToon([](auto& s) { s.vignette.smoothness = 1.5f; });
+
+	// A refused post-process leaves the one the target had, of either type.
+	const bgl::PostProcess current = target->GetPostProcess();
+	const auto*            still   = std::get_if<bgl::FilmicPostProcess>(&current);
+	REQUIRE(still != nullptr);
+	REQUIRE(still->grade);
+	CHECK(still->grade->contrast == 1.2f);
 
 	// The edges of every range are in it.
-	auto edges               = bgl::ColorGradeSettings();
-	edges.temperature        = -100.0f;
-	edges.tint               = 100.0f;
-	edges.slope              = glm::vec3(0.0f);
-	edges.offset             = glm::vec3(-1.0f, 1.0f, 0.0f);
-	edges.saturation         = 0.0f;
-	edges.contrast           = 0.0f;
-	edges.vignetteIntensity  = 1.0f;
-	edges.vignetteSmoothness = 1.0f;
-	CHECK_NOTHROW(target->SetColorGradeSettings(edges));
+	auto edges                = bgl::ColorGradeSettings();
+	edges.temperature         = -100.0f;
+	edges.tint                = 100.0f;
+	edges.slope               = glm::vec3(0.0f);
+	edges.offset              = glm::vec3(-1.0f, 1.0f, 0.0f);
+	edges.saturation          = 0.0f;
+	edges.contrast            = 0.0f;
+	edges.vignette.intensity  = 1.0f;
+	edges.vignette.smoothness = 1.0f;
+	CHECK_NOTHROW(target->SetPostProcess(bgl::FilmicPostProcess{ .grade = edges }));
+
+	auto toonEdges       = bgl::ToonGradeSettings();
+	toonEdges.black      = glm::vec3(0.0f, 1.0f, 0.5f);
+	toonEdges.white      = glm::vec3(0.0f, 1.0f, 0.5f);
+	toonEdges.tint       = -100.0f;
+	toonEdges.saturation = 0.0f;
+	CHECK_NOTHROW(target->SetPostProcess(bgl::ToonPostProcess{ .grade = toonEdges }));
 }
 
 /**
@@ -338,8 +372,8 @@ TEST_CASE(
 
 	// The vignette darkens toward a corner and leaves the centre alone.
 	{
-		auto s              = neutral;
-		s.vignetteIntensity = 0.3f;
+		auto s               = neutral;
+		s.vignette.intensity = 0.3f;
 
 		const auto centre = glm::vec3(bgl::test::RunGradedAgX(*gfx, grey, c_Centre, s));
 		const auto corner = glm::vec3(bgl::test::RunGradedAgX(*gfx, grey, glm::vec2(0.1f), s));
@@ -348,10 +382,10 @@ TEST_CASE(
 		CHECK(Luma(corner) < Luma(centre) - c_Moved);
 
 		// Smoother spreads the same darkening further in, so a mid-way point loses more.
-		const auto midway    = glm::vec2(0.3f);
-		const auto sharp     = glm::vec3(bgl::test::RunGradedAgX(*gfx, grey, midway, s));
-		s.vignetteSmoothness = 1.0f;
-		const auto smooth    = glm::vec3(bgl::test::RunGradedAgX(*gfx, grey, midway, s));
+		const auto midway     = glm::vec2(0.3f);
+		const auto sharp      = glm::vec3(bgl::test::RunGradedAgX(*gfx, grey, midway, s));
+		s.vignette.smoothness = 1.0f;
+		const auto smooth     = glm::vec3(bgl::test::RunGradedAgX(*gfx, grey, midway, s));
 		CHECK(Luma(smooth) < Luma(sharp) - c_Moved);
 	}
 }
@@ -370,7 +404,7 @@ TEST_CASE("A neutral grade leaves a toon value where it was", "[colorgrade][tone
 
 	for (const glm::vec3& v : sweep)
 	{
-		const glm::vec3 graded = ToonGraded(*gfx, v, bgl::ColorGradeSettings());
+		const glm::vec3 graded = ToonGraded(*gfx, v, bgl::ToonGradeSettings());
 
 		INFO("display-linear " << v.r << " " << v.g << " " << v.b);
 		CHECK(graded.r == Catch::Approx(v.r).margin(1e-4));
@@ -380,43 +414,53 @@ TEST_CASE("A neutral grade leaves a toon value where it was", "[colorgrade][tone
 }
 
 TEST_CASE(
-	"Under toon the CDL and contrast act on the encoded display value",
+	"The toon grade's black and white are the ends the display shows",
 	"[colorgrade][tonemap]")
 {
 	auto gfx = MakeGraphics();
 
-	const auto neutral = bgl::ColorGradeSettings();
+	const auto neutral = bgl::ToonGradeSettings();
 	const auto black   = glm::vec3(0.0f);
 	const auto white   = glm::vec3(1.0f);
 	const auto grey    = glm::vec3(0.18f);
 	const auto orange  = glm::vec3(0.6f, 0.25f, 0.08f);
 
-	// An offset is the black the screen shows, channel by channel: the lifted, tinted black of a
-	// film print is three numbers read straight off it. A negative one stays at zero.
+	// The lifted, tinted black of a film print and its cream white, each three numbers read
+	// straight off a frame.
+	auto print  = neutral;
+	print.black = glm::vec3(0.0f, 0.055f, 0.05f);
+	print.white = glm::vec3(1.0f, 0.95f, 0.85f);
 	{
-		auto s       = neutral;
-		s.offset     = glm::vec3(-0.02f, 0.055f, 0.05f);
-		const auto c = Encoded(ToonGraded(*gfx, black, s));
-		INFO("lifted black, encoded: " << c.r << " " << c.g << " " << c.b);
+		const auto c = Encoded(ToonGraded(*gfx, black, print));
+		INFO("black, encoded: " << c.r << " " << c.g << " " << c.b);
 		CHECK(c.r == Catch::Approx(0.0f).margin(1e-4));
 		CHECK(c.g == Catch::Approx(0.055f).margin(1e-3));
 		CHECK(c.b == Catch::Approx(0.05f).margin(1e-3));
+
+		const auto w = Encoded(ToonGraded(*gfx, white, print));
+		INFO("white, encoded: " << w.r << " " << w.g << " " << w.b);
+		CHECK(w.r == Catch::Approx(1.0f).margin(1e-3));
+		CHECK(w.g == Catch::Approx(0.95f).margin(1e-3));
+		CHECK(w.b == Catch::Approx(0.85f).margin(1e-3));
 	}
 
-	// A slope is the white it shows.
+	// The levels come last, so contrast, gamma and saturation never move the ends the levels name.
 	{
-		auto s       = neutral;
-		s.slope      = glm::vec3(1.0f, 0.95f, 0.85f);
-		const auto c = Encoded(ToonGraded(*gfx, white, s));
-		CHECK(c.r == Catch::Approx(1.0f).margin(1e-3));
-		CHECK(c.g == Catch::Approx(0.95f).margin(1e-3));
-		CHECK(c.b == Catch::Approx(0.85f).margin(1e-3));
+		auto s       = print;
+		s.contrast   = 1.4f;
+		s.gamma      = glm::vec3(1.3f);
+		s.saturation = 1.5f;
+
+		const auto c = Encoded(ToonGraded(*gfx, black, s));
+		CHECK(c.g == Catch::Approx(0.055f).margin(1e-3));
+		const auto w = Encoded(ToonGraded(*gfx, white, s));
+		CHECK(w.b == Catch::Approx(0.85f).margin(1e-3));
 	}
 
-	// Power above one lowers the middle and holds both ends.
+	// Gamma above one lowers the middle and holds both ends.
 	{
 		auto s  = neutral;
-		s.power = glm::vec3(1.2f);
+		s.gamma = glm::vec3(1.2f);
 		CHECK(Luma(ToonGraded(*gfx, grey, s)) < Luma(grey) - c_Moved);
 		CHECK(ToonGraded(*gfx, white, s).g == Catch::Approx(1.0f).margin(1e-4));
 		CHECK(ToonGraded(*gfx, black, s).g == Catch::Approx(0.0f).margin(1e-4));
@@ -450,7 +494,7 @@ TEST_CASE(
 	auto gfx = MakeGraphics();
 
 	const auto grey    = glm::vec3(0.18f);
-	const auto neutral = bgl::ColorGradeSettings();
+	const auto neutral = bgl::ToonGradeSettings();
 
 	{
 		auto s        = neutral;
@@ -465,8 +509,8 @@ TEST_CASE(
 	}
 
 	{
-		auto s              = neutral;
-		s.vignetteIntensity = 0.3f;
+		auto s               = neutral;
+		s.vignette.intensity = 0.3f;
 
 		const auto centre = glm::vec3(bgl::test::RunGradedToon(*gfx, grey, c_Centre, s));
 		const auto corner = glm::vec3(bgl::test::RunGradedToon(*gfx, grey, glm::vec2(0.1f), s));
@@ -474,10 +518,10 @@ TEST_CASE(
 		CHECK(centre.g == Catch::Approx(0.18f).margin(1e-4));
 		CHECK(Luma(corner) < Luma(centre) - c_Moved);
 
-		// The lift follows the vignette, so a darkened corner still bottoms out at the lifted
-		// black rather than below it.
-		s.vignetteIntensity = 1.0f;
-		s.offset            = glm::vec3(0.05f);
+		// The levels follow the vignette, so a darkened corner bottoms out at the lifted black
+		// rather than below it.
+		s.vignette.intensity = 1.0f;
+		s.black              = glm::vec3(0.05f);
 		const auto floor =
 			Encoded(glm::vec3(bgl::test::RunGradedToon(*gfx, grey, glm::vec2(0.0f), s)));
 		CHECK(floor.g == Catch::Approx(0.05f).margin(1e-3));
@@ -494,7 +538,7 @@ TEST_CASE("A neutral grade renders the ungraded image", "[colorgrade][render]")
 	cube.Capture(offPath);
 	REQUIRE(OrangeCube::CentreProbe(offPath).Luma() > 0.1f);
 
-	cube.target->SetColorGradeEnabled(true);
+	cube.target->SetPostProcess(bgl::FilmicPostProcess{ .grade = bgl::ColorGradeSettings() });
 	cube.Capture(onPath);
 
 	const float delta = bgl::test::MaxChannelDelta(offPath, onPath);
@@ -505,7 +549,9 @@ TEST_CASE("A neutral grade renders the ungraded image", "[colorgrade][render]")
 	std::remove(onPath.c_str());
 }
 
-TEST_CASE("The target's grade reaches the frame and its toggle removes it", "[colorgrade][render]")
+TEST_CASE(
+	"The target's grade reaches the frame, and leaving it out removes it",
+	"[colorgrade][render]")
 {
 	auto cube = OrangeCube();
 
@@ -520,9 +566,7 @@ TEST_CASE("The target's grade reaches the frame and its toggle removes it", "[co
 
 	auto settings       = bgl::ColorGradeSettings();
 	settings.saturation = 0.0f;
-	cube.target->SetColorGradeSettings(settings);
-	cube.target->SetColorGradeEnabled(true);
-	CHECK(cube.target->IsColorGradeEnabled());
+	cube.target->SetPostProcess(bgl::FilmicPostProcess{ .grade = settings });
 
 	cube.Capture(greyPath);
 	const auto grey = OrangeCube::CentreProbe(greyPath);
@@ -530,7 +574,7 @@ TEST_CASE("The target's grade reaches the frame and its toggle removes it", "[co
 	CHECK(grey.r == Catch::Approx(grey.b).margin(0.02));
 	CHECK(grey.r == Catch::Approx(grey.g).margin(0.02));
 
-	cube.target->SetColorGradeEnabled(false);
+	cube.target->SetPostProcess(bgl::FilmicPostProcess());
 	cube.Capture(disabledPath);
 	CHECK(bgl::test::MaxChannelDelta(plainPath, disabledPath) <= 1.0f / 255.0f);
 

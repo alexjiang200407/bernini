@@ -7,6 +7,8 @@
 #include <bgl/ISceneView.h>
 #include <bgl/error.h>
 #include <bgl/types/Camera.h>
+#include <bgl/types/ColorSplitSettings.h>
+#include <bgl/types/PostProcess.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
@@ -19,7 +21,9 @@
 #include <core/glm.h>
 #include <cstdio>
 #include <limits>
+#include <optional>
 #include <string>
+#include <variant>
 
 // The colour split: its settings are validated where every target setting is, and red and blue
 // land where the settings say. A white Unlit cube on black is a step in every channel at each
@@ -139,37 +143,47 @@ namespace
 			gfx->ScreenshotPng(target, path);
 		}
 
+		/** The target's post-process, whichever type it is, with `split` in place of its own. */
+		void
+		SetSplit(const std::optional<bgl::ColorSplitSettings>& split)
+		{
+			bgl::PostProcess postProcess = target->GetPostProcess();
+			std::visit([&](auto& p) { p.split = split; }, postProcess);
+			target->SetPostProcess(postProcess);
+		}
+
 		void
 		Split(glm::vec2 offsetPx, float radialPx)
 		{
-			auto settings   = bgl::ColorSplitSettings();
-			settings.offset = offsetPx * c_PixelUnits;
-			settings.radial = radialPx * c_PixelUnits;
-			target->SetColorSplitSettings(settings);
-			target->SetColorSplitEnabled(true);
+			SetSplit(
+				bgl::ColorSplitSettings{ .offset = offsetPx * c_PixelUnits,
+			                             .radial = radialPx * c_PixelUnits });
 		}
 	};
 
 	bgl::RenderTargetDesc
 	Toon()
 	{
-		auto desc            = bgl::RenderTargetDesc();
-		desc.postProcessType = bgl::PostProcessType::kToon;
+		auto desc        = bgl::RenderTargetDesc();
+		desc.postProcess = bgl::ToonPostProcess();
 		return desc;
 	}
 }
 
 TEST_CASE("Colour split settings that are not finite are refused", "[colorsplit]")
 {
-	auto cube   = WhiteCube();
+	auto cube   = WhiteCube(Toon());
 	auto target = cube.target;
 
-	CHECK(!target->IsColorSplitEnabled());
+	const auto split = [&]() {
+		return std::get<bgl::ToonPostProcess>(target->GetPostProcess()).split;
+	};
+	CHECK(!split());
 
 	auto kept   = bgl::ColorSplitSettings();
 	kept.offset = glm::vec2(3.0f, -1.0f);
 	kept.radial = 2.0f;
-	target->SetColorSplitSettings(kept);
+	cube.SetSplit(kept);
 
 	constexpr float c_Nan = std::numeric_limits<float>::quiet_NaN();
 	constexpr float c_Inf = std::numeric_limits<float>::infinity();
@@ -177,7 +191,10 @@ TEST_CASE("Colour split settings that are not finite are refused", "[colorsplit]
 	const auto refuses = [&](auto mutate) {
 		auto bad = bgl::ColorSplitSettings();
 		mutate(bad);
-		CHECK_THROWS_AS(target->SetColorSplitSettings(bad), bgl::GraphicsError);
+		CHECK_THROWS_AS(cube.SetSplit(bad), bgl::GraphicsError);
+		CHECK_THROWS_AS(
+			target->SetPostProcess(bgl::FilmicPostProcess{ .split = bad }),
+			bgl::GraphicsError);
 	};
 
 	refuses([](auto& s) { s.offset.x = c_Nan; });
@@ -185,21 +202,17 @@ TEST_CASE("Colour split settings that are not finite are refused", "[colorsplit]
 	refuses([](auto& s) { s.radial = -c_Inf; });
 	refuses([](auto& s) { s.radial = c_Nan; });
 
-	// A refused set leaves the settings the target had.
-	const auto got = target->GetColorSplitSettings();
-	CHECK(got.offset == glm::vec2(3.0f, -1.0f));
-	CHECK(got.radial == 2.0f);
+	// A refused post-process leaves the one the target had.
+	REQUIRE(split());
+	CHECK(split()->offset == glm::vec2(3.0f, -1.0f));
+	CHECK(split()->radial == 2.0f);
 
 	// Either sign, and no split at all, are settings rather than errors.
 	auto none   = bgl::ColorSplitSettings();
 	none.offset = glm::vec2(0.0f);
 	none.radial = -4.0f;
-	CHECK_NOTHROW(target->SetColorSplitSettings(none));
-
-	// The toggle is its own state: turning it on keeps the settings.
-	target->SetColorSplitEnabled(true);
-	CHECK(target->IsColorSplitEnabled());
-	CHECK(target->GetColorSplitSettings().radial == -4.0f);
+	CHECK_NOTHROW(cube.SetSplit(none));
+	CHECK(split()->radial == -4.0f);
 }
 
 TEST_CASE(
@@ -269,7 +282,7 @@ TEST_CASE(
 		CHECK(left.red == Catch::Approx(0.0f).margin(c_Exact));
 	}
 
-	cube.target->SetColorSplitEnabled(false);
+	cube.SetSplit(std::nullopt);
 	cube.Capture(disabled);
 	CHECK(bgl::test::MaxChannelDelta(plain, disabled) == 0.0f);
 

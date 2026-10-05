@@ -40,9 +40,15 @@
 #include <bgl/LodLevel.h>
 #include <bgl/glm.h>
 #include <bgl/types/BackdropGradient.h>
+#include <bgl/types/BloomSettings.h>
+#include <bgl/types/ColorGradeSettings.h>
+#include <bgl/types/ColorSplitSettings.h>
+#include <bgl/types/FilmicPostProcess.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/InstanceDesc.h>
 #include <bgl/types/MaterialHandle.h>
+#include <bgl/types/PostProcess.h>
+#include <bgl/types/ToonPostProcess.h>
 #include <cstdint>
 #include <editor_plugin_api/EditorPanel.h>
 #include <editor_plugin_api/IEditorViewport.h>
@@ -113,6 +119,7 @@
 #include <qwidget.h>
 #include <string>
 #include <type_traits>
+#include <variant>
 #include <vector>
 
 // What a viewport's `headless` flag buys: a whole editor -- device, renderer, every viewport --
@@ -638,7 +645,7 @@ TEST_CASE(
 		// The last project's post-process choice does not carry over: Auto, and the new one's.
 		CHECK(PostProcessChoice(window, "Auto")->isChecked());
 		for (const RenderTargetWindow* view : views)
-			CHECK(view->GetPostProcessType() == bgl::PostProcessType::kFilmic);
+			CHECK(view->GetPostProcessType() == assetlib::PostProcessType::kFilmic);
 	}
 }
 
@@ -969,11 +976,11 @@ TEST_CASE("Every viewport a headless editor builds is headless", "[mainwindow][r
 	for (const RenderTargetWindow* view : viewports) CHECK(view->IsHeadless());
 }
 
-// How a viewport blooms is config.json's alone: the Render menu may switch it on and off and nothing
-// else. A partial section overrides only what it names, and a value bgl would throw on is clamped
-// rather than taking the editor down with it.
+// A viewport's effects are config.json's, each post-process type's in its own section: the Render
+// menu may switch them on and off and nothing else. A partial section overrides only what it names,
+// and a value bgl would throw on is clamped rather than taking the editor down with it.
 TEST_CASE(
-	"A viewport blooms as config.json says, and the menu only toggles it",
+	"A viewport's effects are config.json's, per post-process type, and the menu only toggles them",
 	"[mainwindow][render]")
 {
 	const HeadlessEditor editor;
@@ -981,66 +988,19 @@ TEST_CASE(
 	const std::string config = R"({
   "headless": true,
   "materialEditor":  { "temporalAA": false,
-                       "bloom": { "enabled": true, "intensity": 0.3, "threshold": 0.8,
-                                  "softKnee": 5.0 } },
-  "animationEditor": { "temporalAA": false }
-})";
-	core::file::write_atomic(editor.ConfigFile(), config);
-
-	const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
-
-	const auto* material = window.findChild<MeshEditorWindow*>();
-	REQUIRE(material != nullptr);
-	const auto* materialView = material->findChild<RenderTargetWindow*>();
-	REQUIRE(materialView != nullptr);
-
-	CHECK(materialView->IsBloomEnabled());
-
-	const bgl::BloomSettings named = materialView->GetBloomSettings();
-	CHECK(named.intensity == Catch::Approx(0.3f));
-	CHECK(named.threshold == Catch::Approx(0.8f));
-	CHECK(named.softKnee == Catch::Approx(1.0f));
-	CHECK(named.scatter == Catch::Approx(bgl::BloomSettings().scatter));
-
-	// No section is bloom's default: off, and with the settings bgl ships.
-	const auto* animation = window.findChild<AnimationEditorWindow*>();
-	REQUIRE(animation != nullptr);
-	const auto* animationView = animation->findChild<RenderTargetWindow*>();
-	REQUIRE(animationView != nullptr);
-
-	CHECK_FALSE(animationView->IsBloomEnabled());
-	CHECK(
-		animationView->GetBloomSettings().intensity ==
-		Catch::Approx(bgl::BloomSettings().intensity));
-
-	// Checked because a viewport started with it on; and a toggle is all the menu offers.
-	const QAction* bloom = ActionNamed(window, "Bloom");
-	REQUIRE(bloom != nullptr);
-	CHECK(bloom->isChecked());
-
-	for (const char* valueMenu :
-	     { "Bloom Intensity", "Bloom Threshold", "Bloom Soft Knee", "Bloom Scatter" })
-	{
-		INFO(valueMenu);
-		CHECK(ActionNamed(window, valueMenu) == nullptr);
-	}
-}
-
-// As bloom: how a viewport grades is config.json's, and the Render menu only switches it. A partial
-// CDL channel set overrides only the channels it names, and a value bgl would throw on is clamped.
-TEST_CASE(
-	"A viewport grades as config.json says, and the menu only toggles it",
-	"[mainwindow][render]")
-{
-	const HeadlessEditor editor;
-
-	const std::string config = R"({
-  "headless": true,
-  "materialEditor":  { "temporalAA": false,
-                       "colorGrade": { "enabled": true, "temperature": 20.0, "saturation": 1.3,
-                                       "slope": { "r": 1.1 }, "power": { "g": 0.0 },
-                                       "tint": 250.0 } },
-  "animationEditor": { "temporalAA": false }
+                       "filmic": {
+                         "bloom": { "enabled": true, "intensity": 0.3, "threshold": 0.8,
+                                    "softKnee": 5.0 },
+                         "grade": { "enabled": true, "temperature": 20.0, "saturation": 1.3,
+                                    "slope": { "r": 1.1 }, "power": { "g": 0.0 },
+                                    "tint": 250.0, "vignette": { "intensity": 0.5 } },
+                         "filmGrain": { "enabled": true, "intensity": 0.4, "size": -3.0,
+                                        "holdFrames": 5 },
+                         "colorSplit": { "enabled": true, "offset": { "y": 1.5 },
+                                         "radial": 900.0 } },
+                       "toon": {
+                         "grade": { "enabled": true, "black": { "g": 0.055, "b": 1.5 } } } },
+  "animationEditor": { "temporalAA": false, "bloom": { "enabled": true } }
 })";
 	core::file::write_atomic(editor.ConfigFile(), config);
 
@@ -1050,40 +1010,132 @@ TEST_CASE(
 	REQUIRE(material != nullptr);
 	auto* materialView = material->findChild<RenderTargetWindow*>();
 	REQUIRE(materialView != nullptr);
+	REQUIRE(materialView->GetPostProcessType() == assetlib::PostProcessType::kFilmic);
 
-	CHECK(materialView->IsColorGradeEnabled());
+	// What the filmic target ends in is what `filmic` named, clamped where bgl would refuse it.
+	{
+		const bgl::PostProcess postProcess = materialView->GetPostProcess();
+		const auto*            filmic      = std::get_if<bgl::FilmicPostProcess>(&postProcess);
+		REQUIRE(filmic != nullptr);
 
-	const bgl::ColorGradeSettings named = materialView->GetColorGradeSettings();
-	CHECK(named.temperature == Catch::Approx(20.0f));
-	CHECK(named.saturation == Catch::Approx(1.3f));
-	CHECK(named.slope.r == Catch::Approx(1.1f));
-	CHECK(named.slope.g == Catch::Approx(1.0f));
-	CHECK(named.power.g > 0.0f);
-	CHECK(named.tint == Catch::Approx(100.0f));
-	CHECK(named.contrast == Catch::Approx(DefaultViewportGrade().contrast));
+		REQUIRE(filmic->bloom);
+		CHECK(filmic->bloom->intensity == Catch::Approx(0.3f));
+		CHECK(filmic->bloom->threshold == Catch::Approx(0.8f));
+		CHECK(filmic->bloom->softKnee == Catch::Approx(1.0f));
+		CHECK(filmic->bloom->scatter == Catch::Approx(bgl::BloomSettings().scatter));
 
-	// No section is the editor's default grade, off -- and not bgl's neutral one, or the Render
-	// menu's toggle would switch between two identical images.
+		REQUIRE(filmic->grade);
+		CHECK(filmic->grade->temperature == Catch::Approx(20.0f));
+		CHECK(filmic->grade->saturation == Catch::Approx(1.3f));
+		CHECK(filmic->grade->slope.r == Catch::Approx(1.1f));
+		CHECK(filmic->grade->slope.g == Catch::Approx(1.0f));
+		CHECK(filmic->grade->power.g > 0.0f);
+		CHECK(filmic->grade->tint == Catch::Approx(100.0f));
+		CHECK(filmic->grade->vignette.intensity == Catch::Approx(0.5f));
+		CHECK(filmic->grade->contrast == Catch::Approx(editor::DefaultViewportGrade().contrast));
+
+		REQUIRE(filmic->grain);
+		CHECK(filmic->grain->intensity == Catch::Approx(0.4f));
+		CHECK(filmic->grain->size > 0.0f);
+		CHECK(filmic->grain->holdFrames == 5);
+
+		REQUIRE(filmic->split);
+		CHECK(filmic->split->offset.x == Catch::Approx(bgl::ColorSplitSettings().offset.x));
+		CHECK(filmic->split->offset.y == Catch::Approx(1.5f));
+		CHECK(filmic->split->radial < 900.0f);
+	}
+
+	// `toon` is its own: its grade is the black the screen shows, clamped to one, and nothing the
+	// filmic section turned on is on here.
+	{
+		const editor::ToonConfig& toon = materialView->GetToonConfig();
+		CHECK(toon.grade.enabled);
+		CHECK(toon.grade.settings.black.g == Catch::Approx(0.055f));
+		CHECK(toon.grade.settings.black.b == Catch::Approx(1.0f));
+		CHECK_FALSE(toon.bloom.enabled);
+		CHECK_FALSE(toon.grain.enabled);
+	}
+
+	// A section from before each type had its own is not read, under either.
 	const auto* animation = window.findChild<AnimationEditorWindow*>();
 	REQUIRE(animation != nullptr);
-	const auto* animationView = animation->findChild<RenderTargetWindow*>();
+	auto* animationView = animation->findChild<RenderTargetWindow*>();
 	REQUIRE(animationView != nullptr);
 
-	CHECK_FALSE(animationView->IsColorGradeEnabled());
+	for (const ViewportEffect effect : { ViewportEffect::kBloom,
+	                                     ViewportEffect::kGrade,
+	                                     ViewportEffect::kGrain,
+	                                     ViewportEffect::kSplit })
+		CHECK_FALSE(animationView->IsEffectEnabled(effect));
+	CHECK_FALSE(animationView->GetFilmicConfig().bloom.enabled);
+	CHECK_FALSE(animationView->GetToonConfig().bloom.enabled);
 
-	const bgl::ColorGradeSettings unnamed = animationView->GetColorGradeSettings();
-	CHECK(unnamed.saturation == Catch::Approx(DefaultViewportGrade().saturation));
-	CHECK(unnamed.saturation != Catch::Approx(bgl::ColorGradeSettings().saturation));
-	CHECK(unnamed.vignetteIntensity > 0.0f);
+	// No grade named is the editor's mild one, off -- and not bgl's neutral one, or the menu's toggle
+	// would switch between two identical images.
+	const editor::FilmicConfig& unnamed = animationView->GetFilmicConfig();
+	CHECK(
+		unnamed.grade.settings.saturation ==
+		Catch::Approx(editor::DefaultViewportGrade().saturation));
+	CHECK(unnamed.grade.settings.saturation != Catch::Approx(bgl::ColorGradeSettings().saturation));
+	CHECK(unnamed.grade.settings.vignette.intensity > 0.0f);
 
+	// Checked because a viewport started with it on; and a toggle is all the menu offers.
+	QAction* bloom = ActionNamed(window, "Bloom");
 	QAction* grade = ActionNamed(window, "Color Grade");
+	QAction* grain = ActionNamed(window, "Film Grain");
+	QAction* split = ActionNamed(window, "Color Split");
+	REQUIRE(bloom != nullptr);
 	REQUIRE(grade != nullptr);
+	REQUIRE(grain != nullptr);
+	REQUIRE(split != nullptr);
+	CHECK(bloom->isChecked());
 	CHECK(grade->isChecked());
+	CHECK(grain->isChecked());
+	CHECK(split->isChecked());
 
-	// Unchecking switches every viewport off and leaves what config.json named in place.
+	for (const char* valueMenu :
+	     { "Bloom Intensity", "Bloom Threshold", "Bloom Soft Knee", "Bloom Scatter" })
+	{
+		INFO(valueMenu);
+		CHECK(ActionNamed(window, valueMenu) == nullptr);
+	}
+
+	// Each switches every viewport, in both types, and leaves the others and what config.json named
+	// alone.
+	grain->setChecked(false);
+	CHECK_FALSE(materialView->IsEffectEnabled(ViewportEffect::kGrain));
+	CHECK_FALSE(materialView->GetToonConfig().grain.enabled);
+	CHECK(materialView->IsEffectEnabled(ViewportEffect::kSplit));
+	CHECK(materialView->GetFilmicConfig().grain.settings.intensity == Catch::Approx(0.4f));
+	CHECK_FALSE(std::get<bgl::FilmicPostProcess>(materialView->GetPostProcess()).grain);
+
 	grade->setChecked(false);
-	CHECK_FALSE(materialView->IsColorGradeEnabled());
-	CHECK(materialView->GetColorGradeSettings().saturation == Catch::Approx(1.3f));
+	CHECK_FALSE(materialView->IsEffectEnabled(ViewportEffect::kGrade));
+	CHECK(materialView->GetFilmicConfig().grade.settings.saturation == Catch::Approx(1.3f));
+
+	// Switched off and on again, bloom and the split are on in every viewport and both types,
+	// where config.json had them on in one.
+	bloom->setChecked(false);
+	bloom->setChecked(true);
+	split->setChecked(false);
+	split->setChecked(true);
+	CHECK(animationView->IsEffectEnabled(ViewportEffect::kBloom));
+	CHECK(animationView->GetToonConfig().bloom.enabled);
+	CHECK(materialView->GetToonConfig().split.enabled);
+
+	// The type the viewport ends in picks which config reaches its target.
+	PostProcessChoice(window, "Toon")->trigger();
+	grade->setChecked(true);
+	{
+		const bgl::PostProcess postProcess = materialView->GetPostProcess();
+		const auto*            toon        = std::get_if<bgl::ToonPostProcess>(&postProcess);
+		REQUIRE(toon != nullptr);
+		REQUIRE(toon->grade);
+		CHECK(toon->grade->black.g == Catch::Approx(0.055f));
+		CHECK(toon->bloom);
+		CHECK_FALSE(toon->grain);
+		CHECK(toon->split);
+	}
 }
 
 // The toon backdrop is what is shown deciding the background, not the post-process: a pick of Filmic
@@ -1133,85 +1185,13 @@ TEST_CASE(
 	REQUIRE(toon != nullptr);
 
 	filmic->trigger();
-	CHECK(materialView->GetPostProcessType() == bgl::PostProcessType::kFilmic);
+	CHECK(materialView->GetPostProcessType() == assetlib::PostProcessType::kFilmic);
 	CHECK(materialView->GetBackdrop().has_value());
 
 	materialView->SetShowsToonContent(false);
 	toon->trigger();
-	CHECK(materialView->GetPostProcessType() == bgl::PostProcessType::kToon);
+	CHECK(materialView->GetPostProcessType() == assetlib::PostProcessType::kToon);
 	CHECK_FALSE(materialView->GetBackdrop().has_value());
-}
-
-// As bloom and the grade: a viewport's film grain and colour split are config.json's, a partial
-// section overrides only what it names, and the Render menu only switches each.
-TEST_CASE(
-	"A viewport's film grain and colour split are config.json's, and the menu only toggles them",
-	"[mainwindow][render]")
-{
-	const HeadlessEditor editor;
-
-	const std::string config = R"({
-  "headless": true,
-  "materialEditor":  { "temporalAA": false,
-                       "filmGrain": { "enabled": true, "intensity": 0.4, "size": -3.0,
-                                      "holdFrames": 5 },
-                       "colorSplit": { "enabled": true, "offset": { "y": 1.5 }, "radial": 900.0 } },
-  "animationEditor": { "temporalAA": false }
-})";
-	core::file::write_atomic(editor.ConfigFile(), config);
-
-	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
-
-	const auto* material = window.findChild<MeshEditorWindow*>();
-	REQUIRE(material != nullptr);
-	auto* materialView = material->findChild<RenderTargetWindow*>();
-	REQUIRE(materialView != nullptr);
-
-	CHECK(materialView->IsFilmGrainEnabled());
-	CHECK(materialView->IsColorSplitEnabled());
-
-	// A size bgl would throw on is clamped to one it takes.
-	const bgl::FilmGrainSettings grain = materialView->GetFilmGrainSettings();
-	CHECK(grain.intensity == Catch::Approx(0.4f));
-	CHECK(grain.size > 0.0f);
-	CHECK(grain.holdFrames == 5);
-
-	// The offset's unnamed axis keeps bgl's, and a radial share past the sanity bound is pulled in.
-	const bgl::ColorSplitSettings split = materialView->GetColorSplitSettings();
-	CHECK(split.offset.x == Catch::Approx(bgl::ColorSplitSettings().offset.x));
-	CHECK(split.offset.y == Catch::Approx(1.5f));
-	CHECK(split.radial < 900.0f);
-
-	// No section is each one's default: off, with the settings bgl ships.
-	const auto* animation = window.findChild<AnimationEditorWindow*>();
-	REQUIRE(animation != nullptr);
-	const auto* animationView = animation->findChild<RenderTargetWindow*>();
-	REQUIRE(animationView != nullptr);
-
-	CHECK_FALSE(animationView->IsFilmGrainEnabled());
-	CHECK_FALSE(animationView->IsColorSplitEnabled());
-	CHECK(
-		animationView->GetFilmGrainSettings().intensity ==
-		Catch::Approx(bgl::FilmGrainSettings().intensity));
-
-	QAction* grainAction = ActionNamed(window, "Film Grain");
-	QAction* splitAction = ActionNamed(window, "Color Split");
-	REQUIRE(grainAction != nullptr);
-	REQUIRE(splitAction != nullptr);
-	CHECK(grainAction->isChecked());
-	CHECK(splitAction->isChecked());
-
-	// Each switches every viewport and leaves the other, and what config.json named, alone.
-	grainAction->setChecked(false);
-	CHECK_FALSE(materialView->IsFilmGrainEnabled());
-	CHECK(materialView->IsColorSplitEnabled());
-	CHECK(materialView->GetFilmGrainSettings().intensity == Catch::Approx(0.4f));
-
-	splitAction->setChecked(false);
-	CHECK_FALSE(materialView->IsColorSplitEnabled());
-
-	grainAction->setChecked(true);
-	CHECK(animationView->IsFilmGrainEnabled());
 }
 
 // Which tab is up decides which viewport is in the frame loop, so the tab a project opens on is
@@ -2378,7 +2358,7 @@ TEST_CASE(
 		const QList<RenderTargetWindow*> viewports = window.findChildren<RenderTargetWindow*>();
 		REQUIRE_FALSE(viewports.empty());
 		for (const RenderTargetWindow* view : viewports)
-			CHECK(view->GetPostProcessType() == bgl::PostProcessType::kToon);
+			CHECK(view->GetPostProcessType() == assetlib::PostProcessType::kToon);
 	}
 
 	SECTION("toon content ends in Toon until the user picks a post-process")
@@ -2386,7 +2366,7 @@ TEST_CASE(
 		const MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
 		auto* view = window.findChild<MeshEditorWindow*>()->findChild<RenderTargetWindow*>();
 		REQUIRE(view != nullptr);
-		CHECK(view->GetPostProcessType() == bgl::PostProcessType::kFilmic);
+		CHECK(view->GetPostProcessType() == assetlib::PostProcessType::kFilmic);
 
 		QAction* autoChoice = PostProcessChoice(window, "Auto");
 		QAction* filmic     = PostProcessChoice(window, "Filmic");
@@ -2397,19 +2377,19 @@ TEST_CASE(
 		CHECK(autoChoice->isChecked());
 
 		view->SetShowsToonContent(true);
-		CHECK(view->GetPostProcessType() == bgl::PostProcessType::kToon);
+		CHECK(view->GetPostProcessType() == assetlib::PostProcessType::kToon);
 		CHECK(autoChoice->isChecked());
 
 		filmic->trigger();
 		CHECK(filmic->isChecked());
 		CHECK_FALSE(autoChoice->isChecked());
-		CHECK(view->GetPostProcessType() == bgl::PostProcessType::kFilmic);
+		CHECK(view->GetPostProcessType() == assetlib::PostProcessType::kFilmic);
 
 		view->SetShowsToonContent(false);
 		toon->trigger();
-		CHECK(view->GetPostProcessType() == bgl::PostProcessType::kToon);
+		CHECK(view->GetPostProcessType() == assetlib::PostProcessType::kToon);
 
 		autoChoice->trigger();
-		CHECK(view->GetPostProcessType() == bgl::PostProcessType::kFilmic);
+		CHECK(view->GetPostProcessType() == assetlib::PostProcessType::kFilmic);
 	}
 }

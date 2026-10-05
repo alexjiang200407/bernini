@@ -294,7 +294,7 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
 * **The `.bproj`** keys are `name`, `version`, `dataDirectory`, `plugins`
   ([Editor plugins](editor_plugins.md)) and the optional `postProcess` -- `"filmic"` or `"toon"`,
   the post-process the project's look is authored for and its renders end in
-  (`Project::GetPostProcessType`; bgl's `IRenderTarget::SetPostProcessType`). Absent, it is filmic,
+  (`Project::GetPostProcessType`; bgl's `FilmicPostProcess` or `ToonPostProcess`). Absent, it is filmic,
   and Save writes it only when it is not, so a project that never sets it keeps its file's shape;
   any other value refuses the file. A toon game is authored for toon.
 

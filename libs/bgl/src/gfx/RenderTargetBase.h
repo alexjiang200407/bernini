@@ -2,12 +2,13 @@
 #include "fg/PassTimer.h"
 #include "gfx/frame_constants.h"
 #include "postprocess/BloomChain.h"
-#include "postprocess/color_grade.h"
+#include "postprocess/post_process.h"
 #include <algorithm>
 #include <array>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/types/PassTiming.h>
+#include <bgl/types/PostProcess.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/cmd/TimestampHeap.h>
@@ -202,27 +203,22 @@ namespace bgl
 			m_TaaSharpness = sharpness;
 		}
 
-		[[nodiscard]] bool
-		IsBloomEnabled() const noexcept final
+		[[nodiscard]] PostProcess
+		GetPostProcess() const final
 		{
-			return m_BloomEnabled;
+			return m_PostProcess;
 		}
 
 		void
-		SetBloomEnabled(bool enabled) noexcept final
+		SetPostProcess(const PostProcess& postProcess) final
 		{
-			if (enabled && !m_BloomEnabled)
-			{
+			ValidatePostProcess(postProcess);
+
+			// A chain a pool refused is tried again when bloom is turned back on.
+			if (BloomOf(postProcess) && !BloomOf(m_PostProcess))
 				m_BloomChain.Retry();
-			}
 
-			m_BloomEnabled = enabled;
-		}
-
-		[[nodiscard]] BloomSettings
-		GetBloomSettings() const noexcept final
-		{
-			return m_BloomSettings;
+			m_PostProcess = postProcess;
 		}
 
 		/**
@@ -233,137 +229,6 @@ namespace bgl
 		GetBloomChain() noexcept
 		{
 			return m_BloomChain;
-		}
-
-		void
-		SetBloomSettings(const BloomSettings& settings) final
-		{
-			if (!(settings.intensity >= 0.0f) || !std::isfinite(settings.intensity))
-			{
-				throw GraphicsError("BloomSettings::intensity must be non-negative and finite");
-			}
-
-			if (!(settings.threshold >= 0.0f) || !std::isfinite(settings.threshold))
-			{
-				throw GraphicsError("BloomSettings::threshold must be non-negative and finite");
-			}
-
-			if (!(settings.softKnee >= 0.0f) || !(settings.softKnee <= 1.0f))
-			{
-				throw GraphicsError("BloomSettings::softKnee must be within [0, 1]");
-			}
-
-			if (!(settings.scatter >= 0.0f) || !(settings.scatter <= 1.0f))
-			{
-				throw GraphicsError("BloomSettings::scatter must be within [0, 1]");
-			}
-
-			m_BloomSettings = settings;
-		}
-
-		[[nodiscard]] bool
-		IsColorGradeEnabled() const noexcept final
-		{
-			return m_ColorGradeEnabled;
-		}
-
-		void
-		SetColorGradeEnabled(bool enabled) noexcept final
-		{
-			m_ColorGradeEnabled = enabled;
-		}
-
-		[[nodiscard]] PostProcessType
-		GetPostProcessType() const noexcept final
-		{
-			return m_PostProcessType;
-		}
-
-		void
-		SetPostProcessType(PostProcessType postProcessType) noexcept final
-		{
-			m_PostProcessType = postProcessType;
-		}
-
-		[[nodiscard]] ColorGradeSettings
-		GetColorGradeSettings() const noexcept final
-		{
-			return m_ColorGradeSettings;
-		}
-
-		void
-		SetColorGradeSettings(const ColorGradeSettings& settings) final
-		{
-			ValidateColorGradeSettings(settings);
-			m_ColorGradeSettings = settings;
-		}
-
-		[[nodiscard]] bool
-		IsFilmGrainEnabled() const noexcept final
-		{
-			return m_FilmGrainEnabled;
-		}
-
-		void
-		SetFilmGrainEnabled(bool enabled) noexcept final
-		{
-			m_FilmGrainEnabled = enabled;
-		}
-
-		[[nodiscard]] FilmGrainSettings
-		GetFilmGrainSettings() const noexcept final
-		{
-			return m_FilmGrainSettings;
-		}
-
-		void
-		SetFilmGrainSettings(const FilmGrainSettings& settings) final
-		{
-			if (!(settings.intensity >= 0.0f && settings.intensity <= 1.0f))
-			{
-				throw GraphicsError("FilmGrainSettings::intensity must be within [0, 1]");
-			}
-
-			if (!(settings.size > 0.0f) || !std::isfinite(settings.size))
-			{
-				throw GraphicsError("FilmGrainSettings::size must be positive and finite");
-			}
-
-			m_FilmGrainSettings = settings;
-		}
-
-		[[nodiscard]] bool
-		IsColorSplitEnabled() const noexcept final
-		{
-			return m_ColorSplitEnabled;
-		}
-
-		void
-		SetColorSplitEnabled(bool enabled) noexcept final
-		{
-			m_ColorSplitEnabled = enabled;
-		}
-
-		[[nodiscard]] ColorSplitSettings
-		GetColorSplitSettings() const noexcept final
-		{
-			return m_ColorSplitSettings;
-		}
-
-		void
-		SetColorSplitSettings(const ColorSplitSettings& settings) final
-		{
-			if (!std::isfinite(settings.offset.x) || !std::isfinite(settings.offset.y))
-			{
-				throw GraphicsError("ColorSplitSettings::offset must be finite");
-			}
-
-			if (!std::isfinite(settings.radial))
-			{
-				throw GraphicsError("ColorSplitSettings::radial must be finite");
-			}
-
-			m_ColorSplitSettings = settings;
 		}
 
 		/**
@@ -599,20 +464,10 @@ namespace bgl
 		float m_TaaReconstructionWidth = RenderTargetDesc().taaReconstructionWidth;
 		float m_TaaSharpness           = RenderTargetDesc().taaSharpness;
 
-		// Like the reconstruction width: shader constants and a toggle, never an allocation --
-		// the chain the toggle turns on is the render context's, sized lazily at the frame.
-		bool          m_BloomEnabled = false;
-		BloomSettings m_BloomSettings;
-		BloomChain    m_BloomChain;
-
-		bool               m_ColorGradeEnabled = false;
-		PostProcessType    m_PostProcessType   = PostProcessType::kFilmic;
-		ColorGradeSettings m_ColorGradeSettings;
-
-		bool               m_FilmGrainEnabled = false;
-		FilmGrainSettings  m_FilmGrainSettings;
-		bool               m_ColorSplitEnabled = false;
-		ColorSplitSettings m_ColorSplitSettings;
+		// Like the reconstruction width: shader constants, never an allocation -- the bloom chain is
+		// the render context's, sized lazily at the first frame that blooms.
+		PostProcess m_PostProcess = FilmicPostProcess();
+		BloomChain  m_BloomChain;
 
 		bool                                           m_GpuTimingEnabled = false;
 		bgpu::TimestampHeapRef                         m_TimingHeap;

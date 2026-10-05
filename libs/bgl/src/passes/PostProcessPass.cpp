@@ -4,10 +4,18 @@
 #include "gfx/frame_constants.h"
 #include "passes/BindingNameCheck.h"
 #include "postprocess/color_grade.h"
+#include "postprocess/post_process.h"
 #include <algorithm>
 #include <array>
-#include <bgl/IRenderTarget.h>
 #include <bgl/idl/Constants.h>
+#include <bgl/types/BloomSettings.h>
+#include <bgl/types/ColorGradeSettings.h>
+#include <bgl/types/ColorSplitSettings.h>
+#include <bgl/types/FilmGrainSettings.h>
+#include <bgl/types/FilmicPostProcess.h>
+#include <bgl/types/PostProcess.h>
+#include <bgl/types/ToonGradeSettings.h>
+#include <bgl/types/ToonPostProcess.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/constants/constants.h>
 #include <bgpu/device/Device.h>
@@ -24,9 +32,11 @@
 #include <core/err/util.h>
 #include <core/glm.h>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 
 namespace bgl
 {
@@ -41,7 +51,7 @@ namespace bgl
 		// Every member Execute writes. Kept beside the code that writes them so
 		// BindingNameCheck catches a shader rename at startup: an optional write is silent, so
 		// a stale name would otherwise resolve to nothing every frame and say nothing.
-		constexpr std::array<std::string_view, 31> c_Fields = {
+		constexpr std::array<std::string_view, 34> c_Fields = {
 			"sceneColor"sv,
 			"sourceTexelSize"sv,
 			"rcasStrength"sv,
@@ -64,6 +74,9 @@ namespace bgl
 			"gradeContrast"sv,
 			"gradeVignetteIntensity"sv,
 			"gradeVignetteSmoothness"sv,
+			"gradeBlack"sv,
+			"gradeWhite"sv,
+			"gradeGamma"sv,
 			"gradeEnabled"sv,
 			"toon"sv,
 			"splitOffset"sv,
@@ -133,7 +146,7 @@ namespace bgl
 			desc.AddTextureRead(c_OutlineMaskName, bgpu::BarrierSyncFlag::kPixelShader);
 		}
 
-		if (args.bloomEnabled)
+		if (args.bloomRan)
 		{
 			desc.AddTextureRead(args.bloomName, bgpu::BarrierSyncFlag::kPixelShader);
 		}
@@ -173,55 +186,82 @@ namespace bgl
 				tonemap["maskSize"].SetIfValid(args.maskSize);
 			}
 
-			tonemap["bloomEnabled"].SetIfValid(args.bloomEnabled ? 1u : 0u);
-			if (args.bloomEnabled)
+			const std::optional<BloomSettings>& bloom     = BloomOf(args.postProcess);
+			const bool                          bloomRuns = args.bloomRan && bloom.has_value();
+
+			tonemap["bloomEnabled"].SetIfValid(bloomRuns ? 1u : 0u);
+			if (bloomRuns)
 			{
 				tonemap["bloom"].SetIfValid(args.bloom);
 				tonemap["bloomSampler"].SetIfValid(args.bloomSampler);
-				tonemap["bloomIntensity"].SetIfValid(args.bloomIntensity);
+				tonemap["bloomIntensity"].SetIfValid(bloom->intensity);
 			}
 
-			tonemap["toon"].SetIfValid(args.postProcessType == PostProcessType::kToon ? 1u : 0u);
-			tonemap["gradeEnabled"].SetIfValid(args.colorGradeEnabled ? 1u : 0u);
-			if (args.colorGradeEnabled)
+			const auto* toon = std::get_if<ToonPostProcess>(&args.postProcess);
+			tonemap["toon"].SetIfValid(toon != nullptr ? 1u : 0u);
+
+			if (toon != nullptr)
 			{
-				const ColorGradeSettings& grade = args.colorGrade;
+				tonemap["gradeEnabled"].SetIfValid(toon->grade ? 1u : 0u);
+				if (toon->grade)
+				{
+					const ToonGradeSettings& grade = *toon->grade;
 
-				tonemap["gradeWhiteBalance"].SetIfValid(
-					WhiteBalanceLmsScale(grade.temperature, grade.tint));
-				tonemap["gradeSlope"].SetIfValid(grade.slope);
-				tonemap["gradeOffset"].SetIfValid(grade.offset);
-				tonemap["gradePower"].SetIfValid(grade.power);
-				tonemap["gradeSaturation"].SetIfValid(grade.saturation);
-				tonemap["gradeContrast"].SetIfValid(grade.contrast);
-				tonemap["gradeVignetteIntensity"].SetIfValid(grade.vignetteIntensity);
-				tonemap["gradeVignetteSmoothness"].SetIfValid(grade.vignetteSmoothness);
+					tonemap["gradeWhiteBalance"].SetIfValid(
+						WhiteBalanceLmsScale(grade.temperature, grade.tint));
+					tonemap["gradeBlack"].SetIfValid(grade.black);
+					tonemap["gradeWhite"].SetIfValid(grade.white);
+					tonemap["gradeGamma"].SetIfValid(grade.gamma);
+					tonemap["gradeSaturation"].SetIfValid(grade.saturation);
+					tonemap["gradeContrast"].SetIfValid(grade.contrast);
+					tonemap["gradeVignetteIntensity"].SetIfValid(grade.vignette.intensity);
+					tonemap["gradeVignetteSmoothness"].SetIfValid(grade.vignette.smoothness);
+				}
+			}
+			else
+			{
+				const auto& filmic = std::get<FilmicPostProcess>(args.postProcess);
+
+				tonemap["gradeEnabled"].SetIfValid(filmic.grade ? 1u : 0u);
+				if (filmic.grade)
+				{
+					const ColorGradeSettings& grade = *filmic.grade;
+
+					tonemap["gradeWhiteBalance"].SetIfValid(
+						WhiteBalanceLmsScale(grade.temperature, grade.tint));
+					tonemap["gradeSlope"].SetIfValid(grade.slope);
+					tonemap["gradeOffset"].SetIfValid(grade.offset);
+					tonemap["gradePower"].SetIfValid(grade.power);
+					tonemap["gradeSaturation"].SetIfValid(grade.saturation);
+					tonemap["gradeContrast"].SetIfValid(grade.contrast);
+					tonemap["gradeVignetteIntensity"].SetIfValid(grade.vignette.intensity);
+					tonemap["gradeVignetteSmoothness"].SetIfValid(grade.vignette.smoothness);
+				}
 			}
 
-			tonemap["splitEnabled"].SetIfValid(args.colorSplitEnabled ? 1u : 0u);
-			if (args.colorSplitEnabled)
+			const std::optional<ColorSplitSettings>& split = SplitOf(args.postProcess);
+			tonemap["splitEnabled"].SetIfValid(split ? 1u : 0u);
+			if (split)
 			{
 				// A distance from the centre of one is half the height, so the radial share in uv
 				// is the same number on both axes and at every output size.
 				tonemap["splitOffset"].SetIfValid(
-					args.colorSplit.offset * (outputSize.y / idl::cReferenceOutputLines) /
-					outputSize);
+					split->offset * (outputSize.y / idl::cReferenceOutputLines) / outputSize);
 				tonemap["splitRadial"].SetIfValid(
-					args.colorSplit.radial / (0.5f * idl::cReferenceOutputLines));
+					split->radial / (0.5f * idl::cReferenceOutputLines));
 			}
 
-			tonemap["grainEnabled"].SetIfValid(args.filmGrainEnabled ? 1u : 0u);
-			if (args.filmGrainEnabled)
+			const std::optional<FilmGrainSettings>& grain = GrainOf(args.postProcess);
+			tonemap["grainEnabled"].SetIfValid(grain ? 1u : 0u);
+			if (grain)
 			{
-				const FilmGrainSettings& grain = args.filmGrain;
-
 				tonemap["grainPitch"].SetIfValid(
-					std::max(1.0f, grain.size * outputSize.y / idl::cReferenceOutputLines));
-				tonemap["grainIntensity"].SetIfValid(grain.intensity);
+					std::max(1.0f, grain->size * outputSize.y / idl::cReferenceOutputLines));
+				tonemap["grainIntensity"].SetIfValid(grain->intensity);
 				tonemap["grainPattern"].SetIfValid(
-					grain.holdFrames == 0 ?
+					grain->holdFrames == 0 ?
 						0u :
-						static_cast<uint32_t>(args.frameCount / grain.holdFrames));
+						static_cast<uint32_t>(args.frameCount / grain->holdFrames));
 			}
 		}
 		else

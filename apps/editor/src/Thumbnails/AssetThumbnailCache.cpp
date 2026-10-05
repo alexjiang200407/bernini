@@ -3,8 +3,11 @@
 #include "util/toon_backdrop.h"
 #include "util/toon_light.h"
 #include <algorithm>
+#include <assetlib/Project.h>
 #include <assetlib/bmesh.h>
 #include <bgl/IRenderTarget.h>
+#include <bgl/types/FilmicPostProcess.h>
+#include <bgl/types/ToonPostProcess.h>
 #include <bit>
 #include <core/err/util.h>
 #include <editor_sdk/mesh_load.h>
@@ -1059,8 +1062,11 @@ AssetThumbnailCache::BuildShot(Shot& shot)
 {
 	const bool toon =
 		shot.item.type == ThumbnailType::kMesh ? BuildMesh(shot) : BuildMaterial(shot);
-	m_RenderTarget->SetPostProcessType(
-		toon ? bgl::PostProcessType::kToon : m_ProjectPostProcessType);
+	// A thumbnail is the asset as authored, so neither type takes an effect.
+	if (toon || m_ProjectPostProcessType == assetlib::PostProcessType::kToon)
+		m_RenderTarget->SetPostProcess(bgl::ToonPostProcess());
+	else
+		m_RenderTarget->SetPostProcess(bgl::FilmicPostProcess());
 	if (toon)
 		m_SceneView->SetBackdrop(m_Desc.toonBackdrop);
 	else

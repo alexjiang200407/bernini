@@ -9,18 +9,22 @@
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/glm.h>
+#include <bgl/types/BloomSettings.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/MaterialHandle.h>
+#include <bgl/types/PostProcess.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
+#include <bgl/types/ToonGradeSettings.h>
 #include <bgl/types/Viewport.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <string>
+#include <variant>
 
 // The post-process a target ends in: toon is the exposed value clamped and sRGB-encoded, as
 // Blender's Standard view shows it, and filmic is the AgX it always was. A full-frame Unlit plane puts a
@@ -91,9 +95,9 @@ namespace
 TEST_CASE("Toon post-process shows the exposed value clamped and sRGB-encoded", "[tonemap][render]")
 {
 	Plane plane;
-	CHECK(plane.target->GetPostProcessType() == bgl::PostProcessType::kFilmic);
-	plane.target->SetPostProcessType(bgl::PostProcessType::kToon);
-	CHECK(plane.target->GetPostProcessType() == bgl::PostProcessType::kToon);
+	CHECK(std::holds_alternative<bgl::FilmicPostProcess>(plane.target->GetPostProcess()));
+	plane.target->SetPostProcess(bgl::ToonPostProcess());
+	CHECK(std::holds_alternative<bgl::ToonPostProcess>(plane.target->GetPostProcess()));
 
 	// One quantization step, and a little for the 16-bit scene colour on the way.
 	constexpr float c_Margin = 1.5f / 255.0f;
@@ -132,22 +136,26 @@ TEST_CASE(
 	const auto* back     = "assets/golden/tonemap_switch_back.got.png";
 
 	plane.Shoot(radiance, 1.0f, agx);
-	plane.target->SetPostProcessType(bgl::PostProcessType::kToon);
+	plane.target->SetPostProcess(bgl::ToonPostProcess());
 	plane.Shoot(radiance, 1.0f, standard);
-	plane.target->SetPostProcessType(bgl::PostProcessType::kFilmic);
+
+	// A switch takes the whole value: the toon bloom set here is gone once filmic is set without it.
+	plane.target->SetPostProcess(bgl::ToonPostProcess{ .bloom = bgl::BloomSettings() });
+	plane.target->SetPostProcess(bgl::FilmicPostProcess());
+	CHECK(!std::get<bgl::FilmicPostProcess>(plane.target->GetPostProcess()).bloom);
 	plane.Shoot(radiance, 1.0f, back);
 
 	CHECK(bgl::test::MaxChannelDelta(agx, standard) > 0.05f);
 	CHECK(bgl::test::MaxChannelDelta(agx, back) == 0.0f);
 
 	// A target asked for toon at creation starts in it.
-	auto targetDesc            = bgl::RenderTargetDesc();
-	targetDesc.width           = c_Size;
-	targetDesc.height          = c_Size;
-	targetDesc.headless        = true;
-	targetDesc.postProcessType = bgl::PostProcessType::kToon;
-	plane.target               = plane.gfx->CreateRenderTarget(targetDesc);
-	CHECK(plane.target->GetPostProcessType() == bgl::PostProcessType::kToon);
+	auto targetDesc        = bgl::RenderTargetDesc();
+	targetDesc.width       = c_Size;
+	targetDesc.height      = c_Size;
+	targetDesc.headless    = true;
+	targetDesc.postProcess = bgl::ToonPostProcess();
+	plane.target           = plane.gfx->CreateRenderTarget(targetDesc);
+	CHECK(std::holds_alternative<bgl::ToonPostProcess>(plane.target->GetPostProcess()));
 	const auto* created = "assets/golden/tonemap_switch_created.got.png";
 	plane.Shoot(radiance, 1.0f, created);
 	CHECK(bgl::test::MaxChannelDelta(standard, created) == 0.0f);
@@ -160,11 +168,9 @@ TEST_CASE(
 	"[tonemap][bloom][render]")
 {
 	Plane plane;
-	plane.target->SetPostProcessType(bgl::PostProcessType::kToon);
 
 	auto bloom      = bgl::BloomSettings();
 	bloom.threshold = 0.0f;
-	plane.target->SetBloomEnabled(true);
 
 	constexpr float c_Margin = 1.5f / 255.0f;
 
@@ -188,7 +194,7 @@ TEST_CASE(
 		INFO("case " << i);
 
 		bloom.intensity = intensity;
-		plane.target->SetBloomSettings(bloom);
+		plane.target->SetPostProcess(bgl::ToonPostProcess{ .bloom = bloom });
 
 		const auto got = plane.Shoot(
 			radiance,
@@ -206,7 +212,7 @@ TEST_CASE(
 
 	// The orange kept its order, where an add lands red and green both on white.
 	bloom.intensity = 1.0f;
-	plane.target->SetBloomSettings(bloom);
+	plane.target->SetPostProcess(bgl::ToonPostProcess{ .bloom = bloom });
 	const auto orange = plane.Shoot(
 		glm::vec3(0.9f, 0.6f, 0.3f),
 		1.0f,
@@ -216,11 +222,11 @@ TEST_CASE(
 }
 
 // The grade reaches a toon frame through the target, and a black plane makes the frame the grade's
-// answer for black: its offset, which no curve stands between.
+// answer for black: the black it names, which no curve stands between.
 TEST_CASE("A toon target is graded on the value it displays", "[tonemap][colorgrade][render]")
 {
 	Plane plane;
-	plane.target->SetPostProcessType(bgl::PostProcessType::kToon);
+	plane.target->SetPostProcess(bgl::ToonPostProcess());
 
 	constexpr float c_Margin = 1.5f / 255.0f;
 
@@ -232,20 +238,20 @@ TEST_CASE("A toon target is graded on the value it displays", "[tonemap][colorgr
 	const glm::vec3 teal(0.1f, 0.4f, 0.6f);
 
 	plane.Shoot(teal, 1.0f, plain);
-	plane.target->SetColorGradeEnabled(true);
+	plane.target->SetPostProcess(bgl::ToonPostProcess{ .grade = bgl::ToonGradeSettings() });
 	plane.Shoot(teal, 1.0f, neutral);
 	CHECK(bgl::test::MaxChannelDelta(plain, neutral) <= 1.0f / 255.0f);
 
-	auto grade   = bgl::ColorGradeSettings();
-	grade.offset = glm::vec3(0.0f, 0.055f, 0.05f);
-	plane.target->SetColorGradeSettings(grade);
+	auto grade  = bgl::ToonGradeSettings();
+	grade.black = glm::vec3(0.0f, 0.055f, 0.05f);
+	plane.target->SetPostProcess(bgl::ToonPostProcess{ .grade = grade });
 
 	const auto got = plane.Shoot(glm::vec3(0.0f), 1.0f, lifted);
 	CHECK(got.r == Catch::Approx(0.0f).margin(c_Margin));
 	CHECK(got.g == Catch::Approx(0.055f).margin(c_Margin));
 	CHECK(got.b == Catch::Approx(0.05f).margin(c_Margin));
 
-	plane.target->SetColorGradeEnabled(false);
+	plane.target->SetPostProcess(bgl::ToonPostProcess());
 	const auto black = plane.Shoot(glm::vec3(0.0f), 1.0f, off);
 	CHECK(black.g == Catch::Approx(0.0f).margin(c_Margin));
 }

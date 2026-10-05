@@ -8,6 +8,8 @@
 #include <bgl/ISceneView.h>
 #include <bgl/error.h>
 #include <bgl/types/Camera.h>
+#include <bgl/types/FilmGrainSettings.h>
+#include <bgl/types/PostProcess.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
@@ -21,7 +23,9 @@
 #include <cstdint>
 #include <cstdio>
 #include <limits>
+#include <optional>
 #include <string>
+#include <variant>
 
 // Film grain: its settings are validated where every target setting is, and the grain on a frame
 // is what they say. A full-frame Unlit plane under toon puts one known value on every pixel, so
@@ -63,17 +67,17 @@ namespace
 		bgl::RenderTargetRef target;
 		bgl::RenderJob       job;
 
-		explicit Plane(bgl::PostProcessType type = bgl::PostProcessType::kToon)
+		explicit Plane(bgl::PostProcess postProcess = bgl::ToonPostProcess())
 		{
 			REQUIRE(gfx != nullptr);
 			scene = gfx->CreateScene(bgl::SceneDesc());
 
-			auto targetDesc            = bgl::RenderTargetDesc();
-			targetDesc.width           = c_Size;
-			targetDesc.height          = c_Size;
-			targetDesc.headless        = true;
-			targetDesc.postProcessType = type;
-			target                     = gfx->CreateRenderTarget(targetDesc);
+			auto targetDesc        = bgl::RenderTargetDesc();
+			targetDesc.width       = c_Size;
+			targetDesc.height      = c_Size;
+			targetDesc.headless    = true;
+			targetDesc.postProcess = postProcess;
+			target                 = gfx->CreateRenderTarget(targetDesc);
 			REQUIRE(target != nullptr);
 
 			job.viewport = bgl::Viewport(static_cast<float>(c_Size), static_cast<float>(c_Size));
@@ -111,15 +115,28 @@ namespace
 			gfx->ScreenshotPng(target, path);
 		}
 
+		/** The target's post-process, whichever type it is, with `grain` in place of its own. */
+		void
+		SetGrain(const std::optional<bgl::FilmGrainSettings>& grain)
+		{
+			bgl::PostProcess postProcess = target->GetPostProcess();
+			std::visit([&](auto& p) { p.grain = grain; }, postProcess);
+			target->SetPostProcess(postProcess);
+		}
+
+		[[nodiscard]] std::optional<bgl::FilmGrainSettings>
+		GetGrain() const
+		{
+			return std::visit([](const auto& p) { return p.grain; }, target->GetPostProcess());
+		}
+
 		void
 		Grain(float intensity, uint32_t holdFrames = 0, float size = bgl::FilmGrainSettings().size)
 		{
-			auto settings       = bgl::FilmGrainSettings();
-			settings.intensity  = intensity;
-			settings.size       = size;
-			settings.holdFrames = holdFrames;
-			target->SetFilmGrainSettings(settings);
-			target->SetFilmGrainEnabled(true);
+			SetGrain(
+				bgl::FilmGrainSettings{ .intensity  = intensity,
+			                            .size       = size,
+			                            .holdFrames = holdFrames });
 		}
 	};
 
@@ -139,16 +156,15 @@ namespace
 
 TEST_CASE("Film grain settings outside their documented ranges are refused", "[filmgrain]")
 {
-	auto plane  = Plane();
-	auto target = plane.target;
+	auto plane = Plane();
 
-	CHECK(!target->IsFilmGrainEnabled());
+	CHECK(!plane.GetGrain());
 
 	auto kept       = bgl::FilmGrainSettings();
 	kept.intensity  = 0.5f;
 	kept.size       = 3.0f;
 	kept.holdFrames = 4;
-	target->SetFilmGrainSettings(kept);
+	plane.SetGrain(kept);
 
 	constexpr float c_Nan = std::numeric_limits<float>::quiet_NaN();
 	constexpr float c_Inf = std::numeric_limits<float>::infinity();
@@ -156,7 +172,10 @@ TEST_CASE("Film grain settings outside their documented ranges are refused", "[f
 	const auto refuses = [&](auto mutate) {
 		auto bad = bgl::FilmGrainSettings();
 		mutate(bad);
-		CHECK_THROWS_AS(target->SetFilmGrainSettings(bad), bgl::GraphicsError);
+		CHECK_THROWS_AS(plane.SetGrain(bad), bgl::GraphicsError);
+		CHECK_THROWS_AS(
+			plane.target->SetPostProcess(bgl::FilmicPostProcess{ .grain = bad }),
+			bgl::GraphicsError);
 	};
 
 	refuses([](auto& s) { s.intensity = -0.01f; });
@@ -167,24 +186,21 @@ TEST_CASE("Film grain settings outside their documented ranges are refused", "[f
 	refuses([](auto& s) { s.size = c_Inf; });
 	refuses([](auto& s) { s.size = c_Nan; });
 
-	// A refused set leaves the settings the target had.
-	const auto got = target->GetFilmGrainSettings();
-	CHECK(got.intensity == 0.5f);
-	CHECK(got.size == 3.0f);
-	CHECK(got.holdFrames == 4);
+	// A refused post-process leaves the one the target had.
+	const auto got = plane.GetGrain();
+	REQUIRE(got);
+	CHECK(got->intensity == 0.5f);
+	CHECK(got->size == 3.0f);
+	CHECK(got->holdFrames == 4);
 
 	// The edges of every range are in it, and a pattern may be held forever.
 	auto edges       = bgl::FilmGrainSettings();
 	edges.intensity  = 0.0f;
 	edges.holdFrames = 0;
-	CHECK_NOTHROW(target->SetFilmGrainSettings(edges));
+	CHECK_NOTHROW(plane.SetGrain(edges));
 	edges.intensity = 1.0f;
-	CHECK_NOTHROW(target->SetFilmGrainSettings(edges));
-
-	// The toggle is its own state: turning it on keeps the settings.
-	target->SetFilmGrainEnabled(true);
-	CHECK(target->IsFilmGrainEnabled());
-	CHECK(target->GetFilmGrainSettings().intensity == 1.0f);
+	CHECK_NOTHROW(plane.SetGrain(edges));
+	CHECK(plane.GetGrain()->intensity == 1.0f);
 }
 
 TEST_CASE(
@@ -207,7 +223,7 @@ TEST_CASE(
 	{
 		INFO("display-linear " << value);
 
-		plane.target->SetFilmGrainEnabled(false);
+		plane.SetGrain(std::nullopt);
 		plane.Fill(value);
 		plane.Capture(plain);
 		REQUIRE(Deviation(plain) == 0.0f);
@@ -253,9 +269,9 @@ TEST_CASE(
 	CHECK(bgl::test::MeanColor(grain, 0, 0, c_Size, c_Size).g == 0.0f);
 	CHECK(Deviation(grain) == 0.0f);
 
-	// No intensity is the plain frame, and so is the toggle off once grain has run.
+	// No intensity is the plain frame, and so is no grain once grain has run.
 	plane.Fill(0.5f);
-	plane.target->SetFilmGrainEnabled(false);
+	plane.SetGrain(std::nullopt);
 	plane.Capture(plain);
 	plane.Grain(0.0f);
 	plane.Capture(grain);
@@ -265,7 +281,7 @@ TEST_CASE(
 	plane.Capture(grain);
 	CHECK(!SameFrame(plain, grain));
 
-	plane.target->SetFilmGrainEnabled(false);
+	plane.SetGrain(std::nullopt);
 	plane.Capture(grain);
 	CHECK(SameFrame(plain, grain));
 
@@ -347,7 +363,7 @@ TEST_CASE("Film grain's pitch scales with the output and floors at a pixel", "[f
 
 TEST_CASE("Film grain follows the curve under filmic too", "[filmgrain][render]")
 {
-	auto plane = Plane(bgl::PostProcessType::kFilmic);
+	auto plane = Plane(bgl::FilmicPostProcess());
 	plane.Fill(0.5f);
 
 	const std::string plain = "assets/golden/filmgrain_filmic_plain.got.png";

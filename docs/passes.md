@@ -105,16 +105,19 @@ fold it in, while the display curve — `AgX` in
 [lib/math/Tonemap.slang](libs/bgl/shaders/src/lib/math/Tonemap.slang) — belongs to the output and runs once.
 `AgX` leaves its result linear, so the sRGB backbuffer view is still what encodes it.
 
-**The post-process is the target's: filmic, or toon.** `IRenderTarget::SetPostProcessType` (and
-`RenderTargetDesc::postProcessType`) picks it per output, `PostProcessType::kFilmic` by default:
-AgX. `kToon` is Blender's Standard view: the exposed value clamped to [0, 1]
-and no curve, so a colour authored to be seen as it is -- a toon look -- reaches the screen as
-authored, after the same sRGB encoding. RCAS, bloom, the colour grade and the editor's outline
-apply under both. Two of them do so by maths of their own under toon, which has no curve to roll a
-glow off and no log encoding to grade in: bloom is screened rather than added ([Bloom](#bloom)), and
-the grade's CDL and contrast act on the sRGB-encoded value ([the colour grade](#the-colour-grade)).
-The settings are the same under both; the type picks what they mean. The rest of this section is
-the filmic curve.
+**The post-process is the target's: filmic, or toon.** `IRenderTarget::SetPostProcess` (and
+`RenderTargetDesc::postProcess`) sets it per output as one `bgl::PostProcess`, a variant of
+`FilmicPostProcess` -- AgX, the default -- and `ToonPostProcess`, Blender's Standard view: the
+exposed value clamped to [0, 1] and no curve, so a colour authored to be seen as it is -- a toon
+look -- reaches the screen as authored, after the same sRGB encoding. **Each type holds the effects
+it has**, each an `optional` that is off when absent: bloom, a grade, [film grain](#film-grain) and
+[the colour split](#the-colour-split). Bloom, grain and the split take the same settings under both,
+but bloom is added ahead of AgX and screened over toon's clamp ([Bloom](#bloom)), which has no curve
+to roll a glow off. The grades are different types, because they are different maths: filmic's
+`ColorGradeSettings` is a CDL in AgX's log encoding, toon's `ToonGradeSettings` the black and white
+the screen shows ([the colour grade](#the-colour-grade)). So a grade can only be set on the type it
+works under, and switching type takes the whole value with it. RCAS and the editor's outline apply
+under both. The rest of this section is the filmic curve.
 
 **The curve is Blender 5.2's AgX, and the LUT is Blender's own file.** Blender's `AgX Base sRGB`
 view is a 57³ formation LUT applied in FilmLight E-Gamut log2 space, then a Rec.1886 decode, and
@@ -944,8 +947,8 @@ Renders the glow the [PostProcess](#postprocess) combine adds: a ladder of half-
 levels), walked down with the 13-tap Jimenez downsample and back up with a 9-tap tent, one graph
 pass per level in each direction (`BloomDown0..`, `BloomUp0..`), each a full-screen triangle from
 the `programs.screen.Bloom` module sharing `programs.screen.FullscreenRect`'s mesh stage. Added in
-`EndFrame` between the resolve and `PostProcess`, and **only when the target has
-`SetBloomEnabled`** — the chain is created lazily at the first frame that blooms and rebuilt on
+`EndFrame` between the resolve and `PostProcess`, and **only when the target's post-process has
+`bloom`** — the chain is created lazily at the first frame that blooms and rebuilt on
 resize, so enabling costs nothing at target creation.
 
 The first downsample owns the two scene-facing decisions: the threshold with its quadratic soft
@@ -1000,11 +1003,11 @@ first sharpens the resolved history with RCAS ([Temporal Antialiasing](docs/taa.
 reading four more point taps of it. Otherwise the branch is skipped and the frame is the one it
 always was. A target with [the colour split](#the-colour-split) on reads red and blue from
 displaced taps of that. Then it combines the [Bloom](#bloom) chain's finished level — in linear radiance, scaled by
-`BloomSettings::intensity`, behind the target's flag so a bloom-less frame binds nothing; added
+`BloomSettings::intensity`, behind a flag so a bloom-less frame binds nothing; added
 under filmic, screened under toon — then
 applies the display curve — `AgX` through the LUT above, or toon's clamp — graded when the target
-has `SetColorGradeEnabled` (see [the colour grade](#the-colour-grade) below), then
-[film grain](#film-grain) when the target has `SetFilmGrainEnabled`, then — on a frame where a
+sets a `grade` (see [the colour grade](#the-colour-grade) below), then
+[film grain](#film-grain) when it sets `grain`, then — on a frame where a
 [Outline Mask](#outline-mask) pass ran — composites the selection outline: a pixel outside the mask but within the outline width of it
 takes the display-space outline colour instead of the tonemapped result. Compositing after the
 curve is deliberate: the outline is editor feedback rather than radiance, so exposure and AgX must
@@ -1041,8 +1044,8 @@ between and before them:
    pick a white on the CIE daylight locus as Unity does, and `WhiteBalanceLmsScale`
    ([postprocess/color_grade.h](libs/bgl/src/postprocess/color_grade.h)) turns it into
    three gains on the CPU once per frame.
-2. **Vignette**, in scene linear: Unity's frame-shaped falloff, `vignetteIntensity` reaching a black
-   corner at 1 and `vignetteSmoothness` the exponent's share of 5.
+2. **Vignette**, in scene linear: Unity's frame-shaped falloff, `vignette.intensity` reaching a black
+   corner at 1 and `vignette.smoothness` the exponent's share of 5.
 3. **The ASC CDL**, in the log coordinate the formation LUT reads — where a colourist applies one in
    a scene-referred pipeline and where Blender's looks run. `slope` and `offset` act on a 25-stop
    encoding with 0 at −12.5 EV, so a slope brightens the top of the range more than the bottom;
@@ -1057,22 +1060,22 @@ grade is evaluated per pixel rather than baked into a per-frame LUT as Unreal's 
 Unity's LutBuilder do, because a baked LUT is a per-target allocation and a pass of its own for
 work this pass does in a few dozen ALU.
 
-**Under toon the same steps run around no curve** — `ToonGraded`, in the same module. Its input is
-the clamped scene with the glow already screened over it, which is display-linear: toon's scene and
-display coincide, so white balance and the vignette act on it as they do above. The CDL and
-contrast then act on its **sRGB encoding** rather than a log one, which makes two of the CDL's
-numbers readable off the screen: `offset` is the black the display shows, per channel, and `slope`
-the white. A film print's lifted, tinted black is an offset of a few hundredths in two channels and
-none in the third. Contrast pivots at middle grey's encoding there, 0.461, so 0.18 holds as it does
-under filmic. The lift follows the vignette, so a darkened corner bottoms out at the lifted black
-and not below it. The same `ColorGradeSettings` are therefore a different grade under each type: a
-slope of 1.1 brightens the top of a 25-stop log range under filmic and scales the encoded value
-under toon. A game is one type or the other and tunes its grade for it (`ColorGrade_test`,
-`PostProcessType_test`).
+**Toon's grade is its own type**, `ToonGradeSettings`, run by `ToonGraded` in the same module. Its
+input is the clamped scene with the glow already screened over it, which is display-linear: toon's
+scene and display coincide, so white balance and the vignette act on it as they do above. Then, on
+its **sRGB encoding**: contrast, pivoting at middle grey's encoding (0.461) so 0.18 holds as it does
+under filmic; `gamma`; saturation about Rec.709 luma; and last the **levels**, which map the
+encoded [0, 1] onto [`black`, `white`]. Last, so contrast, gamma and saturation never move the ends:
+`black` is the black the screen shows, per channel, and `white` the white -- a film print's lifted,
+tinted black and its cream white are read straight off a frame and typed in. The levels follow the
+vignette, so a darkened corner bottoms out at the lifted black and not below it
+(`ColorGrade_test`, `PostProcessType_test`). It is not the CDL in another encoding: a CDL's offset
+moves under its slope and its power, and the point of a toon grade is two ends that stay where they
+were put.
 
 #### The colour split
 
-`SetColorSplitEnabled` reads the scene's red from one side of each pixel and its blue from the
+A post-process with a `split` reads the scene's red from one side of each pixel and its blue from the
 other, green staying put: a misregistered print with `ColorSplitSettings::offset`, the same
 displacement over the whole frame, and a lens's chromatic aberration with `radial`, nothing at the
 centre and growing linearly outward. Red moves by the setting and blue by its opposite, so the two
@@ -1094,7 +1097,7 @@ sharpen runs at each of the three taps, fifteen reads in place of five (`ColorSp
 
 #### Film grain
 
-`SetFilmGrainEnabled` multiplies the displayed value by `1 + intensity * n`, `n` a triangular
+A post-process with `grain` multiplies the displayed value by `1 + intensity * n`, `n` a triangular
 noise in (-1, 1): the sum of two uniform hashes, which has a film grain's soft-shouldered
 distribution where one uniform is flat to its edges. It is **a share of the pixel's value**, so
 black stays black, a bright region carries the most, and a black the grade lifted carries a

@@ -126,7 +126,8 @@ surface.
 **A toon look is authored for the toon post-process**, Blender's Standard view -- its cel colours
 are the screen's, which AgX's filmic curve would lift and desaturate -- so a toon game sets its
 project's `.bproj` `postProcess` to `"toon"` and its targets end in it
-(`IRenderTarget::SetPostProcessType`); the editor shows a toon asset in it on its own.
+(`IRenderTarget::SetPostProcess` with a `ToonPostProcess`); the editor shows a toon asset in it on
+its own.
 
 **A toon surface draws through the lit programs.** Registration binds a toon slot to its model's
 adapter over the game's type — `ToonCharacterLit<G>` or `ToonEnvironmentLit<G>`, in

@@ -214,7 +214,10 @@ on the render thread, before its host dies. The host drains a viewport's pending
 destroying its view. Inactive tabs must suspend their viewports through `SetActive`.
 
 `ViewportDesc` supplies initial instance capacity, TAA allocation, render scale, reconstruction
-width and sharpness. The host preserves these defaults until the user selects a Render-menu override. Those
+width and sharpness, and `filmic` and `toon`: each post-process type's effects with their settings
+and whether each is on. Which type a viewport ends in is the host's -- the project's, toon for toon
+content, or the user's pick -- so a plugin describes both; the Render menu switches an effect in both
+at once and keeps its settings while it is off. The host preserves these defaults until the user selects a Render-menu override. Those
 choices also apply to viewports created later by lazy panel factories; outline and GPU timing follow
 the current host toggles. TAA availability is refreshed when the Render menu opens.
 

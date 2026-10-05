@@ -1,7 +1,8 @@
 #pragma once
 
 #include <bgl/IGraphics.h>
-#include <bgl/IRenderTarget.h>
+#include <bgl/types/ColorGradeSettings.h>
+#include <bgl/types/ToonGradeSettings.h>
 #include <core/glm.h>
 
 namespace bgl::test
@@ -45,8 +46,8 @@ namespace bgl::test
 	 */
 	[[nodiscard]] glm::vec4
 	RunGradedToon(
-		bgl::IGraphics&                gfx,
-		glm::vec3                      displayLinear,
-		glm::vec2                      uv,
-		const bgl::ColorGradeSettings& settings);
+		bgl::IGraphics&               gfx,
+		glm::vec3                     displayLinear,
+		glm::vec2                     uv,
+		const bgl::ToonGradeSettings& settings);
 }

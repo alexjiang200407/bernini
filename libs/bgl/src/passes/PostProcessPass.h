@@ -1,6 +1,6 @@
 #pragma once
 #include "passes/PassInitContext.h"
-#include <bgl/IRenderTarget.h>
+#include <bgl/types/PostProcess.h>
 #include <bgl/types/Viewport.h>
 #include <bgpu/pipeline/MeshletKernel.h>
 #include <bgpu/resource/Rtv.h>
@@ -65,29 +65,21 @@ namespace bgl
 			bgpu::SrvHandle     tonemapLut;
 			bgpu::SamplerHandle lutSampler;
 
-			// Set only when the bloom passes ran this frame; the shader samples the chain behind
-			// the flag, so a disabled frame binds nothing. Half the source's resolution, so it is
+			// Set only when the bloom passes ran this frame, which a post-process with bloom on
+			// can still skip when a pool refused the chain; the shader samples the chain behind the
+			// flag, so a frame without it binds nothing. Half the source's resolution, so it is
 			// always linearly sampled.
 			bgpu::SrvHandle     bloom;
 			bgpu::SamplerHandle bloomSampler;
 			std::string         bloomName;
-			float               bloomIntensity = 0.0f;
-			bool                bloomEnabled   = false;
+			bool                bloomRan = false;
 
 			// The target's TAA sharpness, in [0, 1]; zero skips RCAS. Set only on a frame the resolve
 			// ran below a render scale of 1, whose output is on the backbuffer's grid.
 			float taaSharpness = 0.0f;
 
-			// Validated by the target that carries it; written only when enabled.
-			ColorGradeSettings colorGrade;
-			bool               colorGradeEnabled = false;
-			PostProcessType    postProcessType   = PostProcessType::kFilmic;
-
-			ColorSplitSettings colorSplit;
-			bool               colorSplitEnabled = false;
-
-			FilmGrainSettings filmGrain;
-			bool              filmGrainEnabled = false;
+			// The target's, validated when it was set: the curve, and each effect's settings.
+			PostProcess postProcess = FilmicPostProcess();
 
 			// How many frames have begun on the target, which is what a grain pattern is held by.
 			uint64_t frameCount = 0;

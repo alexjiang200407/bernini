@@ -31,7 +31,7 @@ namespace bgl
 			desc.renderScale);
 		SetTaaReconstructionWidth(desc.taaReconstructionWidth);
 		SetTaaSharpness(desc.taaSharpness);
-		SetPostProcessType(desc.postProcessType);
+		SetPostProcess(desc.postProcess);
 
 		for (UINT i = 0; i < c_SwapchainImageCount; i++)
 		{

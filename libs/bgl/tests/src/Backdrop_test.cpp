@@ -14,6 +14,7 @@
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/SkyboxDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
+#include <bgl/types/ToonPostProcess.h>
 #include <bgl/types/Viewport.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
@@ -74,12 +75,12 @@ namespace
 			scene = gfx->CreateScene(bgl::SceneDesc());
 			view  = gfx->CreateSceneView(scene, 4);
 
-			auto targetDesc            = bgl::RenderTargetDesc();
-			targetDesc.width           = c_Size;
-			targetDesc.height          = c_Size;
-			targetDesc.headless        = true;
-			targetDesc.postProcessType = bgl::PostProcessType::kToon;
-			target                     = gfx->CreateRenderTarget(targetDesc);
+			auto targetDesc        = bgl::RenderTargetDesc();
+			targetDesc.width       = c_Size;
+			targetDesc.height      = c_Size;
+			targetDesc.headless    = true;
+			targetDesc.postProcess = bgl::ToonPostProcess();
+			target                 = gfx->CreateRenderTarget(targetDesc);
 			REQUIRE(target != nullptr);
 
 			job.view     = view;
