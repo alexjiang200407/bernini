@@ -12,6 +12,7 @@
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/SurfaceMaterialDesc.h>
 #include <bgl/types/Viewport.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -439,4 +440,78 @@ TEST_CASE("Bloom survives a resize, fed by the TAA resolve", "[bloom][render]")
 	CHECK(spill > 0.01f);
 
 	std::remove(resizedPath.c_str());
+}
+
+// The chain is not clamped to the display's range under toon: an emissive above one is how a toon
+// surface asks for more glow, and what the screen combine keeps from clipping.
+TEST_CASE("Under toon an emissive above one glows further", "[bloom][tonemap][render]")
+{
+	auto opts                       = HeadlessOptions();
+	opts.gpuContext.clientShaderDir = "./shaders/tests/surfaces";
+
+	auto gfx = bgl::test::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc            = bgl::RenderTargetDesc();
+	targetDesc.width           = static_cast<int>(c_Size);
+	targetDesc.height          = static_cast<int>(c_Size);
+	targetDesc.headless        = true;
+	targetDesc.postProcessType = bgl::PostProcessType::kToon;
+	auto target                = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto settings      = bgl::BloomSettings();
+	settings.threshold = 0.0f;
+	settings.intensity = 0.25f;
+	target->SetBloomSettings(settings);
+	target->SetBloomEnabled(true);
+
+	auto scene = gfx->CreateScene(bgl::SceneDesc());
+
+	auto camera = bgl::Camera();
+	camera
+		.LookAt(
+			glm::vec3(0.0f, 0.0f, c_CameraDist),
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(glm::radians(60.0f), 1.0f, 0.5f, 500.0f);
+
+	const auto shoot = [&](float radiance, const std::string& path) {
+		const auto material = scene->CreateSurfaceMaterial(
+			bgl::SurfaceMaterialDesc{ .surfaceName = "Unlit",
+		                              .values = { { "color", glm::vec4(glm::vec3(radiance), 0.0f) },
+		                                          { "opacity", glm::vec4(1.0f) } } });
+
+		auto view = gfx->CreateSceneView(scene, 4);
+		view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(scene->AddCubeGeom(material)));
+
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = camera;
+		job.viewport = bgl::Viewport(static_cast<float>(c_Size), static_cast<float>(c_Size));
+
+		gfx->DrawFrame(target, job);
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, path);
+	};
+
+	const std::string onePath = "assets/golden/bloom_toon_one.got.png";
+	const std::string twoPath = "assets/golden/bloom_toon_two.got.png";
+
+	shoot(1.0f, onePath);
+	shoot(2.0f, twoPath);
+
+	// Both cubes are display white, so only the glow tells them apart.
+	CHECK(CenterProbe(onePath, c_Size).Luma() > 0.99f);
+	CHECK(CenterProbe(twoPath, c_Size).Luma() > 0.99f);
+
+	const float spillOne = SpillLuma(onePath, c_Size);
+	const float spillTwo = SpillLuma(twoPath, c_Size);
+	INFO("spill at radiance 1: " << spillOne << ", at 2: " << spillTwo);
+	CHECK(spillOne > 0.02f);
+	CHECK(spillTwo > spillOne + 0.02f);
+
+	std::remove(onePath.c_str());
+	std::remove(twoPath.c_str());
 }

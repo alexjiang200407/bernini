@@ -98,6 +98,13 @@ float SampleOutline(float2 uv)
     return covered > 0.0 ? 1.0 : 0.0;
 }
 
+// The glow over a display value with no curve to roll it off: the sum where both are small, and
+// short of white however bright either is. Written so that no glow returns `base` exactly.
+float3 ScreenBlend(float3 base, float3 layer)
+{
+    return base + layer * (1.0 - base);
+}
+
 struct VSOut
 {
     float4 position : SV_Position;
@@ -146,10 +153,12 @@ float4 PSMain(VSOut input) : SV_Target
         scene.rgb = Rcas(above, left, scene.rgb, right, below, gPostProcessData.rcasStrength);
     }
 
-    // Added in linear radiance, ahead of the curve: the glow is of the scene, not of the display.
+    // Linear radiance. Filmic adds it ahead of the curve, which rolls it off; toon has no curve.
+    float3 glow = float3(0.0, 0.0, 0.0);
+
     if (gPostProcessData.bloomEnabled != 0)
     {
-        scene.rgb += gPostProcessData.bloomIntensity * gPostProcessData.bloom.SampleLevel(gPostProcessData.bloomSampler, input.uv, 0.0).rgb;
+        glow = gPostProcessData.bloomIntensity * gPostProcessData.bloom.SampleLevel(gPostProcessData.bloomSampler, input.uv, 0.0).rgb;
     }
 
     TonemapLut lut;
@@ -160,7 +169,7 @@ float4 PSMain(VSOut input) : SV_Target
 
     if (gPostProcessData.toon != 0)
     {
-        color = saturate(scene.rgb);
+        color = ScreenBlend(saturate(scene.rgb), saturate(glow));
     }
     else if (gPostProcessData.gradeEnabled != 0)
     {
@@ -174,11 +183,11 @@ float4 PSMain(VSOut input) : SV_Target
         grade.vignetteIntensity = gPostProcessData.gradeVignetteIntensity;
         grade.vignetteSmoothness = gPostProcessData.gradeVignetteSmoothness;
 
-        color = AgXGraded(scene.rgb, input.uv, grade, lut);
+        color = AgXGraded(scene.rgb + glow, input.uv, grade, lut);
     }
     else
     {
-        color = AgX(scene.rgb, lut);
+        color = AgX(scene.rgb + glow, lut);
     }
 
     if (gPostProcessData.outlineEnabled != 0)

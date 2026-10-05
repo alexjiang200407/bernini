@@ -1,3 +1,4 @@
+#include "util/AgxProbe.h"
 #include "util/GoldenImage.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
@@ -36,14 +37,6 @@ namespace
 		opts.gpuContext.shaderCacheDir  = bgl::test::ShaderCacheDir();
 		opts.gpuContext.clientShaderDir = "./shaders/tests/surfaces";
 		return opts;
-	}
-
-	/** The sRGB transfer function, linear to encoded. */
-	float
-	SrgbEncode(float linear)
-	{
-		return linear <= 0.0031308f ? 12.92f * linear :
-		                              1.055f * std::pow(linear, 1.0f / 2.4f) - 0.055f;
 	}
 
 	struct Plane
@@ -121,9 +114,9 @@ TEST_CASE("Toon post-process shows the exposed value clamped and sRGB-encoded", 
 			exposure,
 			"assets/golden/tonemap_standard_" + std::to_string(i) + ".got.png");
 		const glm::vec3 exposed = glm::clamp(radiance * exposure, 0.0f, 1.0f);
-		CHECK(got.r == Catch::Approx(SrgbEncode(exposed.r)).margin(c_Margin));
-		CHECK(got.g == Catch::Approx(SrgbEncode(exposed.g)).margin(c_Margin));
-		CHECK(got.b == Catch::Approx(SrgbEncode(exposed.b)).margin(c_Margin));
+		CHECK(got.r == Catch::Approx(bgl::test::EncodeSrgb(exposed.r)).margin(c_Margin));
+		CHECK(got.g == Catch::Approx(bgl::test::EncodeSrgb(exposed.g)).margin(c_Margin));
+		CHECK(got.b == Catch::Approx(bgl::test::EncodeSrgb(exposed.b)).margin(c_Margin));
 	}
 }
 
@@ -158,4 +151,66 @@ TEST_CASE(
 	const auto* created = "assets/golden/tonemap_switch_created.got.png";
 	plane.Shoot(radiance, 1.0f, created);
 	CHECK(bgl::test::MaxChannelDelta(standard, created) == 0.0f);
+}
+
+// A full-frame plane of one radiance blurs to itself, so with the threshold at zero the chain's
+// level is that radiance exactly and the frame is the combine's answer for it.
+TEST_CASE(
+	"Toon screens the glow, so a bright colour stops short of white",
+	"[tonemap][bloom][render]")
+{
+	Plane plane;
+	plane.target->SetPostProcessType(bgl::PostProcessType::kToon);
+
+	auto bloom      = bgl::BloomSettings();
+	bloom.threshold = 0.0f;
+	plane.target->SetBloomEnabled(true);
+
+	constexpr float c_Margin = 1.5f / 255.0f;
+
+	struct Case
+	{
+		glm::vec3 radiance;
+		float     intensity;
+	};
+
+	// The second is the one an add clips: 0.9 + 0.9 and 0.6 + 0.6 both land on white, and the
+	// orange goes yellow. The third's red is past the display's range before any glow.
+	const std::array<Case, 3> cases = { {
+		{ glm::vec3(0.5f, 0.25f, 0.8f), 0.5f },
+		{ glm::vec3(0.9f, 0.6f, 0.3f), 1.0f },
+		{ glm::vec3(2.0f, 0.1f, 0.05f), 0.25f },
+	} };
+
+	for (size_t i = 0; i < cases.size(); ++i)
+	{
+		const auto& [radiance, intensity] = cases[i];
+		INFO("case " << i);
+
+		bloom.intensity = intensity;
+		plane.target->SetBloomSettings(bloom);
+
+		const auto got = plane.Shoot(
+			radiance,
+			1.0f,
+			"assets/golden/tonemap_toon_glow_" + std::to_string(i) + ".got.png");
+
+		const glm::vec3 base     = glm::clamp(radiance, 0.0f, 1.0f);
+		const glm::vec3 glow     = glm::clamp(radiance * intensity, 0.0f, 1.0f);
+		const glm::vec3 expected = base + glow * (1.0f - base);
+
+		CHECK(got.r == Catch::Approx(bgl::test::EncodeSrgb(expected.r)).margin(c_Margin));
+		CHECK(got.g == Catch::Approx(bgl::test::EncodeSrgb(expected.g)).margin(c_Margin));
+		CHECK(got.b == Catch::Approx(bgl::test::EncodeSrgb(expected.b)).margin(c_Margin));
+	}
+
+	// The orange kept its order, where an add lands red and green both on white.
+	bloom.intensity = 1.0f;
+	plane.target->SetBloomSettings(bloom);
+	const auto orange = plane.Shoot(
+		glm::vec3(0.9f, 0.6f, 0.3f),
+		1.0f,
+		"assets/golden/tonemap_toon_glow_orange.got.png");
+	CHECK(orange.g < 0.95f);
+	CHECK(orange.g < orange.r - 0.02f);
 }

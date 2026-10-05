@@ -112,7 +112,8 @@ and nothing else, so a colour authored to be seen as it is -- a toon look -- rea
 authored, after the same sRGB encoding. The colour grade works in AgX's log encoding and is not
 applied under toon -- with it go its white balance, saturation, contrast and vignette, so the Color
 Grade toggle has no effect on a target in toon. RCAS, bloom and the editor's outline come before or
-after the curve and apply under both. A toon effect added later joins the `kToon` branch.
+after the curve and apply under both -- bloom by a combine of its own under toon, which has no
+curve to roll a glow off ([Bloom](#bloom)). A toon effect added later joins the `kToon` branch.
 Everything below is the filmic path.
 
 **The curve is Blender 5.2's AgX, and the LUT is Blender's own file.** Blender's `AgX Base sRGB`
@@ -978,6 +979,16 @@ set this way, so a stylized material wants little specular. Glow colour also goe
 which pulls very bright colours toward white — a saturated emissive glows paler than it is
 authored.
 
+**Under toon the glow is screened, not added.** Filmic adds the chain's level to the scene and AgX
+rolls the sum off. Toon has no curve, so an add over an already bright cel colour clips: 0.9 + 0.6
+and 0.6 + 0.6 both land on white, and an orange goes yellow. `PostProcess` screens it there instead
+— `base + glow * (1 - base)` on the clamped scene and the clamped, intensity-scaled level, in
+display-linear light — which is the add where both are small and stops short of white however
+bright either is. The chain itself is the same under both types and is not clamped to the display's
+range, so an emissive above one still glows further than one at it. With the threshold at zero the
+chain is a blur of the whole frame and the result is the diffusion filter of cel animation: every
+lit region haloed, the mid-brightness ones too.
+
 ### PostProcess — [passes/PostProcessPass.{h,cpp}](libs/bgl/src/passes/PostProcessPass.cpp)
 
 Turns the linear HDR scene colour into the displayed image, as a single full-screen triangle from
@@ -987,8 +998,9 @@ the `programs.screen.PostProcess` module (mesh + pixel, no amplification shader,
 On a TAA target rendering below a scale of 1, with a nonzero `taaSharpness` (1 by default), it
 first sharpens the resolved history with RCAS ([Temporal Antialiasing](docs/taa.md) § The sharpen),
 reading four more point taps of it. Otherwise the branch is skipped and the frame is the one it
-always was. Then it adds the [Bloom](#bloom) chain's finished level — in linear radiance, scaled by
-`BloomSettings::intensity`, behind the target's flag so a bloom-less frame binds nothing — then
+always was. Then it combines the [Bloom](#bloom) chain's finished level — in linear radiance, scaled by
+`BloomSettings::intensity`, behind the target's flag so a bloom-less frame binds nothing; added
+under filmic, screened under toon — then
 applies `AgX` through the LUT above, graded when the target has `SetColorGradeEnabled` (see
 [the colour grade](#the-colour-grade) below), then — on a frame where a [Outline Mask](#outline-mask) pass ran —
 composites the selection outline: a pixel outside the mask but within the outline width of it

@@ -62,7 +62,7 @@ namespace bgl
 	/** How a target blooms. Per-frame constants: a change reallocates nothing. */
 	struct BloomSettings
 	{
-		// sceneColor + intensity * bloom.
+		// The glow's weight: added to the scene under filmic, screened over it under toon.
 		float intensity = 0.25f;
 
 		// Linear radiance after exposure, which puts a scene's average near 0.18.
