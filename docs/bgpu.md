@@ -111,9 +111,15 @@ every test get the check without asking for it, and nothing can turn it off.
 | macOS | a Mac with Apple silicon (M1 or later) | `hw.optional.arm64`, so an x86_64 build under Rosetta passes |
 | | macOS 13 Ventura or later | `NSProcessInfo.operatingSystemVersion` |
 | | a Metal 3 GPU with a mesh stage and bindless | `MTLGPUFamilyMetal3`, `MTLGPUFamilyApple7`, `MTLArgumentBuffersTier2` |
+| Windows | a D3D12 device at feature level 12_0 | `D3D12CreateDevice` on DXGI's first adapter, the one every owner draws on |
+| | a mesh stage and bindless | `MeshShaderTier` 1 (`OPTIONS7`), `ResourceBindingTier` 3 (`OPTIONS`) |
+| | a driver new enough for the shaders and barriers | shader model 6.6, the profile the sessions compile to; `EnhancedBarriersSupported` (`OPTIONS12`) |
 
 An Intel Mac is refused even when its GPU supports Metal 3: the engine is built and tested on Apple
 silicon only.
+On Windows that is NVIDIA Turing (GTX 1660, RTX 2060) and newer, AMD RDNA2 (Radeon RX 6000) and
+newer, and Intel Arc. A machine whose first adapter is an integrated GPU without mesh shaders is
+refused, even when a second GPU would pass, because the engine does not choose an adapter.
 
 * **The error is for a player, and the data is for the client.** `what()` says that this computer
   does not meet the minimum requirements. It then names each thing to replace or update once, with
