@@ -241,6 +241,8 @@ private:
 	std::optional<bool>       m_TaaOverride;
 	std::optional<bool>       m_BloomOverride;
 	std::optional<bool>       m_ColorGradeOverride;
+	std::optional<bool>       m_FilmGrainOverride;
+	std::optional<bool>       m_ColorSplitOverride;
 
 	// The open project's post-process, and the Render > Post Process choice; empty is Auto, which a new
 	// project resets it to.

@@ -52,6 +52,17 @@
             "vignetteIntensity": 0.25,
             "vignetteSmoothness": 0.2
         },
+        "filmGrain": {
+            "enabled": false,
+            "intensity": 0.25,
+            "size": 2.0,
+            "holdFrames": 1
+        },
+        "colorSplit": {
+            "enabled": false,
+            "offset": { "x": -2.0, "y": 0.0 },
+            "radial": 0.0
+        },
         "environmentMap": "assets/Data/Authored/Environments/forest.benv",
         "dataRoot": "assets/Data",
         "skyMipLevel": 3,
@@ -87,6 +98,17 @@
             "contrast": 1.1,
             "vignetteIntensity": 0.25,
             "vignetteSmoothness": 0.2
+        },
+        "filmGrain": {
+            "enabled": false,
+            "intensity": 0.25,
+            "size": 2.0,
+            "holdFrames": 1
+        },
+        "colorSplit": {
+            "enabled": false,
+            "offset": { "x": -2.0, "y": 0.0 },
+            "radial": 0.0
         },
         "environmentMap": "assets/Data/Authored/Environments/forest.benv",
         "dataRoot": "assets/Data",

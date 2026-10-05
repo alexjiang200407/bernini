@@ -1142,6 +1142,78 @@ TEST_CASE(
 	CHECK_FALSE(materialView->GetBackdrop().has_value());
 }
 
+// As bloom and the grade: a viewport's film grain and colour split are config.json's, a partial
+// section overrides only what it names, and the Render menu only switches each.
+TEST_CASE(
+	"A viewport's film grain and colour split are config.json's, and the menu only toggles them",
+	"[mainwindow][render]")
+{
+	const HeadlessEditor editor;
+
+	const std::string config = R"({
+  "headless": true,
+  "materialEditor":  { "temporalAA": false,
+                       "filmGrain": { "enabled": true, "intensity": 0.4, "size": -3.0,
+                                      "holdFrames": 5 },
+                       "colorSplit": { "enabled": true, "offset": { "y": 1.5 }, "radial": 900.0 } },
+  "animationEditor": { "temporalAA": false }
+})";
+	core::file::write_atomic(editor.ConfigFile(), config);
+
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+
+	const auto* material = window.findChild<MeshEditorWindow*>();
+	REQUIRE(material != nullptr);
+	auto* materialView = material->findChild<RenderTargetWindow*>();
+	REQUIRE(materialView != nullptr);
+
+	CHECK(materialView->IsFilmGrainEnabled());
+	CHECK(materialView->IsColorSplitEnabled());
+
+	// A size bgl would throw on is clamped to one it takes.
+	const bgl::FilmGrainSettings grain = materialView->GetFilmGrainSettings();
+	CHECK(grain.intensity == Catch::Approx(0.4f));
+	CHECK(grain.size > 0.0f);
+	CHECK(grain.holdFrames == 5);
+
+	// The offset's unnamed axis keeps bgl's, and a radial share past the sanity bound is pulled in.
+	const bgl::ColorSplitSettings split = materialView->GetColorSplitSettings();
+	CHECK(split.offset.x == Catch::Approx(bgl::ColorSplitSettings().offset.x));
+	CHECK(split.offset.y == Catch::Approx(1.5f));
+	CHECK(split.radial < 900.0f);
+
+	// No section is each one's default: off, with the settings bgl ships.
+	const auto* animation = window.findChild<AnimationEditorWindow*>();
+	REQUIRE(animation != nullptr);
+	const auto* animationView = animation->findChild<RenderTargetWindow*>();
+	REQUIRE(animationView != nullptr);
+
+	CHECK_FALSE(animationView->IsFilmGrainEnabled());
+	CHECK_FALSE(animationView->IsColorSplitEnabled());
+	CHECK(
+		animationView->GetFilmGrainSettings().intensity ==
+		Catch::Approx(bgl::FilmGrainSettings().intensity));
+
+	QAction* grainAction = ActionNamed(window, "Film Grain");
+	QAction* splitAction = ActionNamed(window, "Color Split");
+	REQUIRE(grainAction != nullptr);
+	REQUIRE(splitAction != nullptr);
+	CHECK(grainAction->isChecked());
+	CHECK(splitAction->isChecked());
+
+	// Each switches every viewport and leaves the other, and what config.json named, alone.
+	grainAction->setChecked(false);
+	CHECK_FALSE(materialView->IsFilmGrainEnabled());
+	CHECK(materialView->IsColorSplitEnabled());
+	CHECK(materialView->GetFilmGrainSettings().intensity == Catch::Approx(0.4f));
+
+	splitAction->setChecked(false);
+	CHECK_FALSE(materialView->IsColorSplitEnabled());
+
+	grainAction->setChecked(true);
+	CHECK(animationView->IsFilmGrainEnabled());
+}
+
 // Which tab is up decides which viewport is in the frame loop, so the tab a project opens on is
 // behaviour rather than layout: the panel behind it holds no mesh and renders nothing.
 TEST_CASE("A project opens on the Mesh Editor tab", "[mainwindow][render]")

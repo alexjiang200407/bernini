@@ -181,6 +181,30 @@ namespace
 			ClampGradeValue("vignetteSmoothness", s.vignetteSmoothness, 0.01f, 1.0f);
 		return s;
 	}
+
+	// As ClampBloomSettings. The ceiling on size is sanity only, and its floor stands in for bgl's
+	// "positive".
+	bgl::FilmGrainSettings
+	ClampFilmGrainSettings(bgl::FilmGrainSettings s)
+	{
+		s.intensity = ClampSectionValue("filmGrain", "intensity", s.intensity, 0.0f, 1.0f);
+		s.size      = ClampSectionValue("filmGrain", "size", s.size, 0.01f, 64.0f);
+		return s;
+	}
+
+	// bgl takes any finite distance; past these the fringes are wider than a viewport's panels.
+	bgl::ColorSplitSettings
+	ClampColorSplitSettings(bgl::ColorSplitSettings s)
+	{
+		constexpr float c_Farthest = 64.0f;
+
+		s.offset.x =
+			ClampSectionValue("colorSplit", "offset.x", s.offset.x, -c_Farthest, c_Farthest);
+		s.offset.y =
+			ClampSectionValue("colorSplit", "offset.y", s.offset.y, -c_Farthest, c_Farthest);
+		s.radial = ClampSectionValue("colorSplit", "radial", s.radial, -c_Farthest, c_Farthest);
+		return s;
+	}
 }
 
 RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc desc) :
@@ -238,6 +262,8 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 
 	const bgl::BloomSettings      bloom = ClampBloomSettings(m_Desc.bloom.settings);
 	const bgl::ColorGradeSettings grade = ClampColorGradeSettings(m_Desc.colorGrade.settings);
+	const bgl::FilmGrainSettings  grain = ClampFilmGrainSettings(m_Desc.filmGrain.settings);
+	const bgl::ColorSplitSettings split = ClampColorSplitSettings(m_Desc.colorSplit.settings);
 
 	m_RenderTarget = m_Desc.renderer->Invoke([&] {
 		auto target = m_Desc.renderer->GetGraphics()->CreateRenderTarget(rtvDesc);
@@ -245,6 +271,10 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 		target->SetBloomEnabled(m_Desc.bloom.enabled);
 		target->SetColorGradeSettings(grade);
 		target->SetColorGradeEnabled(m_Desc.colorGrade.enabled);
+		target->SetFilmGrainSettings(grain);
+		target->SetFilmGrainEnabled(m_Desc.filmGrain.enabled);
+		target->SetColorSplitSettings(split);
+		target->SetColorSplitEnabled(m_Desc.colorSplit.enabled);
 		target->SetPostProcessType(GetPostProcessType());
 		return target;
 	});
@@ -485,6 +515,60 @@ RenderTargetWindow::GetBloomSettings() const
 		return {};
 
 	return m_Desc.renderer->Invoke([&] { return m_RenderTarget->GetBloomSettings(); });
+}
+
+void
+RenderTargetWindow::SetFilmGrainEnabled(bool enabled)
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return;
+
+	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetFilmGrainEnabled(enabled); });
+}
+
+bool
+RenderTargetWindow::IsFilmGrainEnabled() const
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return false;
+
+	return m_Desc.renderer->Invoke([&] { return m_RenderTarget->IsFilmGrainEnabled(); });
+}
+
+bgl::FilmGrainSettings
+RenderTargetWindow::GetFilmGrainSettings() const
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return {};
+
+	return m_Desc.renderer->Invoke([&] { return m_RenderTarget->GetFilmGrainSettings(); });
+}
+
+void
+RenderTargetWindow::SetColorSplitEnabled(bool enabled)
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return;
+
+	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetColorSplitEnabled(enabled); });
+}
+
+bool
+RenderTargetWindow::IsColorSplitEnabled() const
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return false;
+
+	return m_Desc.renderer->Invoke([&] { return m_RenderTarget->IsColorSplitEnabled(); });
+}
+
+bgl::ColorSplitSettings
+RenderTargetWindow::GetColorSplitSettings() const
+{
+	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
+		return {};
+
+	return m_Desc.renderer->Invoke([&] { return m_RenderTarget->GetColorSplitSettings(); });
 }
 
 void

@@ -83,8 +83,10 @@ namespace
 		bool     taa         = true;
 		float    renderScale = 1.0f;
 
-		// Off unless asked for, as bgl's own default is; on, it takes bgl's default settings.
-		bool bloom = false;
+		// Each off unless asked for, as bgl's own default is; on, it takes bgl's default settings.
+		bool bloom      = false;
+		bool filmGrain  = false;
+		bool colorSplit = false;
 
 		// The post-process, "filmic" or "toon".
 		std::string postProcessType = "filmic";
@@ -559,11 +561,20 @@ try
 			   "reconstructs the output (RenderTargetDesc::renderScale)")
 			->check(CLI::PositiveNumber);
 		app.add_flag("--bloom", opts.bloom, "Render with bloom at bgl's default settings");
+		app.add_flag(
+			"--film-grain",
+			opts.filmGrain,
+			"Render with film grain at bgl's default settings; frame N has the same grain every "
+			"run");
+		app.add_flag(
+			"--color-split",
+			opts.colorSplit,
+			"Render with the colour split at bgl's default settings");
 		app.add_option(
 			   "--post-process",
 			   opts.postProcessType,
-			   "The post-process: filmic (bgl's default, AgX and the grade) or toon, the exposed "
-			   "colour clamped, which a toon look is authored for "
+			   "The post-process: filmic (bgl's default, AgX) or toon, the exposed colour clamped, "
+			   "which a toon look is authored for and which screens bloom rather than adding it "
 			   "(IRenderTarget::SetPostProcessType)")
 			->check(CLI::IsMember({ "filmic", "toon" }));
 		app.add_option(
@@ -664,6 +675,8 @@ try
 		opts.taa,
 		opts.renderScale);
 	target->SetBloomEnabled(opts.bloom);
+	target->SetFilmGrainEnabled(opts.filmGrain);
+	target->SetColorSplitEnabled(opts.colorSplit);
 	target->SetPostProcessType(
 		opts.postProcessType == "toon" ? bgl::PostProcessType::kToon :
 										 bgl::PostProcessType::kFilmic);
@@ -714,7 +727,8 @@ try
 	                               PlaceGrassPatch(opts, store, *scene, assets, view);
 
 	std::cout << std::format(
-		"{} frames at {} fps, {}x{}, render scale {}, {}, TAA {}, bloom {}, {} post-process, {} "
+		"{} frames at {} fps, {}x{}, render scale {}, {}, TAA {}, bloom {}, film grain {}, colour "
+		"split {}, {} post-process, {} "
 		"warm-up frames held at t = 0\n\n",
 		opts.frames,
 		opts.fps,
@@ -726,6 +740,8 @@ try
 			std::string(lit ? "lit" : "unlit"),
 		opts.taa ? "on" : "off",
 		opts.bloom ? "on" : "off",
+		opts.filmGrain ? "on" : "off",
+		opts.colorSplit ? "on" : "off",
 		opts.postProcessType,
 		opts.warmup);
 

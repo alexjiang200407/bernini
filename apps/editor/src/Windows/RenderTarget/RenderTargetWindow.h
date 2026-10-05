@@ -59,6 +59,20 @@ struct ColorGradeConfig
 	bgl::ColorGradeSettings settings = DefaultViewportGrade();
 };
 
+// A viewport's `filmGrain` and `colorSplit` sections of config.json. The Render menu toggles
+// `enabled`, never `settings`.
+struct FilmGrainConfig
+{
+	bool                   enabled = false;
+	bgl::FilmGrainSettings settings;
+};
+
+struct ColorSplitConfig
+{
+	bool                    enabled = false;
+	bgl::ColorSplitSettings settings;
+};
+
 struct RenderTargetWindowDesc
 {
 	// Borrowed services must outlive the viewport; destruction drains its pending render work.
@@ -89,6 +103,8 @@ struct RenderTargetWindowDesc
 	// Out-of-range settings are clamped and warned about, like the render scale.
 	BloomConfig      bloom;
 	ColorGradeConfig colorGrade;
+	FilmGrainConfig  filmGrain;
+	ColorSplitConfig colorSplit;
 
 	// What the viewport draws behind toon content instead of its sky; clamped like the bloom.
 	bgl::BackdropGradient toonBackdrop;
@@ -164,6 +180,25 @@ public:
 
 	[[nodiscard]] bgl::ColorGradeSettings
 	GetColorGradeSettings() const;
+
+	// As the colour grade: on or off, with the settings config.json gave the viewport.
+	void
+	SetFilmGrainEnabled(bool enabled);
+
+	[[nodiscard]] bool
+	IsFilmGrainEnabled() const;
+
+	[[nodiscard]] bgl::FilmGrainSettings
+	GetFilmGrainSettings() const;
+
+	void
+	SetColorSplitEnabled(bool enabled);
+
+	[[nodiscard]] bool
+	IsColorSplitEnabled() const;
+
+	[[nodiscard]] bgl::ColorSplitSettings
+	GetColorSplitSettings() const;
 
 	// The post-process this viewport ends in is the user's pick if there is one, else toon for
 	// toon content, else the project's. Each setter re-derives it. Toon content also swaps the sky

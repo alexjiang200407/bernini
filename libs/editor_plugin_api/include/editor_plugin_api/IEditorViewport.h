@@ -37,6 +37,10 @@ namespace editor
 		bgl::BloomSettings      bloom;
 		bool                    colorGradeEnabled = false;
 		bgl::ColorGradeSettings colorGrade;
+		bool                    filmGrainEnabled = false;
+		bgl::FilmGrainSettings  filmGrain;
+		bool                    colorSplitEnabled = false;
+		bgl::ColorSplitSettings colorSplit;
 
 		// Drawn in place of the sky while the viewport shows toon content (SetShowsToonContent).
 		bgl::BackdropGradient toonBackdrop;
@@ -110,6 +114,38 @@ namespace editor
 		SetColorGrade(this Self&& self, bgl::ColorGradeSettings value) noexcept
 		{
 			self.colorGrade = value;
+			return std::forward<Self>(self);
+		}
+
+		template <typename Self>
+		Self&&
+		SetFilmGrainEnabled(this Self&& self, bool value) noexcept
+		{
+			self.filmGrainEnabled = value;
+			return std::forward<Self>(self);
+		}
+
+		template <typename Self>
+		Self&&
+		SetFilmGrain(this Self&& self, bgl::FilmGrainSettings value) noexcept
+		{
+			self.filmGrain = value;
+			return std::forward<Self>(self);
+		}
+
+		template <typename Self>
+		Self&&
+		SetColorSplitEnabled(this Self&& self, bool value) noexcept
+		{
+			self.colorSplitEnabled = value;
+			return std::forward<Self>(self);
+		}
+
+		template <typename Self>
+		Self&&
+		SetColorSplit(this Self&& self, bgl::ColorSplitSettings value) noexcept
+		{
+			self.colorSplit = value;
 			return std::forward<Self>(self);
 		}
 

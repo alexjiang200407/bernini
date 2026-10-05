@@ -275,6 +275,28 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 			return grade;
 		};
 
+		const auto readFilmGrain = [](const auto& section) {
+			auto       grain = FilmGrainConfig();
+			const auto node  = section["filmGrain"];
+			grain.enabled    = node["enabled"].GetOrDefault(grain.enabled);
+			auto& s          = grain.settings;
+			s.intensity      = node["intensity"].GetOrDefault(s.intensity);
+			s.size           = node["size"].GetOrDefault(s.size);
+			s.holdFrames     = node["holdFrames"].GetOrDefault(s.holdFrames);
+			return grain;
+		};
+
+		const auto readColorSplit = [](const auto& section) {
+			auto       split = ColorSplitConfig();
+			const auto node  = section["colorSplit"];
+			split.enabled    = node["enabled"].GetOrDefault(split.enabled);
+			auto& s          = split.settings;
+			s.offset.x       = node["offset"]["x"].GetOrDefault(s.offset.x);
+			s.offset.y       = node["offset"]["y"].GetOrDefault(s.offset.y);
+			s.radial         = node["radial"].GetOrDefault(s.radial);
+			return split;
+		};
+
 		// temporalAA, renderScale, taaReconstructionWidth and taaSharpness are each viewport's own
 		// rather than graphics-wide -- see docs/taa.md. `headless` is every viewport together: a
 		// headless editor is a whole editor built without windows, which is the only shape a test can
@@ -283,6 +305,8 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 			auto       viewport             = editor::ViewportDesc();
 			const auto bloom                = readBloom(section);
 			const auto grade                = readColorGrade(section);
+			const auto grain                = readFilmGrain(section);
+			const auto split                = readColorSplit(section);
 			viewport.initialInstances       = section["initialPreviewInstances"].GetOrDefault(16u);
 			viewport.taaEnabled             = section["temporalAA"].GetOrDefault(true);
 			viewport.renderScale            = section["renderScale"].GetOrDefault(1.0f);
@@ -292,6 +316,10 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 			viewport.bloom                  = bloom.settings;
 			viewport.colorGradeEnabled      = grade.enabled;
 			viewport.colorGrade             = grade.settings;
+			viewport.filmGrainEnabled       = grain.enabled;
+			viewport.filmGrain              = grain.settings;
+			viewport.colorSplitEnabled      = split.enabled;
+			viewport.colorSplit             = split.settings;
 			viewport.toonBackdrop           = readToonBackdrop(section);
 			return viewport;
 		};
@@ -604,6 +632,47 @@ MainWindow::SetUpRenderMenu()
 		m_ColorGradeOverride = enabled;
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetColorGradeEnabled(enabled);
+	});
+
+	// As bloom: each is its viewport's config.json section, and the menu switches it.
+	bool anyGrain = false;
+	bool anySplit = false;
+	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+	{
+		anyGrain = anyGrain || view->IsFilmGrainEnabled();
+		anySplit = anySplit || view->IsColorSplitEnabled();
+	}
+
+	auto* grain =
+		render->addAction(editor::Localize("editor.main_window.film_grain", "Film Grain"));
+	grain->setCheckable(true);
+	grain->setChecked(anyGrain);
+	grain->setStatusTip(
+		editor::Localize(
+			"editor.main_window.film_grain_tip",
+			"Grain the viewports after the display curve, in proportion to each pixel's "
+			"brightness. The grain is each viewport's `filmGrain` section in config.json."));
+
+	connect(grain, &QAction::toggled, this, [this](bool enabled) {
+		m_FilmGrainOverride = enabled;
+		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+			view->SetFilmGrainEnabled(enabled);
+	});
+
+	auto* split =
+		render->addAction(editor::Localize("editor.main_window.color_split", "Color Split"));
+	split->setCheckable(true);
+	split->setChecked(anySplit);
+	split->setStatusTip(
+		editor::Localize(
+			"editor.main_window.color_split_tip",
+			"Displace the viewports' red and blue from green, as a misregistered print or a lens "
+			"does. The split is each viewport's `colorSplit` section in config.json."));
+
+	connect(split, &QAction::toggled, this, [this](bool enabled) {
+		m_ColorSplitOverride = enabled;
+		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+			view->SetColorSplitEnabled(enabled);
 	});
 
 	SetUpPostProcessMenu(render);
@@ -1929,6 +1998,10 @@ MainWindow::ConfigureViewport(RenderTargetWindow& view)
 		view.SetBloomEnabled(*m_BloomOverride);
 	if (m_ColorGradeOverride)
 		view.SetColorGradeEnabled(*m_ColorGradeOverride);
+	if (m_FilmGrainOverride)
+		view.SetFilmGrainEnabled(*m_FilmGrainOverride);
+	if (m_ColorSplitOverride)
+		view.SetColorSplitEnabled(*m_ColorSplitOverride);
 	view.SetProjectPostProcessType(m_ProjectPostProcessType);
 	view.SetChosenPostProcessType(m_PostProcessTypeOverride);
 	view.SetOutlineEnabled(m_OutlineEnabled);

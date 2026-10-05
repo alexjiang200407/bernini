@@ -36,10 +36,12 @@ Bare, it renders `assets/Data`'s apples — the one project `copy_assets` stages
 | `--sun-azimuth`, `--sun-elevation` | 35, 38 | where that sun sits, in degrees: azimuth about the up axis from +Z toward +X, elevation above the horizon |
 | `--sun-color` | `1 1 1` | its colour, as three floats |
 | `--backdrop` | `sky` | what is drawn behind the scene: `sky`, the environment's, or `gradient`, the toon look-dev backdrop the editor's toon previews draw, pale horizon to sky blue (`ISceneView::SetBackdrop`). Only the background changes; `--env` still lights the scene |
-| `--post-process` | `filmic` | the post-process: `filmic` (AgX and the grade), or `toon` -- the exposed colour clamped, no curve, which a toon look is authored for (`IRenderTarget::SetPostProcessType`) |
+| `--post-process` | `filmic` | the post-process: `filmic` (AgX), or `toon` -- the exposed colour clamped, no curve, which a toon look is authored for and which screens `--bloom` rather than adding it (`IRenderTarget::SetPostProcessType`) |
 | `-w`, `-h`, `--taa` | 1280, 720, on | the output, as a viewport renders it |
 | `--render-scale` | 1 | the grid the geometry passes render on, relative to the output; below 1 the TAA resolve reconstructs the output ([Temporal Antialiasing](taa.md) § Render scale) |
 | `--bloom` | off | bloom at `bgl::BloomSettings`' defaults; its `BloomDown*`/`BloomUp*` passes join the timings |
+| `--film-grain` | off | film grain at `bgl::FilmGrainSettings`' defaults. The pattern follows the target's frame count, so frame N carries the same grain every run and two screenshots of one run differ by it |
+| `--color-split` | off | the colour split at `bgl::ColorSplitSettings`' defaults: red two pixels left of green at 2160 lines and blue two right, scaled to `-h` |
 | `--frame-clip` | off | frame the camera on the playing clip's poses rather than every clip's |
 | `--out-dir` | `ai_viewer` | where the PNGs and `gpu_timings.csv` go |
 | `--grass` | none | a `.bgrass` to grow on a patch of bare ground, in place of `--import` |

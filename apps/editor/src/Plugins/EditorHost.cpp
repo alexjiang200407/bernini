@@ -69,6 +69,8 @@ namespace editor::plugins
 		                            .taaSharpness           = desc.taaSharpness,
 		                            .bloom                  = { desc.bloomEnabled, desc.bloom },
 		                            .colorGrade   = { desc.colorGradeEnabled, desc.colorGrade },
+		                            .filmGrain    = { desc.filmGrainEnabled, desc.filmGrain },
+		                            .colorSplit   = { desc.colorSplitEnabled, desc.colorSplit },
 		                            .toonBackdrop = desc.toonBackdrop,
 		                            .headless     = m_Headless });
 		if (m_Dispatch.viewportCreated)
