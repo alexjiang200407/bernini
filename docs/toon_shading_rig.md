@@ -89,6 +89,17 @@ is `face`, each by as much as it is:
 - **The light** is the block's face light rather than the sun, blended toward it by `face` times
   the block's fade, so a head crossing the fade's end, or dropping out of the pool, returns to the
   sun without a step.
+- **The normal** the base tone shades with (`ToonFaceNormal`) is the surface's pulled toward the
+  outward normal of the rig's ellipsoid about the head's origin, by the rig's smoothing times the
+  same weight: `normalize(lerp(n, e, smoothing * weight))`, the paper's normal smoothing with an
+  ellipsoid where it has a sphere. `e` is the gradient of the ellipsoid's implicit form at the
+  pixel's head-space position -- the position times the block's row -- taken to world space through
+  the transpose of `headFromWorld`, so a head scaled unevenly needs no case of its own. A hard cel
+  step on a face's own normals flips once per crease; on this one it draws a single shadow shape,
+  and the edits put the nose and the brow back. The ellipsoid's half is per pixel and reads nothing
+  of the mesh but the position, so it is the same shape at every level of detail. The other half is
+  `1 - smoothing` of whatever normal the mesh carries, creases included: at the same smoothing, a
+  face exported with a relaxed normal draws a rounder edge than one exported with its raw normals.
 - **The terminator** moves by the sum of every slot's push, times the same weight. The
   pixel goes into head space through `headFromWorld`, its normal through the same rotation, both
   with X flipped on a mirrored slot. A slot's push (`ToonShadingRigSlotOffset`) is the Shading Rig's
@@ -97,7 +108,12 @@ is `face`, each by as much as it is:
   `10 * (bulge * x + bend * y)` radians, and fallen off as `exp(-(e x² + |y|^(2 - sharpness) / e))`
   with `e = 1 - anisotropy`; then faded out over the last quarter of its radius, cut where the twist
   passes a quarter turn, and scaled by how far the pixel's normal -- pulled toward the head's
-  sphere by its normal smoothing -- faces the edit.
+  sphere by its normal smoothing -- faces the edit. That is the surface's own normal under the
+  key's own smoothing, whatever the rig's face normal is.
+
+A face with no block -- under the fade's end, past the pool, dissolving or blended -- shades on its
+mesh normals under the sun, with no light remap, no smoothing and no edits; all three fade in
+together.
 
 ## The document
 
