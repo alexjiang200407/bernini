@@ -27,6 +27,9 @@ namespace assetlib
 		constexpr std::string_view c_KeySharpnessKey    = "keySharpness";
 		constexpr std::string_view c_MirroredKey        = "mirrored";
 		constexpr std::string_view c_FaceLightKey       = "faceLight";
+		constexpr std::string_view c_FaceNormalKey      = "faceNormal";
+		constexpr std::string_view c_SmoothingKey       = "smoothing";
+		constexpr std::string_view c_RadiiKey           = "radii";
 		constexpr std::string_view c_HeadBoneKey        = "headBone";
 		constexpr std::string_view c_HeadToBoneKey      = "headToBone";
 		constexpr std::string_view c_HeadRadiusKey      = "headRadius";
@@ -223,6 +226,25 @@ namespace assetlib
 				json.erase(it);
 		}
 
+		if (const auto it = json.find(c_FaceNormalKey); it != json.end())
+		{
+			if (!it->is_object())
+			{
+				throw_runtime_error("btoonrig: '{}' is not an object", c_FaceNormalKey);
+			}
+
+			const doc::Taker group(*it, "btoonrig.faceNormal");
+			group.Take(c_SmoothingKey, rig.faceNormal.smoothing);
+			if (const auto radii = it->find(c_RadiiKey); radii != it->end())
+			{
+				doc::vecFromJson(*radii, c_RadiiKey, rig.faceNormal.radii, "btoonrig.faceNormal");
+				it->erase(radii);
+			}
+
+			if (it->empty())
+				json.erase(it);
+		}
+
 		if (const auto it = json.find(c_EditsKey); it != json.end())
 		{
 			if (!it->is_array())
@@ -272,6 +294,12 @@ namespace assetlib
 			faceLight = nlohmann::json::object();
 		for (const auto& [name, field] : c_FaceLightFields)
 			faceLight[name] = doc::plainFloat(rig.faceLight.*field);
+
+		nlohmann::json& faceNormal = json[c_FaceNormalKey];
+		if (!faceNormal.is_object())
+			faceNormal = nlohmann::json::object();
+		faceNormal[c_SmoothingKey] = doc::plainFloat(rig.faceNormal.smoothing);
+		faceNormal[c_RadiiKey]     = doc::vecToJson(rig.faceNormal.radii);
 
 		// Omitted rather than written empty: an absent bone and an empty name would otherwise be
 		// two spellings of the placement's own frame.

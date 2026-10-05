@@ -67,10 +67,23 @@ namespace assetlib
 	};
 
 	/**
+	 * The normal a face shades its base tone with, as `bgl::FaceNormalDesc` holds it: how far the
+	 * surface's is pulled toward an ellipsoid about the head's origin, and the ellipsoid's radii.
+	 */
+	struct ToonFaceNormal
+	{
+		float     smoothing = 0.6f;
+		glm::vec3 radii     = glm::vec3(1.0f);
+
+		bool
+		operator==(const ToonFaceNormal&) const = default;
+	};
+
+	/**
 	 * A `.btoonrig`: a face's toon shading rig, authored -- the edits, their keys, the face light's
-	 * remap and the head's binding. The renderer's counterpart is `bgl::ToonShadingRigDesc`, and
-	 * the defaults are its own, so a document that omits a key draws exactly as one that spells
-	 * out the default.
+	 * remap, the face's normal and the head's binding. The renderer's counterpart is
+	 * `bgl::ToonShadingRigDesc`, and the defaults are its own, so a document that omits a key draws
+	 * exactly as one that spells out the default.
 	 *
 	 * The head bone is a *name*, for the reason an avatar's legs are: an index is a fact about one
 	 * cook of one `.bskel`. It is resolved against the mesh's rig where the two meet.
@@ -83,6 +96,8 @@ namespace assetlib
 		std::vector<ToonShadingRigEdit> edits;
 
 		ToonFaceLight faceLight;
+
+		ToonFaceNormal faceNormal;
 
 		// The bone whose pose carries the head; empty for the placement's own frame.
 		std::string headBone;

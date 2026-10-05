@@ -70,6 +70,8 @@ namespace
 		rig.faceLight.maxAzimuth        = 60.0f;
 		rig.faceLight.minElevation      = -20.0f;
 		rig.faceLight.azimuthFadeAmount = 0.6f;
+		rig.faceNormal.smoothing        = 0.8f;
+		rig.faceNormal.radii            = glm::vec3(0.08f, 0.115f, 0.1f);
 		rig.headBone                    = std::move(headBone);
 		rig.headToBone = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.2f, 0.0f));
 		return rig;
@@ -114,6 +116,8 @@ TEST_CASE("A toon shading rig document becomes the renderer's desc", "[toonshadi
 		CHECK(desc.faceLight.minElevation == Catch::Approx(-std::numbers::pi_v<float> / 9.0f));
 		CHECK(desc.faceLight.azimuthFadeAmount == 0.6f);
 		CHECK(desc.faceLight.maxElevation == Catch::Approx(bgl::FaceLightDesc().maxElevation));
+		CHECK(desc.faceNormal.smoothing == 0.8f);
+		CHECK(desc.faceNormal.radii == glm::vec3(0.08f, 0.115f, 0.1f));
 		REQUIRE(desc.edits.size() == 1);
 		CHECK(desc.edits[0].mirrored);
 		REQUIRE(desc.edits[0].keys.size() == 1);
@@ -121,6 +125,16 @@ TEST_CASE("A toon shading rig document becomes the renderer's desc", "[toonshadi
 		CHECK(desc.edits[0].keys[0].gain == -0.5f);
 		CHECK(desc.headRadius == bgl::ToonShadingRigDesc().headRadius);
 		CHECK_FALSE(desc.headBoneIndex.has_value());
+	}
+
+	SECTION("a document that says nothing of the face normal draws as the desc's default")
+	{
+		const bgl::ToonShadingRigDesc desc = game::ToonShadingRigDescOf(
+			assetlib::BToonShadingRig(),
+			nullptr,
+			game::ToonShadingRigPose::kPosed);
+		CHECK(desc.faceNormal.smoothing == bgl::FaceNormalDesc().smoothing);
+		CHECK(desc.faceNormal.radii == bgl::FaceNormalDesc().radii);
 	}
 
 	SECTION("a posed head bone resolves by name to its index in the mesh's rig")

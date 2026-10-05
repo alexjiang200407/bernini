@@ -119,7 +119,7 @@ together.
 
 A rig is authored as a `.btoonrig` ([BToonShadingRig.h](../libs/assetlib_structs/include/assetlib_structs/BToonShadingRig.h)),
 an authored text document like a `.bgrass`: canonical JSON, unknown keys kept at every depth -- the
-top, `faceLight`, each edit and each key -- and a known key of the wrong shape refused. A character's
+top, `faceLight`, `faceNormal`, each edit and each key -- and a known key of the wrong shape refused. A character's
 `.bimport` names it under `toonShadingRig`, one per character whatever its materials, so a delete,
 a rename, `refs` and `pack` see the edge ([Asset Containers](asset_containers.md)).
 
@@ -132,6 +132,7 @@ a rename, `refs` and `pack` see the edge ([Asset Containers](asset_containers.md
 	                         "rotation": 30, "sharpness": 0.25, "size": 0.2 } ] } ],
 	"faceLight": { "azimuthFadeAmount": 0.6, "azimuthFadeEnd": 70, "azimuthFadeStart": 30,
 	               "maxAzimuth": 60, "maxElevation": 15, "minElevation": -20 },
+	"faceNormal": { "radii": [0.08, 0.115, 0.1], "smoothing": 0.6 },
 	"fadeEndPixels": 48.0, "fadeStartPixels": 96.0, "headBone": "head", "headRadius": 0.12,
 	"headToBone": [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
 }
@@ -146,9 +147,13 @@ Each value is the `ToonShadingRigDesc` field of its name, with three differences
   head. Absent, the placement's own frame is the head; an empty name is refused.
 - **`headToBone` is four rows of four**, as a matrix is written: the translation is the last column.
 
+`faceNormal`'s `radii` are the head's half-extents along head-space X, Y and Z. Only their
+proportions reach the shading, so any unit does and three equal numbers are a sphere.
+
 A key needs `light` and `position`, and an edit needs `keys`; every other value takes the desc's
-default when absent, and `faceLight` absent remaps nothing. An edit's `name` is the author's label
-and nothing reads it. Ranges are not checked on read: `IScene::AddToonShadingRig` states them once.
+default when absent: `faceLight` absent remaps nothing, and `faceNormal` absent pulls the normal 0.6
+of the way toward a sphere. An edit's `name` is the author's label and nothing reads it. Ranges are
+not checked on read: `IScene::AddToonShadingRig` states them once.
 
 ## Loading
 

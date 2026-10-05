@@ -908,6 +908,14 @@ namespace assetlib
 			light.azimuthFadeEnd,
 			light.azimuthFadeAmount);
 
+		const ToonFaceNormal& normal = rig.faceNormal;
+		out += std::format(
+			"  face normal  smoothing {}  radii ({}, {}, {})\n",
+			normal.smoothing,
+			normal.radii.x,
+			normal.radii.y,
+			normal.radii.z);
+
 		out += std::format("  edits        {}\n", rig.edits.size());
 		for (const ToonShadingRigEdit& edit : rig.edits)
 		{
