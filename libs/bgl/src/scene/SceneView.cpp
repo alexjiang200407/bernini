@@ -29,6 +29,7 @@
 #include <bgl/idl/SkinnedState.h>
 #include <bgl/idl/SkinnedTableState.h>
 #include <bgl/idl/ToonShadingRigRange.h>
+#include <bgl/types/BackdropGradient.h>
 #include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/EnvironmentMapDesc.h>
 #include <bgl/types/GeomHandle.h>
@@ -2126,6 +2127,45 @@ namespace bgl
 		}
 
 		m_Skybox = std::make_optional(std::move(desc));
+		++m_TemporalEpoch;
+	}
+
+	void
+	SceneView::SetBackdrop(const BackdropGradient& backdrop)
+	{
+		const std::pair<const char*, glm::vec3> colors[] = { { "bottom", backdrop.bottom },
+			                                                 { "top", backdrop.top } };
+		for (const auto& [name, color] : colors)
+		{
+			for (int i = 0; i < 3; ++i)
+			{
+				if (!std::isfinite(color[i]) || color[i] < 0.0f)
+				{
+					throw SceneError(
+						std::format(
+							"SetBackdrop: colours must be finite and non-negative, got {}.{} = {}",
+							name,
+							"rgb"[i],
+							color[i]));
+				}
+			}
+		}
+
+		// Unchanged is not a new history: a panel re-asserting its content must not reset TAA.
+		if (m_Backdrop == backdrop)
+			return;
+
+		m_Backdrop = backdrop;
+		++m_TemporalEpoch;
+	}
+
+	void
+	SceneView::ClearBackdrop() noexcept
+	{
+		if (!m_Backdrop.has_value())
+			return;
+
+		m_Backdrop.reset();
 		++m_TemporalEpoch;
 	}
 

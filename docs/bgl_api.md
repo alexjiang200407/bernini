@@ -522,6 +522,14 @@ flowchart TD
   and its toon shading rigs are evaluated against, and nothing else reads: a view lights its
   characters for their look apart from what lights its world. No fallback either way, so a view that
   sets only the PBR sun draws its toon characters black; the toon environment model reads neither.
+* **`SetBackdrop(gradient)` / `ClearBackdrop()`** — @pre every colour component finite and
+  non-negative. A `BackdropGradient` drawn behind the scene in the sky's place, fixed to the screen:
+  `bottom` at the frame's bottom edge to `top` at its top, scene-linear and unexposed. Only the draw
+  changes — the environment lights the scene as before, a following sky still turns the lighting, a
+  `SetSkyBox` meanwhile is accepted and lights at once, and `ClearBackdrop` shows whatever sky the
+  view holds then. A temporal-epoch change, unless
+  it restates the backdrop already set. Its
+  default colours are the toon look-dev background, pale horizon to sky blue.
 * **`SetExposure(e)`** — @pre finite and non-negative. Scales *total* radiance before tone mapping, not
   the environment's contribution — it is camera sensitivity, not an IBL property.
 * **`SetWind(desc)`** — @pre every field finite, strengths and gust speed non-negative, `gustScale`
