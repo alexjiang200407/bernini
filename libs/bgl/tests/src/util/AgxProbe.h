@@ -1,7 +1,8 @@
 #pragma once
 
 #include <bgl/IGraphics.h>
-#include <bgl/IRenderTarget.h>
+#include <bgl/types/ColorGradeSettings.h>
+#include <bgl/types/ToonGradeSettings.h>
 #include <core/glm.h>
 
 namespace bgl::test
@@ -13,6 +14,10 @@ namespace bgl::test
 	 */
 	[[nodiscard]] float
 	EncodeSrgb(float linear) noexcept;
+
+	/** Its inverse: what a value sampled off a screenshot was before the backbuffer encoded it. */
+	[[nodiscard]] float
+	DecodeSrgb(float encoded) noexcept;
 
 	/**
 	 * AgX(grey) as the shipped tone map computes it, in scene-linear output: one dispatch of the
@@ -34,4 +39,15 @@ namespace bgl::test
 		glm::vec3                      sceneLinear,
 		glm::vec2                      uv,
 		const bgl::ColorGradeSettings& settings);
+
+	/**
+	 * `displayLinear` at output position `uv` through the post pass's toon grade, which wraps no
+	 * curve: the same dispatch of CSColorGradeProbe, on its toon branch.
+	 */
+	[[nodiscard]] glm::vec4
+	RunGradedToon(
+		bgl::IGraphics&               gfx,
+		glm::vec3                     displayLinear,
+		glm::vec2                     uv,
+		const bgl::ToonGradeSettings& settings);
 }

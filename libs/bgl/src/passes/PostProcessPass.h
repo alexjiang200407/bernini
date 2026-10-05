@@ -1,12 +1,13 @@
 #pragma once
 #include "passes/PassInitContext.h"
-#include <bgl/IRenderTarget.h>
+#include <bgl/types/PostProcess.h>
 #include <bgl/types/Viewport.h>
 #include <bgpu/pipeline/MeshletKernel.h>
 #include <bgpu/resource/Rtv.h>
 #include <bgpu/resource/Sampler.h>
 #include <bgpu/resource/Srv.h>
 #include <bgpu/types/ViewportState.h>
+#include <cstdint>
 #include <spdlog/spdlog.h>
 #include <string>
 
@@ -27,7 +28,8 @@ namespace bgl
 	 * writes it afterwards, blending over this -- so the capture path, a readback of the last
 	 * presented backbuffer, still describes what was shown.
 	 *
-	 * Today that is the bloom combine, the colour grade and the display curve. Everything between a
+	 * Today that is the colour split, the bloom combine, the colour grade, the display curve and
+	 * film grain. Everything between a
 	 * resolved scene and the screen belongs here as it lands -- exposure adaptation next -- so the
 	 * stage is named for the role rather than for its current steps.
 	 *
@@ -47,7 +49,7 @@ namespace bgl
 
 			// Point where the source is already on the backbuffer's grid, which is every frame the
 			// resolve ran and every unscaled one; linear is what carries a render-resolution scene
-			// colour across when it did not.
+			// colour across when it did not, and what the colour split reads between texels with.
 			bgpu::SamplerHandle sampler;
 			bgpu::Viewport      viewport;
 
@@ -63,23 +65,24 @@ namespace bgl
 			bgpu::SrvHandle     tonemapLut;
 			bgpu::SamplerHandle lutSampler;
 
-			// Set only when the bloom passes ran this frame; the shader samples the chain behind
-			// the flag, so a disabled frame binds nothing. Half the source's resolution, so it is
+			// Set only when the bloom passes ran this frame, which a post-process with bloom on
+			// can still skip when a pool refused the chain; the shader samples the chain behind the
+			// flag, so a frame without it binds nothing. Half the source's resolution, so it is
 			// always linearly sampled.
 			bgpu::SrvHandle     bloom;
 			bgpu::SamplerHandle bloomSampler;
 			std::string         bloomName;
-			float               bloomIntensity = 0.0f;
-			bool                bloomEnabled   = false;
+			bool                bloomRan = false;
 
 			// The target's TAA sharpness, in [0, 1]; zero skips RCAS. Set only on a frame the resolve
 			// ran below a render scale of 1, whose output is on the backbuffer's grid.
 			float taaSharpness = 0.0f;
 
-			// Validated by the target that carries it; written only when enabled.
-			ColorGradeSettings colorGrade;
-			bool               colorGradeEnabled = false;
-			PostProcessType    postProcessType   = PostProcessType::kFilmic;
+			// The target's, validated when it was set: the curve, and each effect's settings.
+			PostProcess postProcess = FilmicPostProcess();
+
+			// How many frames have begun on the target, which is what a grain pattern is held by.
+			uint64_t frameCount = 0;
 		};
 
 		explicit PostProcessPass(const PassInitContext& ctx);

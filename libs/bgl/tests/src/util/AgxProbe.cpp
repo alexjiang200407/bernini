@@ -3,7 +3,8 @@
 #include "postprocess/TonemapLut.h"
 #include "postprocess/color_grade.h"
 #include <bgl/IGraphics.h>
-#include <bgl/IRenderTarget.h>
+#include <bgl/types/ColorGradeSettings.h>
+#include <bgl/types/ToonGradeSettings.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
@@ -28,6 +29,12 @@ namespace bgl::test
 	{
 		return linear <= 0.0031308f ? linear * 12.92f :
 		                              1.055f * std::pow(linear, 1.0f / 2.4f) - 0.055f;
+	}
+
+	float
+	DecodeSrgb(float encoded) noexcept
+	{
+		return encoded <= 0.04045f ? encoded / 12.92f : std::pow((encoded + 0.055f) / 1.055f, 2.4f);
 	}
 
 	namespace
@@ -141,8 +148,31 @@ namespace bgl::test
 			uniforms["power"]        = settings.power;
 			uniforms["saturation"]   = settings.saturation;
 			uniforms["contrast"]     = settings.contrast;
-			uniforms["vignetteIntensity"]  = settings.vignetteIntensity;
-			uniforms["vignetteSmoothness"] = settings.vignetteSmoothness;
+			uniforms["vignetteIntensity"]  = settings.vignette.intensity;
+			uniforms["vignetteSmoothness"] = settings.vignette.smoothness;
+			uniforms["toon"]               = 0u;
+		});
+	}
+
+	glm::vec4
+	RunGradedToon(
+		bgl::IGraphics&               gfx,
+		glm::vec3                     displayLinear,
+		glm::vec2                     uv,
+		const bgl::ToonGradeSettings& settings)
+	{
+		return RunProbe(gfx, "CSColorGradeProbe", [&](bgpu::Uniforms& uniforms) {
+			uniforms["sceneLinear"]  = displayLinear;
+			uniforms["uv"]           = uv;
+			uniforms["whiteBalance"] = WhiteBalanceLmsScale(settings.temperature, settings.tint);
+			uniforms["black"]        = settings.black;
+			uniforms["white"]        = settings.white;
+			uniforms["gamma"]        = settings.gamma;
+			uniforms["saturation"]   = settings.saturation;
+			uniforms["contrast"]     = settings.contrast;
+			uniforms["vignetteIntensity"]  = settings.vignette.intensity;
+			uniforms["vignetteSmoothness"] = settings.vignette.smoothness;
+			uniforms["toon"]               = 1u;
 		});
 	}
 }

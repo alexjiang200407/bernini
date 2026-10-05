@@ -14,7 +14,7 @@ libs/bgl/shaders/include/             the contract: what a game surface conforms
 libs/bgl/shaders/src/                 the renderer's
   idl/                                the IDL modules, the one source bgpu_idlgen mirrors to C++; see docs/idlgen.md
   programs/   forward/ culling/ screen/ env/ anim/   one entry point or more, grouped by feature
-  lib/        anim/ math/ geom/ data/                handle-free: the pose walk and vertex blend, the foot-plant solve; the BRDF and its LUT integral, the TAA resolve, hashed alpha, tonemapping, a motion vector, a frustum test, a box's screen bounds, transform maths; vertex decode; plain view structs
+  lib/        anim/ math/ geom/ data/                handle-free: the pose walk and vertex blend, the foot-plant solve; the BRDF and its LUT integral, the TAA resolve, hashed alpha, tonemapping, the sRGB transfer function, a motion vector, a frustum test, a box's screen bounds, transform maths; vertex decode; plain view structs
               forward/ types/ screen/ culling/        imported, never dispatched; types/ is the binding layer, screen/ the post pass's LUT
   luts/                                              the display curve's data, read by C++ and never imported: gen_agx_lut.py's strip
 ```

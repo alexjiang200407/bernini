@@ -241,16 +241,18 @@ private:
 	std::optional<bool>       m_TaaOverride;
 	std::optional<bool>       m_BloomOverride;
 	std::optional<bool>       m_ColorGradeOverride;
+	std::optional<bool>       m_FilmGrainOverride;
+	std::optional<bool>       m_ColorSplitOverride;
 
 	// The open project's post-process, and the Render > Post Process choice; empty is Auto, which a new
 	// project resets it to.
-	bgl::PostProcessType                m_ProjectPostProcessType = bgl::PostProcessType::kFilmic;
-	std::optional<bgl::PostProcessType> m_PostProcessTypeOverride;
-	QAction*                            m_PostProcessTypeAuto = nullptr;
-	std::optional<float>                m_RenderScaleOverride;
-	std::optional<float>                m_ReconstructionWidthOverride;
-	std::optional<float>                m_SharpnessOverride;
-	bool                                m_OutlineEnabled = true;
+	assetlib::PostProcessType m_ProjectPostProcessType = assetlib::PostProcessType::kFilmic;
+	std::optional<assetlib::PostProcessType> m_PostProcessTypeOverride;
+	QAction*                                 m_PostProcessTypeAuto = nullptr;
+	std::optional<float>                     m_RenderScaleOverride;
+	std::optional<float>                     m_ReconstructionWidthOverride;
+	std::optional<float>                     m_SharpnessOverride;
+	bool                                     m_OutlineEnabled = true;
 
 	// Set only while Build() is running: what startup reports into, and how RunBehindScreen tells
 	// which screen is up. Cleared once the window is ready, so a later Open Project gets the modal.

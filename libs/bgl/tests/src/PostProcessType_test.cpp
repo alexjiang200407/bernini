@@ -1,3 +1,4 @@
+#include "util/AgxProbe.h"
 #include "util/GoldenImage.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
@@ -8,18 +9,22 @@
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/glm.h>
+#include <bgl/types/BloomSettings.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/MaterialHandle.h>
+#include <bgl/types/PostProcess.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
+#include <bgl/types/ToonGradeSettings.h>
 #include <bgl/types/Viewport.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <string>
+#include <variant>
 
 // The post-process a target ends in: toon is the exposed value clamped and sRGB-encoded, as
 // Blender's Standard view shows it, and filmic is the AgX it always was. A full-frame Unlit plane puts a
@@ -36,14 +41,6 @@ namespace
 		opts.gpuContext.shaderCacheDir  = bgl::test::ShaderCacheDir();
 		opts.gpuContext.clientShaderDir = "./shaders/tests/surfaces";
 		return opts;
-	}
-
-	/** The sRGB transfer function, linear to encoded. */
-	float
-	SrgbEncode(float linear)
-	{
-		return linear <= 0.0031308f ? 12.92f * linear :
-		                              1.055f * std::pow(linear, 1.0f / 2.4f) - 0.055f;
 	}
 
 	struct Plane
@@ -98,9 +95,9 @@ namespace
 TEST_CASE("Toon post-process shows the exposed value clamped and sRGB-encoded", "[tonemap][render]")
 {
 	Plane plane;
-	CHECK(plane.target->GetPostProcessType() == bgl::PostProcessType::kFilmic);
-	plane.target->SetPostProcessType(bgl::PostProcessType::kToon);
-	CHECK(plane.target->GetPostProcessType() == bgl::PostProcessType::kToon);
+	CHECK(std::holds_alternative<bgl::FilmicPostProcess>(plane.target->GetPostProcess()));
+	plane.target->SetPostProcess(bgl::ToonPostProcess());
+	CHECK(std::holds_alternative<bgl::ToonPostProcess>(plane.target->GetPostProcess()));
 
 	// One quantization step, and a little for the 16-bit scene colour on the way.
 	constexpr float c_Margin = 1.5f / 255.0f;
@@ -121,9 +118,9 @@ TEST_CASE("Toon post-process shows the exposed value clamped and sRGB-encoded", 
 			exposure,
 			"assets/golden/tonemap_standard_" + std::to_string(i) + ".got.png");
 		const glm::vec3 exposed = glm::clamp(radiance * exposure, 0.0f, 1.0f);
-		CHECK(got.r == Catch::Approx(SrgbEncode(exposed.r)).margin(c_Margin));
-		CHECK(got.g == Catch::Approx(SrgbEncode(exposed.g)).margin(c_Margin));
-		CHECK(got.b == Catch::Approx(SrgbEncode(exposed.b)).margin(c_Margin));
+		CHECK(got.r == Catch::Approx(bgl::test::EncodeSrgb(exposed.r)).margin(c_Margin));
+		CHECK(got.g == Catch::Approx(bgl::test::EncodeSrgb(exposed.g)).margin(c_Margin));
+		CHECK(got.b == Catch::Approx(bgl::test::EncodeSrgb(exposed.b)).margin(c_Margin));
 	}
 }
 
@@ -139,23 +136,122 @@ TEST_CASE(
 	const auto* back     = "assets/golden/tonemap_switch_back.got.png";
 
 	plane.Shoot(radiance, 1.0f, agx);
-	plane.target->SetPostProcessType(bgl::PostProcessType::kToon);
+	plane.target->SetPostProcess(bgl::ToonPostProcess());
 	plane.Shoot(radiance, 1.0f, standard);
-	plane.target->SetPostProcessType(bgl::PostProcessType::kFilmic);
+
+	// A switch takes the whole value: the toon bloom set here is gone once filmic is set without it.
+	plane.target->SetPostProcess(bgl::ToonPostProcess{ .bloom = bgl::BloomSettings() });
+	plane.target->SetPostProcess(bgl::FilmicPostProcess());
+	CHECK(!std::get<bgl::FilmicPostProcess>(plane.target->GetPostProcess()).bloom);
 	plane.Shoot(radiance, 1.0f, back);
 
 	CHECK(bgl::test::MaxChannelDelta(agx, standard) > 0.05f);
 	CHECK(bgl::test::MaxChannelDelta(agx, back) == 0.0f);
 
 	// A target asked for toon at creation starts in it.
-	auto targetDesc            = bgl::RenderTargetDesc();
-	targetDesc.width           = c_Size;
-	targetDesc.height          = c_Size;
-	targetDesc.headless        = true;
-	targetDesc.postProcessType = bgl::PostProcessType::kToon;
-	plane.target               = plane.gfx->CreateRenderTarget(targetDesc);
-	CHECK(plane.target->GetPostProcessType() == bgl::PostProcessType::kToon);
+	auto targetDesc        = bgl::RenderTargetDesc();
+	targetDesc.width       = c_Size;
+	targetDesc.height      = c_Size;
+	targetDesc.headless    = true;
+	targetDesc.postProcess = bgl::ToonPostProcess();
+	plane.target           = plane.gfx->CreateRenderTarget(targetDesc);
+	CHECK(std::holds_alternative<bgl::ToonPostProcess>(plane.target->GetPostProcess()));
 	const auto* created = "assets/golden/tonemap_switch_created.got.png";
 	plane.Shoot(radiance, 1.0f, created);
 	CHECK(bgl::test::MaxChannelDelta(standard, created) == 0.0f);
+}
+
+// A full-frame plane of one radiance blurs to itself, so with the threshold at zero the chain's
+// level is that radiance exactly and the frame is the combine's answer for it.
+TEST_CASE(
+	"Toon screens the glow, so a bright colour stops short of white",
+	"[tonemap][bloom][render]")
+{
+	Plane plane;
+
+	auto bloom      = bgl::BloomSettings();
+	bloom.threshold = 0.0f;
+
+	constexpr float c_Margin = 1.5f / 255.0f;
+
+	struct Case
+	{
+		glm::vec3 radiance;
+		float     intensity;
+	};
+
+	// The second is the one an add clips: 0.9 + 0.9 and 0.6 + 0.6 both land on white, and the
+	// orange goes yellow. The third's red is past the display's range before any glow.
+	const std::array<Case, 3> cases = { {
+		{ glm::vec3(0.5f, 0.25f, 0.8f), 0.5f },
+		{ glm::vec3(0.9f, 0.6f, 0.3f), 1.0f },
+		{ glm::vec3(2.0f, 0.1f, 0.05f), 0.25f },
+	} };
+
+	for (size_t i = 0; i < cases.size(); ++i)
+	{
+		const auto& [radiance, intensity] = cases[i];
+		INFO("case " << i);
+
+		bloom.intensity = intensity;
+		plane.target->SetPostProcess(bgl::ToonPostProcess{ .bloom = bloom });
+
+		const auto got = plane.Shoot(
+			radiance,
+			1.0f,
+			"assets/golden/tonemap_toon_glow_" + std::to_string(i) + ".got.png");
+
+		const glm::vec3 base     = glm::clamp(radiance, 0.0f, 1.0f);
+		const glm::vec3 glow     = glm::clamp(radiance * intensity, 0.0f, 1.0f);
+		const glm::vec3 expected = base + glow * (1.0f - base);
+
+		CHECK(got.r == Catch::Approx(bgl::test::EncodeSrgb(expected.r)).margin(c_Margin));
+		CHECK(got.g == Catch::Approx(bgl::test::EncodeSrgb(expected.g)).margin(c_Margin));
+		CHECK(got.b == Catch::Approx(bgl::test::EncodeSrgb(expected.b)).margin(c_Margin));
+	}
+
+	// The orange kept its order, where an add lands red and green both on white.
+	bloom.intensity = 1.0f;
+	plane.target->SetPostProcess(bgl::ToonPostProcess{ .bloom = bloom });
+	const auto orange = plane.Shoot(
+		glm::vec3(0.9f, 0.6f, 0.3f),
+		1.0f,
+		"assets/golden/tonemap_toon_glow_orange.got.png");
+	CHECK(orange.g < 0.95f);
+	CHECK(orange.g < orange.r - 0.02f);
+}
+
+// The grade reaches a toon frame through the target, and a black plane makes the frame the grade's
+// answer for black: the black it names, which no curve stands between.
+TEST_CASE("A toon target is graded on the value it displays", "[tonemap][colorgrade][render]")
+{
+	Plane plane;
+	plane.target->SetPostProcess(bgl::ToonPostProcess());
+
+	constexpr float c_Margin = 1.5f / 255.0f;
+
+	const auto* plain   = "assets/golden/tonemap_toon_grade_plain.got.png";
+	const auto* neutral = "assets/golden/tonemap_toon_grade_neutral.got.png";
+	const auto* lifted  = "assets/golden/tonemap_toon_grade_lifted.got.png";
+	const auto* off     = "assets/golden/tonemap_toon_grade_off.got.png";
+
+	const glm::vec3 teal(0.1f, 0.4f, 0.6f);
+
+	plane.Shoot(teal, 1.0f, plain);
+	plane.target->SetPostProcess(bgl::ToonPostProcess{ .grade = bgl::ToonGradeSettings() });
+	plane.Shoot(teal, 1.0f, neutral);
+	CHECK(bgl::test::MaxChannelDelta(plain, neutral) <= 1.0f / 255.0f);
+
+	auto grade  = bgl::ToonGradeSettings();
+	grade.black = glm::vec3(0.0f, 0.055f, 0.05f);
+	plane.target->SetPostProcess(bgl::ToonPostProcess{ .grade = grade });
+
+	const auto got = plane.Shoot(glm::vec3(0.0f), 1.0f, lifted);
+	CHECK(got.r == Catch::Approx(0.0f).margin(c_Margin));
+	CHECK(got.g == Catch::Approx(0.055f).margin(c_Margin));
+	CHECK(got.b == Catch::Approx(0.05f).margin(c_Margin));
+
+	plane.target->SetPostProcess(bgl::ToonPostProcess());
+	const auto black = plane.Shoot(glm::vec3(0.0f), 1.0f, off);
+	CHECK(black.g == Catch::Approx(0.0f).margin(c_Margin));
 }

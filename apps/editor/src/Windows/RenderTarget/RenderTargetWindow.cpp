@@ -4,6 +4,7 @@
 #include "util/toon_backdrop.h"
 #include "util/toon_light.h"
 #include <algorithm>
+#include <assetlib/Project.h>
 #include <cmath>
 #include <core/glm.h>
 #include <cstdint>
@@ -31,9 +32,18 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/types/BackdropGradient.h>
+#include <bgl/types/BloomSettings.h>
+#include <bgl/types/ColorGradeSettings.h>
+#include <bgl/types/ColorSplitSettings.h>
+#include <bgl/types/FilmGrainSettings.h>
+#include <bgl/types/FilmicPostProcess.h>
 #include <bgl/types/PassTiming.h>
+#include <bgl/types/PostProcess.h>
 #include <bgl/types/RenderJob.h>
+#include <bgl/types/ToonGradeSettings.h>
+#include <bgl/types/ToonPostProcess.h>
 #include <bgl/types/Viewport.h>
+#include <bgl/types/VignetteSettings.h>
 #include <core/err/util.h>
 
 namespace
@@ -129,57 +139,137 @@ namespace
 		return clamped;
 	}
 
-	float
-	ClampBloomValue(std::string_view name, float value, float lo, float hi)
+	glm::vec3
+	ClampSectionRgb(
+		std::string_view section,
+		std::string_view name,
+		glm::vec3        rgb,
+		float            lo,
+		float            hi)
 	{
-		return ClampSectionValue("bloom", name, value, lo, hi);
+		const auto channel = [&](std::string_view suffix, float value) {
+			return ClampSectionValue(section, std::format("{}.{}", name, suffix), value, lo, hi);
+		};
+
+		return glm::vec3(channel("r", rgb.r), channel("g", rgb.g), channel("b", rgb.b));
 	}
 
 	// bgl throws on these, which is right for a caller and wrong for a hand-edited config.json: a
 	// typo there should cost a warning, not the editor. The upper bounds on intensity and threshold
 	// are sanity only -- bgl takes any finite non-negative value.
 	bgl::BloomSettings
-	ClampBloomSettings(bgl::BloomSettings settings)
+	ClampBloom(std::string_view section, bgl::BloomSettings s)
 	{
-		settings.intensity = ClampBloomValue("intensity", settings.intensity, 0.0f, 16.0f);
-		settings.threshold = ClampBloomValue("threshold", settings.threshold, 0.0f, 64.0f);
-		settings.softKnee  = ClampBloomValue("softKnee", settings.softKnee, 0.0f, 1.0f);
-		settings.scatter   = ClampBloomValue("scatter", settings.scatter, 0.0f, 1.0f);
-		return settings;
-	}
-
-	float
-	ClampGradeValue(std::string_view name, float value, float lo, float hi)
-	{
-		return ClampSectionValue("colorGrade", name, value, lo, hi);
-	}
-
-	glm::vec3
-	ClampGradeRgb(std::string_view name, glm::vec3 rgb, float lo, float hi)
-	{
-		const auto channel = [&](std::string_view suffix, float value) {
-			return ClampGradeValue(std::format("{}.{}", name, suffix), value, lo, hi);
-		};
-
-		return glm::vec3(channel("r", rgb.r), channel("g", rgb.g), channel("b", rgb.b));
-	}
-
-	// As ClampBloomSettings. The upper bounds on slope, saturation and contrast are sanity only, and
-	// power's floor stands in for bgl's "positive".
-	bgl::ColorGradeSettings
-	ClampColorGradeSettings(bgl::ColorGradeSettings s)
-	{
-		s.temperature       = ClampGradeValue("temperature", s.temperature, -100.0f, 100.0f);
-		s.tint              = ClampGradeValue("tint", s.tint, -100.0f, 100.0f);
-		s.slope             = ClampGradeRgb("slope", s.slope, 0.0f, 16.0f);
-		s.offset            = ClampGradeRgb("offset", s.offset, -1.0f, 1.0f);
-		s.power             = ClampGradeRgb("power", s.power, 0.01f, 16.0f);
-		s.saturation        = ClampGradeValue("saturation", s.saturation, 0.0f, 16.0f);
-		s.contrast          = ClampGradeValue("contrast", s.contrast, 0.0f, 16.0f);
-		s.vignetteIntensity = ClampGradeValue("vignetteIntensity", s.vignetteIntensity, 0.0f, 1.0f);
-		s.vignetteSmoothness =
-			ClampGradeValue("vignetteSmoothness", s.vignetteSmoothness, 0.01f, 1.0f);
+		s.intensity = ClampSectionValue(section, "intensity", s.intensity, 0.0f, 16.0f);
+		s.threshold = ClampSectionValue(section, "threshold", s.threshold, 0.0f, 64.0f);
+		s.softKnee  = ClampSectionValue(section, "softKnee", s.softKnee, 0.0f, 1.0f);
+		s.scatter   = ClampSectionValue(section, "scatter", s.scatter, 0.0f, 1.0f);
 		return s;
+	}
+
+	bgl::VignetteSettings
+	ClampVignette(std::string_view section, bgl::VignetteSettings s)
+	{
+		s.intensity  = ClampSectionValue(section, "vignette.intensity", s.intensity, 0.0f, 1.0f);
+		s.smoothness = ClampSectionValue(section, "vignette.smoothness", s.smoothness, 0.01f, 1.0f);
+		return s;
+	}
+
+	// As ClampBloom. The upper bounds on slope, saturation and contrast are sanity only, and the
+	// floors on power and gamma stand in for bgl's "positive".
+	bgl::ColorGradeSettings
+	ClampGrade(std::string_view section, bgl::ColorGradeSettings s)
+	{
+		s.temperature = ClampSectionValue(section, "temperature", s.temperature, -100.0f, 100.0f);
+		s.tint        = ClampSectionValue(section, "tint", s.tint, -100.0f, 100.0f);
+		s.slope       = ClampSectionRgb(section, "slope", s.slope, 0.0f, 16.0f);
+		s.offset      = ClampSectionRgb(section, "offset", s.offset, -1.0f, 1.0f);
+		s.power       = ClampSectionRgb(section, "power", s.power, 0.01f, 16.0f);
+		s.saturation  = ClampSectionValue(section, "saturation", s.saturation, 0.0f, 16.0f);
+		s.contrast    = ClampSectionValue(section, "contrast", s.contrast, 0.0f, 16.0f);
+		s.vignette    = ClampVignette(section, s.vignette);
+		return s;
+	}
+
+	bgl::ToonGradeSettings
+	ClampToonGrade(std::string_view section, bgl::ToonGradeSettings s)
+	{
+		s.temperature = ClampSectionValue(section, "temperature", s.temperature, -100.0f, 100.0f);
+		s.tint        = ClampSectionValue(section, "tint", s.tint, -100.0f, 100.0f);
+		s.black       = ClampSectionRgb(section, "black", s.black, 0.0f, 1.0f);
+		s.white       = ClampSectionRgb(section, "white", s.white, 0.0f, 1.0f);
+		s.gamma       = ClampSectionRgb(section, "gamma", s.gamma, 0.01f, 16.0f);
+		s.saturation  = ClampSectionValue(section, "saturation", s.saturation, 0.0f, 16.0f);
+		s.contrast    = ClampSectionValue(section, "contrast", s.contrast, 0.0f, 16.0f);
+		s.vignette    = ClampVignette(section, s.vignette);
+		return s;
+	}
+
+	// The ceiling on size is sanity only, and its floor stands in for bgl's "positive".
+	bgl::FilmGrainSettings
+	ClampGrain(std::string_view section, bgl::FilmGrainSettings s)
+	{
+		s.intensity = ClampSectionValue(section, "intensity", s.intensity, 0.0f, 1.0f);
+		s.size      = ClampSectionValue(section, "size", s.size, 0.01f, 64.0f);
+		return s;
+	}
+
+	// bgl takes any finite distance; past these the fringes are wider than a viewport's panels.
+	bgl::ColorSplitSettings
+	ClampSplit(std::string_view section, bgl::ColorSplitSettings s)
+	{
+		constexpr float c_Farthest = 64.0f;
+
+		s.offset.x = ClampSectionValue(section, "offset.x", s.offset.x, -c_Farthest, c_Farthest);
+		s.offset.y = ClampSectionValue(section, "offset.y", s.offset.y, -c_Farthest, c_Farthest);
+		s.radial   = ClampSectionValue(section, "radial", s.radial, -c_Farthest, c_Farthest);
+		return s;
+	}
+
+	editor::FilmicConfig
+	Clamped(editor::FilmicConfig c)
+	{
+		c.bloom.settings = ClampBloom("filmic.bloom", c.bloom.settings);
+		c.grade.settings = ClampGrade("filmic.grade", c.grade.settings);
+		c.grain.settings = ClampGrain("filmic.filmGrain", c.grain.settings);
+		c.split.settings = ClampSplit("filmic.colorSplit", c.split.settings);
+		return c;
+	}
+
+	editor::ToonConfig
+	Clamped(editor::ToonConfig c)
+	{
+		c.bloom.settings = ClampBloom("toon.bloom", c.bloom.settings);
+		c.grade.settings = ClampToonGrade("toon.grade", c.grade.settings);
+		c.grain.settings = ClampGrain("toon.filmGrain", c.grain.settings);
+		c.split.settings = ClampSplit("toon.colorSplit", c.split.settings);
+		return c;
+	}
+
+	template <typename Settings>
+	[[nodiscard]] std::optional<Settings>
+	Resolved(const editor::EffectConfig<Settings>& effect)
+	{
+		return effect.enabled ? std::optional<Settings>(effect.settings) : std::nullopt;
+	}
+
+	/** The `enabled` of `effect` in a type's config; both configs name their effects alike. */
+	template <typename Config>
+	[[nodiscard]] auto&
+	Enabled(Config& config, ViewportEffect effect) noexcept
+	{
+		switch (effect)
+		{
+		case ViewportEffect::kBloom:
+			return config.bloom.enabled;
+		case ViewportEffect::kGrade:
+			return config.grade.enabled;
+		case ViewportEffect::kGrain:
+			return config.grain.enabled;
+		case ViewportEffect::kSplit:
+			return config.split.enabled;
+		}
+		core::fatal("unknown viewport effect {}", static_cast<int>(effect));
 	}
 }
 
@@ -236,16 +326,13 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	// its way there, so it draws hashed alpha as the blend it converges to instead.
 	rtvDesc.taaEnabled = m_Desc.taaEnabled;
 
-	const bgl::BloomSettings      bloom = ClampBloomSettings(m_Desc.bloom.settings);
-	const bgl::ColorGradeSettings grade = ClampColorGradeSettings(m_Desc.colorGrade.settings);
+	m_Desc.filmic                      = Clamped(m_Desc.filmic);
+	m_Desc.toon                        = Clamped(m_Desc.toon);
+	const bgl::PostProcess postProcess = BuildPostProcess();
 
 	m_RenderTarget = m_Desc.renderer->Invoke([&] {
 		auto target = m_Desc.renderer->GetGraphics()->CreateRenderTarget(rtvDesc);
-		target->SetBloomSettings(bloom);
-		target->SetBloomEnabled(m_Desc.bloom.enabled);
-		target->SetColorGradeSettings(grade);
-		target->SetColorGradeEnabled(m_Desc.colorGrade.enabled);
-		target->SetPostProcessType(GetPostProcessType());
+		target->SetPostProcess(postProcess);
 		return target;
 	});
 	m_SceneView    = m_Desc.renderer->Invoke([&] {
@@ -461,70 +548,63 @@ RenderTargetWindow::SetOutlineEnabled(bool enabled)
 }
 
 void
-RenderTargetWindow::SetBloomEnabled(bool enabled)
-{
-	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
-		return;
-
-	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetBloomEnabled(enabled); });
-}
-
-bool
-RenderTargetWindow::IsBloomEnabled() const
-{
-	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
-		return false;
-
-	return m_Desc.renderer->Invoke([&] { return m_RenderTarget->IsBloomEnabled(); });
-}
-
-bgl::BloomSettings
-RenderTargetWindow::GetBloomSettings() const
-{
-	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
-		return {};
-
-	return m_Desc.renderer->Invoke([&] { return m_RenderTarget->GetBloomSettings(); });
-}
-
-void
-RenderTargetWindow::SetProjectPostProcessType(bgl::PostProcessType postProcessType)
+RenderTargetWindow::SetProjectPostProcessType(assetlib::PostProcessType postProcessType)
 {
 	m_ProjectPostProcessType = postProcessType;
-	ApplyPostProcessType();
+	ApplyPostProcess();
 }
 
 void
-RenderTargetWindow::SetChosenPostProcessType(std::optional<bgl::PostProcessType> postProcessType)
+RenderTargetWindow::SetChosenPostProcessType(
+	std::optional<assetlib::PostProcessType> postProcessType)
 {
 	m_ChosenPostProcessType = postProcessType;
-	ApplyPostProcessType();
+	ApplyPostProcess();
 }
 
 void
 RenderTargetWindow::SetShowsToonContent(bool toon)
 {
 	m_ShowsToonContent = toon;
-	ApplyPostProcessType();
+	ApplyPostProcess();
 	ApplyBackdrop();
 }
 
-bgl::PostProcessType
+assetlib::PostProcessType
 RenderTargetWindow::GetPostProcessType() const noexcept
 {
 	if (m_ChosenPostProcessType.has_value())
 		return *m_ChosenPostProcessType;
-	return m_ShowsToonContent ? bgl::PostProcessType::kToon : m_ProjectPostProcessType;
+	return m_ShowsToonContent ? assetlib::PostProcessType::kToon : m_ProjectPostProcessType;
+}
+
+bgl::PostProcess
+RenderTargetWindow::BuildPostProcess() const
+{
+	if (GetPostProcessType() == assetlib::PostProcessType::kToon)
+	{
+		const editor::ToonConfig& c = m_Desc.toon;
+		return bgl::ToonPostProcess{ .bloom = Resolved(c.bloom),
+			                         .grade = Resolved(c.grade),
+			                         .grain = Resolved(c.grain),
+			                         .split = Resolved(c.split) };
+	}
+
+	const editor::FilmicConfig& c = m_Desc.filmic;
+	return bgl::FilmicPostProcess{ .bloom = Resolved(c.bloom),
+		                           .grade = Resolved(c.grade),
+		                           .grain = Resolved(c.grain),
+		                           .split = Resolved(c.split) };
 }
 
 void
-RenderTargetWindow::ApplyPostProcessType()
+RenderTargetWindow::ApplyPostProcess()
 {
 	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
 		return;
 
-	const bgl::PostProcessType postProcessType = GetPostProcessType();
-	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetPostProcessType(postProcessType); });
+	const bgl::PostProcess postProcess = BuildPostProcess();
+	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetPostProcess(postProcess); });
 }
 
 void
@@ -551,30 +631,28 @@ RenderTargetWindow::GetBackdrop() const noexcept
 }
 
 void
-RenderTargetWindow::SetColorGradeEnabled(bool enabled)
+RenderTargetWindow::SetEffectEnabled(ViewportEffect effect, bool enabled)
 {
-	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
-		return;
-
-	m_Desc.renderer->Invoke([&] { m_RenderTarget->SetColorGradeEnabled(enabled); });
+	Enabled(m_Desc.filmic, effect) = enabled;
+	Enabled(m_Desc.toon, effect)   = enabled;
+	ApplyPostProcess();
 }
 
 bool
-RenderTargetWindow::IsColorGradeEnabled() const
+RenderTargetWindow::IsEffectEnabled(ViewportEffect effect) const
 {
-	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
-		return false;
-
-	return m_Desc.renderer->Invoke([&] { return m_RenderTarget->IsColorGradeEnabled(); });
+	return GetPostProcessType() == assetlib::PostProcessType::kToon ?
+	           Enabled(m_Desc.toon, effect) :
+	           Enabled(m_Desc.filmic, effect);
 }
 
-bgl::ColorGradeSettings
-RenderTargetWindow::GetColorGradeSettings() const
+bgl::PostProcess
+RenderTargetWindow::GetPostProcess() const
 {
 	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
-		return {};
+		return bgl::FilmicPostProcess();
 
-	return m_Desc.renderer->Invoke([&] { return m_RenderTarget->GetColorGradeSettings(); });
+	return m_Desc.renderer->Invoke([&] { return m_RenderTarget->GetPostProcess(); });
 }
 
 void

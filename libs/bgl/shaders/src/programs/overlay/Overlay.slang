@@ -1,4 +1,5 @@
 import idl.OverlayVertex;
+import lib.math.Srgb;
 import lib.types.UploadBuffer;
 
 struct OverlayDrawData
@@ -27,13 +28,6 @@ struct VSOut
     float4 color : COLOR;
     float2 uv : TEXCOORD;
 };
-
-float3 SrgbToLinear(float3 c)
-{
-    const float3 low = c / 12.92;
-    const float3 high = pow((c + 0.055) / 1.055, float3(2.4, 2.4, 2.4));
-    return lerp(low, high, step(0.04045, c));
-}
 
 // The vertex carries sRGB bytes premultiplied by alpha. Premultiplication is only valid in the space
 // the blend runs in, so the alpha is divided out before the decode and multiplied back after it:

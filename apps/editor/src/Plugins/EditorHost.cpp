@@ -67,10 +67,10 @@ namespace editor::plugins
 		                            .renderScale            = desc.renderScale,
 		                            .taaReconstructionWidth = desc.taaReconstructionWidth,
 		                            .taaSharpness           = desc.taaSharpness,
-		                            .bloom                  = { desc.bloomEnabled, desc.bloom },
-		                            .colorGrade   = { desc.colorGradeEnabled, desc.colorGrade },
-		                            .toonBackdrop = desc.toonBackdrop,
-		                            .headless     = m_Headless });
+		                            .filmic                 = desc.filmic,
+		                            .toon                   = desc.toon,
+		                            .toonBackdrop           = desc.toonBackdrop,
+		                            .headless               = m_Headless });
 		if (m_Dispatch.viewportCreated)
 			m_Dispatch.viewportCreated(*viewport);
 		return viewport.release();

@@ -3,6 +3,7 @@
 #include <QHash>
 #include <QQueue>
 #include <QThreadPool>
+#include <assetlib/Project.h>
 #include <bgl/IRenderTarget.h>
 
 #include "Render/Renderer.h"
@@ -101,7 +102,7 @@ public:
 	 * material ends in toon whatever this is, as its preview does. Takes effect from the next shot.
 	 */
 	void
-	SetProjectPostProcessType(bgl::PostProcessType postProcessType) noexcept
+	SetProjectPostProcessType(assetlib::PostProcessType postProcessType) noexcept
 	{
 		m_ProjectPostProcessType = postProcessType;
 	}
@@ -354,10 +355,10 @@ private:
 	// The `.benv` bound and the slots it took, so nothing releases one the view still names.
 	editor::EnvironmentBinding m_Environment;
 
-	bgl::RenderTargetRef m_RenderTarget;
-	bgl::PostProcessType m_ProjectPostProcessType = bgl::PostProcessType::kFilmic;
-	bgl::SceneViewRef    m_SceneView;
-	bgl::MaterialHandle  m_DefaultMaterial;
+	bgl::RenderTargetRef      m_RenderTarget;
+	assetlib::PostProcessType m_ProjectPostProcessType = assetlib::PostProcessType::kFilmic;
+	bgl::SceneViewRef         m_SceneView;
+	bgl::MaterialHandle       m_DefaultMaterial;
 
 	const assetlib::AssetStore* m_Store = nullptr;
 

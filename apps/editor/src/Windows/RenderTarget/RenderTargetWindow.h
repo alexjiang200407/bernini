@@ -3,10 +3,12 @@
 #include <QElapsedTimer>
 #include <QString>
 #include <QWidget>
+#include <assetlib/Project.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/types/BackdropGradient.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/PassTiming.h>
+#include <bgl/types/PostProcess.h>
 #include <cstddef>
 #include <cstdint>
 #include <editor_plugin_api/IEditorViewport.h>
@@ -30,33 +32,13 @@ namespace game
 
 #include "Render/Renderer.h"
 
-// A viewport's `bloom` section of config.json. The Render menu toggles `enabled`, never `settings`.
-struct BloomConfig
+// The effects the Render menu switches, each in both post-process types at once.
+enum class ViewportEffect : uint8_t
 {
-	bool               enabled = false;
-	bgl::BloomSettings settings;
-};
-
-// bgl's defaults are the identity, which leaves the Render menu's toggle nothing to show. A viewport
-// whose config.json leaves a key out takes this mild grade's value for it instead: warmer, a touch
-// more saturated and contrasty, darker corners.
-[[nodiscard]] inline bgl::ColorGradeSettings
-DefaultViewportGrade() noexcept
-{
-	auto settings              = bgl::ColorGradeSettings();
-	settings.temperature       = 10.0f;
-	settings.saturation        = 1.15f;
-	settings.contrast          = 1.1f;
-	settings.vignetteIntensity = 0.25f;
-	return settings;
-}
-
-// A viewport's `colorGrade` section of config.json. The Render menu toggles `enabled`, never
-// `settings`.
-struct ColorGradeConfig
-{
-	bool                    enabled  = false;
-	bgl::ColorGradeSettings settings = DefaultViewportGrade();
+	kBloom,
+	kGrade,
+	kGrain,
+	kSplit,
 };
 
 struct RenderTargetWindowDesc
@@ -87,8 +69,8 @@ struct RenderTargetWindowDesc
 	float taaSharpness = 1.0f;
 
 	// Out-of-range settings are clamped and warned about, like the render scale.
-	BloomConfig      bloom;
-	ColorGradeConfig colorGrade;
+	editor::FilmicConfig filmic;
+	editor::ToonConfig   toon;
 
 	// What the viewport draws behind toon content instead of its sky; clamped like the bloom.
 	bgl::BackdropGradient toonBackdrop;
@@ -142,43 +124,47 @@ public:
 	void
 	SetOutlineEnabled(bool enabled);
 
-	// Turns bloom on or off for this viewport, with the settings config.json gave it. Unlike TAA
-	// nothing is allocated at creation -- the chain appears at the first frame that blooms -- so
-	// any viewport can turn it on.
+	// Turns an effect on or off for this viewport, in both post-process types, with the settings
+	// config.json gave each. Unlike TAA nothing is allocated at creation -- bloom's chain appears at
+	// the first frame that blooms -- so any viewport can turn any effect on.
 	void
-	SetBloomEnabled(bool enabled);
+	SetEffectEnabled(ViewportEffect effect, bool enabled);
 
-	// What the viewport's target is blooming with now, read on the render thread that owns it.
+	// Whether the effect is on in the post-process type the viewport ends in now.
 	[[nodiscard]] bool
-	IsBloomEnabled() const;
+	IsEffectEnabled(ViewportEffect effect) const;
 
-	[[nodiscard]] bgl::BloomSettings
-	GetBloomSettings() const;
+	// What the viewport's target ends in now, read on the render thread that owns it.
+	[[nodiscard]] bgl::PostProcess
+	GetPostProcess() const;
 
-	// Turns the colour grade on or off for this viewport, with the settings config.json gave it.
-	void
-	SetColorGradeEnabled(bool enabled);
+	// Each type's effects, on or off, after config.json's values were clamped.
+	[[nodiscard]] const editor::FilmicConfig&
+	GetFilmicConfig() const noexcept
+	{
+		return m_Desc.filmic;
+	}
 
-	[[nodiscard]] bool
-	IsColorGradeEnabled() const;
-
-	[[nodiscard]] bgl::ColorGradeSettings
-	GetColorGradeSettings() const;
+	[[nodiscard]] const editor::ToonConfig&
+	GetToonConfig() const noexcept
+	{
+		return m_Desc.toon;
+	}
 
 	// The post-process this viewport ends in is the user's pick if there is one, else toon for
 	// toon content, else the project's. Each setter re-derives it. Toon content also swaps the sky
 	// for the desc's toonBackdrop, whatever the pick.
 	void
-	SetProjectPostProcessType(bgl::PostProcessType postProcessType);
+	SetProjectPostProcessType(assetlib::PostProcessType postProcessType);
 
 	// Empty is Auto: the project and the content decide.
 	void
-	SetChosenPostProcessType(std::optional<bgl::PostProcessType> postProcessType);
+	SetChosenPostProcessType(std::optional<assetlib::PostProcessType> postProcessType);
 
 	void
 	SetShowsToonContent(bool toon) override;
 
-	[[nodiscard]] bgl::PostProcessType
+	[[nodiscard]] assetlib::PostProcessType
 	GetPostProcessType() const noexcept;
 
 	// What the viewport draws in place of its sky: empty draws the sky.
@@ -348,8 +334,12 @@ private:
 	// backbuffers.
 	QTimer* m_ResizeTimer = nullptr;
 
+	// The target's post-process from the type the viewport ends in and that type's config.
+	[[nodiscard]] bgl::PostProcess
+	BuildPostProcess() const;
+
 	void
-	ApplyPostProcessType();
+	ApplyPostProcess();
 
 	void
 	ApplyBackdrop();
@@ -357,10 +347,10 @@ private:
 	RenderTargetWindowDesc m_Desc;
 	bgl::RenderTargetRef   m_RenderTarget;
 
-	bgl::PostProcessType                m_ProjectPostProcessType = bgl::PostProcessType::kFilmic;
-	std::optional<bgl::PostProcessType> m_ChosenPostProcessType;
-	bool                                m_ShowsToonContent = false;
-	bgl::SceneViewRef                   m_SceneView;
+	assetlib::PostProcessType m_ProjectPostProcessType = assetlib::PostProcessType::kFilmic;
+	std::optional<assetlib::PostProcessType> m_ChosenPostProcessType;
+	bool                                     m_ShowsToonContent = false;
+	bgl::SceneViewRef                        m_SceneView;
 
 	// Non-zero only while this window is in the frame loop.
 	Renderer::ViewportId m_ViewportId = 0;

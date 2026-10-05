@@ -75,7 +75,13 @@
 #include <QDebug>
 #include <QKeySequence>
 #include <bgl/types/BackdropGradient.h>
+#include <bgl/types/BloomSettings.h>
+#include <bgl/types/ColorGradeSettings.h>
+#include <bgl/types/ColorSplitSettings.h>
+#include <bgl/types/FilmGrainSettings.h>
 #include <bgl/types/PassTiming.h>
+#include <bgl/types/ToonGradeSettings.h>
+#include <bgl/types/VignetteSettings.h>
 #include <core/str/str.h>
 #include <memory>
 #include <optional>
@@ -228,20 +234,16 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 
 		// Each absent key keeps the default, so a partial section overrides only what it names.
 		// Range checks are the viewport's, at creation.
-		const auto readBloom = [](const auto& section) {
-			auto       bloom = BloomConfig();
-			const auto node  = section["bloom"];
-			bloom.enabled    = node["enabled"].GetOrDefault(bloom.enabled);
-			auto& s          = bloom.settings;
-			s.intensity      = node["intensity"].GetOrDefault(s.intensity);
-			s.threshold      = node["threshold"].GetOrDefault(s.threshold);
-			s.softKnee       = node["softKnee"].GetOrDefault(s.softKnee);
-			s.scatter        = node["scatter"].GetOrDefault(s.scatter);
-			return bloom;
+		const auto readBloom = [](const auto& node, bgl::BloomSettings s) {
+			s.intensity = node["intensity"].GetOrDefault(s.intensity);
+			s.threshold = node["threshold"].GetOrDefault(s.threshold);
+			s.softKnee  = node["softKnee"].GetOrDefault(s.softKnee);
+			s.scatter   = node["scatter"].GetOrDefault(s.scatter);
+			return s;
 		};
 
-		// The CDL's per-channel values are objects -- { "r": .., "g": .., "b": .. } -- so a partial
-		// one overrides only the channels it names, like the rest of the section.
+		// Per-channel values are objects -- { "r": .., "g": .., "b": .. } -- so a partial one
+		// overrides only the channels it names, like the rest of the section.
 		const auto readRgb = [](const auto& node, glm::vec3 rgb) {
 			rgb.r = node["r"].GetOrDefault(rgb.r);
 			rgb.g = node["g"].GetOrDefault(rgb.g);
@@ -258,21 +260,92 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 			return gradient;
 		};
 
-		const auto readColorGrade = [&readRgb](const auto& section) {
-			auto       grade     = ColorGradeConfig();
-			const auto node      = section["colorGrade"];
-			grade.enabled        = node["enabled"].GetOrDefault(grade.enabled);
-			auto& s              = grade.settings;
-			s.temperature        = node["temperature"].GetOrDefault(s.temperature);
-			s.tint               = node["tint"].GetOrDefault(s.tint);
-			s.slope              = readRgb(node["slope"], s.slope);
-			s.offset             = readRgb(node["offset"], s.offset);
-			s.power              = readRgb(node["power"], s.power);
-			s.saturation         = node["saturation"].GetOrDefault(s.saturation);
-			s.contrast           = node["contrast"].GetOrDefault(s.contrast);
-			s.vignetteIntensity  = node["vignetteIntensity"].GetOrDefault(s.vignetteIntensity);
-			s.vignetteSmoothness = node["vignetteSmoothness"].GetOrDefault(s.vignetteSmoothness);
-			return grade;
+		const auto readVignette = [](const auto& node, bgl::VignetteSettings s) {
+			s.intensity  = node["intensity"].GetOrDefault(s.intensity);
+			s.smoothness = node["smoothness"].GetOrDefault(s.smoothness);
+			return s;
+		};
+
+		const auto readGrade = [&](const auto& node, bgl::ColorGradeSettings s) {
+			s.temperature = node["temperature"].GetOrDefault(s.temperature);
+			s.tint        = node["tint"].GetOrDefault(s.tint);
+			s.slope       = readRgb(node["slope"], s.slope);
+			s.offset      = readRgb(node["offset"], s.offset);
+			s.power       = readRgb(node["power"], s.power);
+			s.saturation  = node["saturation"].GetOrDefault(s.saturation);
+			s.contrast    = node["contrast"].GetOrDefault(s.contrast);
+			s.vignette    = readVignette(node["vignette"], s.vignette);
+			return s;
+		};
+
+		const auto readToonGrade = [&](const auto& node, bgl::ToonGradeSettings s) {
+			s.temperature = node["temperature"].GetOrDefault(s.temperature);
+			s.tint        = node["tint"].GetOrDefault(s.tint);
+			s.black       = readRgb(node["black"], s.black);
+			s.white       = readRgb(node["white"], s.white);
+			s.gamma       = readRgb(node["gamma"], s.gamma);
+			s.saturation  = node["saturation"].GetOrDefault(s.saturation);
+			s.contrast    = node["contrast"].GetOrDefault(s.contrast);
+			s.vignette    = readVignette(node["vignette"], s.vignette);
+			return s;
+		};
+
+		const auto readGrain = [](const auto& node, bgl::FilmGrainSettings s) {
+			s.intensity  = node["intensity"].GetOrDefault(s.intensity);
+			s.size       = node["size"].GetOrDefault(s.size);
+			s.holdFrames = node["holdFrames"].GetOrDefault(s.holdFrames);
+			return s;
+		};
+
+		const auto readSplit = [](const auto& node, bgl::ColorSplitSettings s) {
+			s.offset.x = node["offset"]["x"].GetOrDefault(s.offset.x);
+			s.offset.y = node["offset"]["y"].GetOrDefault(s.offset.y);
+			s.radial   = node["radial"].GetOrDefault(s.radial);
+			return s;
+		};
+
+		const auto readEffect = [](const auto& node, auto effect, const auto& readSettings) {
+			effect.enabled  = node["enabled"].GetOrDefault(effect.enabled);
+			effect.settings = readSettings(node, effect.settings);
+			return effect;
+		};
+
+		// Each post-process type's effects are its own section, so a grade written for one is never
+		// read as the other's.
+		const auto readFilmic = [&](const auto& section) {
+			auto       c = editor::FilmicConfig();
+			const auto n = section["filmic"];
+			c.bloom      = readEffect(n["bloom"], c.bloom, readBloom);
+			c.grade      = readEffect(n["grade"], c.grade, readGrade);
+			c.grain      = readEffect(n["filmGrain"], c.grain, readGrain);
+			c.split      = readEffect(n["colorSplit"], c.split, readSplit);
+			return c;
+		};
+
+		const auto readToon = [&](const auto& section) {
+			auto       c = editor::ToonConfig();
+			const auto n = section["toon"];
+			c.bloom      = readEffect(n["bloom"], c.bloom, readBloom);
+			c.grade      = readEffect(n["grade"], c.grade, readToonGrade);
+			c.grain      = readEffect(n["filmGrain"], c.grain, readGrain);
+			c.split      = readEffect(n["colorSplit"], c.split, readSplit);
+			return c;
+		};
+
+		// The sections a viewport named before each type had its own. Not read: which type's they
+		// were cannot be told, so they would be a guess.
+		const auto warnRetired = [](const auto& section) {
+			for (const char* key : { "bloom", "colorGrade", "filmGrain", "colorSplit" })
+			{
+				if (section[key])
+				{
+					qWarning(
+						"config.json: a viewport's `%s` section is no longer read; each "
+						"post-process "
+						"type has its own, under `filmic` and `toon`",
+						key);
+				}
+			}
 		};
 
 		// temporalAA, renderScale, taaReconstructionWidth and taaSharpness are each viewport's own
@@ -280,18 +353,15 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 		// headless editor is a whole editor built without windows, which is the only shape a test can
 		// construct.
 		const auto readViewport = [&](const auto& section) {
-			auto       viewport             = editor::ViewportDesc();
-			const auto bloom                = readBloom(section);
-			const auto grade                = readColorGrade(section);
+			warnRetired(section);
+			auto viewport                   = editor::ViewportDesc();
 			viewport.initialInstances       = section["initialPreviewInstances"].GetOrDefault(16u);
 			viewport.taaEnabled             = section["temporalAA"].GetOrDefault(true);
 			viewport.renderScale            = section["renderScale"].GetOrDefault(1.0f);
 			viewport.taaReconstructionWidth = section["taaReconstructionWidth"].GetOrDefault(0.4f);
 			viewport.taaSharpness           = section["taaSharpness"].GetOrDefault(1.0f);
-			viewport.bloomEnabled           = bloom.enabled;
-			viewport.bloom                  = bloom.settings;
-			viewport.colorGradeEnabled      = grade.enabled;
-			viewport.colorGrade             = grade.settings;
+			viewport.filmic                 = readFilmic(section);
+			viewport.toon                   = readToon(section);
 			viewport.toonBackdrop           = readToonBackdrop(section);
 			return viewport;
 		};
@@ -567,7 +637,7 @@ MainWindow::SetUpRenderMenu()
 	// the one thing asked of the menu. Checked when config.json started any viewport with it.
 	bool anyBloom = false;
 	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
-		anyBloom = anyBloom || view->IsBloomEnabled();
+		anyBloom = anyBloom || view->IsEffectEnabled(ViewportEffect::kBloom);
 
 	auto* bloom = render->addAction(editor::Localize("editor.main_window.bloom", "Bloom"));
 	bloom->setCheckable(true);
@@ -575,19 +645,21 @@ MainWindow::SetUpRenderMenu()
 	bloom->setStatusTip(
 		editor::Localize(
 			"editor.main_window.bloom_tip",
-			"Spill the viewports' bright pixels into a glow, ahead of the display curve. How they "
-			"bloom is each viewport's `bloom` section in config.json."));
+			"Spill the viewports' bright pixels into a glow: added ahead of the curve under "
+			"Filmic, "
+			"screened over the colour under Toon. How they bloom is each viewport's `filmic.bloom` "
+			"and `toon.bloom` section in config.json."));
 
 	connect(bloom, &QAction::toggled, this, [this](bool enabled) {
 		m_BloomOverride = enabled;
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
-			view->SetBloomEnabled(enabled);
+			view->SetEffectEnabled(ViewportEffect::kBloom, enabled);
 	});
 
 	// As bloom: the grade itself is each viewport's config.json section.
 	bool anyGrade = false;
 	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
-		anyGrade = anyGrade || view->IsColorGradeEnabled();
+		anyGrade = anyGrade || view->IsEffectEnabled(ViewportEffect::kGrade);
 
 	auto* grade =
 		render->addAction(editor::Localize("editor.main_window.color_grade", "Color Grade"));
@@ -596,14 +668,57 @@ MainWindow::SetUpRenderMenu()
 	grade->setStatusTip(
 		editor::Localize(
 			"editor.main_window.color_grade_tip",
-			"White-balance and grade the viewports ahead of the display curve. The grade is each "
-			"viewport's `colorGrade` section in config.json. No effect on a viewport in Toon "
-			"post-process."));
+			"White-balance and grade the viewports. Each type has its own grade: `filmic.grade` in "
+			"config.json, a CDL in AgX's log encoding, and `toon.grade`, the black and white the "
+			"screen shows."));
 
 	connect(grade, &QAction::toggled, this, [this](bool enabled) {
 		m_ColorGradeOverride = enabled;
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
-			view->SetColorGradeEnabled(enabled);
+			view->SetEffectEnabled(ViewportEffect::kGrade, enabled);
+	});
+
+	// As bloom: each is its viewport's config.json section, and the menu switches it.
+	bool anyGrain = false;
+	bool anySplit = false;
+	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+	{
+		anyGrain = anyGrain || view->IsEffectEnabled(ViewportEffect::kGrain);
+		anySplit = anySplit || view->IsEffectEnabled(ViewportEffect::kSplit);
+	}
+
+	auto* grain =
+		render->addAction(editor::Localize("editor.main_window.film_grain", "Film Grain"));
+	grain->setCheckable(true);
+	grain->setChecked(anyGrain);
+	grain->setStatusTip(
+		editor::Localize(
+			"editor.main_window.film_grain_tip",
+			"Grain the viewports after the display curve, in proportion to each pixel's "
+			"brightness. The grain is each viewport's `filmic.filmGrain` and `toon.filmGrain` "
+			"section in config.json."));
+
+	connect(grain, &QAction::toggled, this, [this](bool enabled) {
+		m_FilmGrainOverride = enabled;
+		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+			view->SetEffectEnabled(ViewportEffect::kGrain, enabled);
+	});
+
+	auto* split =
+		render->addAction(editor::Localize("editor.main_window.color_split", "Color Split"));
+	split->setCheckable(true);
+	split->setChecked(anySplit);
+	split->setStatusTip(
+		editor::Localize(
+			"editor.main_window.color_split_tip",
+			"Displace the viewports' red and blue from green, as a misregistered print or a lens "
+			"does. The split is each viewport's `filmic.colorSplit` and `toon.colorSplit` section "
+			"in config.json."));
+
+	connect(split, &QAction::toggled, this, [this](bool enabled) {
+		m_ColorSplitOverride = enabled;
+		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
+			view->SetEffectEnabled(ViewportEffect::kSplit, enabled);
 	});
 
 	SetUpPostProcessMenu(render);
@@ -652,14 +767,15 @@ MainWindow::SetUpPostProcessMenu(QMenu* render)
 	menu->setStatusTip(
 		editor::Localize(
 			"editor.main_window.post_process_tip",
-			"The post-process the viewports end in: Filmic (AgX and the colour grade), or Toon -- "
-			"the colour as it is, which a toon look is authored for. Auto is the project's, and "
-			"Toon for a viewport showing toon content."));
+			"The post-process the viewports end in: Filmic (AgX), or Toon -- the colour as it is, "
+			"which a toon look is authored for. Auto is the project's, and Toon for a viewport "
+			"showing toon content."));
 
 	auto* group = new QActionGroup(menu);
 	group->setExclusive(true);
 
-	const auto addChoice = [&](const QString& label, std::optional<bgl::PostProcessType> choice) {
+	const auto addChoice = [&](const QString&                           label,
+	                           std::optional<assetlib::PostProcessType> choice) {
 		QAction* action = menu->addAction(label);
 		action->setCheckable(true);
 		action->setChecked(choice == m_PostProcessTypeOverride);
@@ -675,10 +791,10 @@ MainWindow::SetUpPostProcessMenu(QMenu* render)
 		addChoice(editor::Localize("editor.main_window.post_process_auto", "Auto"), std::nullopt);
 	addChoice(
 		editor::Localize("editor.main_window.post_process_filmic", "Filmic"),
-		bgl::PostProcessType::kFilmic);
+		assetlib::PostProcessType::kFilmic);
 	addChoice(
 		editor::Localize("editor.main_window.post_process_toon", "Toon"),
-		bgl::PostProcessType::kToon);
+		assetlib::PostProcessType::kToon);
 }
 
 void
@@ -1381,9 +1497,7 @@ MainWindow::SetActiveProject(assetlib::Project project)
 	m_Project = std::make_unique<assetlib::Project>(std::move(project));
 	editor::RecordRecentProject(m_RecentProjectsFile, m_Project->GetProjectFile());
 
-	m_ProjectPostProcessType = m_Project->GetPostProcessType() == assetlib::PostProcessType::kToon ?
-	                               bgl::PostProcessType::kToon :
-	                               bgl::PostProcessType::kFilmic;
+	m_ProjectPostProcessType = m_Project->GetPostProcessType();
 	// A new project starts at Auto: a choice made for the last one's look is not this one's.
 	m_PostProcessTypeOverride.reset();
 	if (m_PostProcessTypeAuto != nullptr)
@@ -1926,9 +2040,13 @@ MainWindow::ConfigureViewport(RenderTargetWindow& view)
 	if (m_SharpnessOverride)
 		view.SetTaaSharpness(*m_SharpnessOverride);
 	if (m_BloomOverride)
-		view.SetBloomEnabled(*m_BloomOverride);
+		view.SetEffectEnabled(ViewportEffect::kBloom, *m_BloomOverride);
 	if (m_ColorGradeOverride)
-		view.SetColorGradeEnabled(*m_ColorGradeOverride);
+		view.SetEffectEnabled(ViewportEffect::kGrade, *m_ColorGradeOverride);
+	if (m_FilmGrainOverride)
+		view.SetEffectEnabled(ViewportEffect::kGrain, *m_FilmGrainOverride);
+	if (m_ColorSplitOverride)
+		view.SetEffectEnabled(ViewportEffect::kSplit, *m_ColorSplitOverride);
 	view.SetProjectPostProcessType(m_ProjectPostProcessType);
 	view.SetChosenPostProcessType(m_PostProcessTypeOverride);
 	view.SetOutlineEnabled(m_OutlineEnabled);

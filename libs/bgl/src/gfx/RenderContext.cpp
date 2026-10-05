@@ -19,6 +19,7 @@
 #include "passes/DrawData.h"
 #include "passes/PassInitContext.h"
 #include "postprocess/BloomChain.h"
+#include "postprocess/post_process.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "util/util.h"
@@ -1155,9 +1156,12 @@ namespace bgl
 			postProcessArgs.taaSharpness = rt.GetRenderScale() < 1.0f ? rt.GetTaaSharpness() : 0.0f;
 		}
 
+		const PostProcess                   postProcess = rt.GetPostProcess();
+		const std::optional<BloomSettings>& bloom       = BloomOf(postProcess);
+
 		BloomChain& bloomChain = rt.GetBloomChain();
 
-		if (rt.IsBloomEnabled())
+		if (bloom)
 		{
 			bloomChain.Ensure(m_ResourceManager, rt.GetWidth(), rt.GetHeight());
 		}
@@ -1166,9 +1170,9 @@ namespace bgl
 		// the frame's bloom is the whole recovery.
 		const std::span<const BloomChain::Level> levels = bloomChain.GetLevels();
 
-		if (rt.IsBloomEnabled() && !levels.empty())
+		if (bloom && !levels.empty())
 		{
-			const BloomSettings settings = rt.GetBloomSettings();
+			const BloomSettings& settings = *bloom;
 
 			auto bloomArgs       = BloomPass::Args();
 			bloomArgs.source     = postProcessArgs.source;
@@ -1213,13 +1217,17 @@ namespace bgl
 			postProcessArgs.bloomSampler = m_LinearClampSampler;
 			postProcessArgs.bloomName =
 				bloomChain.IsUpsampled() ? GetBloomUpName(0) : GetBloomDownName(0);
-			postProcessArgs.bloomIntensity = settings.intensity;
-			postProcessArgs.bloomEnabled   = true;
+			postProcessArgs.bloomRan = true;
 		}
 
-		postProcessArgs.colorGrade        = rt.GetColorGradeSettings();
-		postProcessArgs.colorGradeEnabled = rt.IsColorGradeEnabled();
-		postProcessArgs.postProcessType   = rt.GetPostProcessType();
+		postProcessArgs.postProcess = postProcess;
+		postProcessArgs.frameCount  = rt.GetFrameCount();
+
+		if (SplitOf(postProcess))
+		{
+			// A displaced tap lands between texels, and at a texel's centre linear is the point tap.
+			postProcessArgs.sampler = m_LinearClampSampler;
+		}
 
 		m_PostProcess.AttachToFrameGraph(m_FrameGraph, postProcessArgs);
 
