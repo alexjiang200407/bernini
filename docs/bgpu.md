@@ -127,6 +127,8 @@ refused, even when a second GPU would pass, because the engine does not choose a
   client can write its own words or localize them. bgpu never shows UI: it is linked by headless
   tests and tools. The editor shows the text in its "could not start" dialog. A game must show it
   itself, because a Steam player never sees stderr and Steam cannot enforce hardware requirements.
+  `core::show_fatal_message` (`core/platform/util.h`) is the native dialog for a game's `main` to
+  call in its catch.
 * **The checks are separate from the reading.** Each backend reads plain facts off its device
   (`AppleSystemFacts`, `D3d12SystemFacts`), and `CheckSystemRequirements` decides on them. So
   `bgpu_tests` `[sysreq]` pins both backends' checks on any machine, including the machines that
