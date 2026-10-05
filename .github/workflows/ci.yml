@@ -1,18 +1,23 @@
 name: CI
 
 on:
+  # ready_for_review is the run a draft never had: the Hub opens each feature's PR as a draft before
+  # any work is on it, so a draft's pushes compile nothing until the PR is marked ready.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
-    branches: [master, dev]
+    branches: [master]
 
 # A PR gets one review-worthy result, not one per intermediate push.
+# A draft's run skips every job, so it must not cancel the real one a ready PR has in progress.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !github.event.pull_request.draft }}
 
 jobs:
   compile:
     name: compile (ninja-msvc, Debug)
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: windows-latest
     # packages: write is what lets GITHUB_TOKEN push vcpkg's binaries to this repo's feed.
     permissions:
@@ -76,7 +81,8 @@ jobs:
 
       # An entry is addressed by what it was compiled from, not by this key: the key only chooses
       # which store to start from, so any earlier one is as good a start as the last. Entries are
-      # scoped to the ref that saved them and a PR reads its base's, which is why dev builds too.
+      # scoped to the ref that saved them and a PR reads its base's or master's, which is why master builds
+      # on every push.
       - name: Restore the compiler cache
         id: ccache
         uses: actions/cache/restore@v4
@@ -138,6 +144,7 @@ jobs:
 
   macos:
     name: compile (macos-clang, Debug + Metal)
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: macos-latest
     env:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
