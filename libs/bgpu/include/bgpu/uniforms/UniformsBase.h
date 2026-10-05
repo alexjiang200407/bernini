@@ -174,14 +174,14 @@ namespace bgpu
 			operator[](std::string_view name) const
 			{
 				auto [node, offset] = m_Node->Traverse(m_Offset, name);
-				return AccessorBase(m_Data, offset, node);
+				return AccessorBase(m_Data, m_MirrorSize, offset, node);
 			}
 
 			AccessorBase
 			operator[](uint32_t idx) const
 			{
 				auto [node, offset] = m_Node->Traverse(m_Offset, idx);
-				return AccessorBase(m_Data, offset, node);
+				return AccessorBase(m_Data, m_MirrorSize, offset, node);
 			}
 
 			[[nodiscard]] bool
@@ -202,6 +202,7 @@ namespace bgpu
 			{
 				AssertIsValue();
 				AssertType<T>();
+				EnsureInMirror(sizeof(T));
 
 				T value{};
 				std::memcpy(&value, static_cast<const uint8_t*>(m_Data) + m_Offset, sizeof(T));
@@ -245,6 +246,7 @@ namespace bgpu
 				}
 
 				const uint32_t words[2] = { index, 0 };
+				EnsureInMirror(sizeof(words));
 				std::memcpy(static_cast<uint8_t*>(m_Data) + m_Offset, words, sizeof(words));
 			}
 
@@ -298,14 +300,31 @@ namespace bgpu
 			{
 				AssertIsValue();
 				AssertType<T>();
+				EnsureInMirror(sizeof(T));
 
 				std::memcpy(static_cast<uint8_t*>(m_Data) + m_Offset, &value, sizeof(T));
 			}
 
 		private:
-			AccessorBase(DataPtr data, size_t offset, detail::UniformsNode* node) :
-				m_Data(data), m_Offset(offset), m_Node(node)
+			AccessorBase(
+				DataPtr               data,
+				size_t                mirrorSize,
+				size_t                offset,
+				detail::UniformsNode* node) :
+				m_Data(data), m_MirrorSize(mirrorSize), m_Offset(offset), m_Node(node)
 			{}
+
+			// Not debug-only: an overrun corrupts the heap silently and surfaces far away (#979).
+			void
+			EnsureInMirror(size_t bytes) const
+			{
+				core::ensure(
+					m_Offset <= m_MirrorSize && bytes <= m_MirrorSize - m_Offset,
+					"UniformsBase::Accessor: {} bytes at offset {} overrun the {}-byte mirror",
+					bytes,
+					m_Offset,
+					m_MirrorSize);
+			}
 
 			void
 			AssertIsValue() const
@@ -324,6 +343,7 @@ namespace bgpu
 
 		private:
 			DataPtr               m_Data;
+			size_t                m_MirrorSize;
 			size_t                m_Offset;
 			detail::UniformsNode* m_Node;
 
