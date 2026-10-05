@@ -68,6 +68,9 @@ We use Qt for the editor. Get Qt Installer from [here](https://doc.qt.io/qt-6/qt
 - Apple Silicon M1 or later. No Intel Macs
 - OS: MacOS 13+
 
+The engine checks these when it creates its GPU device and refuses to start below them
+([docs/bgpu.md § Minimum system requirements](docs/bgpu.md#minimum-system-requirements)).
+
 ## Soft Requirements
 
 ### just

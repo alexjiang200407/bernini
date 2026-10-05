@@ -97,6 +97,35 @@ rm->RegisterQueue(queue.Get());
   `libs/bgpu/CMakeLists.txt`) into a tree of their own and compiles each against it, so an include
   of an RHI header fails to resolve. A new context header joins that list.
 
+## Minimum system requirements
+
+The engine has one hardware bar, bindless resource access plus a mesh stage, and no lower tier.
+`CreateGpuContext` checks the machine against it as soon as it has the native device, before any
+owner builds anything on it. Below the bar it throws `bgpu::UnsupportedSystem`
+([SystemRequirements.h](../libs/bgpu/include/bgpu/SystemRequirements.h)) instead of letting the
+first mesh pipeline fail. Every client creates its device there, so the editor, every game and
+every test get the check without asking for it, and nothing can turn it off.
+
+| | Needs | Checked as |
+|---|---|---|
+| macOS | a Mac with Apple silicon (M1 or later) | `hw.optional.arm64`, so an x86_64 build under Rosetta passes |
+| | macOS 13 Ventura or later | `NSProcessInfo.operatingSystemVersion` |
+| | a Metal 3 GPU with a mesh stage and bindless | `MTLGPUFamilyMetal3`, `MTLGPUFamilyApple7`, `MTLArgumentBuffersTier2` |
+
+An Intel Mac is refused even when its GPU supports Metal 3: the engine is built and tested on Apple
+silicon only.
+
+* **The error is for a player, and the data is for the client.** `what()` says that this computer
+  does not meet the minimum requirements. It then names each thing to replace or update once, with
+  what the machine has instead, in English. `Unmet()` is the same list as `Requirement`s, so a
+  client can write its own words or localize them. bgpu never shows UI: it is linked by headless
+  tests and tools. The editor shows the text in its "could not start" dialog. A game must show it
+  itself, because a Steam player never sees stderr and Steam cannot enforce hardware requirements.
+* **The checks are separate from the reading.** Each backend reads plain facts off its device
+  (`AppleSystemFacts`, `D3d12SystemFacts`), and `CheckSystemRequirements` decides on them. So
+  `bgpu_tests` `[sysreq]` pins both backends' checks on any machine, including the machines that
+  fail them, which no test machine is.
+
 ## Threading & Synchronization
 
 * **Sessions are per thread.** A thread's first compile creates its own global session and session,
