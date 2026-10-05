@@ -251,25 +251,25 @@ namespace bgpu
 	UniformsBase::Accessor
 	UniformsBase::operator[](std::string_view name)
 	{
-		return Accessor(m_Buffer.data(), 0, m_Root.get())[name];
+		return Accessor(m_Buffer.data(), m_Buffer.size(), 0, m_Root.get())[name];
 	}
 
 	UniformsBase::Accessor
 	UniformsBase::operator[](uint32_t idx)
 	{
-		return Accessor(m_Buffer.data(), 0, m_Root.get())[idx];
+		return Accessor(m_Buffer.data(), m_Buffer.size(), 0, m_Root.get())[idx];
 	}
 
 	UniformsBase::ConstAccessor
 	UniformsBase::operator[](std::string_view name) const
 	{
-		return ConstAccessor(m_Buffer.data(), 0, m_Root.get())[name];
+		return ConstAccessor(m_Buffer.data(), m_Buffer.size(), 0, m_Root.get())[name];
 	}
 
 	UniformsBase::ConstAccessor
 	UniformsBase::operator[](uint32_t idx) const
 	{
-		return ConstAccessor(m_Buffer.data(), 0, m_Root.get())[idx];
+		return ConstAccessor(m_Buffer.data(), m_Buffer.size(), 0, m_Root.get())[idx];
 	}
 
 	UniformsBase::UniformsBase(std::shared_ptr<const ReflectedLayout> layout, size_t size)

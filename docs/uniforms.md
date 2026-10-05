@@ -153,6 +153,14 @@ time, so it is the suballocation the GPU reads and the mirror may be rewritten i
   absent; a bare `accessor = v` writes one that must exist and throws when it does not. There is no
   third form, so a member with no guard is a claim that every variant declares it.
 
+* **No read or write leaves the mirror, in any build.** An index past an array's count resolves to
+  the null node, so the only way to an offset beyond the mirror is a wrong reflected layout — a
+  stride or offset the backend misreported, as #979's whole-array stride was. @post every value
+  read, value write and `AssignDescriptorIndex` checks that its bytes end inside the mirror and
+  stops through `core::ensure`, naming the offset, the width and the mirror's size, instead of
+  overrunning the heap and failing somewhere else later. It checks the access, not the layout: a
+  wrong offset that still lands inside the mirror writes the wrong member silently.
+
 * **`Uniforms::operator[]` on an empty or `Reset()` instance dereferences a null root.** @pre
   `IsEmpty()` is false; the accessor's null checks run after the first `Traverse`.
 
