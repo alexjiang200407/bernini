@@ -38,6 +38,7 @@
 #include <assetlib/Project.h>
 #include <assetlib/cancel.h>
 #include <assetlib/progress.h>
+#include <bgl/SurfaceType.h>
 #include <default_editor/plugin.h>
 #include <editor_plugin_api/IEditorRegistry.h>
 #include <editor_sdk/BackgroundTask.h>
@@ -86,6 +87,7 @@
 #include <qobjectdefs.h>
 #include <qtypes.h>
 #include <qwidget.h>
+#include <span>
 #include <string>
 #include <tracy/Tracy.hpp>
 #include <utility>
@@ -207,8 +209,11 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 			sceneDesc,
 			m_StartupProgress ? RendererWait::kPumpEventLoop : RendererWait::kBlock);
 
-		m_SurfaceCount =
-			m_Renderer->Invoke([&] { return m_Renderer->GetGraphics()->GetSurfaceTypes().size(); });
+		m_Surfaces = m_Renderer->Invoke([&] {
+			const std::span<const bgl::SurfaceType> types =
+				m_Renderer->GetGraphics()->GetSurfaceTypes();
+			return std::vector<bgl::SurfaceType>(types.begin(), types.end());
+		});
 
 		// The preview look, each knob overridable per viewport; absent keeps what `sky` came with.
 		const auto readSky = [](const auto& section, editor::SkyPresentation sky) {
@@ -355,6 +360,7 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 		return editor::GetAssetsHeldOpen(this);
 	});
 	m_ContentExplorer->SetThumbnails(m_Thumbnails.get());
+	m_ContentExplorer->SetSurfaces(m_Surfaces);
 	connect(
 		m_ContentExplorer,
 		&ContentExplorerWindow::MaterialBaked,
@@ -917,7 +923,7 @@ MainWindow::AskHowToOpen(const QString& title, const std::filesystem::path& proj
 {
 	if (!editor::OpeningNeedsRelaunch(
 			m_SurfaceShaderDir,
-			m_SurfaceCount,
+			m_Surfaces.size(),
 			editor::ShadersDirectoryOf(projectFile)))
 	{
 		return ProjectOpening::kHere;
@@ -1436,7 +1442,8 @@ MainWindow::SetActiveProject(assetlib::Project project)
 					return editor::RunMeshImport(
 							   this,
 							   dataDir,
-							   QString::fromStdWString(source.wstring()))
+							   QString::fromStdWString(source.wstring()),
+							   m_Surfaces)
 		                .mesh.toStdString();
 				},
 		});

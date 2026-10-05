@@ -11,7 +11,9 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMaterialImport.h>
 #include <assetlib_structs/Node.h>
+#include <bgl/SurfaceType.h>
 #include <editor_sdk/asset_paths.h>
+#include <glm/glm.hpp>
 
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/BMeshImport.h>
@@ -21,6 +23,7 @@
 
 #include "StoreAt.h"
 #include <QDir>
+#include <algorithm>
 #include <assetlib/AssetStore.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -29,6 +32,7 @@
 #include <filesystem>
 #include <qcontainerfwd.h>
 #include <qtypes.h>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -551,4 +555,242 @@ TEST_CASE("One texture used as two maps routes both at the same file", "[importe
 	CHECK(material.pbr.routes[assetlib::channelIndex(PbrChannel::kAo)].channel == 0);
 	CHECK(material.pbr.routes[assetlib::channelIndex(PbrChannel::kRoughness)].channel == 1);
 	CHECK(material.pbr.routes[assetlib::channelIndex(PbrChannel::kNormalX)].texture.empty());
+}
+
+namespace
+{
+	bgl::SurfaceValue
+	Value(std::string name, bgl::SurfaceValueType type)
+	{
+		auto value = bgl::SurfaceValue();
+		value.name = std::move(name);
+		value.type = type;
+		return value;
+	}
+
+	bgl::SurfaceTexture
+	Slot(std::string name, bgl::SurfaceTextureKind kind, uint32_t index)
+	{
+		auto texture  = bgl::SurfaceTexture();
+		texture.name  = std::move(name);
+		texture.kind  = kind;
+		texture.index = index;
+		return texture;
+	}
+
+	/** A toon character surface as registration would reflect the test project's: hand-built. */
+	bgl::SurfaceType
+	ToonSurface()
+	{
+		auto surface            = bgl::SurfaceType();
+		surface.surfaceName     = "ToonCharacter";
+		surface.shading         = bgl::SurfaceShading::kToonCharacter;
+		surface.params.values   = { Value("baseColorFactor", bgl::SurfaceValueType::kFloat4),
+			                        Value("firstShade", bgl::SurfaceValueType::kFloat3),
+			                        Value("baseStep", bgl::SurfaceValueType::kFloat),
+			                        Value("face", bgl::SurfaceValueType::kFloat) };
+		surface.params.textures = { Slot("baseColor", bgl::SurfaceTextureKind::kColor, 0),
+			                        Slot("shadeOffsetMap", bgl::SurfaceTextureKind::kData, 1) };
+		return surface;
+	}
+
+	/** A material whose extras name `surface`: the albedo as glTF base colour, the ORM image as a map. */
+	assetlib::imp::BMaterialImport
+	ToonMaterial(std::string surface)
+	{
+		auto material                = PbrMaterial();
+		material.baseColorFactor     = glm::vec4(0.16f, 0.1f, 0.05f, 1.0f);
+		material.doubleSided         = true;
+		material.surface.surfaceName = std::move(surface);
+		material.surface.values      = {
+			{ .field = "baseStep", .value = glm::vec4(0.65f, 0.0f, 0.0f, 0.0f), .width = 1 },
+			{ .field = "firstShade", .value = glm::vec4(0.76f, 0.6f, 0.57f, 0.0f), .width = 3 },
+		};
+		material.surface.textures = { { .field = "shadeOffsetMap", .texture = 1 } };
+		return material;
+	}
+
+	const std::vector<float>*
+	FindValue(const assetlib::BMaterial& material, std::string_view name)
+	{
+		const auto it =
+			std::ranges::find(material.surface.values, name, &assetlib::SurfaceValueBinding::name);
+		return it == material.surface.values.end() ? nullptr : &it->value;
+	}
+
+	std::string
+	FindTexture(const assetlib::BMaterial& material, std::string_view slot)
+	{
+		const auto it = std::ranges::find(
+			material.surface.textures,
+			slot,
+			&assetlib::SurfaceTextureBinding::name);
+		return it == material.surface.textures.end() ? std::string() : it->texturePath;
+	}
+
+	assetlib::BMaterial
+	ImportOne(
+		const TempProject&                      project,
+		assetlib::imp::BMaterialImport          material,
+		std::span<const bgl::SurfaceType>       surfaces,
+		std::vector<assetlib::MaterialBinding>* bindings = nullptr)
+	{
+		const auto imported = ImportWith({ std::move(material) }, { "Skin" });
+		auto       mesh     = assetlib::toBMesh(imported);
+
+		auto written = editor::WriteImportedMaterials(
+			imported,
+			mesh,
+			project.Data(),
+			project.MaterialDir(),
+			project.TextureDir(),
+			QStringList{ "Skin" },
+			surfaces);
+		if (bindings != nullptr)
+			*bindings = std::move(written);
+
+		const std::filesystem::path file = project.MaterialDir() / "Skin.bmaterial";
+		REQUIRE(std::filesystem::exists(file));
+		return LoadAt<assetlib::BMaterial>(file);
+	}
+}
+
+TEST_CASE("A material whose extras name a surface is written on it", "[importedmaterials][extras]")
+{
+	const TempProject      project;
+	const bgl::SurfaceType toon = ToonSurface();
+
+	auto                      bindings = std::vector<assetlib::MaterialBinding>();
+	const assetlib::BMaterial material =
+		ImportOne(project, ToonMaterial("ToonCharacter"), { &toon, 1 }, &bindings);
+
+	REQUIRE(bindings.size() == 1);
+	CHECK(bindings[0].material == "Authored/Materials/hydrant/Skin.bmaterial");
+
+	CHECK(material.shadingModel == assetlib::ShadingModel::kToonCharacterSurface);
+	CHECK(material.surface.surfaceName == "ToonCharacter");
+	CHECK(material.layer.doubleSided);
+	CHECK_FALSE(material.editorGraph.empty());
+
+	const std::vector<float>* step = FindValue(material, "baseStep");
+	REQUIRE(step != nullptr);
+	REQUIRE(step->size() == 1);
+	CHECK((*step)[0] == Catch::Approx(0.65f));
+
+	const std::vector<float>* shade = FindValue(material, "firstShade");
+	REQUIRE(shade != nullptr);
+	REQUIRE(shade->size() == 3);
+	CHECK((*shade)[2] == Catch::Approx(0.57f));
+
+	CHECK(FindTexture(material, "shadeOffsetMap") == "Derived/SourceTextures/hydrant/orm.ktx2");
+}
+
+TEST_CASE(
+	"The glTF's own base colour fills the surface's base colour where the extras say nothing",
+	"[importedmaterials][extras]")
+{
+	// What a Blender export carries in a Principled Base Color, so an artist sets it there once.
+	const TempProject         project;
+	const bgl::SurfaceType    toon = ToonSurface();
+	const assetlib::BMaterial material =
+		ImportOne(project, ToonMaterial("ToonCharacter"), { &toon, 1 });
+
+	const std::vector<float>* factor = FindValue(material, "baseColorFactor");
+	REQUIRE(factor != nullptr);
+	REQUIRE(factor->size() == 4);
+	CHECK((*factor)[0] == Catch::Approx(0.16f));
+	CHECK((*factor)[3] == Catch::Approx(1.0f));
+
+	CHECK(FindTexture(material, "baseColor") == "Derived/SourceTextures/hydrant/albedo.ktx2");
+}
+
+TEST_CASE(
+	"A value too small for the editor's spin box is imported as written",
+	"[importedmaterials][extras]")
+{
+	// A toon feather defaults to 0.0001; the PBR import's three-decimal snap would make it 0.
+	const TempProject      project;
+	const bgl::SurfaceType toon = ToonSurface();
+
+	auto source = ToonMaterial("ToonCharacter");
+	source.surface.values.push_back(
+		{ .field = "face", .value = glm::vec4(0.0005f, 0.0f, 0.0f, 0.0f), .width = 1 });
+
+	const assetlib::BMaterial material = ImportOne(project, std::move(source), { &toon, 1 });
+
+	const std::vector<float>* face = FindValue(material, "face");
+	REQUIRE(face != nullptr);
+	CHECK((*face)[0] == Catch::Approx(0.0005f));
+}
+
+TEST_CASE(
+	"An extras field the surface does not declare, or declares wider, is dropped alone",
+	"[importedmaterials][extras]")
+{
+	const TempProject      project;
+	const bgl::SurfaceType toon = ToonSurface();
+
+	auto source = ToonMaterial("ToonCharacter");
+	source.surface.values.push_back(
+		{ .field = "rimPower", .value = glm::vec4(3.0f, 0.0f, 0.0f, 0.0f), .width = 1 });
+	source.surface.values.push_back(
+		{ .field = "face", .value = glm::vec4(1.0f, 1.0f, 0.0f, 0.0f), .width = 2 });
+	source.surface.textures.push_back({ .field = "mask", .texture = 1 });
+
+	const assetlib::BMaterial material = ImportOne(project, std::move(source), { &toon, 1 });
+
+	CHECK(FindValue(material, "rimPower") == nullptr);
+
+	// The sink writes every value the surface declares, so a dropped one keeps its default.
+	const std::vector<float>* face = FindValue(material, "face");
+	REQUIRE(face != nullptr);
+	CHECK((*face)[0] == 0.0f);
+	CHECK(FindTexture(material, "mask").empty());
+
+	// The rest of the material still imported.
+	CHECK(FindValue(material, "baseStep") != nullptr);
+}
+
+TEST_CASE(
+	"A material naming a surface the project does not register imports as PBR",
+	"[importedmaterials][extras]")
+{
+	const TempProject      project;
+	const bgl::SurfaceType toon = ToonSurface();
+
+	const assetlib::BMaterial material = ImportOne(project, ToonMaterial("Misspelt"), { &toon, 1 });
+
+	CHECK(material.shadingModel == assetlib::ShadingModel::kPbr);
+	CHECK(material.surface.surfaceName.empty());
+}
+
+TEST_CASE(
+	"A non-PBR material naming a registered surface is written on it",
+	"[importedmaterials][extras]")
+{
+	// The extras are the author's word for what the material is; KHR_materials_unlit is only how
+	// Blender exported an Emission-ended material.
+	const TempProject      project;
+	const bgl::SurfaceType toon = ToonSurface();
+
+	auto source  = ToonMaterial("ToonCharacter");
+	source.isPbr = false;
+
+	const assetlib::BMaterial material = ImportOne(project, std::move(source), { &toon, 1 });
+	CHECK(material.shadingModel == assetlib::ShadingModel::kToonCharacterSurface);
+}
+
+TEST_CASE(
+	"A material naming a surface claims a stem though it is not PBR",
+	"[importedmaterials][extras]")
+{
+	const auto probed = std::vector<assetlib::GltfMaterial>{
+		{ .name = "Skin", .isPbr = false, .surfaceName = "ToonCharacter" },
+		{ .name = "Sign", .isPbr = false },
+	};
+
+	const QStringList stems = editor::MaterialStems(probed);
+	REQUIRE(stems.size() == 2);
+	CHECK(stems[0] == "Skin");
+	CHECK(stems[1].isEmpty());
 }

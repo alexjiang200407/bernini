@@ -3,6 +3,8 @@
 #include "Windows/AssetImporter/AssetImporterDialog.h"
 
 #include <QString>
+#include <bgl/SurfaceType.h>
+#include <span>
 
 class QWidget;
 
@@ -28,6 +30,9 @@ namespace editor
 		bool textures     = false;
 		bool pbrMaterials = false;  // ignored without textures -- a material routes at those
 		bool animations   = false;  // the clips; the skeleton rides with the mesh
+
+		// The project's registered surfaces, which a material's extras may name.
+		std::span<const bgl::SurfaceType> surfaces;
 	};
 
 	/**

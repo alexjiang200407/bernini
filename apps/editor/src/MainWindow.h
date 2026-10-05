@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "main_window_ui.h"
+#include <bgl/SurfaceType.h>
 #include <editor_sdk/BackgroundTask.h>
 
 class QAction;
@@ -257,9 +258,9 @@ private:
 
 	QString m_InstanceName;
 
-	// What the renderer registered surfaces from, and how many it found. Fixed for the session.
-	std::filesystem::path m_SurfaceShaderDir;
-	std::size_t           m_SurfaceCount = 0;
+	// What the renderer registered surfaces from, and what it found. Fixed for the session.
+	std::filesystem::path         m_SurfaceShaderDir;
+	std::vector<bgl::SurfaceType> m_Surfaces;
 
 	std::filesystem::path m_RelaunchProject;
 

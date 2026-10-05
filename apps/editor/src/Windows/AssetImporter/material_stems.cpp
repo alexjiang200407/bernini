@@ -43,9 +43,11 @@ namespace editor
 
 		for (size_t i = 0; i < materials.size(); ++i)
 		{
-			// A non-PBR material claims no stem at all, so it cannot take a name off one that will
-			// actually be written.
-			stems << (materials[i].isPbr ? UniqueStem(materials[i].name, i, taken) : QString());
+			// A material no import writes claims no stem at all, so it cannot take a name off one
+			// that will actually be written. One naming a surface may be written whatever its glTF
+			// shading model says.
+			const bool written = materials[i].isPbr || !materials[i].surfaceName.empty();
+			stems << (written ? UniqueStem(materials[i].name, i, taken) : QString());
 		}
 
 		return stems;

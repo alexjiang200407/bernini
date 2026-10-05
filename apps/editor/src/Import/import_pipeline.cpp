@@ -353,7 +353,8 @@ namespace editor
 							dataRoot,
 							materialDir,
 							textureDir,
-							options.outputs.materialStems);
+							options.outputs.materialStems,
+							options.surfaces);
 
 					const assetlib::AssetStore meshStore(dataRoot);
 					meshStore.Save(*mesh, meshStore.KeyFor(bmeshPath));

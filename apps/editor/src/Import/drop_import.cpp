@@ -3,6 +3,7 @@
 #include "Import/import_pipeline.h"
 #include "Windows/AssetImporter/AssetImporterDialog.h"
 #include "util/editor_language.h"
+#include <bgl/SurfaceType.h>
 
 #include <QFileInfo>
 #include <QMessageBox>
@@ -17,6 +18,7 @@
 #include <qdialog.h>
 #include <qlogging.h>
 #include <qobject.h>
+#include <span>
 #include <vector>
 
 namespace editor
@@ -47,7 +49,11 @@ namespace editor
 	}
 
 	MeshImport
-	RunMeshImport(QWidget* parent, const QString& dataRoot, const QString& sourceFile)
+	RunMeshImport(
+		QWidget*                          parent,
+		const QString&                    dataRoot,
+		const QString&                    sourceFile,
+		std::span<const bgl::SurfaceType> surfaces)
 	{
 		// Refused here, before a dialog promises an import that cannot happen.
 		try
@@ -89,6 +95,7 @@ namespace editor
 		options.textures     = dialog.GetImportTextures();
 		options.pbrMaterials = dialog.CanImportPbrMaterials();
 		options.animations   = dialog.GetImportAnimations();
+		options.surfaces     = surfaces;
 
 		const ImportOutcome outcome = ImportMesh(parent, dataRoot, sourceFile, options);
 		if (outcome != ImportOutcome::kImported || !options.mesh)
@@ -98,7 +105,11 @@ namespace editor
 	}
 
 	void
-	RunImportDrop(QWidget* parent, const QString& dataRoot, const QMimeData& mime)
+	RunImportDrop(
+		QWidget*                          parent,
+		const QString&                    dataRoot,
+		const QMimeData&                  mime,
+		std::span<const bgl::SurfaceType> surfaces)
 	{
 		for (const QUrl& url : mime.urls())
 		{
@@ -117,7 +128,8 @@ namespace editor
 			if (!IsImportableMesh(file))
 				continue;
 
-			if (RunMeshImport(parent, dataRoot, file).outcome == ImportOutcome::kCancelled)
+			if (RunMeshImport(parent, dataRoot, file, surfaces).outcome ==
+			    ImportOutcome::kCancelled)
 				break;
 		}
 	}

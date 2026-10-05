@@ -1045,6 +1045,34 @@ material and the key, and the rest of the material still reads.
 assetlib holds no project's surfaces, so it checks nothing against one. Whether a field exists and
 is as wide as given is for the importer to decide.
 
+**The editor's import writes the material on that surface** when the project registers it
+(`editor::WriteImportedMaterials`, handed the renderer's `GetSurfaceTypes()`). It writes the same
+graph the Mesh Editor reopens, built by `BuildSurfaceMaterialGraph` from a document assembled in
+this order:
+
+1. The glTF's own base colour. `baseColorFactor` fills a `float4` value of that name, and
+   `baseColorTexture` fills a slot named `baseColor`, wherever the surface declares them. This is
+   what Blender exports from a Principled BSDF's Base Color, so an artist sets it there once.
+2. The extras, over that. A field the surface does not declare, a value of another width, or a slot
+   it does not have is dropped with a warning naming the material, and that value keeps the
+   surface's default.
+3. The glTF's alpha mode, cutoff and `doubleSided` become the layer, as for PBR.
+
+Three more rules:
+
+* **A surface the project does not register falls back to PBR**, with a warning naming it, so a
+  misspelt `bernini_surface` still produces a material. A material that is not PBR
+  (`KHR_materials_unlit`, which Blender writes for a material ending in an Emission shader) is still
+  written when it names a registered surface. The extras say what it is, and the dialog gives it a
+  file name to match.
+* **Values are not snapped to three decimals** the way imported PBR factors are. A toon feather
+  defaults to 0.0001, and snapping would make it 0. The sink's spin box rounds what it *shows*,
+  and the file keeps what the extras said until someone edits the field.
+* **The import seeds the `.bmaterial` once.** `Reimport` never writes a `.bmaterial`, and an
+  import refuses a material file that already exists, so after the first import the document is
+  the authority. A later change to the extras does not reach it. To take one, delete the
+  material and import again.
+
 **An image that only an extras string names is decoded as data.** Colour space is decided at decode
 from what glTF calls colour (`baseColorTexture`, a specular-glossiness diffuse). That decode also
 runs in `assetlib_cli` and in texture refresh, and neither holds a surface's slot types. So a colour
