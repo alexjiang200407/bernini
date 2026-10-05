@@ -46,6 +46,10 @@ embed *args:
 install *args:
     @{{ python }} scripts/install.py {{ args }}
 
+# Build the editor in Release and package it to share, as dist/bernini-editor-<host>.zip.
+package-editor *args:
+    @{{ python }} scripts/package_editor.py {{ args }}
+
 # clang-format files in place (--check to verify only).
 format *args:
     @{{ python }} scripts/format.py {{ args }}

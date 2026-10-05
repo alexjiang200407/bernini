@@ -223,9 +223,12 @@ would use.
 
 The build jobs in [.github/workflows/ci.yml](../.github/workflows/ci.yml) check out with `lfs: false`:
 they compile and none of them runs a suite, so `assets/` is only staged, never read. A job that
-runs a test suite needs the assets, and gets them the same way a fresh clone does — a `just init`
-to point the clone at the store, and no secrets at all. Neither `actions/checkout`'s `lfs: true`
-nor a bare `git lfs pull` works: both go to GitHub's endpoint, which holds nothing.
+needs the assets — the editor package in
+[.github/workflows/editor-release.yml](../.github/workflows/editor-release.yml), or one that runs a
+test suite — gets them the way a fresh clone does, with no secrets at all: `python scripts/init.py
+--lfs-only` points the clone at the store, fetches, and fails while a file is still a pointer.
+Neither `actions/checkout`'s `lfs: true` nor a bare `git lfs pull` works: both go to GitHub's
+endpoint, which holds nothing.
 
 A runner needs `BERNINI_LFS_*` secrets only if it *writes* — a nightly re-seed, say — and that
 should be a key of its own, so revoking it costs nobody else their assets.

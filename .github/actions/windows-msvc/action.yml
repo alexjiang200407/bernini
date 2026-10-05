@@ -1,0 +1,69 @@
+name: Windows MSVC build
+description: >-
+  What a windows-ninja-msvc build needs on a hosted runner: Python, vcpkg on VCPKG_ROOT reading and
+  writing this repository's NuGet binary feed, and ccache in front of cl.exe. The job must grant
+  packages: write and restore its own compiler cache into CCACHE_DIR.
+
+inputs:
+  token:
+    description: The token that reads and writes the package feed (the job's GITHUB_TOKEN).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    # vcpkg's binaries live on GitHub Packages, one NuGet package per port per ABI hash. Every run
+    # reads the one feed: an actions/cache entry is scoped to the ref that saved it, so a PR's could
+    # serve no other PR, and a key naming the runner image missed on every PR while the image pool
+    # was mixed. A package's ABI hash covers the compiler, so an image that changes it rebuilds each
+    # affected port once and every later run, on any branch, reuses it.
+    #
+    # The vcpkg preset resolves its toolchain through $env{VCPKG_ROOT}; the runner image ships vcpkg
+    # but exports it as VCPKG_INSTALLATION_ROOT. GITHUB_TOKEN may publish only a package linked to
+    # this repository, which VCPKG_NUGET_REPOSITORY makes the nuspec do.
+    #
+    # The compile is what the minutes go to. cmake/enable_compiler_cache.cmake puts ccache in front
+    # of cl.exe only when asked, because it must also turn the precompiled headers off: ccache's MSVC
+    # PCH support can return a wrong object. See docs/build_performance.md § ccache.
+    - name: Export the build's environment
+      shell: pwsh
+      run: |
+        $feed = "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+        @(
+          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT"
+          "FEED_URL=$feed"
+          "VCPKG_BINARY_SOURCES=clear;nuget,$feed,readwrite"
+          "VCPKG_NUGET_REPOSITORY=https://github.com/${{ github.repository }}"
+          "BERNINI_MSVC_COMPILER_CACHE=1"
+          "CCACHE_DIR=${{ github.workspace }}\.ccache"
+          "CCACHE_MAXSIZE=1500M"
+          "CCACHE_COMPRESS=1"
+        ) | Add-Content $env:GITHUB_ENV
+
+    # A push the token cannot make -- a fork's pull request -- is a warning, not a failure: the
+    # run still reads the feed and builds what it misses.
+    - name: Give vcpkg's NuGet the package feed
+      shell: pwsh
+      run: |
+        $nuget = & "$env:VCPKG_ROOT\vcpkg.exe" fetch nuget | Select-Object -Last 1
+        & $nuget sources add -Source "$env:FEED_URL" -Name GitHubPackages `
+          -UserName "${{ github.repository_owner }}" -Password "${{ inputs.token }}" `
+          -StorePasswordInClearText
+        & $nuget setapikey "${{ inputs.token }}" -Source "$env:FEED_URL"
+
+    # Pinned and checksummed: the cache is trusted to return the object cl.exe would have made, so
+    # the program making that promise is not whatever a package manager serves today.
+    - name: Install ccache
+      shell: pwsh
+      run: |
+        $version = "4.14.1"
+        $sha256 = "6219f3865ca59aec41ee4b678df171d5d35855ecb2b6dbbbd20690b3a68af7b4"
+        $zip = "$env:RUNNER_TEMP\ccache.zip"
+        Invoke-WebRequest "https://github.com/ccache/ccache/releases/download/v$version/ccache-$version-windows-x86_64.zip" -OutFile $zip
+        if ((Get-FileHash $zip -Algorithm SHA256).Hash -ne $sha256.ToUpper()) { throw "ccache $version does not match its checksum" }
+        Expand-Archive $zip -DestinationPath "$env:RUNNER_TEMP\ccache"
+        "$env:RUNNER_TEMP\ccache\ccache-$version-windows-x86_64" >> $env:GITHUB_PATH

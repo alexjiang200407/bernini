@@ -435,6 +435,7 @@ just api                          # refresh the API catalog in build/api/ (every
 just targets                      # list all CMake targets (+ --type EXECUTABLE, --json)
 just exes                         # resolve executable paths (--target NAME prints one, --json)
 just count                        # count source files and lines by language and by module (bgl, assetlib_cli, editor...), tests counted separately
+just package-editor               # Windows: build the editor in Release and zip it, runtime and all, for beta testers (dist/)
 ```
 
 Opening, watching and answering pull requests is not a recipe here: it is the workspace's PR
