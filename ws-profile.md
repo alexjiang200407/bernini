@@ -127,7 +127,8 @@ defect.
 | `core/err/util.h` | `throw_runtime_error` (`std::format`-style), crash handlers |
 | `core/math.h` | `align`, `div_ceil`, `round_up`, `c_Pi` |
 | `core/glm.h` | vectors, matrices, quaternions — all real vector math |
-| `core/hash.h` | `hash_bytes`, `hash_string`, `hash_pod`, `hash_seed` |
+| `core/hash.h` | `hash_bytes`, `hash_string`, `hash_pod`, `hash_seed`, `hash_mix32` (the shaders' `HashUint`) |
+| `core/noise.h` | `gradient_noise`, `fbm`, `ridged_noise` — a reproducible field over the plane, keyed on `hash_mix32` |
 | `core/str/str.h` | `split_once`, UTF conversions, transparent string hash/compare for heterogeneous lookup |
 | `core/io/ByteReader.h`, `ByteWriter.h` | binary container reads and writes |
 | `core/file/file.h` | `read_file_bytes`, executable and library paths |

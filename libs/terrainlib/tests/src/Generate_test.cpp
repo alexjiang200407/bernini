@@ -1,4 +1,3 @@
-#include "noise.h"
 #include <algorithm>
 #include <assetlib_structs/Heightfield.h>
 #include <catch2/catch_message.hpp>
@@ -135,50 +134,6 @@ TEST_CASE("Generate refuses a field it cannot make", "[terrain]")
 	CHECK_THROWS_AS(
 		terrain::Generate(Small(terrain::Shape::kFlat).SetCellSize(-1.0f)),
 		std::runtime_error);
-}
-
-TEST_CASE("gradient noise is zero on the lattice and bounded between", "[terrain][noise]")
-{
-	for (int x = -3; x <= 3; ++x)
-	{
-		for (int z = -3; z <= 3; ++z)
-		{
-			CHECK(terrain::GradientNoise(glm::vec2(x, z), 3) == 0.0f);
-		}
-	}
-
-	float lowest  = 0.0f;
-	float highest = 0.0f;
-	for (int i = 0; i < 4000; ++i)
-	{
-		const glm::vec2 p(static_cast<float>(i) * 0.137f, static_cast<float>(i) * 0.071f);
-		const float     n = terrain::GradientNoise(p, 3);
-		lowest            = std::min(lowest, n);
-		highest           = std::max(highest, n);
-	}
-	CHECK(lowest >= -1.0f);
-	CHECK(highest <= 1.0f);
-	CHECK(lowest < -0.3f);
-	CHECK(highest > 0.3f);
-
-	// Another seed is another field.
-	CHECK(
-		terrain::GradientNoise(glm::vec2(0.37f, 0.61f), 3) !=
-		terrain::GradientNoise(glm::vec2(0.37f, 0.61f), 4));
-}
-
-TEST_CASE("the ridged noise keeps to [0, 1] and the fractal to [-1, 1]", "[terrain][noise]")
-{
-	for (int i = 0; i < 2000; ++i)
-	{
-		const glm::vec2 p(static_cast<float>(i) * 0.113f, static_cast<float>(i) * 0.059f);
-		const float     ridged = terrain::Ridged(p, 11, 5, 2.0f, 0.5f);
-		const float     fbm    = terrain::Fbm(p, 11, 5, 2.0f, 0.5f);
-		CHECK(ridged >= 0.0f);
-		CHECK(ridged <= 1.0f);
-		CHECK(fbm >= -1.0f);
-		CHECK(fbm <= 1.0f);
-	}
 }
 
 // Linear in the samples: sixteen times the samples cost well under sixteen times sixteen. A ratio

@@ -1,9 +1,9 @@
-#include "noise.h"
 #include <algorithm>
 #include <assetlib_structs/Heightfield.h>
 #include <cmath>
 #include <core/err/util.h>
 #include <core/glm.h>
+#include <core/noise.h>
 #include <core/parallel_for.h>
 #include <cstddef>
 #include <cstdint>
@@ -67,20 +67,29 @@ namespace terrain
 			if (params.warp > 0.0f)
 			{
 				const glm::vec2 push(
-					Fbm(q + glm::vec2(5.2f, 1.3f), seed ^ 0x1b873593u, 3, c_Lacunarity, 0.5f),
-					Fbm(q + glm::vec2(1.7f, 9.2f), seed ^ 0xcc9e2d51u, 3, c_Lacunarity, 0.5f));
+					core::fbm(q + glm::vec2(5.2f, 1.3f), seed ^ 0x1b873593u, 3, c_Lacunarity, 0.5f),
+					core::fbm(
+						q + glm::vec2(1.7f, 9.2f),
+						seed ^ 0xcc9e2d51u,
+						3,
+						c_Lacunarity,
+						0.5f));
 				q += params.warp * push;
 			}
 
-			const float rolling = Fbm(q, seed, params.octaves, c_Lacunarity, params.gain);
+			const float rolling = core::fbm(q, seed, params.octaves, c_Lacunarity, params.gain);
 			if (params.ridgeShare <= 0.0f)
 			{
 				return params.amplitude * rolling;
 			}
 
-			const float ridged =
-				2.0f * Ridged(q, seed ^ 0xe6546b64u, params.octaves, c_Lacunarity, params.gain) -
-				1.0f;
+			const float ridged = 2.0f * core::ridged_noise(
+											q,
+											seed ^ 0xe6546b64u,
+											params.octaves,
+											c_Lacunarity,
+											params.gain) -
+			                     1.0f;
 			return params.amplitude * glm::mix(rolling, ridged, params.ridgeShare);
 		}
 
