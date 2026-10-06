@@ -1,19 +1,29 @@
 #include "scene/Scene.h"
+#include "scene/terrain_lod.h"
 #include <algorithm>
 #include <assetlib_structs/Heightfield.h>
+#include <assetlib_structs/ImageData.h>
+#include <assetlib_structs/VkFormat.h>
 #include <bgl/IScene.h>
 #include <bgl/MaterialType.h>
 #include <bgl/glm.h>
 #include <bgl/idl/Constants.h>
+#include <bgl/idl/Terrain.h>
 #include <bgl/types/LayerType.h>
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/TerrainDesc.h>
 #include <bgl/types/TerrainHandle.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <cmath>
+#include <core/containers/fixed_buffer.h>
+#include <core/containers/multi_slot_handle.h>
 #include <core/err/util.h>
+#include <core/parallel_for.h>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <format>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -103,6 +113,103 @@ namespace bgl
 				refuse("the material must be in the opaque layer");
 			}
 		}
+
+		/** The samples as one R16_UNORM image, row-major as the field is. */
+		[[nodiscard]] assetlib::ImageData
+		HeightImage(const assetlib::Heightfield& field)
+		{
+			const size_t rowPitch = static_cast<size_t>(field.samplesX) * sizeof(uint16_t);
+			const size_t bytes    = rowPitch * field.samplesZ;
+
+			auto image      = assetlib::ImageData();
+			image.width     = field.samplesX;
+			image.height    = field.samplesZ;
+			image.mipLevels = 1;
+			image.arraySize = 1;
+			image.vkFormat  = assetlib::VkFormat::R16_UNORM;
+			image.pixels    = core::fixed_buffer<std::byte>(bytes);
+			std::memcpy(image.pixels.data(), field.heights.data(), bytes);
+			image.subresources.push_back(
+				assetlib::ImageSubresource{ .offset     = 0,
+			                                .rowPitch   = rowPitch,
+			                                .slicePitch = bytes });
+			return image;
+		}
+
+		/**
+		 * The lowest and highest height of every node of every level, level-major: level 0 from
+		 * the samples each patch spans, each level above from its children.
+		 */
+		[[nodiscard]] std::vector<glm::vec2>
+		NodeBounds(
+			const assetlib::Heightfield& field,
+			const float                  baseHeight,
+			const uint32_t               levels)
+		{
+			const uint32_t sx     = field.samplesX;
+			const uint32_t sz     = field.samplesZ;
+			auto           bounds = std::vector<glm::vec2>(TerrainNodeCount(sx, sz, levels));
+
+			const uint32_t acrossX = TerrainNodesAcross(sx, 0);
+			const uint32_t acrossZ = TerrainNodesAcross(sz, 0);
+			core::parallel_for(acrossZ, 0, "terrain node bounds", [&](const size_t nz) {
+				for (uint32_t nx = 0; nx < acrossX; ++nx)
+				{
+					const uint32_t x0 = nx * idl::cTerrainPatchQuads;
+					const uint32_t z0 = static_cast<uint32_t>(nz) * idl::cTerrainPatchQuads;
+					const uint32_t x1 = std::min(x0 + idl::cTerrainPatchQuads, sx - 1);
+					const uint32_t z1 = std::min(z0 + idl::cTerrainPatchQuads, sz - 1);
+
+					uint16_t lo = 65535;
+					uint16_t hi = 0;
+					for (uint32_t z = z0; z <= z1; ++z)
+					{
+						const uint16_t* row = field.heights.data() + static_cast<size_t>(z) * sx;
+						for (uint32_t x = x0; x <= x1; ++x)
+						{
+							lo = std::min(lo, row[x]);
+							hi = std::max(hi, row[x]);
+						}
+					}
+					const float scale         = field.heightRange / 65535.0f;
+					bounds[nz * acrossX + nx] = glm::vec2(
+						baseHeight + static_cast<float>(lo) * scale,
+						baseHeight + static_cast<float>(hi) * scale);
+				}
+			});
+
+			uint32_t childFirst   = 0;
+			uint32_t childAcrossX = acrossX;
+			uint32_t childAcrossZ = acrossZ;
+			for (uint32_t level = 1; level < levels; ++level)
+			{
+				const uint32_t first = childFirst + childAcrossX * childAcrossZ;
+				const uint32_t ownX  = TerrainNodesAcross(sx, level);
+				const uint32_t ownZ  = TerrainNodesAcross(sz, level);
+				for (uint32_t nz = 0; nz < ownZ; ++nz)
+				{
+					for (uint32_t nx = 0; nx < ownX; ++nx)
+					{
+						auto bound = glm::vec2(1e30f, -1e30f);
+						for (uint32_t cz = 2 * nz; cz < std::min(2 * nz + 2, childAcrossZ); ++cz)
+						{
+							for (uint32_t cx = 2 * nx; cx < std::min(2 * nx + 2, childAcrossX);
+							     ++cx)
+							{
+								const glm::vec2 child = bounds[childFirst + cz * childAcrossX + cx];
+								bound.x               = std::min(bound.x, child.x);
+								bound.y               = std::max(bound.y, child.y);
+							}
+						}
+						bounds[first + nz * ownX + nx] = bound;
+					}
+				}
+				childFirst   = first;
+				childAcrossX = ownX;
+				childAcrossZ = ownZ;
+			}
+			return bounds;
+		}
 	}
 
 	TerrainHandle
@@ -111,26 +218,59 @@ namespace bgl
 		ValidateTerrain(desc);
 		const assetlib::Heightfield& field = *desc.heightfield;
 
-		auto meta          = TerrainMeta();
-		meta.samplesX      = field.samplesX;
-		meta.samplesZ      = field.samplesZ;
-		meta.cellSize      = field.cellSize;
-		meta.minHeight     = field.minHeight;
-		meta.heightRange   = field.heightRange;
-		meta.pixelsPerCell = desc.pixelsPerCell;
-		meta.origin        = desc.origin;
-		meta.material      = desc.material;
-		meta.heights       = field.heights;
+		auto meta     = TerrainMeta();
+		meta.material = desc.material;
 
-		auto slot = m_Terrains.try_allocate_and_emplace(std::move(meta));
-		if (slot.is_null())
+		const uint32_t levels = TerrainLevels(field.samplesX, field.samplesZ);
+
+		const float baseHeight = desc.origin.y + field.minHeight;
+
+		meta.heights = m_Textures.Add(HeightImage(field), "Terrain Heights");
+		if (meta.heights.textureSlot.is_null())
 		{
-			m_Terrains.grow(std::max(c_InitialTerrains, m_Terrains.capacity() * 2));
-			slot = m_Terrains.allocate_and_emplace(std::move(meta));
+			throw SceneError("CreateTerrain: the scene's texture pool is exhausted");
 		}
 
-		++m_TerrainEpoch;
-		return TerrainHandle{ slot };
+		try
+		{
+			const std::vector<glm::vec2> bounds = NodeBounds(field, baseHeight, levels);
+			meta.nodeBounds = m_TerrainNodeBounds.Add(std::span<const glm::vec2>(bounds));
+
+			auto record = idl::Terrain();
+			record.originAndCellSize =
+				glm::vec4(desc.origin.x, baseHeight, desc.origin.z, field.cellSize);
+			record.heightRangeAndPixelsPerCell =
+				glm::vec4(field.heightRange, desc.pixelsPerCell, 0.0f, 0.0f);
+			record.samplesX       = field.samplesX;
+			record.samplesZ       = field.samplesZ;
+			record.levels         = levels;
+			record.materialOffset = desc.material.byteOffset;
+			meta.record           = m_TerrainRecords.Add(record);
+
+			auto slot = m_Terrains.try_allocate_and_emplace(meta);
+			if (slot.is_null())
+			{
+				m_Terrains.grow(std::max(c_InitialTerrains, m_Terrains.capacity() * 2));
+				slot = m_Terrains.allocate_and_emplace(meta);
+			}
+
+			++m_TerrainEpoch;
+			++m_TemporalEpoch;
+			return TerrainHandle{ slot };
+		}
+		catch (...)
+		{
+			if (!meta.record.is_null())
+			{
+				m_TerrainRecords.Erase(meta.record);
+			}
+			if (!meta.nodeBounds.is_null())
+			{
+				m_TerrainNodeBounds.Erase(meta.nodeBounds);
+			}
+			m_Textures.Delete(meta.heights);
+			throw;
+		}
 	}
 
 	void
@@ -142,7 +282,13 @@ namespace bgl
 				"TerrainHandle passed to DeleteTerrain refers to a deleted or unknown terrain");
 		}
 
+		const TerrainMeta& meta = m_Terrains[terrain.handle.index];
+		m_TerrainRecords.Erase(meta.record);
+		m_TerrainNodeBounds.Erase(meta.nodeBounds);
+		m_Textures.Delete(meta.heights);
+
 		m_Terrains.release_slot(terrain.handle.index);
 		++m_TerrainEpoch;
+		++m_TemporalEpoch;
 	}
 }

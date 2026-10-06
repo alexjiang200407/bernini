@@ -166,14 +166,16 @@ namespace bgl
 
 			cmdList->WriteTexture(pending.handle, subresources);
 
-			// COPY_DEST -> SHADER_RESOURCE so the forward pass can sample it.
+			// COPY_DEST -> SHADER_RESOURCE so the forward pass can sample it: its pixel stages for
+			// a material's textures, and its mesh stage for a terrain's heights.
 			bgpu::TextureBarrierDesc barrier;
 			barrier.syncBefore   = bgpu::BarrierSyncFlag::kCopy;
 			barrier.accessBefore = bgpu::BarrierAccessFlag::kCopyDest;
 			barrier.layoutBefore = bgpu::BarrierLayout::kCopyDest;
-			barrier.syncAfter    = bgpu::BarrierSyncFlag::kPixelShader;
-			barrier.accessAfter  = bgpu::BarrierAccessFlag::kShaderResource;
-			barrier.layoutAfter  = bgpu::BarrierLayout::kShaderResource;
+			barrier.syncAfter =
+				bgpu::BarrierSyncFlag::kVertexShader | bgpu::BarrierSyncFlag::kPixelShader;
+			barrier.accessAfter = bgpu::BarrierAccessFlag::kShaderResource;
+			barrier.layoutAfter = bgpu::BarrierLayout::kShaderResource;
 
 			handles.push_back(pending.handle);
 			barriers.push_back(barrier);

@@ -35,6 +35,7 @@
 #include <bgl/idl/SkinnedBone.h>
 #include <bgl/idl/SkinnedLegChain.h>
 #include <bgl/idl/Submesh.h>
+#include <bgl/idl/Terrain.h>
 #include <bgl/idl/ToonShadingRig.h>
 #include <bgl/types/FootPlantDesc.h>
 #include <bgl/types/GeomHandle.h>
@@ -47,6 +48,8 @@
 #include <bgl/types/RigHandle.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
+#include <bgl/types/TerrainDesc.h>
+#include <bgl/types/TerrainHandle.h>
 #include <bgl/types/TextureAssetHandle.h>
 #include <bgl/types/ToonShadingRigDesc.h>
 #include <bgl/types/ToonShadingRigHandle.h>
@@ -154,23 +157,20 @@ namespace bgl
 	};
 
 	/**
-	 * One live terrain: its heightfield's shape and the samples, copied from the desc.
+	 * One live terrain: what the scene made of the desc's samples.
 	 *
 	 * Namespace-scope for the same reason as GeomRecord above.
 	 */
 	struct TerrainMeta
 	{
-		uint32_t  samplesX      = 0;
-		uint32_t  samplesZ      = 0;
-		float     cellSize      = 1.0f;
-		float     minHeight     = 0.0f;
-		float     heightRange   = 1.0f;
-		float     pixelsPerCell = 6.0f;
-		glm::vec3 origin        = glm::vec3(0.0f);
-
 		MaterialHandle material;
 
-		std::vector<uint16_t> heights;
+		// The samples as one R16_UNORM texture, the record the stage reads, and the lowest and
+		// highest height of every node of every level (scene/terrain_lod.h), level-major. The
+		// shape itself lives in the record alone: nothing on the CPU reads a terrain back.
+		TextureAssetHandle      heights;
+		core::slot_handle       record;
+		core::multi_slot_handle nodeBounds;
 	};
 
 	/**
@@ -617,11 +617,18 @@ namespace bgl
 			return terrain.IsValid() && m_Terrains.valid(terrain.handle);
 		}
 
-		/** @pre IsTerrainAlive(terrain). */
-		[[nodiscard]] const TerrainMeta&
-		GetTerrain(const TerrainHandle terrain) const noexcept
+		/** Slots a terrain may occupy: the bound a walk over TerrainAt runs to. */
+		[[nodiscard]] uint32_t
+		TerrainCapacity() const noexcept
 		{
-			return m_Terrains[terrain.handle.index];
+			return m_Terrains.capacity();
+		}
+
+		/** The terrain in slot `index`, or null where no live terrain holds it. */
+		[[nodiscard]] const TerrainMeta*
+		TerrainAt(const uint32_t index) const noexcept
+		{
+			return m_Terrains.allocated(index) ? &m_Terrains[index] : nullptr;
 		}
 
 		/** Moves whenever a terrain is created or deleted. */
@@ -891,6 +898,10 @@ namespace bgl
 		bgpu::RangeBuffer<idl::GrassChunk> m_GrassChunks;
 		bgpu::RangeBuffer<idl::GrassClump> m_GrassClumps;
 
+		// One record per live terrain, and every terrain's node bounds, a range each owns.
+		bgpu::EntryBuffer<idl::Terrain> m_TerrainRecords;
+		bgpu::RangeBuffer<glm::vec2>    m_TerrainNodeBounds;
+
 		// One default material per submesh of a range, keyed at its root. It rides on the RangeBuffer
 		// as Meta, not a parallel array, so it is allocated and freed with the geometry it belongs to.
 		using SubmeshDefaults = std::vector<MaterialHandle>;
@@ -971,6 +982,8 @@ namespace bgl
 			NamedBuffer{ c_GrassClumpBufferName, &Scene::m_GrassClumps },
 			NamedBuffer{ c_ToonShadingRigBufferName, &Scene::m_ToonShadingRigs },
 			NamedBuffer{ c_ToonShadingRigKeyBufferName, &Scene::m_ToonShadingRigKeys },
+			NamedBuffer{ c_TerrainBufferName, &Scene::m_TerrainRecords },
+			NamedBuffer{ c_TerrainNodeBoundsBufferName, &Scene::m_TerrainNodeBounds },
 		};
 
 		static_assert(HasDistinctNames(c_Buffers), "two scene buffers would import under one name");
