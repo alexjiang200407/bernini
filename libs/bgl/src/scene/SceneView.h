@@ -548,12 +548,16 @@ namespace bgl
 			return m_DemandedDrawBuckets;
 		}
 
-		/** A run of the view's grass chunk references drawn through one bucket's pixel program. */
+		/**
+		 * A run of the view's grass chunk references drawn through one bucket's pixel program: a
+		 * mesh's fields, or one terrain's layers, which read that terrain's heights.
+		 */
 		struct GrassBatch
 		{
-			uint32_t bucket   = 0;
-			uint32_t firstRef = 0;
-			uint32_t refCount = 0;
+			uint32_t           bucket   = 0;
+			uint32_t           firstRef = 0;
+			uint32_t           refCount = 0;
+			TextureAssetHandle heights;  // null for the fields meshes grow
 		};
 
 		/**
@@ -836,8 +840,10 @@ namespace bgl
 		// dispatches over it. Dense and CPU-authored for the pose list's reason.
 		bgpu::UploadBuffer<idl::BlobShadow> m_BlobShadows;
 
-		// Every visible placement's grass fields, and one reference per chunk of them, grouped into
-		// m_GrassBatches by the bucket they draw through. Rebuilt whole, like the blob list.
+		// Every visible placement's grass fields and every terrain's layers, and one reference per
+		// chunk of them -- a field's chunks, a layer's tiles around the camera -- grouped into
+		// m_GrassBatches by the bucket they draw through and the terrain they read. Rebuilt whole,
+		// like the blob list.
 		bgpu::UploadBuffer<idl::GrassDraw>     m_GrassDraws;
 		bgpu::UploadBuffer<idl::GrassChunkRef> m_GrassChunkRefs;
 		std::vector<GrassBatch>                m_GrassBatches;

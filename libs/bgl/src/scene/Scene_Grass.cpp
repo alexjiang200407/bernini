@@ -303,7 +303,8 @@ namespace bgl
 		if (m_Grass[grass.handle.index].useCount > 0)
 		{
 			throw SceneError(
-				"GrassHandle passed to DeleteGrass is still bound by a live geom; delete it first");
+				"GrassHandle passed to DeleteGrass is still bound by a live geom or terrain; "
+				"release it first");
 		}
 
 		m_GrassLooks.Erase(m_Grass[grass.handle.index].entry);

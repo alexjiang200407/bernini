@@ -63,6 +63,7 @@ set(IDL_CPP_SOURCES
     GrassDraw.slang
     GrassChunkRef.slang
     Terrain.slang
+    TerrainGrass.slang
     TerrainNodeBounds.slang
     Rig.slang
     BlendNodeKind.slang

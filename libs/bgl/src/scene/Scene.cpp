@@ -137,6 +137,9 @@ namespace bgl
 		m_TerrainNodeBounds(
 			resourceManager,
 			bgpu::RangeBufferDesc().SetInitialCount(1).SetDebugName("Terrain Node Bounds Buffer")),
+		m_TerrainGrass(
+			resourceManager,
+			bgpu::EntryBufferDesc().SetInitialCount(1).SetDebugName("Terrain Grass Buffer")),
 		m_GeomBuffer(
 			resourceManager,
 			bgpu::EntryBufferDesc()

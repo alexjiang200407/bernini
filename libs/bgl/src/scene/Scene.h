@@ -36,6 +36,7 @@
 #include <bgl/idl/SkinnedLegChain.h>
 #include <bgl/idl/Submesh.h>
 #include <bgl/idl/Terrain.h>
+#include <bgl/idl/TerrainGrass.h>
 #include <bgl/idl/TerrainNodeBounds.h>
 #include <bgl/idl/ToonShadingRig.h>
 #include <bgl/types/FootPlantDesc.h>
@@ -50,6 +51,7 @@
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <bgl/types/TerrainDesc.h>
+#include <bgl/types/TerrainGrassDesc.h>
 #include <bgl/types/TerrainHandle.h>
 #include <bgl/types/TextureAssetHandle.h>
 #include <bgl/types/ToonShadingRigDesc.h>
@@ -152,9 +154,21 @@ namespace bgl
 		// The look's GrassLook record, which every field bound to it names.
 		core::slot_handle entry;
 
-		// Grass fields bound to this look across every live geom. DeleteGrass refuses while it is
-		// nonzero: a field left naming a freed slot would draw with whatever look takes it next.
+		// Grass fields and terrain layers bound to this look across every live geom and terrain.
+		// DeleteGrass refuses while it is nonzero: a field left naming a freed slot would draw with
+		// whatever look takes it next.
 		uint32_t useCount = 0;
+	};
+
+	/**
+	 * One layer of grass on a terrain: the look it draws with, its TerrainGrass record, and the
+	 * side of the tiles its clumps are placed in.
+	 */
+	struct TerrainGrassRecord
+	{
+		GrassHandle       look;
+		core::slot_handle entry;
+		float             tileSize = 0.0f;
 	};
 
 	/**
@@ -172,6 +186,10 @@ namespace bgl
 		TextureAssetHandle      heights;
 		core::slot_handle       record;
 		core::multi_slot_handle nodeBounds;
+
+		// Every layer of grass it grows, each holding a use of its look (see GrassMeta::useCount).
+		// Released by AttachTerrainGrass and DeleteTerrain.
+		std::vector<TerrainGrassRecord> grass;
 	};
 
 	/**
@@ -578,11 +596,15 @@ namespace bgl
 			return m_Geoms[geom.handle.index].grass;
 		}
 
-		/** The GrassLook record `grass` names, and the material it draws through. */
+		/**
+		 * The GrassLook record `grass` names, the material it draws through, and the distance its
+		 * blades have faded to nothing at.
+		 */
 		struct GrassLookRef
 		{
 			uint32_t       entry = 0;
 			MaterialHandle material;
+			float          fadeEnd = 0.0f;
 		};
 
 		/** @pre IsGrassAlive(grass). */
@@ -590,12 +612,15 @@ namespace bgl
 		GetGrassLook(GrassHandle grass) const noexcept
 		{
 			const GrassMeta& meta = m_Grass[grass.handle.index];
-			return { meta.entry.index, meta.desc.material };
+			return { .entry    = meta.entry.index,
+				     .material = meta.desc.material,
+				     .fadeEnd  = meta.desc.density.fadeEnd };
 		}
 
 		/**
 		 * Moves whenever a view's grass list could change without any of its own placements
-		 * changing: grass attached or released, a look rewritten. A SceneView polls it.
+		 * changing: grass attached or released, on a geom or a terrain, a look rewritten. A
+		 * SceneView polls it.
 		 */
 		[[nodiscard]] uint64_t
 		GetGrassEpoch() const noexcept
@@ -611,6 +636,10 @@ namespace bgl
 
 		void
 		DeleteTerrain(TerrainHandle terrain) override;
+
+		void
+		AttachTerrainGrass(TerrainHandle terrain, std::span<const TerrainGrassDesc> layers)
+			override;
 
 		[[nodiscard]] bool
 		IsTerrainAlive(const TerrainHandle terrain) const noexcept override
@@ -785,6 +814,13 @@ namespace bgl
 		void
 		ReleaseGrass(std::vector<GrassFieldRecord>& fields) noexcept;
 
+		/**
+		 * Gives back what each of `layers` holds -- its look's use and its TerrainGrass record --
+		 * and empties it.
+		 */
+		void
+		ReleaseTerrainGrass(std::vector<TerrainGrassRecord>& layers) noexcept;
+
 		/** The GrassLook record CreateGrass and UpdateGrass write for `desc`. */
 		[[nodiscard]] static idl::GrassLook
 		BuildGrassLook(const GrassDesc& desc) noexcept;
@@ -902,6 +938,7 @@ namespace bgl
 		// One record per live terrain, and every terrain's node bounds, a range each owns.
 		bgpu::EntryBuffer<idl::Terrain>           m_TerrainRecords;
 		bgpu::RangeBuffer<idl::TerrainNodeBounds> m_TerrainNodeBounds;
+		bgpu::EntryBuffer<idl::TerrainGrass>      m_TerrainGrass;
 
 		// One default material per submesh of a range, keyed at its root. It rides on the RangeBuffer
 		// as Meta, not a parallel array, so it is allocated and freed with the geometry it belongs to.
@@ -985,6 +1022,7 @@ namespace bgl
 			NamedBuffer{ c_ToonShadingRigKeyBufferName, &Scene::m_ToonShadingRigKeys },
 			NamedBuffer{ c_TerrainBufferName, &Scene::m_TerrainRecords },
 			NamedBuffer{ c_TerrainNodeBoundsBufferName, &Scene::m_TerrainNodeBounds },
+			NamedBuffer{ c_TerrainGrassBufferName, &Scene::m_TerrainGrass },
 		};
 
 		static_assert(HasDistinctNames(c_Buffers), "two scene buffers would import under one name");

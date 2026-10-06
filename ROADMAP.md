@@ -380,9 +380,9 @@ and portability.
   - [ ] Static vs. Dynamic Shadow
   - [ ] Shadow LODs — bias 1–2 tiers coarser, but a unit posed per instance for the camera must not
     read the shared table for a cascade.
-- [~] Terrain — the heightfield exists and draws ([Terrain](docs/terrain.md)); nothing feeds on it
-  yet: the grounded test, foot planting, corpse settling, slope cost and the ground blood field
-  still read `IScene::SetGround`'s plane, and `lib.terrain.heightfield` is what they will read.
+- [~] Terrain — the heightfield exists and draws ([Terrain](docs/terrain.md)), and grass grows on
+  it; nothing else feeds on it yet: the grounded test, foot planting, corpse settling, slope cost
+  and the ground blood field still read `IScene::SetGround`'s plane, and `lib.terrain.heightfield` is what they will read.
   - [x] Heightfield representation + GPU-sampleable height/normal — `assetlib::Heightfield`,
     `IScene::CreateTerrain`, one `R16_UNORM` texture, `lib.terrain.heightfield`.
   - [~] Terrain rendering + LOD — Forward Terrain: CDLOD patches built in the mesh stage, the level
@@ -394,7 +394,9 @@ and portability.
 - [ ] Foliage
   - [x] Grass -- mesh-stage blades from a mesh source's POINTS clumps, wind, screen-size thinning,
     lit through the material ([Grass](docs/grass.md)), and a look editor with a live preview in the
-    editor. Kept open: collision and trampling, terrain grass, placing clumps in the editor.
+    editor. On a terrain, placed over the heightfield near the camera by slope, height and patch
+    rules (`IScene::AttachTerrainGrass`). Kept open: collision and trampling, a painted density
+    map, placing clumps in the editor.
   - [ ] Trees
 - [ ] Water
 - [ ] Screen-space / Volume Decal Pipeline

@@ -40,6 +40,9 @@ public static const uint cMaxDispatchMeshGroups = 65535;
 // in Scene_Grass.cpp holds them equal.
 public static const uint cGrassClumpsPerChunk = 64;
 
+// Clumps along each side of a terrain grass tile: one tile is one chunk of cGrassClumpsPerChunk.
+public static const uint cTerrainGrassClumpsAcross = 8;
+
 // What one grass mesh group may emit: the static tier's per-meshlet limits, so both mesh stages
 // size their outputs alike.
 public static const uint cGrassVerticesPerGroup = 64;

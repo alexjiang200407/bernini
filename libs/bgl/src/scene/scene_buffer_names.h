@@ -47,6 +47,9 @@ namespace bgl
 	constexpr std::string_view c_TerrainBufferName           = "scene.terrainBuffer"sv;
 	constexpr std::string_view c_TerrainNodeBoundsBufferName = "scene.terrainNodeBoundsBuffer"sv;
 
+	// One TerrainGrass record per layer of grass a terrain grows.
+	constexpr std::string_view c_TerrainGrassBufferName = "scene.terrainGrassBuffer"sv;
+
 	// One ToonShadingRig per AddToonShadingRig, and the keys its edits blend, a range each rig owns.
 	constexpr std::string_view c_ToonShadingRigBufferName    = "scene.toonShadingRigBuffer"sv;
 	constexpr std::string_view c_ToonShadingRigKeyBufferName = "scene.toonShadingRigKeyBuffer"sv;

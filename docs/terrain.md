@@ -93,9 +93,12 @@ change here.
 [lib/terrain/heightfield.slang](../libs/bgl/shaders/src/lib/terrain/heightfield.slang) is the one
 place a heightfield is sampled: `TerrainHeightAt` and `TerrainNormalAt` take the record, the
 texture and the clamping sampler, and a world `xz`. The mesh stage reads its vertices through
-them, and whatever stands on the ground later -- a planted foot, a crowd's slope cost, the ground
-blood field -- reads the same functions, so the ground a unit walks is the ground it sees. Nothing
-reads them yet but the stage; `IScene::SetGround`'s plane is still what the pose pass plants on.
+them, and so does the grass a terrain grows ([Grass § On a terrain](grass.md#on-a-terrain)), which
+also reads the node bounds to cull its tiles through the same node layout
+([lib/terrain/nodes.slang](../libs/bgl/shaders/src/lib/terrain/nodes.slang)). Whatever stands on
+the ground later -- a planted foot, a crowd's slope cost, the ground blood field -- reads the same
+functions, so the ground a unit walks is the ground it sees. Nothing of that reads them yet;
+`IScene::SetGround`'s plane is still what the pose pass plants on.
 
 ## Looking at one
 
@@ -109,4 +112,4 @@ view of the scene seeing it.
 No offline container, import or cook: a terrain is generated or built at load and never stored.
 No material layers: a surface shades from where a pixel stands. No range past the view's far
 plane, and no occlusion of anything by the terrain beyond the depth it writes. No consumer of the
-heightfield but the stage. ROADMAP.md § Terrain and § Level Editor name each of these.
+heightfield but the stage and the grass. ROADMAP.md § Terrain and § Level Editor name each of these.

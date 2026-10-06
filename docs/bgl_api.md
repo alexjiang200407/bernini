@@ -410,7 +410,7 @@ flowchart TD
 * **`CreateGrass(desc)` / `UpdateGrass(grass, desc)` / `DeleteGrass(grass)`** —
   a look is shared by every geom bound to it, so an update reaches all of them next frame and moves
   the temporal epoch. There is no getter: the caller holds the desc it wrote. The desc's ranges
-  are listed on `CreateGrass`; an update refused for one writes nothing. `DeleteGrass` refuses while a live geom binds the look: delete the geoms first.
+  are listed on `CreateGrass`; an update refused for one writes nothing. `DeleteGrass` refuses while a live geom or terrain binds the look: delete the geoms or release the terrain's grass first.
 * **`CreateTerrain(desc)` / `DeleteTerrain(terrain)` / `IsTerrainAlive(terrain)`** — one
   heightfield (`assetlib::Heightfield`, through `TerrainDesc`) laid with its sample (0, 0) at the
   desc's origin and its axes the world's, drawn by every view of the scene through one opaque
@@ -418,7 +418,14 @@ flowchart TD
   (`pixelsPerCell`, scaled by the view's `LodSelectionDesc::pixelScale`). The samples are copied
   by the call and the desc's pointer is not kept. No placement and no transform: a heightfield is
   axis-aligned. The refusals are listed on `CreateTerrain`; `DeleteTerrain` refuses a null or
-  deleted handle and leaves the material alone.
+  deleted handle, leaves the material alone and releases the looks the terrain's grass held.
+* **`AttachTerrainGrass(terrain, layers)`** — grass on a terrain, one `TerrainGrassDesc` per layer:
+  a look, the spacing of its clumps, and the slope, height and patch rules that decide how tall each
+  grows where it stands. Nothing per clump is stored or uploaded; the grass stage builds the clumps
+  around the camera from the heightfield ([Grass § On a terrain](grass.md#on-a-terrain)).
+  Attaching again replaces the terrain's layers and releases the looks they held; an empty span
+  takes its grass away. Every layer is checked before any is written, and the refusals are listed
+  on the call.
 * **`AddToonShadingRig(desc)` / `DeleteToonShadingRig(rig)`** — a face's toon shading rig (`ToonShadingRigDesc`):
   shadow and light edits on a toon character's face, each keyed on the light's direction in head
   space and blended between its keys as the light moves, and the remapped light the face shades

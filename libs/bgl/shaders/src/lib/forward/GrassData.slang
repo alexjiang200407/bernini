@@ -3,6 +3,9 @@ import idl.GrassChunkRef;
 import idl.GrassClump;
 import idl.GrassDraw;
 import idl.GrassLook;
+import idl.Terrain;
+import idl.TerrainGrass;
+import idl.TerrainNodeBounds;
 import lib.types.EntryBuffer;
 import lib.types.UploadBuffer;
 
@@ -17,6 +20,15 @@ public struct GrassData
     // Scene ranges, but addressed by the global indices the chunk references and chunks store.
     public StructuredBuffer<GrassChunk, ScalarDataLayout>.Handle chunks;
     public StructuredBuffer<GrassClump, ScalarDataLayout>.Handle clumps;
+
+    // A terrain's layers and what they grow on: the records, every terrain's node bounds, and the
+    // heights of the one terrain this dispatch's layers grow on, read through the clamping sampler.
+    // Unread by a dispatch of a mesh's fields.
+    public EntryBuffer<TerrainGrass> terrainGrass;
+    public EntryBuffer<Terrain> terrains;
+    public StructuredBuffer<TerrainNodeBounds, ScalarDataLayout>.Handle nodeBounds;
+    public Texture2D.Handle heights;
+    public SamplerState.Handle heightSampler;
 
     public float3 cameraPos;
 

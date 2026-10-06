@@ -24,6 +24,17 @@ public struct Node
     public uint z;
 };
 
+// Where `level` starts in the level-major layout.
+public uint LevelFirst(Terrain terrain, uint level)
+{
+    uint first = 0u;
+    for (uint l = 0u; l < level; ++l)
+    {
+        first += NodesAcross(terrain.samplesX, l) * NodesAcross(terrain.samplesZ, l);
+    }
+    return first;
+}
+
 // The node at `index` of the level-major layout, and where its level starts.
 public Node NodeAt(Terrain terrain, uint index, out uint levelFirst)
 {

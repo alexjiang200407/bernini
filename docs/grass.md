@@ -1,7 +1,8 @@
 # Grass
 
 Grass is geometry the renderer builds rather than stores. A mesh source carries **clumps** -- points
-on the ground, one per glTF `POINTS` vertex -- and a **look** says what grows there. Every frame the
+on the ground, one per glTF `POINTS` vertex -- or a terrain's layer places them over its heightfield
+by rules, and a **look** says what grows there. Every frame the
 mesh stage turns the clumps it can see into blades, as many and as finely as their distance earns,
 and draws them through the look's material in the opaque phase. Nothing per blade exists on the CPU
 or in memory: a field costs its clumps.
@@ -12,6 +13,7 @@ or in memory: a field costs its clumps.
 |---|---|---|
 | a look | `bgl::GrassDesc` ([GrassDesc.h](../libs/bgl/include/bgl/types/GrassDesc.h)), authored as a `.bgrass` | the material, the blade's shape, blades per clump, the fade, the response to wind, the lighting terms |
 | the fields | `assetlib::GrassGeometry` ([GrassGeometry.h](../libs/assetlib_structs/include/assetlib_structs/GrassGeometry.h)), embedded in `BMesh::grassFields` | named fields with a mesh index and look slot; chunks of at most `c_GrassClumpsPerChunk` (64) clumps with a bound each; the clumps |
+| a terrain's layers | `bgl::TerrainGrassDesc` ([TerrainGrassDesc.h](../libs/bgl/include/bgl/types/TerrainGrassDesc.h)), through `IScene::AttachTerrainGrass` | the look, the clumps' spacing, and the slope, height and patch rules that scale them -- nothing per clump ([On a terrain](#on-a-terrain)) |
 
 A clump is a point, a height scale, a ground normal and a colour. The cook sorts a field's clumps
 along a Morton curve before cutting chunks (`assetlib/src/grass/grass_chunks.cpp`), so a chunk is a
@@ -42,6 +44,40 @@ backdrop, as every toon preview is -- and the panel's sun is its toon sun too, a
 toon colours are authored at; under the filmic curve a cel field's tones are lifted together and lose
 their contrast. Where
 the clumps go is the mesh source's, and is not edited there.
+
+## On a terrain
+
+`IScene::AttachTerrainGrass` grows looks on a terrain in **layers**, and stores nothing per clump: a
+layer is a record of its rules, and the grass stage builds the clumps near the camera from the
+heightfield every frame ([lib/forward/terrain_grass.slang](../libs/bgl/shaders/src/lib/forward/terrain_grass.slang)).
+A stored clump list grows with the field's area; a layer costs the same on a field of any size.
+
+- **Tiles.** A layer covers the field with square tiles of 8 x 8 clumps, `spacing` apart, counted
+  from the terrain's origin. A tile is a chunk to the stage: it culls, fades and thins exactly as a
+  mesh's chunk does, and past reading a clump the blades are the same blades. Each clump stands
+  jittered within its cell, on the heightfield (`TerrainHeightAt`), facing its normal, its blades
+  hashed from the tile and the clump, so a clump is the same clump every frame.
+- **The window.** The view lists only the tiles of a square window centred on the camera's tile,
+  wide enough that a blade within the look's `fadeEnd` lies inside it
+  (`SceneView::RefreshGrass`); the stage finds which tile each slot is from the camera's position,
+  so the window moves with the camera at no CPU cost and a tile off the field draws nothing. A
+  tile's culling box is its square between the lowest and highest heights of the terrain nodes it
+  overlaps, on the finest level whose nodes are no smaller than a tile
+  ([Terrain](terrain.md) § The levels).
+- **The rules.** How tall a clump grows is the product of three shares: the slope rule (full height
+  up to `maxSlope`, nothing `slopeBlend` steeper), the height rule (nothing outside
+  `[minHeight, maxHeight]`, full height `heightBlend` inside it), and the patches (a low-frequency
+  value noise about `patchSize` across against `patchCoverage`, with a soft edge). A clump scaled
+  to nothing is not drawn, and one near a rule's edge is shorter, so grass thins toward rock or
+  snow rather than ending on a line. Nothing is painted: the rules are set to agree with the
+  ground's surface by hand, since the engine cannot read a project surface's bands.
+
+The window is what a layer pays for whether or not a blade survives in it: one amplification group
+per tile, (2 * ceil(fadeEnd / tile) + 3)^2 of them, at most `c_MaxTerrainGrassWindowTiles` (255) a
+side -- an attach whose spacing would pass it is refused, and a look whose fade is lengthened past it
+afterwards ends short of its fade -- -- about 9,000 for the test project's meadow,
+fading at 90 m, at a clump every 0.25 m. A layer's clumps carry no colour (white), so a field's
+variation is the look's per-blade `variation`.
 
 ## A blade
 
@@ -198,6 +234,13 @@ mesh. That street now grows GPU grass, and at 4K in a release build its Forward 
 Grass together cost 2.33 ms against the 2.56 ms Forward World its baked grass cost; the difference
 buys wind, a field that fades rather than popping, and no grass geometry in the file.
 
+On a terrain the cost is the look's fade over the whole ground in view. The test project's
+`toon_meadow` on the viewer's `hilly` field (`bgl_ai_viewer --terrain hilly --grass ...`, a clump
+every 0.25 m, 1280x720, debug build) costs 9.9 ms in `Forward Grass 0` with the camera 3 m over the
+ground, where the 90 m fade fills the frame with about half a million blades, and 1.8 ms from 40 m
+up, where nearly every blade in view is under a pixel and the window's tiles are most of the work.
+A terrain's grass is paid for in the look's fade and the layer's spacing.
+
 ## Where it comes from
 
 - **The blade and the field.** A blade as a tapered strip of solid triangles along a quadratic
@@ -208,6 +251,9 @@ buys wind, a field that fades rather than popping, and no grass geometry in the 
 - **The blade's three control points.** The root, a guide at the blade's height above it, and the
   tip, with forces acting on the tip: Jahrmann and Wimmer, "Responsive Real-Time Grass Rendering
   for General 3D Scenes", I3D 2017. `PoseBlade` holds the rest pose; wind is its first force.
+- **Grass on a terrain.** Generated per tile on the GPU near the camera rather than stored, as
+  Tsushima's grass and Unreal's Landscape Grass Type are; placing it by slope and height rules is
+  every engine's first step before a painted map.
 - **The interleaved addressing is the engine's own.** Numbering blades across a chunk's clumps
   (`BladeAddress`), so a mesh group's run of blades spreads over the chunk; Tsushima's compute pass
   compacts its blades into a buffer instead.
@@ -223,10 +269,10 @@ buys wind, a field that fades rather than popping, and no grass geometry in the 
   shows a clear disc. Nothing in the frame tells grass from a wall, since the renderer keeps no
   G-buffer.
 - Grass does not follow deforming ground: clumps are in their mesh's space, and only a static geom
-  takes grass.
+  or a terrain takes grass.
 - Blades are not in a shadow map, and do not collide.
 - Clumps are not placed in the editor: a field is its mesh source's `POINTS`, authored where the
-  mesh is.
+  mesh is, and a terrain's grass is placed by its layer's rules, with nothing painted.
 
 ## Kept open
 
@@ -248,15 +294,11 @@ pass writes and that relaxes over time. The seams:
 
 The API itself is not designed: it faces gameplay and has no consumer yet.
 
-**Terrain grass.** When terrain lands, grass on it is placed from a density map over the heightfield,
-generated per tile on the GPU as Tsushima and Unreal's Landscape Grass Type do, because a stored clump
-list grows with area and a density map does not. It adds its own attach beside `AttachGrass`, which
-stays the source for grass on meshes, and shares the look, the blade model, the forces and the
-lighting. The seams: the chunk is the unit the pass tests, whatever made it; the grass stage reads a
-clump through one function, which a density map can implement by sampling; and placement parameters
-that mean something only to stored clumps (`bladesPerClump`, the clump radius) sit in their own group,
-where a density in blades per square metre would join them. Baking terrain density into clumps at
-cook was rejected: the file grows with area and re-cooks on every painted change.
+**A painted density.** A terrain layer's rules decide everywhere alike; a road, a scorched field or a
+trampled camp is a place, which a map painted over the field says and a rule does not. The seam is
+`TerrainGrassGrowth`, the one function a clump's scale comes from: a density texture sampled there
+multiplies the rules, and a layer that names none reads as one. Unreal's Landscape Grass Type reads
+its layer weights the same way.
 
 **Toon grass's other terms.** [Toon grass](#toon-grass) takes the cel step on the ground's normal and
 the blade's tint, and nothing more, on purpose: the rest come back one at a time once the field has

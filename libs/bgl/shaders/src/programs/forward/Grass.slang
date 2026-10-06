@@ -1,20 +1,28 @@
 import idl.Constants;
 import idl.GrassChunk;
+import idl.GrassChunkRef;
 import idl.GrassClump;
+import idl.GrassDraw;
 import idl.GrassLook;
 import idl.MeshInstance;
+import idl.Terrain;
+import idl.TerrainGrass;
 import lib.forward.common;
 import lib.forward.ExpansionData;
 import lib.forward.grass;
 import lib.forward.GrassData;
 import lib.forward.grass_vertex;
 import lib.forward.mesh_stage;
+import lib.forward.terrain_grass;
 import lib.math.frustum;
+import lib.terrain.nodes;
 
 // The grass geometry stage: one amplification group per chunk of a view's grass list, culled to the
 // frustum and thinned by distance, launching mesh groups that each build a run of the chunk's blades.
-// The pixel side is the material's grass program (lib.forward.GrassShading), which lights the blade
-// through the same entry Forward's programs do.
+// A chunk is a run of clumps a mesh stored, or a tile of clumps a terrain's layer builds around the
+// camera (lib.forward.terrain_grass); past reading a clump, both are the same blades. The pixel side
+// is the material's grass program (lib.forward.GrassShading), which lights the blade through the
+// same entry Forward's programs do.
 
 GrassWind ViewWind()
 {
@@ -53,6 +61,54 @@ BladePose PoseAt(GrassLook look, GrassWind wind, BladeShape placed, float time)
     return PoseBlade(look, placed, push);
 }
 
+// Where a chunk reference's clumps come from, and the space they are in: a mesh's stored run,
+// placed by its instance, or a terrain's tile, already in the world and still.
+struct ChunkSource
+{
+    bool onTerrain;
+    uint clumpCount;
+
+    GrassChunk chunk;
+    MeshInstance mesh;
+
+    TerrainGrass layer;
+    Terrain terrain;
+    int2 tile;
+
+    ClumpPoint Clump(uint clumpLocal)
+    {
+        if (onTerrain)
+        {
+            return TerrainGrassClump(layer, terrain, grassData.heights, grassData.heightSampler, tile, clumpLocal);
+        }
+        let index = chunk.firstClump + clumpLocal;
+        return StoredClump(grassData.clumps[index], index);
+    }
+
+    float3 WorldPoint(float3 p) { return onTerrain ? p : mesh.TransformPoint(p); }
+
+    BladeShape Placed(BladeShape shape, bool previous) { return onTerrain ? shape : PlacedShape(mesh, shape, previous); }
+};
+
+// The source `chunkRef` names; false for a terrain's tile off the field, which draws nothing.
+bool SourceOf(GrassChunkRef chunkRef, GrassDraw draw, out ChunkSource source)
+{
+    source = {};
+    source.onTerrain = !draw.terrainGrass.Null();
+    if (!source.onTerrain)
+    {
+        source.chunk = grassData.chunks[chunkRef.chunk];
+        source.mesh = forwardData.meshBuffer.Get(draw.mesh);
+        source.clumpCount = source.chunk.clumpCount;
+        return true;
+    }
+
+    source.layer = grassData.terrainGrass.Get(draw.terrainGrass);
+    source.terrain = grassData.terrains.Get(source.layer.terrain);
+    source.clumpCount = cGrassClumpsPerChunk;
+    return TerrainGrassTile(source.layer, source.terrain, grassData.cameraPos, draw.windowTiles, chunkRef.chunk, source.tile);
+}
+
 struct GrassPayload
 {
     uint chunkRefIndex;
@@ -70,17 +126,39 @@ void ASMain(uint3 gid: SV_GroupID)
     let refIndex = gid.y * grassData.dispatchWidth + gid.x;
     uint groups = 0u;
 
+    ChunkSource source;
     if (refIndex < grassData.refCount)
     {
         let chunkRef = grassData.chunkRefs[grassData.firstRef + refIndex];
         let draw = grassData.draws[chunkRef.draw];
         let look = grassData.looks.Get(draw.look);
-        let chunk = grassData.chunks[chunkRef.chunk];
-        let mesh = forwardData.meshBuffer.Get(draw.mesh);
+        let found = SourceOf(chunkRef, draw, source);
 
-        let local = float4(chunk.boundingSphere.xyz, chunk.boundingSphere.w + BladeReach(look, chunk.maxHeightScale) + look.clumpRadius);
-        let world = mesh.TransformSphere(local);
-        let visible = SphereInFrustum(expansionData.cullView[0].frustumPlanes, world.xyz, world.w);
+        // The nearest any blade of the chunk can be, and the largest any can be scaled.
+        var visible = false;
+        var nearest = 0.0;
+        var maxHeightScale = 1.0;
+        if (found && source.onTerrain)
+        {
+            float3 lo;
+            float3 hi;
+            TerrainGrassTileBox(source.layer, source.terrain, grassData.nodeBounds, source.tile, lo, hi);
+            let reach = BladeReach(look, 1.0) + look.clumpRadius;
+            lo -= reach;
+            hi += reach;
+            visible = BoxInFrustum(expansionData.cullView[0].frustumPlanes, lo, hi);
+            nearest = NearestDistance(lo, hi, grassData.cameraPos);
+        }
+        else if (found)
+        {
+            let chunk = source.chunk;
+            let local =
+                float4(chunk.boundingSphere.xyz, chunk.boundingSphere.w + BladeReach(look, chunk.maxHeightScale) + look.clumpRadius);
+            let world = source.mesh.TransformSphere(local);
+            visible = SphereInFrustum(expansionData.cullView[0].frustumPlanes, world.xyz, world.w);
+            nearest = max(0.0, distance(grassData.cameraPos, world.xyz) - world.w);
+            maxHeightScale = chunk.maxHeightScale;
+        }
 
 #if defined(BERNINI_GPU_DEBUG)
         expansionData.stats[0].grassChunksTested.add(1u);
@@ -92,11 +170,10 @@ void ASMain(uint3 gid: SV_GroupID)
 
         if (visible)
         {
-            // The nearest any blade of the chunk can be, where it is largest: a chunk whose largest
-            // blade is too small to see launches nothing, and otherwise every blade.
-            let nearest = max(0.0, distance(grassData.cameraPos, world.xyz) - world.w);
-            let total = chunk.clumpCount * look.bladesPerClump;
-            let tallest = look.maxHeight * chunk.maxHeightScale;
+            // A chunk whose largest blade is too small to see where it is nearest launches nothing,
+            // and otherwise every blade.
+            let total = source.clumpCount * look.bladesPerClump;
+            let tallest = look.maxHeight * maxHeightScale;
             let kept = BladeVisible(tallest * ThinningAt(look, nearest).scale, nearest, grassData.pixelsPerUnit) ? total : 0u;
             let segments = SegmentsAt(look, nearest, tallest, grassData.pixelsPerUnit);
             let perGroup = BladesPerGroup(segments, cGrassVerticesPerGroup, cGrassPrimsPerGroup);
@@ -145,8 +222,8 @@ void MSMain(
     let chunkRef = grassData.chunkRefs[grassData.firstRef + launch.chunkRefIndex];
     let draw = grassData.draws[chunkRef.draw];
     let look = grassData.looks.Get(draw.look);
-    let chunk = grassData.chunks[chunkRef.chunk];
-    let mesh = forwardData.meshBuffer.Get(draw.mesh);
+    ChunkSource source;
+    SourceOf(chunkRef, draw, source);
 
     let first = gid * launch.bladesPerGroup;
     let last = min(launch.keptBlades, first + launch.bladesPerGroup);
@@ -164,11 +241,11 @@ void MSMain(
     {
         uint clumpLocal;
         uint bladeInClump;
-        BladeAddress(b, chunk.clumpCount, clumpLocal, bladeInClump);
-        let clump = grassData.clumps[chunk.firstClump + clumpLocal];
-        let rootWorld = mesh.TransformPoint(clump.position.xyz);
+        BladeAddress(b, source.clumpCount, clumpLocal, bladeInClump);
+        let clump = source.Clump(clumpLocal);
+        let rootWorld = source.WorldPoint(clump.position);
         let away = distance(grassData.cameraPos, rootWorld);
-        let tallest = look.maxHeight * clump.position.w * ThinningAt(look, away).scale;
+        let tallest = look.maxHeight * clump.heightScale * ThinningAt(look, away).scale;
         if (BladeVisible(tallest, away, grassData.pixelsPerUnit))
         {
             uint slot;
@@ -197,18 +274,18 @@ void MSMain(
     {
         uint clumpLocal;
         uint bladeInClump;
-        BladeAddress(gSurvivors[gtid], chunk.clumpCount, clumpLocal, bladeInClump);
-        let clumpIndex = chunk.firstClump + clumpLocal;
-        var shape = MakeBladeShape(look, grassData.clumps[clumpIndex], clumpIndex, bladeInClump);
+        BladeAddress(gSurvivors[gtid], source.clumpCount, clumpLocal, bladeInClump);
+        let clump = source.Clump(clumpLocal);
+        var shape = MakeBladeShape(look, clump, bladeInClump);
         let wind = ViewWind();
-        let rootWorld = mesh.TransformPoint(shape.root);
+        let rootWorld = source.WorldPoint(shape.root);
         let distanceToCamera = distance(grassData.cameraPos, rootWorld);
         let thinning = ThinningAt(look, distanceToCamera);
         // A survivor's scale is above zero; the floor keeps its placed height a length to divide by.
         let scale = max(thinning.scale, 1e-3);
         shape.height *= scale;
-        let placed = PlacedShape(mesh, shape, false);
-        let placedBefore = PlacedShape(mesh, shape, true);
+        let placed = source.Placed(shape, false);
+        let placedBefore = source.Placed(shape, true);
 
         PosedBlade posed;
         posed.now = PoseAt(look, wind, placed, viewData.time);
@@ -222,7 +299,7 @@ void MSMain(
         posed.facing = dot(middleFace, grassData.cameraPos - BezierPoint(posed.now, 0.5)) < 0.0 ? -1.0 : 1.0;
         posed.ground = placed.up;
         posed.groundBlend = GroundNormalBlend(look, distanceToCamera);
-        posed.color = BladeColor(look, grassData.clumps[clumpIndex], shape.random);
+        posed.color = BladeColor(look, clump, shape.random);
         posed.random = shape.random;
         gPosed[gtid] = posed;
     }
@@ -245,7 +322,7 @@ void MSMain(
         ProjectVertex(surface, float4(position, 1.0), float4(positionBefore, 1.0));
         surface.normal = BladeNormal(face, posed.side, edge * 2.0 - 1.0, look.normalRounding, posed.ground, posed.groundBlend);
         surface.uv = float2(edge, t);
-        surface.uv1 = float2(posed.random, float(draw.look));
+        surface.uv1 = float2(posed.random, float(draw.look.GetOffset()));
         surface.tangent = float4(posed.side, posed.facing);
         surface.materialOffset = look.materialOffset;
         verts[v] = GrassVSOut(surface, float4(BladeTint(look, posed.color, t), BladeOcclusion(look, t)));

@@ -299,7 +299,8 @@ namespace bgl
 				"TerrainHandle passed to DeleteTerrain refers to a deleted or unknown terrain");
 		}
 
-		const TerrainMeta& meta = m_Terrains[terrain.handle.index];
+		TerrainMeta& meta = m_Terrains[terrain.handle.index];
+		ReleaseTerrainGrass(meta.grass);
 		m_TerrainRecords.Erase(meta.record);
 		m_TerrainNodeBounds.Erase(meta.nodeBounds);
 		m_Textures.Delete(meta.heights);

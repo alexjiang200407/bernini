@@ -104,6 +104,28 @@ public void BladeAddress(uint b, uint clumpCount, out uint clump, out uint blade
     bladeInClump = b / clumpCount;
 }
 
+// A clump as the blades growing from it read it, whatever made it: a point a mesh stored, or one a
+// terrain's grass built where it stands.
+public struct ClumpPoint
+{
+    public float3 position;
+    public float heightScale;
+    public float3 normal;
+    public float3 color;
+    public uint seed; // what every blade of the clump hashes its shape from
+};
+
+public ClumpPoint StoredClump(GrassClump clump, uint clumpIndex)
+{
+    ClumpPoint point;
+    point.position = clump.position.xyz;
+    point.heightScale = clump.position.w;
+    point.normal = DecodeOctahedral(clump.normal);
+    point.color = UnpackColor(clump.color).rgb;
+    point.seed = clumpIndex;
+    return point;
+}
+
 // A blade at rest, in its mesh's space.
 public struct BladeShape
 {
@@ -115,16 +137,16 @@ public struct BladeShape
     public float random; // the blade's own [0, 1) value, what a surface reads as variation
 };
 
-public BladeShape MakeBladeShape(GrassLook look, GrassClump clump, uint clumpIndex, uint bladeInClump)
+public BladeShape MakeBladeShape(GrassLook look, ClumpPoint clump, uint bladeInClump)
 {
-    let seed = HashUint(clumpIndex * 16u + bladeInClump + 0x9e3779b9u);
+    let seed = HashUint(clump.seed * 16u + bladeInClump + 0x9e3779b9u);
     let r0 = HashFloat(seed);
     let r1 = HashFloat(seed + 1u);
     let r2 = HashFloat(seed + 2u);
     let r3 = HashFloat(seed + 3u);
 
     BladeShape blade;
-    blade.up = DecodeOctahedral(clump.normal);
+    blade.up = clump.normal;
 
     let helper = abs(blade.up.x) > 0.9 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
     let tangent = normalize(cross(blade.up, helper));
@@ -133,13 +155,13 @@ public BladeShape MakeBladeShape(GrassLook look, GrassClump clump, uint clumpInd
     // Uniform over the clump's disc.
     let radius = sqrt(r0) * look.clumpRadius;
     let offsetAngle = r1 * cTwoPi;
-    blade.root = clump.position.xyz + (tangent * cos(offsetAngle) + bitangent * sin(offsetAngle)) * radius;
+    blade.root = clump.position + (tangent * cos(offsetAngle) + bitangent * sin(offsetAngle)) * radius;
 
     let facingAngle = r2 * cTwoPi;
     blade.facing = tangent * cos(facingAngle) + bitangent * sin(facingAngle);
     blade.side = cross(blade.up, blade.facing);
 
-    blade.height = lerp(look.minHeight, look.maxHeight, r3) * clump.position.w;
+    blade.height = lerp(look.minHeight, look.maxHeight, r3) * clump.heightScale;
     blade.random = HashFloat(seed + 4u);
     return blade;
 }
@@ -260,9 +282,9 @@ public float3 BladeTint(GrassLook look, float3 bladeColor, float t)
     return lerp(look.rootTint.rgb, look.tipTint.rgb, t) * bladeColor;
 }
 
-public float3 BladeColor(GrassLook look, GrassClump clump, float random)
+public float3 BladeColor(GrassLook look, ClumpPoint clump, float random)
 {
-    return UnpackColor(clump.color).rgb * (1.0 - look.tipTint.w * random);
+    return clump.color * (1.0 - look.tipTint.w * random);
 }
 
 // Occlusion from the root, where the field is densest, to an open tip.
