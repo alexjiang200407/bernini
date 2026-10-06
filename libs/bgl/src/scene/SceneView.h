@@ -578,6 +578,38 @@ namespace bgl
 			return m_GrassDrawBuckets;
 		}
 
+		/** One live terrain of the scene, as the terrain phase dispatches it. */
+		struct TerrainBatch
+		{
+			uint32_t           bucket         = 0;
+			uint32_t           record         = 0;  // into the scene's terrain buffer
+			uint32_t           firstNodeBound = 0;  // into the scene's node bounds buffer
+			uint32_t           nodeCount      = 0;
+			TextureAssetHandle heights;
+		};
+
+		/**
+		 * Rebuilds the terrain list if the scene's terrains changed since it was built. The
+		 * renderer calls it before it asks for the terrain buckets, so a Draw builds the pipelines
+		 * it is about to use.
+		 */
+		void
+		RefreshTerrain();
+
+		/** @pre RefreshTerrain has run this frame. */
+		[[nodiscard]] std::span<const TerrainBatch>
+		GetTerrainBatches() const noexcept
+		{
+			return m_TerrainBatches;
+		}
+
+		/** Every bucket the terrains draw through. @pre RefreshTerrain has run this frame. */
+		[[nodiscard]] const DrawBucketMask&
+		TerrainDrawBuckets() const noexcept
+		{
+			return m_TerrainDrawBuckets;
+		}
+
 	private:
 		/**
 		 * Fills `instance`'s material and draw bucket: `override` if it is valid, else the Scene's default for
@@ -812,6 +844,13 @@ namespace bgl
 		DrawBucketMask                         m_GrassDrawBuckets;
 		bool                                   m_GrassDirty      = true;
 		uint64_t                               m_SceneGrassEpoch = 0;
+
+		// The scene's live terrains, each with the bucket its material resolves to. Rebuilt whole
+		// when the scene's terrains change; nothing per placement is in it.
+		std::vector<TerrainBatch> m_TerrainBatches;
+		DrawBucketMask            m_TerrainDrawBuckets;
+		bool                      m_TerrainDirty      = true;
+		uint64_t                  m_SceneTerrainEpoch = 0;
 
 		// One entry per frustum this view is culled against; index 0 is the camera.
 		std::vector<CullState> m_CullStates;

@@ -104,7 +104,10 @@ takes over (`baseStep`, `shadeStep`) and the width its edge blends over (`baseFe
 `shadeFeather`); `shadeOffset` is added to the term before the steps — a painted threshold map's
 place — and `face` says how much of the pixel takes its placement's toon shading rig and remapped face
 light (`ISceneView::SetToonShadingRig`, or an instance block's `toonShadingRig`; [bgl API](bgl_api.md)). No other shading model reads a rig. Every field defaults to what a surface
-that says nothing about it means. The environment's half holds a `baseColor` alone.
+that says nothing about it means. The environment's half holds a `baseColor` alone: the
+environment's look -- a background painter's, not a character animator's -- is not designed yet,
+and the terrain that shades through it ([Terrain](terrain.md)) waits on it rather than carrying a
+look of its own.
 
 **The character is lit by the toon sun alone** (`ISceneView::SetToonDirectionalLight`), a light of
 its own beside the one every other model reads, with no fallback between them.
@@ -119,7 +122,8 @@ than the mesh's, and its terminator moved by the rig's edits
 ([Toon Shading Rig](toon_shading_rig.md) § The pixels). A character's buckets therefore draw at
 rest through programs of their own, whose vertices carry the placement's evaluated block; a
 blended character, and one dissolving between levels, shade without the rig. The environment model
-still draws `baseColor` flat, reading nothing of the light.
+(`ShadeToonEnvironment`) still draws `baseColor` flat, reading nothing of the light; it is handed
+the toon sun all the same, so the model that replaces it changes nothing at its callers.
 Both return pre-exposure radiance, so exposure and tonemapping apply after them as for every
 surface.
 
@@ -130,10 +134,15 @@ project's `.bproj` `postProcess` to `"toon"` and its targets end in it
 its own.
 
 **A toon surface draws through the lit programs.** Registration binds a toon slot to its model's
-adapter over the game's type — `ToonCharacterLit<G>` or `ToonEnvironmentLit<G>`, in
-`lib.math.ToonShading` — which conforms to `ILitSurfaceSource` with the model's lighting as its
-`Shade`. So the record, the reader, every layer, grass and the blend arm are the lit contract's,
-and a toon model adds no program family; its lighting is the one function to change.
+adapter over the game's type — `ToonCharacterLit<G>` in `lib.math.ToonShading`, or
+`ToonEnvironmentLit<G>` in `lib.forward.ToonData`, beside the toon sun it lights by — which
+conforms to `ILitSurfaceSource` with the model's lighting as its `Shade`. So the record, the
+reader, every layer, grass and the blend arm are the lit contract's, and a toon model adds no
+program family; its lighting is the one function to change. The two sit apart because the
+character's programs hand its adapter the toon sun themselves (a character's pixel may also need
+its rig), while an environment draws through the unchanged lit programs, which hand every surface
+the material light, so its adapter must reach for the toon sun on its own -- which it does, ready
+for the model that reads it.
 A character surface on a grass look is the engine's toon grass: [Grass](grass.md) § Toon grass.
 
 `Coverage` runs first on an alpha-tested layer and discards before `Evaluate` is called, so a cheap

@@ -31,6 +31,10 @@ namespace bgl
 			return m_Name;
 		}
 
+		/** Whether the view places anything: a bucket's instances are placements, so none is none. */
+		[[nodiscard]] bool
+		HasWork(const DrawData& draw) const override;
+
 		void
 		Declare(PassDesc& desc) const override;
 

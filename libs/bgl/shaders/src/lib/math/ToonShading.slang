@@ -156,7 +156,8 @@ public float4 ShadeToonCharacterFace<
 }
 
 // The toon environment model, flat until its look is designed: the base colour as pre-exposure
-// radiance, reading nothing of the light.
+// radiance, reading nothing of the light. The light is handed in all the same, so the model that
+// replaces this one changes nothing at its callers.
 public float4 ShadeToonEnvironment<L : ISurfaceLight>(ToonEnvironmentSurface surface, L light)
 {
     return surface.baseColor;
@@ -176,18 +177,5 @@ public struct ToonCharacterLit<G : IToonCharacterSurfaceSource> : ILitSurfaceSou
     public static float4 Shade<R : IMaterialReader, L : ISurfaceLight>(R reader, L light, MaterialParams params)
     {
         return ShadeToonCharacter(G.Evaluate(reader, params), light, normalize(reader.WorldNormal()));
-    }
-};
-
-/// ToonCharacterLit's environment twin.
-public struct ToonEnvironmentLit<G : IToonEnvironmentSurfaceSource> : ILitSurfaceSource
-{
-    public typealias MaterialParams = G.MaterialParams;
-
-    public static float Coverage<R : IMaterialReader>(R reader, MaterialParams params) { return G.Coverage(reader, params); }
-
-    public static float4 Shade<R : IMaterialReader, L : ISurfaceLight>(R reader, L light, MaterialParams params)
-    {
-        return ShadeToonEnvironment(G.Evaluate(reader, params), light);
     }
 };

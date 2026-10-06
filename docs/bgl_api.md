@@ -411,6 +411,14 @@ flowchart TD
   a look is shared by every geom bound to it, so an update reaches all of them next frame and moves
   the temporal epoch. There is no getter: the caller holds the desc it wrote. The desc's ranges
   are listed on `CreateGrass`; an update refused for one writes nothing. `DeleteGrass` refuses while a live geom binds the look: delete the geoms first.
+* **`CreateTerrain(desc)` / `DeleteTerrain(terrain)` / `IsTerrainAlive(terrain)`** — one
+  heightfield (`assetlib::Heightfield`, through `TerrainDesc`) laid with its sample (0, 0) at the
+  desc's origin and its axes the world's, drawn by every view of the scene through one opaque
+  material the caller keeps alive, at the level of detail its cells' size on screen earns
+  (`pixelsPerCell`, scaled by the view's `LodSelectionDesc::pixelScale`). The samples are copied
+  by the call and the desc's pointer is not kept. No placement and no transform: a heightfield is
+  axis-aligned. The refusals are listed on `CreateTerrain`; `DeleteTerrain` refuses a null or
+  deleted handle and leaves the material alone.
 * **`AddToonShadingRig(desc)` / `DeleteToonShadingRig(rig)`** — a face's toon shading rig (`ToonShadingRigDesc`):
   shadow and light edits on a toon character's face, each keyed on the light's direction in head
   space and blended between its keys as the light moves, and the remapped light the face shades

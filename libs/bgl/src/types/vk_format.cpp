@@ -17,6 +17,8 @@ namespace bgl
 			return bgpu::Format::R8_UNORM;
 		case VkFormat::R8G8_UNORM:
 			return bgpu::Format::RG8_UNORM;
+		case VkFormat::R16_UNORM:
+			return bgpu::Format::R16_UNORM;
 		case VkFormat::R16G16_UNORM:
 			return bgpu::Format::RG16_UNORM;
 		case VkFormat::R8G8B8A8_UNORM:

@@ -30,6 +30,10 @@ namespace bgl
 			return "Transparent";
 		}
 
+		/** Whether the view places anything: the sorted list is of placements, so none is none. */
+		[[nodiscard]] bool
+		HasWork(const DrawData& draw) const override;
+
 		void
 		Declare(PassDesc& desc) const override;
 

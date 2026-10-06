@@ -217,6 +217,8 @@ endif()
 
 add_subdirectory(libs/core)
 add_subdirectory(libs/assetlib_structs)
+# The terrain generator: a heightfield from a seed, linking the container and core alone.
+add_subdirectory(libs/terrainlib)
 # Between the contract and the renderer: what every renderer needs and no renderer owns.
 add_subdirectory(libs/bgpu)
 set(FG_BUILD_TEST OFF CACHE BOOL "" FORCE)

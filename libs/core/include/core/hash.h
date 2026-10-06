@@ -28,4 +28,19 @@ namespace core
 	{
 		return hash_bytes(&value, sizeof(T), seed);
 	}
+
+	// A 32-bit word mixed to look random but reproducible: lowbias32 (Chris Wellons), a full
+	// avalanche in two multiplies. The same function the shaders' `HashUint`
+	// (bgl/shaders/src/lib/math/hash.slang) is, so a value hashed on either side agrees. For
+	// procedural content keyed on an index or a lattice point, not for hashing bytes.
+	[[nodiscard]] constexpr uint32_t
+	hash_mix32(uint32_t x) noexcept
+	{
+		x ^= x >> 16;
+		x *= 0x7feb352du;
+		x ^= x >> 15;
+		x *= 0x846ca68bu;
+		x ^= x >> 16;
+		return x;
+	}
 }

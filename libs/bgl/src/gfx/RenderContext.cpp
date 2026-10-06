@@ -764,7 +764,9 @@ namespace bgl
 		auto scene = view->GetScene()->As<Scene>();
 
 		view->RefreshGrass();
-		const DrawBucketMask demanded = view->DemandedDrawBuckets() | view->GrassDrawBuckets();
+		view->RefreshTerrain();
+		const DrawBucketMask demanded =
+			view->DemandedDrawBuckets() | view->GrassDrawBuckets() | view->TerrainDrawBuckets();
 		EnsureDrawBucketPipelinesExist(demanded);
 		EnsureBrdfLutExists(demanded);
 
@@ -949,9 +951,11 @@ namespace bgl
 		m_ToonShadingRigs.AttachToFrameGraph(m_FrameGraph, draw);
 		m_FrameGraph.SetResourceNamespace(view->GetCullNamespace(draw.cullIdx));
 
+		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kTerrain);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kWorld);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kGrass);
-		// The depth holds the world and its grass alone here: the seam an HZB build belongs at.
+		// The depth holds the terrain, the world and its grass alone here: the seam an HZB build
+		// belongs at.
 		m_BlobShadows.AttachToFrameGraph(m_FrameGraph, draw);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kSkinned);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kTransparent);

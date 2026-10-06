@@ -23,6 +23,8 @@
 #include <bgl/types/SkinnedMeshGeomDesc.h>
 #include <bgl/types/StaticMeshGeomDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
+#include <bgl/types/TerrainDesc.h>
+#include <bgl/types/TerrainHandle.h>
 #include <bgl/types/TextureAssetHandle.h>
 #include <bgl/types/ToonShadingRigDesc.h>
 #include <bgl/types/ToonShadingRigHandle.h>
@@ -424,6 +426,35 @@ namespace bgl
 		 */
 		virtual void
 		SetSubmeshMaterial(GeomHandle geom, uint32_t submeshIndex, MaterialHandle material) = 0;
+
+		/**
+		 * Creates a terrain: `desc.heightfield`'s samples laid at `desc.origin`, drawn by every view
+		 * of this scene through `desc.material` at the level of detail its cells' size on screen
+		 * earns. The samples are copied; the caller keeps the material alive while the terrain draws
+		 * through it, as it does for a geom's. There is no placement and no transform: a heightfield
+		 * is axis-aligned, and where it lies is the desc's origin.
+		 *
+		 * @throws SceneError if `heightfield` is null; either sample count is below 2 or above
+		 *         c_MaxTerrainSamples; `heights` is not samplesX * samplesZ long; `cellSize`,
+		 *         `heightRange` or `pixelsPerCell` is not finite and positive; `minHeight` or
+		 *         `origin` is not finite; or the material is invalid, materialless (kNull, kAssert),
+		 *         not in the opaque layer, or drawn by a toon character surface, whose programs read
+		 *         a placement's shading rig off its vertices and a terrain has none.
+		 */
+		virtual TerrainHandle
+		CreateTerrain(const TerrainDesc& desc) = 0;
+
+		/**
+		 * Destroys a terrain. The material it drew through is the caller's and is left alone.
+		 *
+		 * @throws SceneError if the handle is null or already deleted.
+		 */
+		virtual void
+		DeleteTerrain(TerrainHandle terrain) = 0;
+
+		/** Whether `terrain` still names a live terrain in this scene. */
+		[[nodiscard]] virtual bool
+		IsTerrainAlive(TerrainHandle terrain) const noexcept = 0;
 
 		/**
 		 * Sets the ground plane every skinned instance in this scene plants its feet on. Scene-wide

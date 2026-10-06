@@ -131,6 +131,12 @@ namespace bgl
 		m_GrassClumps(
 			resourceManager,
 			bgpu::RangeBufferDesc().SetInitialCount(1).SetDebugName("Grass Clump Buffer")),
+		m_TerrainRecords(
+			resourceManager,
+			bgpu::EntryBufferDesc().SetInitialCount(1).SetDebugName("Terrain Buffer")),
+		m_TerrainNodeBounds(
+			resourceManager,
+			bgpu::RangeBufferDesc().SetInitialCount(1).SetDebugName("Terrain Node Bounds Buffer")),
 		m_GeomBuffer(
 			resourceManager,
 			bgpu::EntryBufferDesc()

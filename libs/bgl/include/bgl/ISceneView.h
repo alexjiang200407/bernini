@@ -367,7 +367,8 @@ namespace bgl
 		 * Sets the sun the toon character model reads, and its toon shading rigs are evaluated
 		 * against: the light a toon character is drawn by, apart from the one PBR surfaces are, so a
 		 * view can light a character for its look whatever lights the world. Replaces any previously
-		 * set one. The toon environment model reads neither.
+		 * set one. The toon environment model is handed it too, and reads nothing of it while its
+		 * look is undesigned.
 		 *
 		 * A view that never calls this draws its toon characters unlit -- black -- whatever its PBR
 		 * light: the default intensity is 0, and there is no fallback.

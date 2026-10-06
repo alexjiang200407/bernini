@@ -277,3 +277,26 @@ device return at once, so trust the log's removal timestamp over any "ok" printe
 look in that pass's shaders for a group barrier after a `return`, or a loop whose trip count is read
 from payload memory (the entry above). Shaders are compiled from `bin/shaders/src` at run time, so
 edit that copy and rerun one case to bisect without a rebuild; the next build overwrites it.
+
+## Random patches of a mesh-stage draw are missing on Metal, differently every frame
+
+**Symptom.** A pass whose amplification group gathers the work of several threads into one
+payload -- a `groupshared` struct filled by `InterlockedAdd`-claimed slots, then
+`DispatchMesh(count, 1, 1, payload)` after a barrier -- drops whole runs of its launches. The
+terrain draw lost rows of patches; the holes moved from frame to frame and from run to run of the
+same binary, and no validation layer said a word. The same code with every node drawn
+unconditionally, or with no reads of a scene buffer, looked whole, which sent the diagnosis at the
+buffer uploads first.
+
+**Cause.** The payload gathered by many threads of one amplification group: with Slang's Metal
+backend, what the mesh groups received was not always what the group had written when the count
+said it had. Reads and uploads were fine throughout.
+
+**Fixed by** one amplification group of one thread per launch, as the grass stage has always been
+written: the thread decides and launches, and the payload is its own
+([programs/forward/Terrain.slang](../libs/bgl/shaders/src/programs/forward/Terrain.slang)).
+
+**Gates.** `just run bgl_tests -- "[terrain][render]"`: the field under the camera reads green in
+its centre box, which a missing patch row broke on most runs. **Check first** whether the pass
+gathers across threads into a payload; if it does, that is the cause, whatever the uploads look
+like.

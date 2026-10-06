@@ -64,6 +64,10 @@ namespace bgl
 		{
 			core::fatal("Grass is drawn opaque whatever its material's layer");
 		}
+		if (geom == GeometryStage::kTerrain && layer != LayerType::kOpaque)
+		{
+			core::fatal("A terrain takes an opaque material; CreateTerrain refuses the rest");
+		}
 		if (geom == GeometryStage::kSkinnedMesh && material != MaterialType::kPBR &&
 		    !GameSlot(material).has_value())
 		{

@@ -4,7 +4,7 @@ import bgl.MaterialReader;
  * What the toon environment model reads off a surface: the material's half of shading an
  * environment, the engine's toon lighting the other. A model apart from the character's
  * (bgl.ToonCharacterSurface) because the two are different artists' work and grow apart; today the
- * lighting draws baseColor flat.
+ * lighting draws baseColor flat, until the environment's look is designed.
  *
  * Construct one as `ToonEnvironmentSurface()` and set what the surface means to; each default is
  * what a surface that says nothing about the field means.

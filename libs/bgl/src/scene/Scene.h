@@ -35,6 +35,8 @@
 #include <bgl/idl/SkinnedBone.h>
 #include <bgl/idl/SkinnedLegChain.h>
 #include <bgl/idl/Submesh.h>
+#include <bgl/idl/Terrain.h>
+#include <bgl/idl/TerrainNodeBounds.h>
 #include <bgl/idl/ToonShadingRig.h>
 #include <bgl/types/FootPlantDesc.h>
 #include <bgl/types/GeomHandle.h>
@@ -47,6 +49,8 @@
 #include <bgl/types/RigHandle.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
+#include <bgl/types/TerrainDesc.h>
+#include <bgl/types/TerrainHandle.h>
 #include <bgl/types/TextureAssetHandle.h>
 #include <bgl/types/ToonShadingRigDesc.h>
 #include <bgl/types/ToonShadingRigHandle.h>
@@ -151,6 +155,23 @@ namespace bgl
 		// Grass fields bound to this look across every live geom. DeleteGrass refuses while it is
 		// nonzero: a field left naming a freed slot would draw with whatever look takes it next.
 		uint32_t useCount = 0;
+	};
+
+	/**
+	 * One live terrain: what the scene made of the desc's samples.
+	 *
+	 * Namespace-scope for the same reason as GeomRecord above.
+	 */
+	struct TerrainMeta
+	{
+		MaterialHandle material;
+
+		// The samples as one R16_UNORM texture, the record the stage reads, and the lowest and
+		// highest height of every node of every level (scene/terrain_lod.h), level-major. The
+		// shape itself lives in the record alone: nothing on the CPU reads a terrain back.
+		TextureAssetHandle      heights;
+		core::slot_handle       record;
+		core::multi_slot_handle nodeBounds;
 	};
 
 	/**
@@ -585,6 +606,39 @@ namespace bgl
 		void
 		DeleteGrass(GrassHandle grass) override;
 
+		TerrainHandle
+		CreateTerrain(const TerrainDesc& desc) override;
+
+		void
+		DeleteTerrain(TerrainHandle terrain) override;
+
+		[[nodiscard]] bool
+		IsTerrainAlive(const TerrainHandle terrain) const noexcept override
+		{
+			return terrain.IsValid() && m_Terrains.valid(terrain.handle);
+		}
+
+		/** Slots a terrain may occupy: the bound a walk over TerrainAt runs to. */
+		[[nodiscard]] uint32_t
+		TerrainCapacity() const noexcept
+		{
+			return m_Terrains.capacity();
+		}
+
+		/** The terrain in slot `index`, or null where no live terrain holds it. */
+		[[nodiscard]] const TerrainMeta*
+		TerrainAt(const uint32_t index) const noexcept
+		{
+			return m_Terrains.allocated(index) ? &m_Terrains[index] : nullptr;
+		}
+
+		/** Moves whenever a terrain is created or deleted. */
+		[[nodiscard]] uint64_t
+		GetTerrainEpoch() const noexcept
+		{
+			return m_TerrainEpoch;
+		}
+
 		void
 		AttachGrass(
 			GeomHandle                    geom,
@@ -834,6 +888,9 @@ namespace bgl
 		core::slot_vector<GrassMeta> m_Grass;
 		uint64_t                     m_GrassEpoch = 0;
 
+		core::slot_vector<TerrainMeta> m_Terrains;
+		uint64_t                       m_TerrainEpoch = 0;
+
 		// One ToonShadingRig per AddToonShadingRig, and its edits' keys in one range it owns.
 		bgpu::EntryBuffer<idl::ToonShadingRig, ToonShadingRigMeta> m_ToonShadingRigs;
 		bgpu::RangeBuffer<idl::ToonShadingRigKey>                  m_ToonShadingRigKeys;
@@ -841,6 +898,10 @@ namespace bgl
 		bgpu::EntryBuffer<idl::GrassLook>  m_GrassLooks;
 		bgpu::RangeBuffer<idl::GrassChunk> m_GrassChunks;
 		bgpu::RangeBuffer<idl::GrassClump> m_GrassClumps;
+
+		// One record per live terrain, and every terrain's node bounds, a range each owns.
+		bgpu::EntryBuffer<idl::Terrain>           m_TerrainRecords;
+		bgpu::RangeBuffer<idl::TerrainNodeBounds> m_TerrainNodeBounds;
 
 		// One default material per submesh of a range, keyed at its root. It rides on the RangeBuffer
 		// as Meta, not a parallel array, so it is allocated and freed with the geometry it belongs to.
@@ -922,6 +983,8 @@ namespace bgl
 			NamedBuffer{ c_GrassClumpBufferName, &Scene::m_GrassClumps },
 			NamedBuffer{ c_ToonShadingRigBufferName, &Scene::m_ToonShadingRigs },
 			NamedBuffer{ c_ToonShadingRigKeyBufferName, &Scene::m_ToonShadingRigKeys },
+			NamedBuffer{ c_TerrainBufferName, &Scene::m_TerrainRecords },
+			NamedBuffer{ c_TerrainNodeBoundsBufferName, &Scene::m_TerrainNodeBounds },
 		};
 
 		static_assert(HasDistinctNames(c_Buffers), "two scene buffers would import under one name");

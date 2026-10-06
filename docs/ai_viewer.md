@@ -44,6 +44,9 @@ Bare, it renders `assets/Data`'s apples — the one project `copy_assets` stages
 | `--color-split` | off | the colour split at `bgl::ColorSplitSettings`' defaults: red two pixels left of green at 2160 lines and blue two right, scaled to `-h` |
 | `--frame-clip` | off | frame the camera on the playing clip's poses rather than every clip's |
 | `--out-dir` | `ai_viewer` | where the PNGs and `gpu_timings.csv` go |
+| `--terrain` | none | a shape, `flat`, `hilly` or `mountainous`, to generate a battlefield of and draw, in place of `--import` ([Terrain](terrain.md)) |
+| `--terrain-seed`, `--terrain-size`, `--terrain-cell` | 1, 2000, 2 | the generator's seed, the field's side in metres, and the metres between samples |
+| `--terrain-material` | a plain green PBR | a `.bmaterial` in the project the field draws through, such as the test project's `Authored/Materials/Terrain/Battlefield.bmaterial` |
 | `--grass` | none | a `.bgrass` to grow on a patch of bare ground, in place of `--import` |
 | `--patch-size`, `--patch-spacing` | twice the look's fade end, 0.25 | the patch's side and the distance between its clumps, in metres |
 | `--distance` | 10 | how far from the patch's centre its camera stands, in metres, at eye height |

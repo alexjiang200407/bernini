@@ -1,8 +1,10 @@
 #include "passes/TransparentForwardPhase.h"
 #include "fg/PassDesc.h"
+#include "passes/DrawData.h"
 #include "passes/ForwardPhases.h"
 #include "passes/SceneBindings.h"
 #include "scene/scene_buffer_names.h"
+#include <bgl/ISceneView.h>
 #include <bgl/idl/BaseTable.h>
 #include <bgl/idl/LodDrawMode.h>
 #include <bgpu/cmd/CommandList.h>
@@ -14,6 +16,12 @@
 
 namespace bgl
 {
+	bool
+	TransparentForwardPhase::HasWork(const DrawData& draw) const
+	{
+		return draw.view->GetInstanceCount() > 0;
+	}
+
 	void
 	TransparentForwardPhase::Declare(PassDesc& desc) const
 	{

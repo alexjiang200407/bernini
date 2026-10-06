@@ -2,6 +2,7 @@ import lib.forward.GameSurface;
 import lib.forward.GrassShading;
 import lib.forward.MaterialData;
 import lib.forward.MaterialShading;
+import lib.forward.ToonData;
 import lib.forward.common;
 import lib.forward.grass_vertex;
 import lib.math.ToonShading;
