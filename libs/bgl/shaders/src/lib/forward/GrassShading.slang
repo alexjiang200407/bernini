@@ -71,13 +71,16 @@ public extension MaterialData
         return output;
     }
 
-    // A toon character on a blade: the lit grass program, lit by the toon sun.
+    // A toon character on a blade: the lit grass program, lit by the toon sun, its tone tinted root to
+    // tip -- what parts one blade from the next when the cel step gives them all the ground's tone.
+    // The occlusion and translucency stay the PBR program's.
     public ForwardPSOut GameToonGrassProgram<G : IToonCharacterSurfaceSource>(GrassVSOut input)
     {
         let record = LitGameRecord<ToonCharacterLit<G>>.Load(input.materialOffset);
+        let toned = record.ShadeOnGrassWith(input.Surface(), ToonSurfaceLight()).rgb;
 
         ForwardPSOut output;
-        output.color = float4(record.ShadeOnGrassWith(input.Surface(), ToonSurfaceLight()).rgb * exposure, 1.0);
+        output.color = float4(toned * input.tint.rgb * exposure, 1.0);
         output.motion = ComputeMotionVector(input.Surface());
         return output;
     }

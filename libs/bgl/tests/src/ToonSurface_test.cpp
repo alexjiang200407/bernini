@@ -803,8 +803,11 @@ TEST_CASE("A toon character's every lane reads the toon sun", "[surface][render]
 }
 
 // Toon grass (docs/grass.md § Toon grass): at a ground normal of 1 and 1 every blade takes the
-// ground's tone, under suns chosen so the ground and the faces blades turn to the camera disagree.
-TEST_CASE("Toon grass on its ground normal takes the ground's one tone", "[surface][render][toon]")
+// ground's tone, under suns chosen so the ground and the faces blades turn to the camera disagree;
+// a root-to-tip tint then grades each blade within that tone.
+TEST_CASE(
+	"Toon grass on its ground normal takes the ground's one tone, graded root to tip",
+	"[surface][render][toon]")
 {
 	auto gfx = bgl::test::CreateGraphics(ToonOptions());
 	REQUIRE(gfx != nullptr);
@@ -814,17 +817,19 @@ TEST_CASE("Toon grass on its ground normal takes the ground's one tone", "[surfa
 	const auto black     = scene->CreatePbrMaterial(
 		bgl::PbrMaterialDesc{ .baseColorFactor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f) });
 
-	const auto lawn = [&](const float groundNear, const float groundFar) {
-		auto look                      = bgl::GrassDesc();
-		look.material                  = character;
-		look.blade.rootWidth           = 0.05f;
-		look.lighting.groundNormalNear = groundNear;
-		look.lighting.groundNormalFar  = groundFar;
-		const auto looks  = std::array<bgl::GrassHandle, 1>{ { scene->CreateGrass(look) } };
-		const auto ground = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, black);
-		scene->AttachGrass(ground, MakeField(40, 0.12f), 0, looks);
-		return ground;
-	};
+	const auto lawn =
+		[&](const float groundNear, const float groundFar, const glm::vec3& rootTint) {
+			auto look                      = bgl::GrassDesc();
+			look.color.rootTint            = rootTint;
+			look.material                  = character;
+			look.blade.rootWidth           = 0.05f;
+			look.lighting.groundNormalNear = groundNear;
+			look.lighting.groundNormalFar  = groundFar;
+			const auto looks  = std::array<bgl::GrassHandle, 1>{ { scene->CreateGrass(look) } };
+			const auto ground = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, black);
+			scene->AttachGrass(ground, MakeField(40, 0.12f), 0, looks);
+			return ground;
+		};
 
 	// The ground faces +Y once the plane is turned; the camera looks down at it from +Z.
 	const auto shoot = [&](const auto ground, const glm::vec3& toSun, const char* png) {
@@ -857,11 +862,12 @@ TEST_CASE("Toon grass on its ground normal takes the ground's one tone", "[surfa
 	const auto behind  = glm::vec3(0.0f, 1.0f, -1.2f);
 	const auto inFront = glm::vec3(0.0f, -0.3f, 1.0f);
 
-	const auto toon   = lawn(1.0f, 1.0f);
+	const auto white  = glm::vec3(1.0f);
+	const auto toon   = lawn(1.0f, 1.0f, white);
 	const auto lit    = shoot(toon, behind, "assets/golden/toon_grass_ground_lit.got.png");
 	const auto shaded = shoot(toon, inFront, "assets/golden/toon_grass_ground_shaded.got.png");
 	const auto mixed =
-		shoot(lawn(0.0f, 0.8f), behind, "assets/golden/toon_grass_default_blend.got.png");
+		shoot(lawn(0.0f, 0.8f, white), behind, "assets/golden/toon_grass_default_blend.got.png");
 
 	INFO(
 		"lit: " << lit.maxDeviation << " over " << lit.covered
@@ -874,6 +880,19 @@ TEST_CASE("Toon grass on its ground normal takes the ground's one tone", "[surfa
 	CHECK(shaded.maxDeviation < 0.02f);
 	CHECK(shaded.mean.Luma() < lit.mean.Luma() - 0.05f);
 	CHECK(mixed.maxDeviation > 0.1f);
+
+	const auto graded    = lawn(1.0f, 1.0f, glm::vec3(0.3f));
+	const auto gradedLit = shoot(graded, behind, "assets/golden/toon_grass_graded_lit.got.png");
+	const auto gradedShaded =
+		shoot(graded, inFront, "assets/golden/toon_grass_graded_shaded.got.png");
+	INFO(
+		"graded lit: " << gradedLit.maxDeviation << " over " << gradedLit.covered
+					   << ", graded shaded: " << gradedShaded.maxDeviation);
+	REQUIRE(gradedLit.covered > 1000);
+	REQUIRE(gradedShaded.covered > 1000);
+	CHECK(gradedLit.maxDeviation > 0.1f);
+	CHECK(gradedLit.mean.Luma() < lit.mean.Luma() - 0.03f);
+	CHECK(gradedShaded.mean.Luma() < gradedLit.mean.Luma() - 0.03f);
 }
 
 // A document's model is its contract expectation, and the toon models are two contracts: a
