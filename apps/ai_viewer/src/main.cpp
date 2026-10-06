@@ -24,6 +24,7 @@
 #include <bgl/types/Camera.h>
 #include <bgl/types/DirectionalLightDesc.h>
 #include <bgl/types/GeomHandle.h>
+#include <bgl/types/GrassHandle.h>
 #include <bgl/types/InstanceDesc.h>
 #include <bgl/types/LodSelectionDesc.h>
 #include <bgl/types/MaterialHandle.h>
@@ -33,6 +34,7 @@
 #include <bgl/types/SkinnedMeshInstanceDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/TerrainDesc.h>
+#include <bgl/types/TerrainGrassDesc.h>
 #include <bgl/types/TerrainHandle.h>
 #include <bgl/types/Viewport.h>
 #include <bgl/types/WindDesc.h>
@@ -54,8 +56,10 @@
 #include <headless/headless_render.h>
 #include <headless/import_lookup.h>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -109,8 +113,8 @@ namespace
 		float              sunIntensity = 0.0f;
 		std::vector<float> sunColor{ 1.0f, 1.0f, 1.0f };
 
-		// A `.bgrass` grown on a patch of bare ground, in place of --import. Size 0 is twice the
-		// look's fade end.
+		// A `.bgrass` grown on a patch of bare ground in place of --import, or with --terrain on
+		// the field, by the rules below. Size 0 is twice the look's fade end.
 		std::string grass;
 		float       patchSize    = 0.0f;
 		float       patchSpacing = 0.25f;
@@ -123,7 +127,14 @@ namespace
 		uint32_t    terrainSeed = 1;
 		float       terrainSize = 2000.0f;
 		float       terrainCell = 2.0f;
+		float       terrainEye  = 40.0f;
 		std::string terrainMaterial;
+
+		// Where --grass grows on a terrain: no steeper than `grassSlope` degrees, no higher than
+		// `grassBelow` metres, over `grassCoverage` of the ground.
+		float grassSlope    = 90.0f;
+		float grassBelow    = 1e6f;
+		float grassCoverage = 1.0f;
 
 		// Copies of the model laid out in rows receding from the camera, `crowdColumns` a row, each a
 		// fraction of a cycle out of step with the one before. 0 places the model once.
@@ -450,6 +461,19 @@ namespace
 		return headless::FrameBounds(bounds, opts.width, opts.height);
 	}
 
+	/** The wind --wind asks for, with gusts as strong; calm when it asks for none. */
+	void
+	SetViewWind(const Options& opts, const bgl::SceneViewRef& view)
+	{
+		if (opts.wind > 0.0f)
+		{
+			view->SetWind(
+				{ .direction    = glm::vec3(1.0f, 0.0f, 0.4f),
+			      .strength     = opts.wind,
+			      .gustStrength = opts.wind });
+		}
+	}
+
 	/**
 	 * Grows `opts.grass` on a patch of bare ground and returns a camera standing in it, eye height
 	 * above the ground and `opts.distance` from the patch's centre, looking at it.
@@ -491,13 +515,7 @@ namespace
 						glm::radians(-90.0f),
 						glm::vec3(1.0f, 0.0f, 0.0f))));
 
-		if (opts.wind > 0.0f)
-		{
-			view->SetWind(
-				{ .direction    = glm::vec3(1.0f, 0.0f, 0.4f),
-			      .strength     = opts.wind,
-			      .gustStrength = opts.wind });
-		}
+		SetViewWind(opts, view);
 
 		std::cout << std::format(
 			"{}\npatch  {:.0f} m square, a clump every {} m, camera {} m out\nwind   {}\n",
@@ -535,14 +553,19 @@ namespace
 
 	/**
 	 * Generates `opts.terrain` as a field centred on the origin, creates it in the scene through
-	 * `opts.terrainMaterial` -- a plain green PBR material when none is named -- and returns a camera
-	 * standing over the field's middle, forty metres up, looking across it.
+	 * `opts.terrainMaterial` -- a plain green PBR material when none is named -- growing `opts.grass`
+	 * on it when one is named, and returns a camera standing `opts.terrainEye` over the field's
+	 * middle, looking across it.
 	 *
 	 * @throws std::runtime_error when the shape is not one of the three, the field would hold more
 	 *         samples than a terrain may, or what AcquireMaterial and CreateTerrain throw.
 	 */
 	[[nodiscard]] bgl::Camera
-	PlaceTerrain(const Options& opts, bgl::IScene& scene, game::AssetManager& assets)
+	PlaceTerrain(
+		const Options&           opts,
+		bgl::IScene&             scene,
+		game::AssetManager&      assets,
+		const bgl::SceneViewRef& view)
 	{
 		const terrain::TerrainShape shape = ShapeNamed(opts.terrain);
 
@@ -575,12 +598,30 @@ namespace
 
 		// Centred on the origin, its lowest point at y = 0, so a material's heights -- a snow
 		// line -- read as height above the valley floor whatever the generator's own zero was.
-		const float half = static_cast<float>(samples - 1) * opts.terrainCell * 0.5f;
-		(void)scene.CreateTerrain(
+		const float              half = static_cast<float>(samples - 1) * opts.terrainCell * 0.5f;
+		const bgl::TerrainHandle terrain = scene.CreateTerrain(
 			bgl::TerrainDesc()
 				.SetHeightfield(&field)
 				.SetOrigin(glm::vec3(-half, -field.minHeight, -half))
 				.SetMaterial(material));
+
+		if (!opts.grass.empty())
+		{
+			const bgl::GrassHandle look = assets.AcquireGrassLook(opts.grass);
+			if (!look.IsValid())
+			{
+				core::throw_runtime_error("--grass {} cannot be drawn", opts.grass);
+			}
+			const auto layer =
+				bgl::TerrainGrassDesc()
+					.SetLook(look)
+					.SetSpacing(opts.patchSpacing)
+					.SetSlope(glm::radians(opts.grassSlope), glm::radians(5.0f))
+					.SetHeights(std::numeric_limits<float>::lowest(), opts.grassBelow, 2.0f)
+					.SetPatches(20.0f, opts.grassCoverage);
+			scene.AttachTerrainGrass(terrain, std::span<const bgl::TerrainGrassDesc>(&layer, 1));
+			SetViewWind(opts, view);
+		}
 
 		// The ground under the middle of the field, where the camera stands.
 		const size_t centre = static_cast<size_t>(samples / 2) * samples + samples / 2;
@@ -589,7 +630,7 @@ namespace
 
 		std::cout << std::format(
 			"terrain  {} seed {}, {:.0f} m square, a sample every {} m ({} x {}), {:.1f} m of "
-			"relief from y = 0\nmaterial {}\n",
+			"relief from y = 0\nmaterial {}\n{}",
 			opts.terrain,
 			opts.terrainSeed,
 			opts.terrainSize,
@@ -597,13 +638,22 @@ namespace
 			samples,
 			samples,
 			field.heightRange,
-			opts.terrainMaterial.empty() ? std::string("a plain green") : opts.terrainMaterial);
+			opts.terrainMaterial.empty() ? std::string("a plain green") : opts.terrainMaterial,
+			opts.grass.empty() ?
+				std::string() :
+				std::format(
+					"grass    {}, a clump every {} m, up to {} degrees and {} m, over {} of the "
+					"ground\n",
+					opts.grass,
+					opts.patchSpacing,
+					opts.grassSlope,
+					opts.grassBelow,
+					opts.grassCoverage));
 
-		constexpr float c_Above = 40.0f;
-		auto            camera  = bgl::Camera();
+		auto camera = bgl::Camera();
 		camera
 			.LookAt(
-				glm::vec3(0.0f, groundY + c_Above, 0.0f),
+				glm::vec3(0.0f, groundY + opts.terrainEye, 0.0f),
 				glm::vec3(0.0f, groundY, -0.4f * half),
 				glm::vec3(0.0f, 1.0f, 0.0f))
 			.Perspective(
@@ -706,7 +756,8 @@ try
 		app.add_option(
 			   "--grass",
 			   opts.grass,
-			   "A .bgrass to grow on a patch of bare ground, in place of --import")
+			   "A .bgrass to grow on a patch of bare ground in place of --import, or on the field "
+			   "with --terrain")
 			->excludes(import);
 		app.add_option(
 			   "--terrain",
@@ -720,9 +771,28 @@ try
 		app.add_option("--terrain-cell", opts.terrainCell, "Metres between the field's samples")
 			->check(CLI::PositiveNumber);
 		app.add_option(
+			   "--terrain-eye",
+			   opts.terrainEye,
+			   "How far above the field's middle the camera stands, in metres")
+			->check(CLI::PositiveNumber);
+		app.add_option(
 			"--terrain-material",
 			opts.terrainMaterial,
 			"A .bmaterial in the project the field draws through; a plain green PBR otherwise");
+		app.add_option(
+			   "--grass-slope",
+			   opts.grassSlope,
+			   "With --terrain: the steepest ground --grass grows on, in degrees")
+			->check(CLI::Range(0.0f, 90.0f));
+		app.add_option(
+			"--grass-below",
+			opts.grassBelow,
+			"With --terrain: the height in metres --grass grows no higher than");
+		app.add_option(
+			   "--grass-coverage",
+			   opts.grassCoverage,
+			   "With --terrain: the share of the ground --grass covers in patches")
+			->check(CLI::Range(0.0f, 1.0f));
 		app.add_option(
 			   "--patch-size",
 			   opts.patchSize,
@@ -849,12 +919,8 @@ try
 		view->SetLodSelection(selection);
 	}
 
-	if (!opts.grass.empty() && !opts.terrain.empty())
-	{
-		core::throw_runtime_error("--grass and --terrain each take the model's place: pick one");
-	}
 	const bgl::Camera camera =
-		!opts.terrain.empty() ? PlaceTerrain(opts, *scene, assets) :
+		!opts.terrain.empty() ? PlaceTerrain(opts, *scene, assets, view) :
 		opts.grass.empty()    ? PlaceImport(opts, store, dataRoot, assets, view) :
 								PlaceGrassPatch(opts, store, *scene, assets, view);
 

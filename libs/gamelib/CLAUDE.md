@@ -79,7 +79,9 @@ snapshot names, keyed by path like a material; a look holds its material. Packed
 `.bimport` with those bindings. A look with no material, or one the renderer refuses, is warned
 about and its fields drawn bare. `SetGrassLook` redraws a held look from a document that is not
 saved, in place, for an editor dragging a value: every geom drawing it follows, and the material's
-reference moves only once the renderer has taken the new look.
+reference moves only once the renderer has taken the new look. `AcquireGrassLook` and
+`ReleaseGrassLook` hold a look no mesh names, for grass a caller binds itself -- a terrain's
+(`IScene::AttachTerrainGrass`).
 
 A source whose `.bimport` names a `.btoonrig` gets the toon shading rig the same way: the geom holds
 one reference, keyed by the document, the skeleton its head bone resolves against and whether the
