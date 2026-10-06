@@ -40,10 +40,10 @@ namespace
 		return static_cast<float>(sum / pairs / field.cellSize);
 	}
 
-	terrain::GenerateDesc
-	Small(const terrain::Shape shape, const uint32_t seed = 7)
+	terrain::TerrainGenerateDesc
+	Small(const terrain::TerrainShape shape, const uint32_t seed = 7)
 	{
-		return terrain::GenerateDesc()
+		return terrain::TerrainGenerateDesc()
 		    .SetShape(shape)
 		    .SetSeed(seed)
 		    .SetSamples(129, 97)
@@ -53,9 +53,9 @@ namespace
 
 TEST_CASE("the same desc generates the same field, and another seed another", "[terrain]")
 {
-	const assetlib::Heightfield a     = terrain::Generate(Small(terrain::Shape::kHilly));
-	const assetlib::Heightfield again = terrain::Generate(Small(terrain::Shape::kHilly));
-	const assetlib::Heightfield b     = terrain::Generate(Small(terrain::Shape::kHilly, 8));
+	const assetlib::Heightfield a     = terrain::Generate(Small(terrain::TerrainShape::kHilly));
+	const assetlib::Heightfield again = terrain::Generate(Small(terrain::TerrainShape::kHilly));
+	const assetlib::Heightfield b     = terrain::Generate(Small(terrain::TerrainShape::kHilly, 8));
 
 	CHECK(a.samplesX == 129);
 	CHECK(a.samplesZ == 97);
@@ -70,7 +70,8 @@ TEST_CASE("the same desc generates the same field, and another seed another", "[
 
 TEST_CASE("a field's samples span its range, which is the relief it holds", "[terrain]")
 {
-	const assetlib::Heightfield field = terrain::Generate(Small(terrain::Shape::kMountainous));
+	const assetlib::Heightfield field =
+		terrain::Generate(Small(terrain::TerrainShape::kMountainous));
 
 	const auto [low, high] = std::ranges::minmax_element(field.heights);
 	CHECK(*low == 0);
@@ -81,14 +82,14 @@ TEST_CASE("a field's samples span its range, which is the relief it holds", "[te
 	// Mountains stand a few hundred metres over their valleys; a plain a few metres.
 	CHECK(field.heightRange > 100.0f);
 	CHECK(field.heightRange < 1000.0f);
-	CHECK(terrain::Generate(Small(terrain::Shape::kFlat)).heightRange < 20.0f);
+	CHECK(terrain::Generate(Small(terrain::TerrainShape::kFlat)).heightRange < 20.0f);
 }
 
 TEST_CASE("flat is flatter than hilly is flatter than mountainous", "[terrain]")
 {
-	const float flat     = MeanSlope(terrain::Generate(Small(terrain::Shape::kFlat)));
-	const float hilly    = MeanSlope(terrain::Generate(Small(terrain::Shape::kHilly)));
-	const float mountain = MeanSlope(terrain::Generate(Small(terrain::Shape::kMountainous)));
+	const float flat     = MeanSlope(terrain::Generate(Small(terrain::TerrainShape::kFlat)));
+	const float hilly    = MeanSlope(terrain::Generate(Small(terrain::TerrainShape::kHilly)));
+	const float mountain = MeanSlope(terrain::Generate(Small(terrain::TerrainShape::kMountainous)));
 
 	INFO("mean slopes " << flat << " " << hilly << " " << mountain);
 	CHECK(flat < hilly);
@@ -99,9 +100,9 @@ TEST_CASE("flat is flatter than hilly is flatter than mountainous", "[terrain]")
 TEST_CASE("a finer cell resolves the same land rather than smaller land", "[terrain]")
 {
 	// Sample (x, z) at 8 m is sample (2x, 2z) at 4 m: the field is a function of world position.
-	const assetlib::Heightfield coarse =
-		terrain::Generate(Small(terrain::Shape::kHilly).SetSamples(65, 49).SetCellSize(8.0f));
-	const assetlib::Heightfield fine = terrain::Generate(Small(terrain::Shape::kHilly));
+	const assetlib::Heightfield coarse = terrain::Generate(
+		Small(terrain::TerrainShape::kHilly).SetSamples(65, 49).SetCellSize(8.0f));
+	const assetlib::Heightfield fine = terrain::Generate(Small(terrain::TerrainShape::kHilly));
 
 	float largest = 0.0f;
 	for (uint32_t z = 0; z < coarse.samplesZ; ++z)
@@ -119,20 +120,20 @@ TEST_CASE("a finer cell resolves the same land rather than smaller land", "[terr
 TEST_CASE("Generate refuses a field it cannot make", "[terrain]")
 {
 	CHECK_THROWS_AS(
-		terrain::Generate(Small(terrain::Shape::kFlat).SetSamples(1, 10)),
+		terrain::Generate(Small(terrain::TerrainShape::kFlat).SetSamples(1, 10)),
 		std::runtime_error);
 	CHECK_THROWS_AS(
-		terrain::Generate(Small(terrain::Shape::kFlat).SetSamples(10, 1)),
+		terrain::Generate(Small(terrain::TerrainShape::kFlat).SetSamples(10, 1)),
 		std::runtime_error);
 	CHECK_THROWS_AS(
 		terrain::Generate(
-			Small(terrain::Shape::kFlat).SetSamples(terrain::c_MaxGenerateSamples + 1, 10)),
+			Small(terrain::TerrainShape::kFlat).SetSamples(terrain::c_MaxGenerateSamples + 1, 10)),
 		std::runtime_error);
 	CHECK_THROWS_AS(
-		terrain::Generate(Small(terrain::Shape::kFlat).SetCellSize(0.0f)),
+		terrain::Generate(Small(terrain::TerrainShape::kFlat).SetCellSize(0.0f)),
 		std::runtime_error);
 	CHECK_THROWS_AS(
-		terrain::Generate(Small(terrain::Shape::kFlat).SetCellSize(-1.0f)),
+		terrain::Generate(Small(terrain::TerrainShape::kFlat).SetCellSize(-1.0f)),
 		std::runtime_error);
 }
 
@@ -141,7 +142,7 @@ TEST_CASE("Generate refuses a field it cannot make", "[terrain]")
 TEST_CASE("generation costs linear in the samples", "[terrain][perf]")
 {
 	const auto time = [](const uint32_t side) {
-		const auto desc  = Small(terrain::Shape::kMountainous).SetSamples(side, side);
+		const auto desc  = Small(terrain::TerrainShape::kMountainous).SetSamples(side, side);
 		const auto start = std::chrono::steady_clock::now();
 		const auto field = terrain::Generate(desc);
 		const auto end   = std::chrono::steady_clock::now();

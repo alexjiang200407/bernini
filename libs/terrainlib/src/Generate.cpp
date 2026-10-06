@@ -29,25 +29,25 @@ namespace terrain
 		constexpr float c_Lacunarity = 2.0f;
 
 		[[nodiscard]] ShapeParams
-		ParamsOf(const Shape shape) noexcept
+		ParamsOf(const TerrainShape shape) noexcept
 		{
 			switch (shape)
 			{
-			case Shape::kFlat:
+			case TerrainShape::kFlat:
 				return { .amplitude  = 4.0f,
 					     .wavelength = 500.0f,
 					     .octaves    = 3,
 					     .gain       = 0.5f,
 					     .ridgeShare = 0.0f,
 					     .warp       = 0.0f };
-			case Shape::kHilly:
+			case TerrainShape::kHilly:
 				return { .amplitude  = 45.0f,
 					     .wavelength = 450.0f,
 					     .octaves    = 5,
 					     .gain       = 0.5f,
 					     .ridgeShare = 0.0f,
 					     .warp       = 0.35f };
-			case Shape::kMountainous:
+			case TerrainShape::kMountainous:
 				return { .amplitude  = 300.0f,
 					     .wavelength = 1200.0f,
 					     .octaves    = 6,
@@ -94,7 +94,7 @@ namespace terrain
 		}
 
 		void
-		Validate(const GenerateDesc& desc)
+		Validate(const TerrainGenerateDesc& desc)
 		{
 			if (desc.samplesX < 2 || desc.samplesZ < 2 || desc.samplesX > c_MaxGenerateSamples ||
 			    desc.samplesZ > c_MaxGenerateSamples)
@@ -114,7 +114,7 @@ namespace terrain
 	}
 
 	assetlib::Heightfield
-	Generate(const GenerateDesc& desc)
+	Generate(const TerrainGenerateDesc& desc)
 	{
 		Validate(desc);
 

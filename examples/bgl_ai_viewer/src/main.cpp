@@ -521,15 +521,15 @@ namespace
 		return camera;
 	}
 
-	[[nodiscard]] terrain::Shape
+	[[nodiscard]] terrain::TerrainShape
 	ShapeNamed(const std::string& name)
 	{
 		if (name == "flat")
-			return terrain::Shape::kFlat;
+			return terrain::TerrainShape::kFlat;
 		if (name == "hilly")
-			return terrain::Shape::kHilly;
+			return terrain::TerrainShape::kHilly;
 		if (name == "mountainous")
-			return terrain::Shape::kMountainous;
+			return terrain::TerrainShape::kMountainous;
 		core::throw_runtime_error("--terrain {} is not flat, hilly or mountainous", name);
 	}
 
@@ -544,7 +544,7 @@ namespace
 	[[nodiscard]] bgl::Camera
 	PlaceTerrain(const Options& opts, bgl::IScene& scene, game::AssetManager& assets)
 	{
-		const terrain::Shape shape = ShapeNamed(opts.terrain);
+		const terrain::TerrainShape shape = ShapeNamed(opts.terrain);
 
 		const auto samples =
 			static_cast<uint32_t>(std::lround(opts.terrainSize / opts.terrainCell)) + 1;
@@ -559,7 +559,7 @@ namespace
 		}
 
 		const assetlib::Heightfield field = terrain::Generate(
-			terrain::GenerateDesc()
+			terrain::TerrainGenerateDesc()
 				.SetShape(shape)
 				.SetSeed(opts.terrainSeed)
 				.SetSamples(samples, samples)

@@ -6,7 +6,7 @@
 namespace terrain
 {
 	/** The lie of the land a field is generated with. */
-	enum class Shape : uint8_t
+	enum class TerrainShape : uint8_t
 	{
 		kFlat,         // a plain with a few metres of undulation
 		kHilly,        // rolling hills a few tens of metres high
@@ -24,10 +24,10 @@ namespace terrain
 	 * run on a machine; across compilers the float arithmetic may differ in its last bits, so a
 	 * field two machines must share is stored, not regenerated.
 	 */
-	struct GenerateDesc
+	struct TerrainGenerateDesc
 	{
-		Shape    shape = Shape::kHilly;
-		uint32_t seed  = 1;
+		TerrainShape shape = TerrainShape::kHilly;
+		uint32_t     seed  = 1;
 
 		uint32_t samplesX = 1025;
 		uint32_t samplesZ = 1025;
@@ -38,7 +38,7 @@ namespace terrain
 
 		template <typename Self>
 		Self&&
-		SetShape(this Self&& self, Shape value) noexcept
+		SetShape(this Self&& self, TerrainShape value) noexcept
 		{
 			self.shape = value;
 			return std::forward<Self>(self);
@@ -83,5 +83,5 @@ namespace terrain
 	 *         c_MaxGenerateSamples, or `cellSize` is not finite and positive.
 	 */
 	[[nodiscard]] assetlib::Heightfield
-	Generate(const GenerateDesc& desc);
+	Generate(const TerrainGenerateDesc& desc);
 }
