@@ -3,16 +3,21 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
-// Both backends' checks are platform-neutral, so the D3D12 one is pinned on a Mac too. What no case
+// Every backend's checks are platform-neutral, so the D3D12 one is pinned on a Mac too. What no case
 // here can prove is that each backend reads its facts off the device correctly: that is
 // CreateGpuContext's, and a supported machine only ever shows the passing half of it.
 
 namespace
 {
+	// VK_MAKE_API_VERSION(0, 1, 3, 0) and (0, 1, 2, 0), spelled out: the suite includes no Vulkan header.
+	constexpr uint32_t c_Vulkan13 = (1U << 22U) | (3U << 12U);
+	constexpr uint32_t c_Vulkan12 = (1U << 22U) | (2U << 12U);
+
 	bgpu::AppleSystemFacts
 	M1OnSonoma()
 	{
@@ -39,6 +44,19 @@ namespace
 		facts.meshShaderTier      = 10;
 		facts.resourceBindingTier = 3;
 		facts.enhancedBarriers    = true;
+		return facts;
+	}
+
+	bgpu::VulkanSystemFacts
+	Rtx2060OnVulkan()
+	{
+		auto facts               = bgpu::VulkanSystemFacts();
+		facts.device             = true;
+		facts.gpuName            = "NVIDIA GeForce RTX 2060";
+		facts.apiVersion         = c_Vulkan13 | 280U;
+		facts.meshShaders        = true;
+		facts.descriptorIndexing = true;
+		facts.scalarBlockLayout  = true;
 		return facts;
 	}
 
@@ -147,6 +165,82 @@ TEST_CASE("A D3D12 GPU without mesh shaders or an old driver is refused", "[sysr
 	CHECK(
 		Requirements(bgpu::CheckSystemRequirements(tier2)) ==
 		std::vector{ bgpu::Requirement::kD3d12ResourceBindingTier3 });
+}
+
+TEST_CASE(
+	"A Vulkan 1.3 GPU with mesh shaders and descriptor indexing meets every requirement",
+	"[sysreq]")
+{
+	CHECK(bgpu::CheckSystemRequirements(Rtx2060OnVulkan()).empty());
+
+	auto exactly13       = Rtx2060OnVulkan();
+	exactly13.apiVersion = c_Vulkan13;
+	CHECK(bgpu::CheckSystemRequirements(exactly13).empty());
+}
+
+TEST_CASE("A machine with no Vulkan device misses only that", "[sysreq]")
+{
+	const std::vector<bgpu::UnmetRequirement> unmet =
+		bgpu::CheckSystemRequirements(bgpu::VulkanSystemFacts());
+	REQUIRE(unmet.size() == 1);
+	CHECK(unmet[0].requirement == bgpu::Requirement::kVulkanDevice);
+	CHECK(unmet[0].found.empty());
+}
+
+// A driver below 1.3 cannot report the features the bar names, so nothing but its version is held
+// against the machine: the GPU may be fine, and the driver is the thing a player can change.
+TEST_CASE("A Vulkan driver below 1.3 is told to update, and to do nothing else", "[sysreq]")
+{
+	auto old       = bgpu::VulkanSystemFacts();
+	old.device     = true;
+	old.gpuName    = "NVIDIA GeForce RTX 2060";
+	old.apiVersion = c_Vulkan12 | 198U;
+
+	const std::vector<bgpu::UnmetRequirement> unmet = bgpu::CheckSystemRequirements(old);
+	REQUIRE(unmet.size() == 1);
+	CHECK(unmet[0].requirement == bgpu::Requirement::kVulkan13);
+	CHECK(unmet[0].found == "NVIDIA GeForce RTX 2060 with Vulkan 1.2.198");
+}
+
+TEST_CASE("A Vulkan GPU without mesh shaders or bindless is refused", "[sysreq]")
+{
+	auto rdna1        = Rtx2060OnVulkan();
+	rdna1.gpuName     = "AMD Radeon RX 5700 XT";
+	rdna1.meshShaders = false;
+	CHECK(
+		Requirements(bgpu::CheckSystemRequirements(rdna1)) ==
+		std::vector{ bgpu::Requirement::kVulkanMeshShaders });
+
+	auto everything               = Rtx2060OnVulkan();
+	everything.meshShaders        = false;
+	everything.descriptorIndexing = false;
+	everything.scalarBlockLayout  = false;
+	CHECK(
+		Requirements(bgpu::CheckSystemRequirements(everything)) ==
+		std::vector{ bgpu::Requirement::kVulkanMeshShaders,
+	                 bgpu::Requirement::kVulkanDescriptorIndexing,
+	                 bgpu::Requirement::kVulkanScalarBlockLayout });
+}
+
+TEST_CASE("A Vulkan machine's message is the one a D3D12 machine's is", "[sysreq]")
+{
+	using Catch::Matchers::ContainsSubstring;
+
+	auto lacking               = Rtx2060OnVulkan();
+	lacking.gpuName            = "Intel(R) UHD Graphics 630";
+	lacking.meshShaders        = false;
+	lacking.descriptorIndexing = false;
+	lacking.scalarBlockLayout  = false;
+
+	const std::string message =
+		bgpu::DescribeUnmetRequirements(bgpu::CheckSystemRequirements(lacking));
+
+	CHECK_THAT(message, ContainsSubstring("graphics card with mesh shaders"));
+	CHECK_THAT(message, ContainsSubstring("graphics driver"));
+	CHECK_THAT(message, ContainsSubstring("This computer has: Intel(R) UHD Graphics 630."));
+
+	// The mesh stage and bindless read as one line, the layout the driver lacks as another.
+	CHECK(std::ranges::count(message, '\n') == 3);
 }
 
 TEST_CASE(

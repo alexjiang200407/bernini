@@ -114,6 +114,10 @@ every test get the check without asking for it, and nothing can turn it off.
 | Windows | a D3D12 device at feature level 12_0 | `D3D12CreateDevice` on DXGI's first adapter, the one every owner draws on |
 | | a mesh stage and bindless | `MeshShaderTier` 1 (`OPTIONS7`), `ResourceBindingTier` 3 (`OPTIONS`) |
 | | a driver new enough for the shaders and barriers | shader model 6.6, the profile the sessions compile to; `EnhancedBarriersSupported` (`OPTIONS12`) |
+| Vulkan | a Vulkan device | the first physical device the loader enumerates, the system's preferred one |
+| | a driver at Vulkan 1.3 | `VkPhysicalDeviceProperties::apiVersion`; below it nothing else is checked, since an old driver hides what the GPU can do |
+| | a mesh stage and bindless | `VK_EXT_mesh_shader` with its `meshShader` and `taskShader` features, the second being D3D12's amplification stage; the descriptor-indexing features a runtime array of sampled images, storage images or storage buffers needs |
+| | a driver that lays a buffer out as the shaders declare it | `scalarBlockLayout`, what `ScalarDataLayout` compiles to in SPIR-V |
 
 An Intel Mac is refused even when its GPU supports Metal 3: the engine is built and tested on Apple
 silicon only.
@@ -130,9 +134,9 @@ refused, even when a second GPU would pass, because the engine does not choose a
   `core::show_fatal_message` (`core/platform/util.h`) is the native dialog for a game's `main` to
   call in its catch.
 * **The checks are separate from the reading.** Each backend reads plain facts off its device
-  (`AppleSystemFacts`, `D3d12SystemFacts`), and `CheckSystemRequirements` decides on them. So
-  `bgpu_tests` `[sysreq]` pins both backends' checks on any machine, including the machines that
-  fail them, which no test machine is.
+  (`AppleSystemFacts`, `D3d12SystemFacts`, `VulkanSystemFacts`), and `CheckSystemRequirements`
+  decides on them. So `bgpu_tests` `[sysreq]` pins every backend's checks on any machine, including
+  the machines that fail them, which no test machine is.
 
 ## Threading & Synchronization
 
