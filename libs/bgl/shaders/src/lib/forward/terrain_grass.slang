@@ -115,7 +115,10 @@ public ClumpPoint TerrainGrassClump(
     uint k
 )
 {
-    let tileSeed = HashUint((uint(tile.x) * 0x8da6b343u) ^ (uint(tile.y) * 0xd8163841u) ^ (layer.seed * 0xcb1ab31fu));
+    let tileXMix = 0x8da6b343u;
+    let tileZMix = 0xd8163841u;
+    let layerMix = 0xcb1ab31fu;
+    let tileSeed = HashUint((uint(tile.x) * tileXMix) ^ (uint(tile.y) * tileZMix) ^ (layer.seed * layerMix));
     let seed = HashUint(tileSeed + k);
     let jitter = float2(HashFloat(seed + 1u), HashFloat(seed + 2u));
     let cell = float2(k % cTerrainGrassClumpsAcross, k / cTerrainGrassClumpsAcross);
