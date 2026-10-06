@@ -95,6 +95,8 @@ namespace bgl
 			return "programs.forward.SkinnedMesh"sv;
 		case GeometryStage::kGrass:
 			return "programs.forward.Grass"sv;
+		case GeometryStage::kTerrain:
+			return "programs.forward.Terrain"sv;
 		}
 		core::fatal("An unknown geometry stage");
 	}
@@ -112,6 +114,12 @@ namespace bgl
 		if (desc.geom == GeometryStage::kGrass)
 		{
 			return bgpu::RasterCullMode::kNone;
+		}
+		// A terrain is ground, seen from above: its back faces are culled in hardware whatever its
+		// material says, and the stage reads no flag.
+		if (desc.geom == GeometryStage::kTerrain)
+		{
+			return bgpu::RasterCullMode::kBack;
 		}
 		return desc.material == MaterialType::kNull || desc.material == MaterialType::kAssert ?
 		           bgpu::RasterCullMode::kBack :

@@ -7,6 +7,7 @@
 #include "passes/SceneBindings.h"
 #include "passes/draw_bucket_config.h"
 #include "scene/scene_buffer_names.h"
+#include <bgl/ISceneView.h>
 #include <bgl/idl/BaseTable.h>
 #include <bgl/idl/DrawBucket.h>
 #include <bgl/idl/LodDrawMode.h>
@@ -26,6 +27,12 @@ namespace bgl
 		const GeometryStage    stage,
 		const std::string_view name) noexcept : m_Stage(stage), m_Name(name)
 	{}
+
+	bool
+	BucketedForwardPhase::HasWork(const DrawData& draw) const
+	{
+		return draw.view->GetInstanceCount() > 0;
+	}
 
 	void
 	BucketedForwardPhase::Declare(PassDesc& desc) const

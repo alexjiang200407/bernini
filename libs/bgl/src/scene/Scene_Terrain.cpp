@@ -1,14 +1,17 @@
 #include "scene/Scene.h"
 #include "scene/terrain_lod.h"
+#include "util/util.h"
 #include <algorithm>
 #include <assetlib_structs/Heightfield.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/VkFormat.h>
 #include <bgl/IScene.h>
 #include <bgl/MaterialType.h>
+#include <bgl/SurfaceType.h>
 #include <bgl/glm.h>
 #include <bgl/idl/Constants.h>
 #include <bgl/idl/Terrain.h>
+#include <bgl/idl/TerrainNodeBounds.h>
 #include <bgl/types/LayerType.h>
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/TerrainDesc.h>
@@ -57,7 +60,7 @@ namespace bgl
 		}
 
 		void
-		ValidateTerrain(const TerrainDesc& desc)
+		ValidateTerrain(const TerrainDesc& desc, const std::span<const SurfaceType> surfaces)
 		{
 			const auto refuse = [](const std::string_view why) {
 				throw SceneError(std::format("CreateTerrain: {}", why));
@@ -112,6 +115,16 @@ namespace bgl
 			{
 				refuse("the material must be in the opaque layer");
 			}
+			// A character's programs read a placement's toon shading rig off its vertices; a
+			// terrain patch carries none, so its pixels have nothing to read.
+			if (const auto slot = GameSlot(kind);
+			    slot.has_value() && *slot < surfaces.size() &&
+			    surfaces[*slot].shading == SurfaceShading::kToonCharacter)
+			{
+				refuse(
+					"a toon character surface shades a placement's rig, which a terrain has none "
+					"of");
+			}
 		}
 
 		/** The samples as one R16_UNORM image, row-major as the field is. */
@@ -140,15 +153,15 @@ namespace bgl
 		 * The lowest and highest height of every node of every level, level-major: level 0 from
 		 * the samples each patch spans, each level above from its children.
 		 */
-		[[nodiscard]] std::vector<glm::vec2>
+		[[nodiscard]] std::vector<idl::TerrainNodeBounds>
 		NodeBounds(
 			const assetlib::Heightfield& field,
 			const float                  baseHeight,
 			const uint32_t               levels)
 		{
-			const uint32_t sx     = field.samplesX;
-			const uint32_t sz     = field.samplesZ;
-			auto           bounds = std::vector<glm::vec2>(TerrainNodeCount(sx, sz, levels));
+			const uint32_t sx = field.samplesX;
+			const uint32_t sz = field.samplesZ;
+			auto bounds = std::vector<idl::TerrainNodeBounds>(TerrainNodeCount(sx, sz, levels));
 
 			const uint32_t acrossX = TerrainNodesAcross(sx, 0);
 			const uint32_t acrossZ = TerrainNodesAcross(sz, 0);
@@ -172,9 +185,10 @@ namespace bgl
 						}
 					}
 					const float scale         = field.heightRange / 65535.0f;
-					bounds[nz * acrossX + nx] = glm::vec2(
-						baseHeight + static_cast<float>(lo) * scale,
-						baseHeight + static_cast<float>(hi) * scale);
+					bounds[nz * acrossX + nx] = idl::TerrainNodeBounds{
+						.lowest  = baseHeight + static_cast<float>(lo) * scale,
+						.highest = baseHeight + static_cast<float>(hi) * scale,
+					};
 				}
 			});
 
@@ -190,15 +204,16 @@ namespace bgl
 				{
 					for (uint32_t nx = 0; nx < ownX; ++nx)
 					{
-						auto bound = glm::vec2(1e30f, -1e30f);
+						auto bound = idl::TerrainNodeBounds{ .lowest = 1e30f, .highest = -1e30f };
 						for (uint32_t cz = 2 * nz; cz < std::min(2 * nz + 2, childAcrossZ); ++cz)
 						{
 							for (uint32_t cx = 2 * nx; cx < std::min(2 * nx + 2, childAcrossX);
 							     ++cx)
 							{
-								const glm::vec2 child = bounds[childFirst + cz * childAcrossX + cx];
-								bound.x               = std::min(bound.x, child.x);
-								bound.y               = std::max(bound.y, child.y);
+								const idl::TerrainNodeBounds child =
+									bounds[childFirst + cz * childAcrossX + cx];
+								bound.lowest  = std::min(bound.lowest, child.lowest);
+								bound.highest = std::max(bound.highest, child.highest);
 							}
 						}
 						bounds[first + nz * ownX + nx] = bound;
@@ -215,7 +230,7 @@ namespace bgl
 	TerrainHandle
 	Scene::CreateTerrain(const TerrainDesc& desc)
 	{
-		ValidateTerrain(desc);
+		ValidateTerrain(desc, m_Surfaces);
 		const assetlib::Heightfield& field = *desc.heightfield;
 
 		auto meta     = TerrainMeta();
@@ -233,8 +248,10 @@ namespace bgl
 
 		try
 		{
-			const std::vector<glm::vec2> bounds = NodeBounds(field, baseHeight, levels);
-			meta.nodeBounds = m_TerrainNodeBounds.Add(std::span<const glm::vec2>(bounds));
+			const std::vector<idl::TerrainNodeBounds> bounds =
+				NodeBounds(field, baseHeight, levels);
+			meta.nodeBounds =
+				m_TerrainNodeBounds.Add(std::span<const idl::TerrainNodeBounds>(bounds));
 
 			auto record = idl::Terrain();
 			record.originAndCellSize =

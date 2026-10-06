@@ -343,6 +343,13 @@ blade is shaped and posed through one function every force goes through, how a f
 coarsens with distance, what the pass costs and why it is geometry-bound, and what a blob shadow does
 not do to it.
 
+**[Terrain](./docs/terrain.md)**
+
+A heightfield drawn as patches the mesh stage builds from its height texture: the data a terrain
+is made of and the generator that fills it, how it is cut into levels chosen by screen size with a
+rule each node applies alone, why the cuts never crack, why its pixel program is the material's
+own, and the one module anything reads the ground through.
+
 **[Environment Maps](./docs/envmaps.md)**
 
 The `.bsky` / `.benvl` / `.benv` split, how a `.hdr` becomes them, who consumes which, and the

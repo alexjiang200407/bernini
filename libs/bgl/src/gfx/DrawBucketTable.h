@@ -21,6 +21,7 @@ namespace bgl
 		kStaticMesh,
 		kSkinnedMesh,
 		kGrass,  // blades built from a static geom's clumps, drawn opaque whatever the layer
+		kTerrain,  // patches built from a terrain's heightfield, opaque, through the mesh's pixel program
 	};
 
 	/** The stage a geom's instances draw through. @pre geom is kStaticMesh or kSkinnedMesh. */

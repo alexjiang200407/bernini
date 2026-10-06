@@ -162,13 +162,13 @@ TEST_CASE("the level rule covers a field exactly once, from anywhere", "[terrain
 	const std::vector<float> ranges = Ranges(field, 300.0f, 6.0f);
 	REQUIRE(field.levels >= 3);
 
-	// Ranges grow with the level, and each is at least a node's diagonal.
+	// Ranges grow with the level, and each is at least four node diagonals.
 	for (uint32_t level = 0; level + 1 < field.levels; ++level)
 	{
 		CHECK(ranges[level] < ranges[level + 1]);
 		CHECK(
 			ranges[level] >=
-			1.4142f * static_cast<float>(bgl::TerrainNodeCells(level)) * field.cellSize);
+			5.6568f * static_cast<float>(bgl::TerrainNodeCells(level)) * field.cellSize);
 	}
 
 	const std::array<glm::vec3, 6> cameras = {

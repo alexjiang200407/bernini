@@ -101,6 +101,7 @@ namespace bgl
 		// Every bucket kernel is opaque-shaped; only the shared blend kernel differs.
 		// A toon character's bucket at rest draws through MSToon, whose vertices carry the placement's
 		// toon shading rig block; its dissolve lane, and every other bucket, through the shared ones.
+		// Only a mesh tier has MSToon: a blade and a terrain patch carry no placement's rig.
 		PsoConfig
 		ConfigFor(const DrawBucketDesc& desc, const DrawLane lane, const bool toonCharacter)
 		{
@@ -112,7 +113,9 @@ namespace bgl
 				config.meshEntry  = "MSDissolve"sv;
 				config.pixelEntry = "PSDissolve"sv;
 			}
-			else if (toonCharacter && desc.geom != GeometryStage::kGrass)
+			else if (
+				toonCharacter && desc.geom != GeometryStage::kGrass &&
+				desc.geom != GeometryStage::kTerrain)
 			{
 				config.meshEntry = "MSToon"sv;
 			}
@@ -184,7 +187,7 @@ namespace bgl
 	bool
 	DrawBucketDissolves(const DrawBucketDesc& desc) noexcept
 	{
-		return desc.geom != GeometryStage::kGrass;
+		return desc.geom != GeometryStage::kGrass && desc.geom != GeometryStage::kTerrain;
 	}
 
 	ForwardPhases::ForwardPhases(const PassInitContext& ctx)
@@ -287,6 +290,7 @@ namespace bgl
 			.Check("toonData"sv, c_ToonDataFields)
 			.Check("skinnedData"sv, GetUniformKeys(c_SkinnedBuffers));
 		GrassForwardPhase::CheckBindings(check);
+		TerrainForwardPhase::CheckBindings(check);
 	}
 
 	const IForwardPhase&
@@ -294,6 +298,8 @@ namespace bgl
 	{
 		switch (phase)
 		{
+		case ForwardPhase::kTerrain:
+			return m_Terrain;
 		case ForwardPhase::kWorld:
 			return m_World;
 		case ForwardPhase::kGrass:
@@ -464,11 +470,6 @@ namespace bgl
 		const DrawData&      draw,
 		const PassContext&   resources)
 	{
-		if (draw.view->GetInstanceCount() == 0)
-		{
-			return;
-		}
-
 		auto state = bgpu::MeshletState();
 		state.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
 

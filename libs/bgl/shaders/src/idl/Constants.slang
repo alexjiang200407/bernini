@@ -60,9 +60,6 @@ public static const uint cTerrainPatchPrims = 98;
 // cTerrainPatchQuads * 2^(cTerrainMaxLevels - 1) cells, past the widest heightfield allowed.
 public static const uint cTerrainMaxLevels = 12;
 
-// Threads per terrain amplification group, one quadtree node each.
-public static const uint cTerrainNodeGroupSize = 64;
-
 // Thread group sizes of the instance counting-sort compute shaders.
 public static const uint cHistogramGroupSize = 256;
 public static const uint cCompactGroupSize = 128;

@@ -36,6 +36,7 @@
 #include <bgl/idl/SkinnedLegChain.h>
 #include <bgl/idl/Submesh.h>
 #include <bgl/idl/Terrain.h>
+#include <bgl/idl/TerrainNodeBounds.h>
 #include <bgl/idl/ToonShadingRig.h>
 #include <bgl/types/FootPlantDesc.h>
 #include <bgl/types/GeomHandle.h>
@@ -899,8 +900,8 @@ namespace bgl
 		bgpu::RangeBuffer<idl::GrassClump> m_GrassClumps;
 
 		// One record per live terrain, and every terrain's node bounds, a range each owns.
-		bgpu::EntryBuffer<idl::Terrain> m_TerrainRecords;
-		bgpu::RangeBuffer<glm::vec2>    m_TerrainNodeBounds;
+		bgpu::EntryBuffer<idl::Terrain>           m_TerrainRecords;
+		bgpu::RangeBuffer<idl::TerrainNodeBounds> m_TerrainNodeBounds;
 
 		// One default material per submesh of a range, keyed at its root. It rides on the RangeBuffer
 		// as Meta, not a parallel array, so it is allocated and freed with the geometry it belongs to.

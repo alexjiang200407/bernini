@@ -1550,6 +1550,43 @@ namespace bgl
 	}
 
 	void
+	SceneView::RefreshTerrain()
+	{
+		const uint64_t epoch = m_SceneRaw->GetTerrainEpoch();
+		if (!m_TerrainDirty && epoch == m_SceneTerrainEpoch)
+		{
+			return;
+		}
+
+		m_TerrainBatches.clear();
+		m_TerrainDrawBuckets.reset();
+		for (uint32_t index = 0, capacity = m_SceneRaw->TerrainCapacity(); index < capacity;
+		     ++index)
+		{
+			const TerrainMeta* terrain = m_SceneRaw->TerrainAt(index);
+			if (terrain == nullptr)
+			{
+				continue;
+			}
+
+			const uint32_t bucket = m_DrawBucketTable->Resolve(
+				GeometryStage::kTerrain,
+				terrain->material.materialType,
+				LayerType::kOpaque);
+			m_TerrainBatches.push_back(
+				TerrainBatch{ .bucket         = bucket,
+			                  .record         = terrain->record.index,
+			                  .firstNodeBound = terrain->nodeBounds.index,
+			                  .nodeCount      = terrain->nodeBounds.count,
+			                  .heights        = terrain->heights });
+			m_TerrainDrawBuckets.set(bucket);
+		}
+
+		m_TerrainDirty      = false;
+		m_SceneTerrainEpoch = epoch;
+	}
+
+	void
 	SceneView::RebuildToonShadingRigList()
 	{
 		auto ranges = std::vector<idl::ToonShadingRigRange>();

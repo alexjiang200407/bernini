@@ -92,8 +92,10 @@ namespace bgl
 
 	/**
 	 * The distance from the camera at which a cell of `level` spans `pixelsPerCell` on screen:
-	 * the range the level is drawn within. Floored at sqrt(2) times a node's width so two
-	 * neighbours never differ by more than one level, which is what keeps the morph crack-free.
+	 * the range the level is drawn within. Floored at four times a node's diagonal: a node's
+	 * vertices morph toward the coarser grid over the last quarter of its range, so the floor
+	 * keeps a node that borders a finer one -- near the finer level's range, half its own -- out
+	 * of its morph zone, and keeps two neighbours within a level of each other.
 	 */
 	[[nodiscard]] constexpr float
 	TerrainLevelRange(
@@ -104,7 +106,7 @@ namespace bgl
 	{
 		const float cell  = cellSize * static_cast<float>(1u << level);
 		const float range = cell * pixelsPerUnit / pixelsPerCell;
-		const float floor = 1.4142136f * cellSize * static_cast<float>(TerrainNodeCells(level));
+		const float floor = 5.6568542f * cellSize * static_cast<float>(TerrainNodeCells(level));
 		return range > floor ? range : floor;
 	}
 
