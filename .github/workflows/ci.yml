@@ -6,7 +6,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
-    branches: [master]
+    branches: [master, "release_*"]
 
 # A PR gets one review-worthy result, not one per intermediate push.
 # A draft's run skips every job, so it must not cancel the real one a ready PR has in progress.
@@ -33,8 +33,9 @@ jobs:
 
       # An entry is addressed by what it was compiled from, not by this key: the key only chooses
       # which store to start from, so any earlier one is as good a start as the last. Entries are
-      # scoped to the ref that saved them and a PR reads its base's or master's, which is why master
-      # builds on every push.
+      # scoped to the ref that saved them and a PR reads its own, then its base's, then master's,
+      # which is why master and every release train build on every push: a PR's base is its train,
+      # and master's store is a whole train older than that.
       - name: Restore the compiler cache
         id: ccache
         uses: actions/cache/restore@v4
@@ -96,7 +97,8 @@ jobs:
 
   macos:
     name: compile (macos-clang, Debug + Metal)
-    if: ${{ !github.event.pull_request.draft }}
+    # A train's push builds for the compiler cache its pull requests read, and this job has none.
+    if: ${{ !github.event.pull_request.draft && (github.event_name != 'push' || github.ref == 'refs/heads/master') }}
     runs-on: macos-latest
     env:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
