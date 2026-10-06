@@ -801,12 +801,11 @@ namespace bgl
 			const std::optional<glm::vec4>  sphereOverride);
 
 		/**
-		 * Refuses a look no grass pass could draw; see IScene::CreateGrass for the rules. Static
-		 * for the same reason ValidateSkinnedRig is, bar the material, which it reads off the
-		 * handle alone.
+		 * Refuses a look no grass pass could draw; see IScene::CreateGrass for the rules. Reads the
+		 * registered surfaces for the material's model, and otherwise the handle alone.
 		 */
-		static void
-		ValidateGrass(const GrassDesc& desc, std::string_view caller);
+		void
+		ValidateGrass(const GrassDesc& desc, std::string_view caller) const;
 
 		/**
 		 * Gives back what each of `fields` holds -- its look's use (see GrassMeta::useCount) and its

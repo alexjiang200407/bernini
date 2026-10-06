@@ -269,10 +269,6 @@ public struct LitGameRecord<G : ILitSurfaceSource>
     {
         return G.Shade(Reader(input, isFrontFace), MaterialSurfaceLight(), params);
     }
-    public float4 ShadeOnGrassWith<L : ISurfaceLight>(ForwardVSOut input, L light)
-    {
-        return G.Shade(GrassMaterialArenaReaderAt(byteOffset, input), light, params);
-    }
     public float4 ShadeOnGrass(ForwardVSOut input)
     {
         return G.Shade(GrassMaterialArenaReaderAt(byteOffset, input), MaterialSurfaceLight(), params);

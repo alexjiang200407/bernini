@@ -133,12 +133,6 @@ ForwardPSOut PSToonEnvironmentOpaque(ForwardVSOut input, bool isFrontFace: SV_Is
 }
 
 [shader("pixel")]
-ForwardPSOut PSGrassToonCharacter(GrassVSOut input)
-{
-    return materialData.GameToonGrassProgram<NullToonCharacterSurface>(input);
-}
-
-[shader("pixel")]
 ForwardPSOut PSGrassToonEnvironment(GrassVSOut input)
 {
     return materialData.GameLitGrassProgram<ToonEnvironmentLit<NullToonEnvironmentSurface> >(input);

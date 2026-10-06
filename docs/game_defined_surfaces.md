@@ -143,7 +143,7 @@ character's programs hand its adapter the toon sun themselves (a character's pix
 its rig), while an environment draws through the unchanged lit programs, which hand every surface
 the material light, so its adapter must reach for the toon sun on its own -- which it does, ready
 for the model that reads it.
-A character surface on a grass look is the engine's toon grass: [Grass](grass.md) § Toon grass.
+A grass look refuses a character surface ([Grass](grass.md) § Lighting).
 
 `Coverage` runs first on an alpha-tested layer and discards before `Evaluate` is called, so a cheap
 coverage answers without the rest of the surface's samples. It is not read at all on an opaque

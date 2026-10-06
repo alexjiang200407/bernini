@@ -193,21 +193,17 @@ namespace bgl
 
 		// A surface's grass program: the blade's vertex in, and the surface shaded on it.
 		std::string
-		GrassProgramSource(
-			uint32_t         slot,
-			std::string_view program,
-			std::string_view type = "Surface")
+		GrassProgramSource(uint32_t slot, std::string_view program)
 		{
 			return std::format(
 				"import {};\nimport lib.forward.GrassShading;\nimport lib.forward.MaterialData;\n"
 				"import lib.forward.common;\nimport lib.forward.grass_vertex;\n\n"
 				"[shader(\"pixel\")]\n"
 				"ForwardPSOut PSMain(GrassVSOut input)\n{{\n"
-				"    return materialData.{}<Slot{}{}>(input);\n}}\n",
+				"    return materialData.{}<Slot{}Surface>(input);\n}}\n",
 				BindingModuleName(slot),
 				program,
-				slot,
-				type);
+				slot);
 		}
 
 		// The shared blend program, with one arm per registered surface ahead of the engine's own
@@ -250,20 +246,14 @@ namespace bgl
 
 		// Every program a surface's draw buckets can ask for: an opaque, alpha-test and hashed colour
 		// program and a grass one -- the lit family where the surface owns its lighting. Named by the draw-bucket
-		// config, so the names generated here are the names the passes build.
+		// config, so the names generated here are the names the passes build. A toon character has no
+		// grass program: a grass look refuses one.
 		std::vector<bgpu::SlangSourceModule>
 		SurfacePrograms(uint32_t slot, MaterialType kind, SurfaceShading shading)
 		{
 			const auto colour = [kind](LayerType layer) {
 				return DrawBucketPixelSrc(
 					DrawBucketDesc{ GeometryStage::kStaticMesh, kind, layer });
-			};
-			const bool lit   = DrawsLitPrograms(shading);
-			const auto grass = bgpu::SlangSourceModule{
-				DrawBucketPixelSrc(
-					DrawBucketDesc{ GeometryStage::kGrass, kind, LayerType::kOpaque }),
-				GrassProgramSource(slot, lit ? "GameLitGrassProgram" : "GameGrassProgram"),
-				false
 			};
 
 			if (shading == SurfaceShading::kToonCharacter)
@@ -278,13 +268,11 @@ namespace bgl
 					{ colour(LayerType::kHashed),
 					  ToonColorProgramSource(slot, "GameToonHashedAlphaProgram"),
 					  false },
-					{ grass.name,
-					  GrassProgramSource(slot, "GameToonGrassProgram", "Source"),
-					  false },
 				};
 			}
 
 			// Entry programs nothing imports, so each loads only when a draw bucket builds it.
+			const bool lit = DrawsLitPrograms(shading);
 			return {
 				{ colour(LayerType::kOpaque),
 				  ColorProgramSource(slot, lit ? "GameLitOpaqueProgram" : "GameOpaqueProgram"),
@@ -299,7 +287,10 @@ namespace bgl
 					  slot,
 					  lit ? "GameLitHashedAlphaProgram" : "GameHashedAlphaProgram"),
 				  false },
-				grass,
+				{ DrawBucketPixelSrc(
+					  DrawBucketDesc{ GeometryStage::kGrass, kind, LayerType::kOpaque }),
+				  GrassProgramSource(slot, lit ? "GameLitGrassProgram" : "GameGrassProgram"),
+				  false },
 			};
 		}
 
