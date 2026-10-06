@@ -37,7 +37,10 @@ strength, `,` `.` its heading, `G` the gusts.
 In the editor a `.bgrass` opens in the **Grass Editor**: every value of the look beside a patch of it
 in a wind the panel sets and never saves. An edit is drawn at once and written on Save, or when the
 panel closes with it pending: `AssetManager::SetGrassLook` puts the unsaved document on the look in
-place, and a patch whose look could not be drawn as stored is grown from the document instead. Where
+place, and a patch whose look could not be drawn as stored is grown from the document instead. A look whose material is toon is shown as toon content -- the toon post-process and
+backdrop, as every toon preview is -- and the panel's sun is its toon sun too, at the unit intensity
+toon colours are authored at; under the filmic curve a cel field's tones are lifted together and lose
+their contrast. Where
 the clumps go is the mesh source's, and is not edited there.
 
 ## A blade
