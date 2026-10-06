@@ -19,7 +19,10 @@
     { "name": "directx-headers", "platform": "windows" },
     { "name": "directx-dxc", "platform": "windows" },
     { "name": "directx12-agility", "platform": "windows" },
-    { "name": "winpixevent", "platform": "windows" }
+    { "name": "winpixevent", "platform": "windows" },
+    { "name": "volk", "platform": "windows" },
+    { "name": "vulkan-utility-libraries", "platform": "windows" },
+    { "name": "vulkan-validationlayers", "platform": "windows" }
   ],
   "builtin-baseline": "05925b52317eb9a900a8583782e630aafd7a8929"
 }

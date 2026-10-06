@@ -66,7 +66,7 @@ Everything else has a host-derived default and is only worth naming to change it
 | | |
 |---|---|
 | `PLATFORM` | `WINDOWS`, `MACOS` or `WEB` — which platform layer `core` compiles. Defaults from `CMAKE_SYSTEM_NAME`. |
-| `RENDERER_BACKEND` | `DX12`, `METAL`, or `NONE` for `bgl_objects` alone with no runtime, shaders or tests. Defaults from the host. |
+| `RENDERER_BACKEND` | `DX12`, `METAL`, or `NONE` for `bgl_objects` alone with no runtime, shaders or tests. `VULKAN` builds as `NONE` does plus the Vulkan GPU context: it has no RHI and no renderer yet, so nothing a game links ([bgpu.md § Vulkan](bgpu.md#vulkan)). Defaults from the host. |
 | `IS_DEBUG` | Shader debug info and the `dbg_raise()` bodies. Defaults from `CMAKE_BUILD_TYPE`; a multi-config generator has none, so there it is a choice. |
 | `BERNINI_PROFILING` | Tracy zones and the client that opens a socket. `OFF`. |
 | `BERNINI_EDITOR_SDK` | Shared assetlib/gamelib and the build-tree editor plugin package. Defaults on only for a top-level editor build with Qt and a renderer; embedded, editor-free and renderer-free builds stay static. Implies `BERNINI_SHARED_RENDERER`. |

@@ -45,7 +45,10 @@ and portability.
 
 - [ ] RHI
   - [x] DirectX 12
-  - [ ] Vulkan
+  - [~] Vulkan — the GPU context is in place on Windows (`RENDERER_BACKEND=VULKAN`: the instance,
+    the device checked against the hardware bar, the validation layer in `bgpu.log`, sessions that
+    compile to SPIR-V). Left, in order: the compute RHI (all of `bgpu_tests`), the graphics RHI and
+    the renderer's backend half (`bgl_tests`), the libraries above them, then Linux itself.
   - [x] Metal
   - [x] GPU Ring Buffer
   - [ ] Readback ring — N buffers, persistently mapped, fenced; never map a buffer written this frame.

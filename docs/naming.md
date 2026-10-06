@@ -120,6 +120,7 @@ that the next one you meet is probably on it.
 | A header that **does not exist off-platform** | `<sys/_types/_ucontext.h>` is Darwin-internal; `<mach/arm/…>` is not even on an Intel mac | excluded |
 | A header that is **not self-contained** | `<RmlUi/Core/Span.h>` uses `RMLUI_ASSERT` and includes nothing that defines it | excluded; the umbrella is the entry point |
 | An **umbrella that is the interface** | `metal_cpp.h` in `MetalImpl.cpp` emits metal-cpp's out-of-line symbols — deleting it compiles and breaks the *link* | excluded |
+| A header that must be reached **through a wrapper** | `volk_vulkan.h` is volk over the Khronos headers; `<vulkan/vulkan_core.h>` included on its own declares prototypes for functions nothing links | excluded, with the wrapper |
 | **Declared** in one header, **defined** in another | `nlohmann::json` is declared in `json_fwd.hpp`, defined in `json.hpp`, and the check names the declaration | excluded |
 | A **namespace alias** | `logger = spdlog` in gamelib's `log.h`; using `logger::warn` references no symbol from it | `// IWYU pragma: keep` |
 | A type needed **complete inside a template** | `SharedRef<T>` dereferences and destroys T, `unique_ptr` needs `sizeof` for its deleter, `optional<T>` needs the definition | `// IWYU pragma: keep` |

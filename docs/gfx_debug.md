@@ -444,6 +444,17 @@ Check the run said `lit`: unlit is a black image, which reads as a rendering bug
 flags, the refusal when a derived container is not on disk, and why a screenshot carries no GPU time
 are in [AI Viewer](docs/ai_viewer.md).
 
+## 9. Vulkan validation
+
+The same two `bgpu::GpuContextDesc` flags, applied when the Vulkan context creates its instance
+([GpuContext_vulkan.cpp](libs/bgpu/src/vulkan/GpuContext_vulkan.cpp)): `enableDebugLayer` enables
+`VK_LAYER_KHRONOS_validation` and a debug-utils messenger that writes every message to `bgpu.log`
+as `[Vulkan] ...`, and `enableGPUValidationLayer` adds GPU-assisted validation on top. The layer
+is staged beside the executables by the build, so no Vulkan SDK is needed; where it comes from,
+what `strictError` covers and how a leaked object is reported are in
+[bgpu.md § Vulkan](docs/bgpu.md#vulkan). There is no RHI on Vulkan yet, so nothing above the
+context runs under it.
+
 ---
 
 ## Usage Sketch
