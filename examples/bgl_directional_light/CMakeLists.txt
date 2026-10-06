@@ -15,7 +15,7 @@ add_executable(bgl_directional_light
 
 find_package(CLI11 CONFIG REQUIRED)
 
-target_link_libraries(bgl_directional_light PRIVATE core bgl gamelib assetlib CLI11::CLI11 example_util example_headless)
+target_link_libraries(bgl_directional_light PRIVATE core bgl gamelib assetlib CLI11::CLI11 example_util headless)
 
 if(RENDERER_BACKEND STREQUAL "DX12")
     target_link_libraries(bgl_directional_light PRIVATE bgpu_d3d12_agility Shell32)

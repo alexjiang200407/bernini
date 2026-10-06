@@ -74,7 +74,7 @@ pull request that makes the feature permanent is.
 * **`enable_coverage(<target>)` is per-target, not directory-scoped.** FetchContent builds QtNodes
   and metalcpp as in-tree subdirectories; a directory-scoped flag would instrument both. The call
   sites sit beside `enable_strict_compiler`'s, plus `editor_lib` and `editor_tests`, which have no
-  strict-compiler site — strict warnings stay out of `apps/` because Qt and moc output trip them,
+  strict-compiler site — strict warnings stay out of `apps/editor` because Qt and moc output trip them,
   but instrumentation is not a warning.
 * **The flag is a `PUBLIC` link option as well as a compile option.** Instrumented objects
   reference `___llvm_profile_runtime`, which only a `-fprofile-instr-generate` link resolves.

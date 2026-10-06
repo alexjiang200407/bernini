@@ -6,13 +6,13 @@ add_executable(bgl_crowd ${BGL_CROWD_SOURCES})
 
 find_package(CLI11 CONFIG REQUIRED)
 
-# example_headless for loading a skinned character from a project (--project, --import): it brings
+# `headless` for loading a skinned character from a project (--project, --import): it brings
 # gamelib and assetlib, which an example may link beside the crowd, never the crowd's own libraries.
 #
 # gamelib ahead of example_util, as bgl_ui has it: gamelib holds the process's one RmlUi, and
 # example_util's static RmlUi listed first would hand the frame rate overlay's Rml calls a second
 # copy, whose globals Rml::Initialise never sets -- a crash at start.
-target_link_libraries(bgl_crowd PRIVATE core bgpu bgl crowdlib crowd_render gamelib example_headless
+target_link_libraries(bgl_crowd PRIVATE core bgpu bgl crowdlib crowd_render gamelib headless
     CLI11::CLI11 example_util)
 
 if(RENDERER_BACKEND STREQUAL "DX12")

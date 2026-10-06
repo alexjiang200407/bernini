@@ -21,6 +21,8 @@ MODULE_PREFIXES = (
     ('libs/assetlib_structs', 'assetlib_structs'),
     ('libs/gamelib', 'gamelib'),
     ('apps/editor', 'editor'),
+    ('apps/ai_viewer', 'ai_viewer'),
+    ('apps/headless', 'headless'),
     ('examples', 'examples'),
     ('scripts', 'scripts'),
     ('PCH', 'pch'),
