@@ -154,6 +154,26 @@ namespace bgl
 	};
 
 	/**
+	 * One live terrain: its heightfield's shape and the samples, copied from the desc.
+	 *
+	 * Namespace-scope for the same reason as GeomRecord above.
+	 */
+	struct TerrainMeta
+	{
+		uint32_t  samplesX      = 0;
+		uint32_t  samplesZ      = 0;
+		float     cellSize      = 1.0f;
+		float     minHeight     = 0.0f;
+		float     heightRange   = 1.0f;
+		float     pixelsPerCell = 6.0f;
+		glm::vec3 origin        = glm::vec3(0.0f);
+
+		MaterialHandle material;
+
+		std::vector<uint16_t> heights;
+	};
+
+	/**
 	 * The CPU half of a rig: what creating an instance needs without reading back the GPU record,
 	 * and the count that decides whether the rig may be deleted.
 	 *
@@ -585,6 +605,32 @@ namespace bgl
 		void
 		DeleteGrass(GrassHandle grass) override;
 
+		TerrainHandle
+		CreateTerrain(const TerrainDesc& desc) override;
+
+		void
+		DeleteTerrain(TerrainHandle terrain) override;
+
+		[[nodiscard]] bool
+		IsTerrainAlive(const TerrainHandle terrain) const noexcept override
+		{
+			return terrain.IsValid() && m_Terrains.valid(terrain.handle);
+		}
+
+		/** @pre IsTerrainAlive(terrain). */
+		[[nodiscard]] const TerrainMeta&
+		GetTerrain(const TerrainHandle terrain) const noexcept
+		{
+			return m_Terrains[terrain.handle.index];
+		}
+
+		/** Moves whenever a terrain is created or deleted. */
+		[[nodiscard]] uint64_t
+		GetTerrainEpoch() const noexcept
+		{
+			return m_TerrainEpoch;
+		}
+
 		void
 		AttachGrass(
 			GeomHandle                    geom,
@@ -833,6 +879,9 @@ namespace bgl
 
 		core::slot_vector<GrassMeta> m_Grass;
 		uint64_t                     m_GrassEpoch = 0;
+
+		core::slot_vector<TerrainMeta> m_Terrains;
+		uint64_t                       m_TerrainEpoch = 0;
 
 		// One ToonShadingRig per AddToonShadingRig, and its edits' keys in one range it owns.
 		bgpu::EntryBuffer<idl::ToonShadingRig, ToonShadingRigMeta> m_ToonShadingRigs;

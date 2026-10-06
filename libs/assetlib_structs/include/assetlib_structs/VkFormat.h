@@ -14,6 +14,7 @@ namespace assetlib
 		B8G8R8A8_UNORM = 44,
 		B8G8R8A8_SRGB  = 50,
 
+		R16_UNORM           = 70,
 		R16G16_UNORM        = 77,
 		R16G16_SFLOAT       = 83,
 		R16G16B16A16_UNORM  = 91,

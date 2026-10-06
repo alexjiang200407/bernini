@@ -364,12 +364,12 @@ namespace bgl
 		SetPbrDirectionalLight(const DirectionalLightDesc& desc) = 0;
 
 		/**
-		 * Sets the sun the toon character model reads, and its toon shading rigs are evaluated
-		 * against: the light a toon character is drawn by, apart from the one PBR surfaces are, so a
-		 * view can light a character for its look whatever lights the world. Replaces any previously
-		 * set one. The toon environment model reads neither.
+		 * Sets the sun both toon models read -- the character's, whose toon shading rigs are
+		 * evaluated against it, and the environment's: the light a toon surface is drawn by, apart
+		 * from the one PBR surfaces are, so a view can light its toon look whatever lights the
+		 * world. Replaces any previously set one.
 		 *
-		 * A view that never calls this draws its toon characters unlit -- black -- whatever its PBR
+		 * A view that never calls this draws every toon surface unlit -- black -- whatever its PBR
 		 * light: the default intensity is 0, and there is no fallback.
 		 *
 		 * @throws SceneError on what SetPbrDirectionalLight refuses.

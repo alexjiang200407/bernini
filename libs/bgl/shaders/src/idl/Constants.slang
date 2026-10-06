@@ -45,6 +45,24 @@ public static const uint cGrassClumpsPerChunk = 64;
 public static const uint cGrassVerticesPerGroup = 64;
 public static const uint cGrassPrimsPerGroup = 124;
 
+// Samples a terrain's heightfield may have along either axis. The public TerrainDesc names the
+// same number, and a static_assert in Scene_Terrain.cpp holds them equal.
+public static const uint cTerrainMaxSamples = 8192;
+
+// Cells across one terrain patch at every level, and what one patch's mesh group emits: a grid of
+// (cTerrainPatchQuads + 1)^2 vertices and 2 * cTerrainPatchQuads^2 triangles, within the static
+// tier's per-meshlet limits.
+public static const uint cTerrainPatchQuads = 7;
+public static const uint cTerrainPatchVertices = 64;
+public static const uint cTerrainPatchPrims = 98;
+
+// Quadtree levels a terrain may be cut into: a root node at the last covers
+// cTerrainPatchQuads * 2^(cTerrainMaxLevels - 1) cells, past the widest heightfield allowed.
+public static const uint cTerrainMaxLevels = 12;
+
+// Threads per terrain amplification group, one quadtree node each.
+public static const uint cTerrainNodeGroupSize = 64;
+
 // Thread group sizes of the instance counting-sort compute shaders.
 public static const uint cHistogramGroupSize = 256;
 public static const uint cCompactGroupSize = 128;

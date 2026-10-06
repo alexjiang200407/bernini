@@ -74,6 +74,7 @@ namespace assetlib
 			case VkFormat::R8_UNORM:
 				return { 1, 1, 1 };
 			case VkFormat::R8G8_UNORM:
+			case VkFormat::R16_UNORM:
 				return { 1, 1, 2 };
 			case VkFormat::R8G8B8A8_UNORM:
 			case VkFormat::R8G8B8A8_SRGB:
