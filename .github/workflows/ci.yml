@@ -44,6 +44,14 @@ jobs:
           key: ccache-msvc-${{ github.sha }}
           restore-keys: ccache-msvc-
 
+      # The restored store carries its statistics, so unzeroed they describe every run before this
+      # one too. The stamp is what the save's eviction measures an untouched object against.
+      - name: Start this run's compiler cache statistics
+        shell: bash
+        run: |
+          ccache --zero-stats
+          echo "COMPILES_STARTED=$(date +%s)" >> "$GITHUB_ENV"
+
       # Compile only: the ninja-msvc-debug preset has BUILD_TESTS=ON, so the suites are
       # built but never run -- they need a GPU and a machine this runner isn't. Qt is
       # absent, so apps/editor is skipped (CMakeLists.txt find_package(Qt6 QUIET)).
@@ -87,6 +95,13 @@ jobs:
       # links, the runtime DLLs stage beside it, and the executable starts. One translation unit.
       - name: Consume the engine package
         run: python scripts/embed.py --package --preset windows-ninja-msvc-dx12-debug
+
+      # ccache keeps what it restored beside what it compiled. A hit refreshes an entry's timestamp,
+      # so one older than the stamp is one this run neither made nor used.
+      - name: Drop the objects this run did not use
+        if: ${{ success() && steps.ccache.outputs.cache-hit != 'true' }}
+        shell: bash
+        run: ccache --evict-older-than "$(( $(date +%s) - COMPILES_STARTED ))s"
 
       - name: Save the compiler cache
         if: ${{ success() && steps.ccache.outputs.cache-hit != 'true' }}
