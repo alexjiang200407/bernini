@@ -52,7 +52,7 @@ flowchart TD
         POSE --> TSR["Toon Shading Rigs (only when a placement holds a rig; one thread per rigged placement)"]
         TSR --> FTR["Forward Terrain (only when the scene has a terrain; one dispatch per terrain)"]
         FTR --> FWW["Forward World (indirect dispatch per static-tier bucket)"]
-        FWW --> GRS["Forward Grass (only when a drawn geom has grass; one dispatch per grass bucket)"]
+        FWW --> GRS["Forward Grass (only when a drawn geom or a terrain has grass; one dispatch per grass bucket and terrain)"]
         GRS --> BLOB["Blob Shadows (only when the view has a disc; reads the depth as it stands)"]
         BLOB --> FWS["Forward Skinned (indirect dispatch per skinned-tier bucket)"]
         FWS --> FWT["Forward Transparent (one dispatch for the sorted list)"]
@@ -686,18 +686,18 @@ the rest: which draws it records, what its dispatch reads beyond the shared set,
 `BucketedForwardPhase` is World and Skinned, one per `GeometryStage`, indirect over the compaction's
 output; `TerrainForwardPhase` is the scene's terrains, a direct dispatch per terrain over its
 quadtree's nodes ([Terrain](terrain.md)); `GrassForwardPhase` is the grass, a direct dispatch per
-grass bucket over the view's chunk list; `TransparentForwardPhase` is the sorted list, one
+grass bucket and terrain over the view's chunk list; `TransparentForwardPhase` is the sorted list, one
 dispatch through the shared blend kernel.
 A phase takes its kernels already bound, with the framebuffer that kernel declares -- colour,
 velocity and depth for a bucket's, colour and depth for the blend kernel -- and never builds one. The set is fixed and ordered, because
 the frame's order is `RenderContext`'s and Blob Shadows draws between two of them, so the phases are
 concrete members held by value behind one interface, `IForwardPhase`: a phase that may have
 nothing to draw overrides `HasWork` -- the bucketed phases and the sorted list when the view places
-nothing, the terrain when the scene has none, the grass when no drawn geom grows any -- so a view
+nothing, the terrain when the scene has none, the grass when no drawn geom or terrain grows any -- so a view
 with no placement still draws its ground. **Forward
 Terrain** draws the scene's terrains first, the ground being the largest occluder; **Forward
 World** the non-transparent buckets of the static tier -- the world, moving placements included;
-**Forward Grass** the grass those placements grow; **Forward Skinned** the skinned tier's;
+**Forward Grass** the grass those placements and the terrains grow; **Forward Skinned** the skinned tier's;
 **Forward Transparent** the depth-sorted list, every tier. After the grass the depth holds the
 terrain, the world and its grass alone -- everything a blob shadow lands on, the seam
 [Blob Shadows](#blob-shadows) draws at, and where the HZB of two-phase occlusion culling will be
@@ -808,33 +808,39 @@ The depth-sorted path starts at zero; the opaque path reads `drawBucketPrefixSum
 
 #### Forward Grass
 
-Draws the grass the view's geoms grow (`IScene::AttachGrass`); blades are built in the mesh stage
-from the clumps, never stored. What it draws, how a blade is shaped and thinned, and what it costs
+Draws the grass the view's geoms grow (`IScene::AttachGrass`) and the scene's terrains grow
+(`IScene::AttachTerrainGrass`); blades are built in the mesh stage from the clumps, never stored. What it draws, how a blade is shaped and thinned, and what it costs
 are in [Grass](grass.md); this is the phase's contract.
 
 `SceneView::RefreshGrass` lists, on a frame the grass changed, one `GrassChunkRef` per chunk of
-every field on every visible static instance, grouped by the draw bucket the look's material
-resolves to on the `GeometryStage::kGrass` stage -- always opaque, whatever the material's layer.
+every field on every visible static instance, and one per tile of the window around the camera
+every terrain layer is grown in, grouped by the draw bucket the look's material resolves to on the
+`GeometryStage::kGrass` stage -- always opaque, whatever the material's layer -- and, for a
+terrain's layers, by the terrain, whose height texture the dispatch binds.
 A grass bucket is an ordinary bucket to `ForwardPhases`: its kernel pairs `programs.forward.Grass`
 with the material kind's grass program (`programs.forward.Grass_<kind>`, which lights the blade the
 way [Grass § Lighting](grass.md#lighting) describes), culls nothing in hardware (a blade is seen
 from both sides) and writes depth, built by the first `Draw` whose view has grass in it.
-`GrassForwardPhase` dispatches each bucket once, directly, with one amplification group per chunk
-reference in rows at most 65535 (`c_MaxDispatchMeshGroups`) wide, binding its own `grassData`
+`GrassForwardPhase` dispatches each bucket and terrain once, directly, with one amplification group
+per chunk reference in rows at most 65535 (`c_MaxDispatchMeshGroups`) wide, binding its own `grassData`
 constant buffer, which the grass program reads a blade's look from as well.
 
-It culls in two places. The amplification group tests the chunk's sphere, inflated by the furthest
-a blade can reach, against the same `cull.view` planes Forward World uses, and launches as many mesh
+It culls in two places. The amplification group tests the chunk's sphere -- a terrain tile's box,
+between the heights of the terrain nodes under it -- inflated by the furthest a blade can reach,
+against the same `cull.view` planes Forward World uses, and launches as many mesh
 groups as the chunk keeps blades at its nearest point. Each mesh group keeps or drops each blade
 against its own root's distance. In `BERNINI_GPU_DEBUG` builds it adds to `cull.stats`'
 `grassChunksTested`, `grassChunksCulled` and `grassBladesEmitted`. Velocity comes from the
 placement's current and previous transform through the same `ProjectVertex` the world's meshlets
-use, so moved grass moves in the motion vectors and still grass writes none.
+use, so moved grass moves in the motion vectors and still grass writes none; a terrain's grass has
+no placement and moves only in the wind.
 
 * **In:** beyond the shared set, the velocity target and `scene.grassLookBuffer`,
-  `scene.grassChunkBuffer`, `scene.grassClumpBuffer`, `scene.grassDraws`, `scene.grassChunkRefs`.
+  `scene.grassChunkBuffer`, `scene.grassClumpBuffer`, `scene.terrainGrassBuffer`,
+  `scene.terrainBuffer`, `scene.terrainNodeBoundsBuffer`, `scene.grassDraws`,
+  `scene.grassChunkRefs`, and a terrain's height texture.
 * **Out:** scene colour, the velocity buffer, depth.
-* **Skipped** -- no pass attached -- when no drawn geom has grass.
+* **Skipped** -- no pass attached -- when no drawn geom or terrain has grass.
 
 ### Blob Shadows — [passes/BlobShadowPass.{h,cpp}](libs/bgl/src/passes/BlobShadowPass.cpp)
 

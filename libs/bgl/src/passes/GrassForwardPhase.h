@@ -6,9 +6,10 @@ namespace bgl
 {
 	class BindingNameCheck;
 	/**
-	 * The grass the view's geoms grow: per grass bucket, one direct dispatch of one amplification
-	 * group per chunk reference in the view's list, the blades built in the mesh stage. Drawn after
-	 * the world so the blob-shadow decal reads grass in the depth. See docs/grass.md.
+	 * The grass the view's geoms and terrains grow: per grass bucket and terrain, one direct
+	 * dispatch of one amplification group per chunk reference in the view's list, the blades built
+	 * in the mesh stage. Drawn after the world so the blob-shadow decal reads grass in the depth.
+	 * See docs/grass.md.
 	 */
 	class GrassForwardPhase final : public IForwardPhase
 	{
@@ -32,7 +33,7 @@ namespace bgl
 			return "Grass";
 		}
 
-		/** Whether any drawn geom has grass; a view with none attaches no pass. */
+		/** Whether any drawn geom or terrain has grass; a view with none attaches no pass. */
 		[[nodiscard]] bool
 		HasWork(const DrawData& draw) const override;
 

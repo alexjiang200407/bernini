@@ -49,10 +49,12 @@ Bare, it renders `assets/Data`'s apples — the one project `copy_assets` stages
 | `--terrain` | none | a shape, `flat`, `hilly` or `mountainous`, to generate a battlefield of and draw, in place of `--import` ([Terrain](terrain.md)) |
 | `--terrain-seed`, `--terrain-size`, `--terrain-cell` | 1, 2000, 2 | the generator's seed, the field's side in metres, and the metres between samples |
 | `--terrain-material` | a plain green PBR | a `.bmaterial` in the project the field draws through, such as the test project's `Authored/Materials/Terrain/Battlefield.bmaterial` |
-| `--grass` | none | a `.bgrass` to grow on a patch of bare ground, in place of `--import` |
-| `--patch-size`, `--patch-spacing` | twice the look's fade end, 0.25 | the patch's side and the distance between its clumps, in metres |
+| `--terrain-eye` | 40 | how far above the field's middle the camera stands, in metres |
+| `--grass` | none | a `.bgrass` to grow on a patch of bare ground in place of `--import`, or with `--terrain` on the field ([Grass § On a terrain](grass.md#on-a-terrain)) |
+| `--grass-slope`, `--grass-below`, `--grass-coverage` | 90, unbounded, 1 | with `--terrain`: the steepest ground in degrees, the highest in metres and the share of the ground in patches `--grass` grows on |
+| `--patch-size`, `--patch-spacing` | twice the look's fade end, 0.25 | the patch's side and the distance between its clumps, in metres; the spacing is a terrain's grass's too |
 | `--distance` | 10 | how far from the patch's centre its camera stands, in metres, at eye height |
-| `--wind` | 0, calm | the patch's wind: steady and gust strength both, in [0, 1] |
+| `--wind` | 0, calm | the grass's wind, on a patch or a terrain: steady and gust strength both, in [0, 1] |
 | `--crowd`, `--crowd-columns` | 0, 6 | copies of the model in rows of that many, receding from the camera; 0 places it once |
 | `--source` | `per-instance`, or `auto` for a crowd | the pose source a skinned mesh is spawned on: `per-instance`, `table` or `auto` |
 | `--pose-budget`, `--pose-pixels` | `LodSelectionDesc`'s | the view's choice for `auto`: units posed per instance at once, and the size on screen below which a one-level mesh draws from its table |
@@ -80,6 +82,17 @@ done
 
 Add `--wind 0.5` to see it bend. The patch is twice the look's fade end across by default, so the
 far run shows the field thinning to nothing; its `Forward Grass 0` row is what the look costs there.
+
+With `--terrain` as well, the look grows on the generated field by the `--grass-*` rules instead of
+on a patch ([Grass § On a terrain](grass.md#on-a-terrain)). The terrain's camera stands 40 m up,
+where a look that fades by 90 m is under a pixel; `--terrain-eye 3` stands in it:
+
+```bash
+just run bgl_ai_viewer -- --project "<the test project>/Data" --terrain hilly \
+	--terrain-material Authored/Materials/Terrain/Battlefield.bmaterial \
+	--grass Authored/Grass/meadow.bgrass --grass-coverage 0.5 --terrain-eye 6 --sun 2 \
+	--frames 30 --screenshot 29 --out-dir "<a directory of your own>"
+```
 
 ## Decisions a reader relies on
 

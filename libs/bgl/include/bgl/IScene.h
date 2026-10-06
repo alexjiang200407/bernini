@@ -24,6 +24,7 @@
 #include <bgl/types/StaticMeshGeomDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <bgl/types/TerrainDesc.h>
+#include <bgl/types/TerrainGrassDesc.h>
 #include <bgl/types/TerrainHandle.h>
 #include <bgl/types/TextureAssetHandle.h>
 #include <bgl/types/ToonShadingRigDesc.h>
@@ -141,9 +142,11 @@ namespace bgl
 		/**
 		 * Destroys a grass look.
 		 *
-		 * @pre No geom bound to it is still alive. Refused rather than permitted, like DeleteRig: a
-		 *      field left naming a freed look would draw with whatever look takes its slot next.
-		 * @throws SceneError if the handle is null, already deleted, or still bound by a live geom.
+		 * @pre No geom or terrain bound to it is still alive. Refused rather than permitted, like
+		 *      DeleteRig: a field left naming a freed look would draw with whatever look takes its
+		 *      slot next.
+		 * @throws SceneError if the handle is null, already deleted, or still bound by a live geom
+		 *         or terrain.
 		 */
 		virtual void
 		DeleteGrass(GrassHandle grass) = 0;
@@ -445,7 +448,8 @@ namespace bgl
 		CreateTerrain(const TerrainDesc& desc) = 0;
 
 		/**
-		 * Destroys a terrain. The material it drew through is the caller's and is left alone.
+		 * Destroys a terrain, releasing the looks its grass held. The material it drew through is
+		 * the caller's and is left alone.
 		 *
 		 * @throws SceneError if the handle is null or already deleted.
 		 */
@@ -455,6 +459,24 @@ namespace bgl
 		/** Whether `terrain` still names a live terrain in this scene. */
 		[[nodiscard]] virtual bool
 		IsTerrainAlive(TerrainHandle terrain) const noexcept = 0;
+
+		/**
+		 * Grows grass on a terrain: every layer places clumps of its look over the whole field and
+		 * grows each as tall as the layer's rules allow where it stands (TerrainGrassDesc). Nothing
+		 * per clump is stored: the grass stage builds the clumps near the camera from the
+		 * heightfield every frame. Replaces any grass the terrain carried, releasing the looks it
+		 * held; DeleteTerrain releases them too. The terrain holds a use of every look it binds;
+		 * see DeleteGrass. An empty `layers` takes the terrain's grass away.
+		 *
+		 * @throws SceneError if `terrain` is dead; a layer's look is null or deleted; `spacing` or
+		 *         `patchSize` is not finite and positive; `spacing` is so fine against the look's
+		 *         fade end that the window passes c_MaxTerrainGrassWindowTiles; `maxSlope` is outside [0, pi/2] or
+		 *         `slopeBlend` negative; a height or `heightBlend` is not
+		 *         finite, `minHeight > maxHeight` or `heightBlend` is negative; or `patchCoverage` is outside [0, 1].
+		 *         Nothing changes unless every layer passes.
+		 */
+		virtual void
+		AttachTerrainGrass(TerrainHandle terrain, std::span<const TerrainGrassDesc> layers) = 0;
 
 		/**
 		 * Sets the ground plane every skinned instance in this scene plants its feet on. Scene-wide

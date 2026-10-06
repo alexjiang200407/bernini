@@ -20,19 +20,12 @@ namespace bgl
 {
 	namespace
 	{
-
 		constexpr float c_HalfPi = std::numbers::pi_v<float> / 2.0f;
 
 		[[noreturn]] void
 		Refuse(const std::string_view what)
 		{
 			throw SceneError(std::format("AddToonShadingRig: {}", what));
-		}
-
-		[[nodiscard]] bool
-		IsUnit(const float value) noexcept
-		{
-			return std::isfinite(value) && value >= 0.0f && value <= 1.0f;
 		}
 
 		[[nodiscard]] bool
@@ -88,7 +81,8 @@ namespace bgl
 			{
 				refuse("the anisotropy must be in [0, 1)");
 			}
-			if (!IsUnit(key.sharpness) || !IsUnit(key.normalSmoothing))
+			if (!core::is_unit_interval(key.sharpness) ||
+			    !core::is_unit_interval(key.normalSmoothing))
 			{
 				refuse("sharpness and normal smoothing must be in [0, 1]");
 			}
@@ -156,13 +150,13 @@ namespace bgl
 			{
 				Refuse("the face light's azimuth fade must start before it ends");
 			}
-			if (!IsUnit(light.azimuthFadeAmount))
+			if (!core::is_unit_interval(light.azimuthFadeAmount))
 			{
 				Refuse("the face light's azimuthFadeAmount must be in [0, 1]");
 			}
 
 			const FaceNormalDesc& normal = desc.faceNormal;
-			if (!IsUnit(normal.smoothing))
+			if (!core::is_unit_interval(normal.smoothing))
 			{
 				Refuse("the face normal's smoothing must be in [0, 1]");
 			}

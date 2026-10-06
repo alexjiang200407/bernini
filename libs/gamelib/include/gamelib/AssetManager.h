@@ -407,6 +407,21 @@ namespace game
 		SetGrassLook(std::string_view look, const assetlib::BGrass& authored);
 
 		/**
+		 * The look the `.bgrass` at `key` describes, created on the first acquire and shared after:
+		 * what a caller binds where no mesh names it, such as a terrain's grass
+		 * (IScene::AttachTerrainGrass). Null, with a warning, when it cannot be drawn. Takes a
+		 * reference only on success; ReleaseGrassLook gives it back.
+		 *
+		 * @throws std::runtime_error if the look, or the material it names, cannot be read.
+		 */
+		[[nodiscard]] bgl::GrassHandle
+		AcquireGrassLook(const std::string& key);
+
+		/** Drops one reference, deleting the look and releasing its material at zero. */
+		void
+		ReleaseGrassLook(const std::string& key);
+
+		/**
 		 * Places `desc.geom` in `view` at `desc.transform`. The instance holds a reference on the
 		 * geometry, so geometry cannot be deleted while it is still being drawn, and holds `view` too,
 		 * so the view it lives in outlives it. `view` must draw this manager's scene. It takes the
@@ -835,13 +850,6 @@ namespace game
 		void
 		AttachMeshGrass(GeomRecord& record, const assetlib::RegenMesh& mesh, uint32_t meshIndex);
 
-		/**
-		 * The look the `.bgrass` at `key` describes, created on the first acquire and shared after;
-		 * null, with a warning, when it cannot be drawn. Takes a reference only on success.
-		 */
-		[[nodiscard]] bgl::GrassHandle
-		AcquireGrassLook(const std::string& key);
-
 		/** AcquireGrassLook, creating the look from `authored` rather than the store when it is not held. */
 		[[nodiscard]] bgl::GrassHandle
 		AcquireGrassLook(const std::string& key, const assetlib::BGrass& authored);
@@ -853,10 +861,6 @@ namespace game
 			std::string_view                look,
 			const assetlib::BGrass*         authored,
 			bgl::MaterialHandle             ground);
-
-		/** Drops one reference, deleting the look and releasing its material at zero. */
-		void
-		ReleaseGrassLook(const std::string& key);
 
 		/**
 		 * The toon shading rig `document` names, drawn on a mesh of the skeleton at `skeletonKey`,

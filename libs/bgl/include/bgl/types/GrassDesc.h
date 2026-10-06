@@ -111,7 +111,8 @@ namespace bgl
 
 	/**
 	 * A grass look: what IScene::CreateGrass takes and what a `.bgrass` document holds. Placement is
-	 * not part of it -- the clumps come with the geom the look is bound to.
+	 * not part of it -- the clumps come with the geom the look is bound to, or from the terrain
+	 * layer that grows it (TerrainGrassDesc).
 	 */
 	struct GrassDesc
 	{

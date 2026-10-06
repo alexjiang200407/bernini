@@ -68,24 +68,6 @@ namespace bgl
 		}
 
 		[[nodiscard]] bool
-		IsShare(const float value) noexcept
-		{
-			return std::isfinite(value) && value >= 0.0f && value <= 1.0f;
-		}
-
-		[[nodiscard]] bool
-		IsPositive(const float value) noexcept
-		{
-			return std::isfinite(value) && value > 0.0f;
-		}
-
-		[[nodiscard]] bool
-		IsNonNegative(const float value) noexcept
-		{
-			return std::isfinite(value) && value >= 0.0f;
-		}
-
-		[[nodiscard]] bool
 		IsColor(const glm::vec3& color) noexcept
 		{
 			return core::is_finite(color) && color.x >= 0.0f && color.y >= 0.0f && color.z >= 0.0f;
@@ -177,16 +159,17 @@ namespace bgl
 		}
 
 		const GrassBladeDesc& blade = desc.blade;
-		if (!IsPositive(blade.minHeight) || !IsPositive(blade.maxHeight) ||
-		    blade.minHeight > blade.maxHeight)
+		if (!core::is_finite_positive(blade.minHeight) ||
+		    !core::is_finite_positive(blade.maxHeight) || blade.minHeight > blade.maxHeight)
 		{
 			refuse("blade heights must be finite, positive and minHeight <= maxHeight");
 		}
-		if (!IsPositive(blade.rootWidth))
+		if (!core::is_finite_positive(blade.rootWidth))
 		{
 			refuse("blade.rootWidth must be finite and positive");
 		}
-		if (!IsShare(blade.tipWidth) || !IsShare(blade.curvature) || !IsShare(blade.lean))
+		if (!core::is_unit_interval(blade.tipWidth) || !core::is_unit_interval(blade.curvature) ||
+		    !core::is_unit_interval(blade.lean))
 		{
 			refuse("blade.tipWidth, curvature and lean must each be in [0, 1]");
 		}
@@ -204,23 +187,24 @@ namespace bgl
 			refuse(
 				std::format("clump.bladesPerClump must be in [1, {}]", c_MaxGrassBladesPerClump));
 		}
-		if (!IsNonNegative(desc.clump.radius))
+		if (!core::is_finite_non_negative(desc.clump.radius))
 		{
 			refuse("clump.radius must be finite and non-negative");
 		}
 
 		const GrassDensityDesc& density = desc.density;
-		if (!IsNonNegative(density.fadeStart) || !std::isfinite(density.fadeEnd) ||
+		if (!core::is_finite_non_negative(density.fadeStart) || !std::isfinite(density.fadeEnd) ||
 		    density.fadeEnd <= density.fadeStart)
 		{
 			refuse("density fades must be finite, non-negative and fadeStart < fadeEnd");
 		}
-		if (!IsNonNegative(density.widening))
+		if (!core::is_finite_non_negative(density.widening))
 		{
 			refuse("density.widening must be finite and non-negative");
 		}
 
-		if (!IsShare(desc.response.stiffness) || !IsNonNegative(desc.response.gustResponse))
+		if (!core::is_unit_interval(desc.response.stiffness) ||
+		    !core::is_finite_non_negative(desc.response.gustResponse))
 		{
 			refuse(
 				"response.stiffness must be in [0, 1] and response.gustResponse finite and "
@@ -228,20 +212,23 @@ namespace bgl
 		}
 
 		const GrassLightingDesc& lighting = desc.lighting;
-		if (!IsShare(lighting.rootOcclusion) || !IsShare(lighting.normalRounding) ||
-		    !IsShare(lighting.groundNormalNear) || !IsShare(lighting.groundNormalFar))
+		if (!core::is_unit_interval(lighting.rootOcclusion) ||
+		    !core::is_unit_interval(lighting.normalRounding) ||
+		    !core::is_unit_interval(lighting.groundNormalNear) ||
+		    !core::is_unit_interval(lighting.groundNormalFar))
 		{
 			refuse(
 				"lighting.rootOcclusion, normalRounding and both ground-normal blends must be "
 				"in [0, 1]");
 		}
-		if (!IsColor(lighting.translucencyColor) || !IsNonNegative(lighting.translucency))
+		if (!IsColor(lighting.translucencyColor) ||
+		    !core::is_finite_non_negative(lighting.translucency))
 		{
 			refuse("lighting translucency and its colour must be finite and non-negative");
 		}
 
 		if (!IsColor(desc.color.rootTint) || !IsColor(desc.color.tipTint) ||
-		    !IsShare(desc.color.variation))
+		    !core::is_unit_interval(desc.color.variation))
 		{
 			refuse("colour tints must be finite and non-negative, and variation in [0, 1]");
 		}
@@ -303,7 +290,8 @@ namespace bgl
 		if (m_Grass[grass.handle.index].useCount > 0)
 		{
 			throw SceneError(
-				"GrassHandle passed to DeleteGrass is still bound by a live geom; delete it first");
+				"GrassHandle passed to DeleteGrass is still bound by a live geom or terrain; "
+				"release it first");
 		}
 
 		m_GrassLooks.Erase(m_Grass[grass.handle.index].entry);

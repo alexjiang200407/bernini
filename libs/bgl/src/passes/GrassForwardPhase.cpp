@@ -6,6 +6,7 @@
 #include "passes/ForwardPhases.h"
 #include "passes/SceneBindings.h"
 #include "scene/SceneView.h"
+#include "scene/TextureAssetStore.h"
 #include "scene/scene_buffer_names.h"
 #include <algorithm>
 #include <array>
@@ -32,7 +33,7 @@ namespace bgl
 		// ConstantBuffer declaration in Grass.slang.
 		constexpr auto c_Cbuffer = "grassData"sv;
 
-		constexpr std::array<SceneBuffer, 5> c_GrassBuffers = {
+		constexpr std::array<SceneBuffer, 8> c_GrassBuffers = {
 			{ { c_GrassDrawsName,
 			    "draws",
 			    bgpu::BarrierAccessFlag::kShaderResource,
@@ -52,13 +53,25 @@ namespace bgl
 			  { c_GrassClumpBufferName,
 			    "clumps",
 			    bgpu::BarrierAccessFlag::kShaderResource,
+			    bgpu::BarrierSyncFlag::kVertexShader },
+			  { c_TerrainGrassBufferName,
+			    "terrainGrass",
+			    bgpu::BarrierAccessFlag::kShaderResource,
+			    bgpu::BarrierSyncFlag::kVertexShader },
+			  { c_TerrainBufferName,
+			    "terrains",
+			    bgpu::BarrierAccessFlag::kShaderResource,
+			    bgpu::BarrierSyncFlag::kVertexShader },
+			  { c_TerrainNodeBoundsBufferName,
+			    "nodeBounds",
+			    bgpu::BarrierAccessFlag::kShaderResource,
 			    bgpu::BarrierSyncFlag::kVertexShader } }
 		};
 
-		constexpr std::array<std::string_view, 10> c_Fields = {
+		constexpr std::array<std::string_view, 12> c_Fields = {
 			"cameraPos"sv,     "pixelsPerUnit"sv,    "firstRef"sv,     "refCount"sv,
 			"dispatchWidth"sv, "windDirection"sv,    "windStrength"sv, "windGustScale"sv,
-			"windGustSpeed"sv, "windGustStrength"sv,
+			"windGustSpeed"sv, "windGustStrength"sv, "heights"sv,      "heightSampler"sv,
 		};
 
 		/** The wind's horizontal direction, unit; SetWind refused a direction without one. */
@@ -136,6 +149,11 @@ namespace bgl
 			uniforms["firstRef"]      = batch.firstRef;
 			uniforms["refCount"]      = batch.refCount;
 			uniforms["dispatchWidth"] = width;
+			uniforms["heightSampler"] = draw.samplers.linearClamp;
+			if (!batch.heights.textureSlot.is_null())
+			{
+				uniforms["heights"] = batch.heights;
+			}
 
 			uniforms["windDirection"]    = WindDirection(wind);
 			uniforms["windStrength"]     = wind.strength;

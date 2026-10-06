@@ -6,59 +6,15 @@ import lib.forward.mesh_stage;
 import lib.forward.TerrainData;
 import lib.geom.vertexdecode;
 import lib.terrain.heightfield;
+import lib.terrain.nodes;
 
 // The terrain geometry stage: one amplification thread per node of every level of a terrain's
 // quadtree, each deciding alone whether it draws, then one mesh group per drawn node building its
 // patch of cTerrainPatchQuads^2 quads from the height texture. The pixel side is the material's
 // own opaque program, exactly as a static mesh with that material draws.
 //
-// The level rule and the node layout are scene/terrain_lod.h's, which the scene lays the node
-// bounds out by and the tests check the rule on. See docs/terrain.md.
-
-// --- the node layout, the twin of scene/terrain_lod.h ---
-
-uint NodeCells(uint level)
-{
-    return cTerrainPatchQuads << level;
-}
-
-uint NodesAcross(uint samples, uint level)
-{
-    let cells = NodeCells(level);
-    return (samples - 1u + cells - 1u) / cells;
-}
-
-struct Node
-{
-    uint level;
-    uint x;
-    uint z;
-};
-
-// The node at `index` of the level-major layout, and where its level starts.
-Node NodeAt(Terrain terrain, uint index, out uint levelFirst)
-{
-    Node node;
-    node.level = terrain.levels;
-    node.x = 0u;
-    node.z = 0u;
-    levelFirst = 0u;
-    for (uint level = 0u; level < terrain.levels; ++level)
-    {
-        let across = NodesAcross(terrain.samplesX, level);
-        let inLevel = across * NodesAcross(terrain.samplesZ, level);
-        if (index < inLevel)
-        {
-            node.level = level;
-            node.x = index % across;
-            node.z = index / across;
-            return node;
-        }
-        index -= inLevel;
-        levelFirst += inLevel;
-    }
-    return node;
-}
+// The level rule and the node layout (lib.terrain.nodes) are scene/terrain_lod.h's, which the
+// scene lays the node bounds out by and the tests check the rule on. See docs/terrain.md.
 
 // The distance at which a cell of `level` spans the terrain's pixels per cell on screen, floored
 // at four times a node's diagonal so the morph has its zone and neighbours stay within a level.
@@ -87,27 +43,6 @@ void NodeBox(Terrain terrain, Node node, TerrainNodeBounds bound, out float3 lo,
         terrain.originAndCellSize.x + float(x0) * cellSize - slack, bound.minY, terrain.originAndCellSize.z + float(z0) * cellSize - slack
     );
     hi = float3(terrain.originAndCellSize.x + float(x1) * cellSize, bound.maxY, terrain.originAndCellSize.z + float(z1) * cellSize);
-}
-
-float NearestDistance(float3 lo, float3 hi, float3 p)
-{
-    let away = max(max(lo - p, float3(0.0)), p - hi);
-    return length(away);
-}
-
-// Whether any of the box is inside every plane: the corner furthest along each normal decides.
-bool BoxInFrustum(float4 planes[6], float3 lo, float3 hi)
-{
-    for (uint i = 0u; i < 6u; ++i)
-    {
-        let plane = planes[i];
-        let corner = float3(plane.x > 0.0 ? hi.x : lo.x, plane.y > 0.0 ? hi.y : lo.y, plane.z > 0.0 ? hi.z : lo.z);
-        if (dot(plane.xyz, corner) + plane.w < 0.0)
-        {
-            return false;
-        }
-    }
-    return true;
 }
 
 // One node per amplification group, as the grass stage launches one chunk per group: a group

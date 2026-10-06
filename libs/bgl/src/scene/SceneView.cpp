@@ -6,6 +6,7 @@
 #include "scene/Scene.h"
 #include "scene/TextureAssetStore.h"
 #include "scene/scene_buffer_names.h"
+#include "scene/terrain_grass_window.h"
 #include "types/SubmeshInstance.h"
 #include "types/ViewMatrices.h"
 #include "util/util.h"
@@ -1498,8 +1499,23 @@ namespace bgl
 			return;
 		}
 
+		// Keyed by the bucket, then by the terrain slot a run reads the heights of; a mesh's
+		// fields read none and sort first.
+		constexpr uint32_t c_NoTerrain = 0;
+		struct BatchRefs
+		{
+			TextureAssetHandle              heights;
+			std::vector<idl::GrassChunkRef> refs;
+		};
 		auto draws    = std::vector<idl::GrassDraw>();
-		auto byBucket = std::map<uint32_t, std::vector<idl::GrassChunkRef>>();
+		auto byBucket = std::map<std::pair<uint32_t, uint32_t>, BatchRefs>();
+
+		const auto resolve = [this](const Scene::GrassLookRef& look) {
+			return m_DrawBucketTable->Resolve(
+				GeometryStage::kGrass,
+				look.material.materialType,
+				LayerType::kOpaque);
+		};
 
 		for (uint32_t meshIndex = 0; meshIndex < m_MeshBuffer.Capacity(); ++meshIndex)
 		{
@@ -1512,16 +1528,16 @@ namespace bgl
 			for (const GrassFieldRecord& field :
 			     m_SceneRaw->GetGeomGrass(m_MeshBuffer.MetaAt(meshIndex).geom))
 			{
-				const Scene::GrassLookRef look   = m_SceneRaw->GetGrassLook(field.look);
-				const uint32_t            bucket = m_DrawBucketTable->Resolve(
-					GeometryStage::kGrass,
-					look.material.materialType,
-					LayerType::kOpaque);
+				const Scene::GrassLookRef look = m_SceneRaw->GetGrassLook(field.look);
 
 				const auto draw = static_cast<uint32_t>(draws.size());
-				draws.push_back(idl::GrassDraw{ .mesh = meshIndex, .look = look.entry });
+				draws.push_back(
+					idl::GrassDraw{ .mesh        = bgpu::idl::Entry{ .offset = meshIndex },
+				                    .look        = bgpu::idl::Entry{ .offset = look.entry },
+				                    .windowTiles = 0 });
 
-				std::vector<idl::GrassChunkRef>& refs = byBucket[bucket];
+				std::vector<idl::GrassChunkRef>& refs =
+					byBucket[{ resolve(look), c_NoTerrain }].refs;
 				for (uint32_t c = 0; c < field.chunkCount; ++c)
 				{
 					refs.push_back(
@@ -1530,17 +1546,44 @@ namespace bgl
 			}
 		}
 
+		m_SceneRaw->ForEachTerrain([&](const uint32_t slot, const TerrainMeta& terrain) {
+			for (const TerrainGrassRecord& layer : terrain.grass)
+			{
+				const Scene::GrassLookRef look = m_SceneRaw->GetGrassLook(layer.look);
+
+				// Clamped, since UpdateGrass may lengthen the fade past what the attach allowed:
+				// the field then ends short of the fade, rather than the dispatch growing unbounded.
+				const auto windowTiles = static_cast<uint32_t>(std::min(
+					TerrainGrassWindowTiles(look.fadeEnd, layer.tileSize),
+					static_cast<float>(c_MaxTerrainGrassWindowTiles)));
+
+				const auto draw = static_cast<uint32_t>(draws.size());
+				draws.push_back(
+					idl::GrassDraw{ .look         = bgpu::idl::Entry{ .offset = look.entry },
+				                    .terrainGrass = bgpu::idl::Entry{ .offset = layer.entry.index },
+				                    .windowTiles  = windowTiles });
+
+				BatchRefs& batch = byBucket[{ resolve(look), slot + 1 }];
+				batch.heights    = terrain.heights;
+				for (uint32_t tile = 0; tile < windowTiles * windowTiles; ++tile)
+				{
+					batch.refs.push_back(idl::GrassChunkRef{ .draw = draw, .chunk = tile });
+				}
+			}
+		});
+
 		auto refs = std::vector<idl::GrassChunkRef>();
 		m_GrassBatches.clear();
 		m_GrassDrawBuckets.reset();
-		for (const auto& [bucket, bucketRefs] : byBucket)
+		for (const auto& [key, batch] : byBucket)
 		{
 			m_GrassBatches.push_back(
-				GrassBatch{ .bucket   = bucket,
+				GrassBatch{ .bucket   = key.first,
 			                .firstRef = static_cast<uint32_t>(refs.size()),
-			                .refCount = static_cast<uint32_t>(bucketRefs.size()) });
-			m_GrassDrawBuckets.set(bucket);
-			refs.insert(refs.end(), bucketRefs.begin(), bucketRefs.end());
+			                .refCount = static_cast<uint32_t>(batch.refs.size()),
+			                .heights  = batch.heights });
+			m_GrassDrawBuckets.set(key.first);
+			refs.insert(refs.end(), batch.refs.begin(), batch.refs.end());
 		}
 
 		m_GrassDraws.Assign(draws);
@@ -1560,27 +1603,19 @@ namespace bgl
 
 		m_TerrainBatches.clear();
 		m_TerrainDrawBuckets.reset();
-		for (uint32_t index = 0, capacity = m_SceneRaw->TerrainCapacity(); index < capacity;
-		     ++index)
-		{
-			const TerrainMeta* terrain = m_SceneRaw->TerrainAt(index);
-			if (terrain == nullptr)
-			{
-				continue;
-			}
-
+		m_SceneRaw->ForEachTerrain([this](uint32_t, const TerrainMeta& terrain) {
 			const uint32_t bucket = m_DrawBucketTable->Resolve(
 				GeometryStage::kTerrain,
-				terrain->material.materialType,
+				terrain.material.materialType,
 				LayerType::kOpaque);
 			m_TerrainBatches.push_back(
 				TerrainBatch{ .bucket         = bucket,
-			                  .record         = terrain->record.index,
-			                  .firstNodeBound = terrain->nodeBounds.index,
-			                  .nodeCount      = terrain->nodeBounds.count,
-			                  .heights        = terrain->heights });
+			                  .record         = terrain.record.index,
+			                  .firstNodeBound = terrain.nodeBounds.index,
+			                  .nodeCount      = terrain.nodeBounds.count,
+			                  .heights        = terrain.heights });
 			m_TerrainDrawBuckets.set(bucket);
-		}
+		});
 
 		m_TerrainDirty      = false;
 		m_SceneTerrainEpoch = epoch;
