@@ -2276,6 +2276,68 @@ TEST_CASE(
 	CHECK(panel->GetDrawnLook()->material == c_GrassMaterialKey);
 }
 
+// Toon grass is authored for the toon post-process, as every toon asset is, so the Grass Editor
+// shows a toon look as toon content -- the toon post-process and backdrop -- and a PBR one as the
+// project's.
+TEST_CASE(
+	"A toon grass look shows the Grass Editor as toon content, and a PBR one does not",
+	"[mainwindow][render][grassplugin][toon]")
+{
+	const HeadlessEditor editor;
+	core::file::write_atomic(
+		editor.DataRoot() / assetlib::c_ShadersDirectoryName / "FlatToon.slang",
+		R"(import bgl.MaterialReader;
+import bgl.ToonCharacterSurface;
+
+struct FlatToonParams
+{
+    float4 baseColorFactor;
+};
+
+struct FlatToon : IToonCharacterSurfaceSource
+{
+    typealias MaterialParams = FlatToonParams;
+
+    static float Coverage<R : IMaterialReader>(R reader, FlatToonParams params) { return 1.0; }
+
+    static ToonCharacterSurface Evaluate<R : IMaterialReader>(R reader, FlatToonParams params)
+    {
+        ToonCharacterSurface surface = ToonCharacterSurface();
+        surface.baseColor = params.baseColorFactor;
+        return surface;
+    }
+};
+)");
+
+	const std::string toonMaterial = "Authored/Materials/toon.bmaterial";
+	auto              toon         = assetlib::BMaterial();
+	toon.name                      = "toon";
+	toon.shadingModel              = assetlib::ShadingModel::kToonCharacterSurface;
+	toon.surface.surfaceName       = "FlatToon";
+	toon.surface.values            = { { "baseColorFactor", { 0.36f, 0.62f, 0.22f, 1.0f } } };
+	assetlib::AssetStore(editor.DataRoot()).Save(toon, toonMaterial);
+
+	const std::string key = "Authored/Grass/toon.bgrass";
+	SaveGrassLook(editor, key, toonMaterial);
+
+	MainWindow window(editor.Plugins(), editor.Open(), editor.ConfigFile());
+	window.show();
+	GrassEditorWindow* panel = OpenGrassLook(window, key);
+	auto*              view  = panel->findChild<RenderTargetWindow*>();
+	REQUIRE(view != nullptr);
+	REQUIRE(panel->GetDrawnLook().has_value());
+	CHECK(view->GetPostProcessType() == assetlib::PostProcessType::kToon);
+	CHECK(view->GetBackdrop().has_value());
+
+	QMimeData drop;
+	drop.setUrls(
+		{ QUrl::fromLocalFile(
+			QString::fromStdString((editor.DataRoot() / c_GrassMaterialKey).string())) });
+	REQUIRE(panel->TakeDrop(&drop));
+	CHECK(view->GetPostProcessType() == assetlib::PostProcessType::kFilmic);
+	CHECK_FALSE(view->GetBackdrop().has_value());
+}
+
 TEST_CASE(
 	"An asset editor not opened yet is listed in the Window menu, and opens from there",
 	"[mainwindow][render][grassplugin]")

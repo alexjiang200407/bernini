@@ -37,7 +37,10 @@ strength, `,` `.` its heading, `G` the gusts.
 In the editor a `.bgrass` opens in the **Grass Editor**: every value of the look beside a patch of it
 in a wind the panel sets and never saves. An edit is drawn at once and written on Save, or when the
 panel closes with it pending: `AssetManager::SetGrassLook` puts the unsaved document on the look in
-place, and a patch whose look could not be drawn as stored is grown from the document instead. Where
+place, and a patch whose look could not be drawn as stored is grown from the document instead. A look whose material is toon is shown as toon content -- the toon post-process and
+backdrop, as every toon preview is -- and the panel's sun is its toon sun too, at the unit intensity
+toon colours are authored at; under the filmic curve a cel field's tones are lifted together and lose
+their contrast. Where
 the clumps go is the mesh source's, and is not edited there.
 
 ## A blade
@@ -130,18 +133,45 @@ geometry, which the mesh stage builds into the vertex it hands the pixel stage
   tip. Occlusion scales the environment's light and not the sun's, as it does on every surface.
 - **Translucency** (`GrassTranslucency`) is the sun through a blade seen against it: a wrapped
   diffuse term on the far side of the normal, in the look's colour and strength, added after
-  `ShadeSurface`. It is the one lighting term PBR lacks, and one function, so a toon path swaps its
-  body and nothing else.
+  `ShadeSurface`. It is the one lighting term PBR lacks, and one function, so a toon term would
+  replace its body (§ Kept open).
 
 A surface on the lit contract (`ILitSurfaceSource`) owns all of its lighting, so a blade drawn with
-one gets none of the above but the normal: the program calls its `Shade` and adds nothing. The rest
+one gets none of the above but the normal: the program calls its `Shade` and adds nothing. A toon
+character surface is the one exception, and takes the tint too ([Toon grass](#toon-grass)). The rest
 reaches it through the interpolants any surface reads -- `Uv().y` runs root to tip and `Uv1().x` is
-the blade's own random -- so a game can ship its own grass shading before the engine has a toon path.
+the blade's own random -- so a game can write grass shading of its own. A toon surface draws
+through the same lit programs; [Toon grass](#toon-grass) is what the engine's toon model does on a blade.
 
 uv1 on a blade is never a second UV set, so `HasUv1()` is false there and a geometry occlusion map
 is read as white, for the engine's kinds and a surface's alike. Its `y` carries the entry of the
 blade's look, which the program reads the translucency from: an interpolant constant along the blade
 costs nothing where a flat attribute for it cost the pass a third more on Apple silicon.
+
+## Toon grass
+
+Toon grass is a recipe over what is above, not a model of its own: a look whose material is a
+toon character surface ([Game-defined surfaces](game_defined_surfaces.md) § Toon surfaces), with
+`groundNormalNear` and `groundNormalFar` both 1. Its grass program (`GameToonGrassProgram`) shades a
+blade with the character model's cel steps under the toon sun, on the normal the grass stage hands
+it, and at 1 and 1 that normal is the clump's ground normal. So every blade takes the tone of the
+ground under it, whichever way it faces: a field steps as one surface, lit on a slope that faces the
+sun and shaded on one that turns away, and the terminator runs across the field rather than through
+each blade. At the default blend a blade shades on the face it turns to the camera, and a field
+under a sun behind it breaks into a speckle of lit and shaded blades -- the noise a toon look avoids.
+`[toon]`'s "Toon grass on its ground normal takes the ground's one tone, graded root to tip"
+pins both.
+
+It is the stylized standard's lighting -- a field shaded with its terrain's normal -- and its colour:
+the tone is multiplied by the blade's tint, the look's `rootTint` to `tipTint` times the clump's
+colour and the blade's variation, which is what parts one strand from the next when the cel step
+gives them all one tone -- a light tip read against the darker roots behind it. Tints of 1 and no
+variation leave the field the tone alone. The occlusion and translucency stay the PBR program's.
+
+The model is borrowed. Grass is environment, and the toon environment model is a separate contract
+that still draws flat; a character surface on grass never sets `face`, so no rig reaches it, but it
+follows wherever the character model goes. A grass look with a toon environment surface draws its
+`baseColor` flat, reading no light.
 
 ## Cost
 
@@ -228,5 +258,15 @@ that mean something only to stored clumps (`bladesPerClump`, the clump radius) s
 where a density in blades per square metre would join them. Baking terrain density into clumps at
 cook was rejected: the file grows with area and re-cooks on every painted change.
 
-**Toon lighting.** Covered in [Lighting](#lighting): grass has no model of its own, translucency is
-one function, and the root-to-tip value and per-blade random ride the interpolants.
+**Toon grass's other terms.** [Toon grass](#toon-grass) takes the cel step on the ground's normal and
+the blade's tint, and nothing more, on purpose: the rest come back one at a time once the field has
+been seen.
+
+- **A back-lit rim** -- a flat tone where the sun is behind the blade, the toon form of translucency.
+  The look's translucency is read off the look through `Uv1().y`, and `GrassTranslucency` is one
+  function whose body a toon term replaces.
+- **Root occlusion** -- `tint.a` already carries it to the pixel, but a cel shade has no ambient term
+  for it to scale, so it would be a second darkening beside `rootTint`.
+
+Each is a change to `GameToonGrassProgram` alone. Shadows are not among them: blades are in no shadow
+map ([What it does not do](#what-it-does-not-do)).

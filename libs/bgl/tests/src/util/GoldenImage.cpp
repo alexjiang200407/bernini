@@ -6,7 +6,9 @@
 #include <cstdlib>
 #include <filesystem>
 #include <limits>
+#include <memory>
 #include <string>
+#include <string_view>
 #include <system_error>
 
 // STB_IMAGE_STATIC gives this TU its own internal-linkage copy of the decoder, avoiding a
@@ -19,6 +21,62 @@
 
 namespace bgl::test
 {
+	namespace
+	{
+		struct StbiFree
+		{
+			void
+			operator()(unsigned char* pixels) const noexcept
+			{
+				stbi_image_free(pixels);
+			}
+		};
+
+		// A PNG decoded to RGBA8, with a box already checked to lie wholly inside it.
+		struct BoxImage
+		{
+			std::unique_ptr<unsigned char, StbiFree> pixels;
+			int                                      width = 0;
+
+			BoxImage()                = default;
+			BoxImage(const BoxImage&) = delete;
+			BoxImage&
+			operator=(const BoxImage&)    = delete;
+			BoxImage(BoxImage&&) noexcept = default;
+			BoxImage&
+			operator=(BoxImage&&) noexcept = default;
+			~BoxImage()                    = default;
+
+			[[nodiscard]] const unsigned char*
+			Texel(const int row, const int col) const noexcept
+			{
+				return pixels.get() + (static_cast<size_t>(row) * width + col) * 4;
+			}
+		};
+
+		BoxImage
+		LoadBox(const std::string_view caller, const std::string& path, int x, int y, int w, int h)
+		{
+			int  width = 0, height = 0, channels = 0;
+			auto image = BoxImage();
+			image.pixels.reset(stbi_load(path.c_str(), &width, &height, &channels, 4));
+			image.width = width;
+			if (image.pixels == nullptr)
+				core::throw_runtime_error("{}: cannot read '{}'", caller, path);
+
+			if (w <= 0 || h <= 0 || x < 0 || y < 0 || x + w > width || y + h > height)
+			{
+				core::throw_runtime_error(
+					"{}: the box falls outside '{}' ({}x{})",
+					caller,
+					path,
+					width,
+					height);
+			}
+			return image;
+		}
+	}
+
 	bool
 	MatchesGolden(const std::string& expectedPath, const std::string& gotPath, float tolerance)
 	{
@@ -106,34 +164,17 @@ namespace bgl::test
 	Rgba
 	MeanColor(const std::string& path, int x, int y, int w, int h)
 	{
-		int width = 0, height = 0, channels = 0;
-
-		unsigned char* pixels = stbi_load(path.c_str(), &width, &height, &channels, 4);
-		if (pixels == nullptr)
-			core::throw_runtime_error("MeanColor: cannot read '{}'", path);
-
-		if (w <= 0 || h <= 0 || x < 0 || y < 0 || x + w > width || y + h > height)
-		{
-			stbi_image_free(pixels);
-			core::throw_runtime_error(
-				"MeanColor: the box falls outside '{}' ({}x{})",
-				path,
-				width,
-				height);
-		}
+		const auto box = LoadBox("MeanColor", path, x, y, w, h);
 
 		double sum[4] = { 0.0, 0.0, 0.0, 0.0 };
-
 		for (int row = y; row < y + h; ++row)
 		{
 			for (int col = x; col < x + w; ++col)
 			{
-				const size_t texel = (static_cast<size_t>(row) * width + col) * 4;
-				for (int c = 0; c < 4; ++c) sum[c] += pixels[texel + c];
+				const auto* texel = box.Texel(row, col);
+				for (int c = 0; c < 4; ++c) sum[c] += texel[c];
 			}
 		}
-
-		stbi_image_free(pixels);
 
 		const auto texels = static_cast<double>(w) * h * 255.0;
 
@@ -141,6 +182,61 @@ namespace bgl::test
 			         static_cast<float>(sum[1] / texels),
 			         static_cast<float>(sum[2] / texels),
 			         static_cast<float>(sum[3] / texels) };
+	}
+
+	Tones
+	CoveredTones(const std::string& path, int x, int y, int w, int h, float floor)
+	{
+		const auto box = LoadBox("CoveredTones", path, x, y, w, h);
+
+		const auto covered = [floor](const unsigned char* texel) {
+			return static_cast<float>(std::max({ texel[0], texel[1], texel[2] })) / 255.0f > floor;
+		};
+
+		double sum[4] = { 0.0, 0.0, 0.0, 0.0 };
+		auto   tones  = Tones();
+		for (int row = y; row < y + h; ++row)
+		{
+			for (int col = x; col < x + w; ++col)
+			{
+				const auto* texel = box.Texel(row, col);
+				if (covered(texel))
+				{
+					for (int c = 0; c < 4; ++c) sum[c] += texel[c];
+					++tones.covered;
+				}
+			}
+		}
+
+		if (tones.covered == 0)
+		{
+			return tones;
+		}
+
+		const auto texels = static_cast<double>(tones.covered) * 255.0;
+		tones.mean        = Rgba{ static_cast<float>(sum[0] / texels),
+			                      static_cast<float>(sum[1] / texels),
+			                      static_cast<float>(sum[2] / texels),
+			                      static_cast<float>(sum[3] / texels) };
+
+		const float mean[3] = { tones.mean.r, tones.mean.g, tones.mean.b };
+		for (int row = y; row < y + h; ++row)
+		{
+			for (int col = x; col < x + w; ++col)
+			{
+				const auto* texel = box.Texel(row, col);
+				if (!covered(texel))
+				{
+					continue;
+				}
+				for (int c = 0; c < 3; ++c)
+				{
+					const float value  = static_cast<float>(texel[c]) / 255.0f;
+					tones.maxDeviation = std::max(tones.maxDeviation, std::abs(value - mean[c]));
+				}
+			}
+		}
+		return tones;
 	}
 
 	float

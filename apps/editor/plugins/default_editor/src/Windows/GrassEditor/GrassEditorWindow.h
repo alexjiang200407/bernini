@@ -208,6 +208,11 @@ private:
 	void
 	ReleasePreview();
 
+	// Shows the viewport as toon content -- the toon post-process and backdrop -- while the look's
+	// material is a toon model's.
+	void
+	ShowToonIfToon();
+
 	void
 	SetStatus(const QString& text);
 

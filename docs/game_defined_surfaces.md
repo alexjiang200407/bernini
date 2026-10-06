@@ -134,6 +134,7 @@ adapter over the game's type — `ToonCharacterLit<G>` or `ToonEnvironmentLit<G>
 `lib.math.ToonShading` — which conforms to `ILitSurfaceSource` with the model's lighting as its
 `Shade`. So the record, the reader, every layer, grass and the blend arm are the lit contract's,
 and a toon model adds no program family; its lighting is the one function to change.
+A character surface on a grass look is the engine's toon grass: [Grass](grass.md) § Toon grass.
 
 `Coverage` runs first on an alpha-tested layer and discards before `Evaluate` is called, so a cheap
 coverage answers without the rest of the surface's samples. It is not read at all on an opaque

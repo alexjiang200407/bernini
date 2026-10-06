@@ -802,6 +802,99 @@ TEST_CASE("A toon character's every lane reads the toon sun", "[surface][render]
 	}
 }
 
+// Toon grass (docs/grass.md § Toon grass): at a ground normal of 1 and 1 every blade takes the
+// ground's tone, under suns chosen so the ground and the faces blades turn to the camera disagree;
+// a root-to-tip tint then grades each blade within that tone.
+TEST_CASE(
+	"Toon grass on its ground normal takes the ground's one tone, graded root to tip",
+	"[surface][render][toon]")
+{
+	auto gfx = bgl::test::CreateGraphics(ToonOptions());
+	REQUIRE(gfx != nullptr);
+	auto scene = gfx->CreateScene(ToonScene());
+
+	const auto character = scene->CreateSurfaceMaterial(Cel(c_Flat, {}));
+	const auto black     = scene->CreatePbrMaterial(
+		bgl::PbrMaterialDesc{ .baseColorFactor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f) });
+
+	const auto lawn =
+		[&](const float groundNear, const float groundFar, const glm::vec3& rootTint) {
+			auto look                      = bgl::GrassDesc();
+			look.color.rootTint            = rootTint;
+			look.material                  = character;
+			look.blade.rootWidth           = 0.05f;
+			look.lighting.groundNormalNear = groundNear;
+			look.lighting.groundNormalFar  = groundFar;
+			const auto looks  = std::array<bgl::GrassHandle, 1>{ { scene->CreateGrass(look) } };
+			const auto ground = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, black);
+			scene->AttachGrass(ground, MakeField(40, 0.12f), 0, looks);
+			return ground;
+		};
+
+	// The ground faces +Y once the plane is turned; the camera looks down at it from +Z.
+	const auto shoot = [&](const auto ground, const glm::vec3& toSun, const char* png) {
+		auto targetDesc       = bgl::RenderTargetDesc();
+		targetDesc.width      = 400;
+		targetDesc.height     = 300;
+		targetDesc.headless   = true;
+		targetDesc.taaEnabled = false;
+		auto target           = gfx->CreateRenderTarget(targetDesc);
+		auto view             = gfx->CreateSceneView(scene, 4);
+		LightBy(*view, Sun::kToon, -glm::normalize(toSun));
+		view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(ground).SetTransform(
+				glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f))));
+
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.viewport = bgl::Viewport(400.0f, 300.0f);
+		job.camera =
+			bgl::Camera()
+				.LookAt(glm::vec3(0.0f, 3.0f, 6.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))
+				.Perspective(glm::radians(60.0f), 400.0f / 300.0f, 0.1f, 200.0f);
+		for (int i = 0; i < 3; ++i) gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, png);
+		return bgl::test::CoveredTones(png, 150, 120, 100, 80, 0.02f);
+	};
+
+	// Half-Lambert on the ground: 0.82 behind and above, past the base step; 0.36 in front and
+	// below, under it. On a face turned to the camera it is the other way about.
+	const auto behind  = glm::vec3(0.0f, 1.0f, -1.2f);
+	const auto inFront = glm::vec3(0.0f, -0.3f, 1.0f);
+
+	const auto white  = glm::vec3(1.0f);
+	const auto toon   = lawn(1.0f, 1.0f, white);
+	const auto lit    = shoot(toon, behind, "assets/golden/toon_grass_ground_lit.got.png");
+	const auto shaded = shoot(toon, inFront, "assets/golden/toon_grass_ground_shaded.got.png");
+	const auto mixed =
+		shoot(lawn(0.0f, 0.8f, white), behind, "assets/golden/toon_grass_default_blend.got.png");
+
+	INFO(
+		"lit: " << lit.maxDeviation << " over " << lit.covered
+				<< ", shaded: " << shaded.maxDeviation << " over " << shaded.covered
+				<< ", default blend: " << mixed.maxDeviation << " over " << mixed.covered);
+	REQUIRE(lit.covered > 1000);
+	REQUIRE(shaded.covered > 1000);
+	REQUIRE(mixed.covered > 1000);
+	CHECK(lit.maxDeviation < 0.02f);
+	CHECK(shaded.maxDeviation < 0.02f);
+	CHECK(shaded.mean.Luma() < lit.mean.Luma() - 0.05f);
+	CHECK(mixed.maxDeviation > 0.1f);
+
+	const auto graded    = lawn(1.0f, 1.0f, glm::vec3(0.3f));
+	const auto gradedLit = shoot(graded, behind, "assets/golden/toon_grass_graded_lit.got.png");
+	const auto gradedShaded =
+		shoot(graded, inFront, "assets/golden/toon_grass_graded_shaded.got.png");
+	INFO(
+		"graded lit: " << gradedLit.maxDeviation << " over " << gradedLit.covered
+					   << ", graded shaded: " << gradedShaded.maxDeviation);
+	REQUIRE(gradedLit.covered > 1000);
+	REQUIRE(gradedShaded.covered > 1000);
+	CHECK(gradedLit.maxDeviation > 0.1f);
+	CHECK(gradedLit.mean.Luma() < lit.mean.Luma() - 0.03f);
+	CHECK(gradedShaded.mean.Luma() < gradedLit.mean.Luma() - 0.03f);
+}
+
 // A document's model is its contract expectation, and the toon models are two contracts: a
 // material that expects one is refused a surface on the other, naming both.
 TEST_CASE("A toon material is refused a surface on another model", "[surface][toon]")

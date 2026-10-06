@@ -47,6 +47,26 @@ namespace bgl::test
 	[[nodiscard]] Rgba
 	MeanColor(const std::string& path, int x, int y, int w, int h);
 
+	/** What CoveredTones finds: the pixels lit above the floor, their mean and how far any strays. */
+	struct Tones
+	{
+		Rgba  mean;
+		float maxDeviation = 0.0f;  // the largest channel distance of a covered pixel from `mean`
+		int   covered      = 0;
+	};
+
+	/**
+	 * The tones of the `w` x `h` box at (`x`, `y`) in the PNG at `path`, over only the pixels with a
+	 * channel above `floor` -- geometry drawn over a black backdrop, the backdrop left out.
+	 *
+	 * For a test that asks whether everything drawn takes one tone, however much of the box it
+	 * covers.
+	 *
+	 * @throws std::runtime_error if the image cannot be read, or the box is not wholly inside it.
+	 */
+	[[nodiscard]] Tones
+	CoveredTones(const std::string& path, int x, int y, int w, int h, float floor);
+
 	/**
 	 * Mean squared difference between horizontally adjacent pixels in a region -- a measure of how
 	 * grainy it is.
