@@ -16,7 +16,7 @@ is `terrainlib` ([terrainlib/Generate.h](../libs/terrainlib/include/terrainlib/G
 | a terrain | `bgl::TerrainDesc` ([TerrainDesc.h](../libs/bgl/include/bgl/types/TerrainDesc.h)) | the heightfield, the world origin of sample (0, 0), the material, and `pixelsPerCell` |
 | its record | `idl::Terrain` ([Terrain.slang](../libs/bgl/shaders/src/idl/Terrain.slang)) | the origin and cell size, the height range and the pixels per cell, the sample counts, the levels, the material offset |
 | its texture | one `R16_UNORM` through the scene's texture store | sample (x, z) at the centre of texel (x, z), read with the clamping sampler |
-| its node bounds | `idl::TerrainNodeBounds` per node, level-major, a range in `scene.terrainNodeBoundsBuffer` | the lowest and highest height of every node of every level, computed once at creation |
+| its node bounds | `idl::TerrainNodeBounds` per node, level-major, a range in `scene.terrainNodeBoundsBuffer` | the lowest and highest world y of every node of every level, computed once at creation |
 
 `IScene::CreateTerrain` copies the samples into the texture, computes the levels and the node
 bounds ([scene/terrain_lod.h](../libs/bgl/src/scene/terrain_lod.h)), writes the record and

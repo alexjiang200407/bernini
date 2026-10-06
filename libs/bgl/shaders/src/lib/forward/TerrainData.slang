@@ -8,7 +8,7 @@ public struct TerrainData
 {
     public EntryBuffer<Terrain> terrains;
 
-    // Every terrain's node bounds, the lowest and highest height of each node level-major, but
+    // Every terrain's node bounds, the lowest and highest world y of each node level-major, but
     // addressed from firstNodeBound: a scene range, read by the global index.
     public StructuredBuffer<TerrainNodeBounds, ScalarDataLayout>.Handle nodeBounds;
 

@@ -150,7 +150,7 @@ namespace bgl
 		}
 
 		/**
-		 * The lowest and highest height of every node of every level, level-major: level 0 from
+		 * The lowest and highest world y of every node of every level, level-major: level 0 from
 		 * the samples each patch spans, each level above from its children.
 		 */
 		[[nodiscard]] std::vector<idl::TerrainNodeBounds>
@@ -186,8 +186,8 @@ namespace bgl
 					}
 					const float scale         = field.heightRange / 65535.0f;
 					bounds[nz * acrossX + nx] = idl::TerrainNodeBounds{
-						.lowest  = baseHeight + static_cast<float>(lo) * scale,
-						.highest = baseHeight + static_cast<float>(hi) * scale,
+						.minY = baseHeight + static_cast<float>(lo) * scale,
+						.maxY = baseHeight + static_cast<float>(hi) * scale,
 					};
 				}
 			});
@@ -204,7 +204,7 @@ namespace bgl
 				{
 					for (uint32_t nx = 0; nx < ownX; ++nx)
 					{
-						auto bound = idl::TerrainNodeBounds{ .lowest = 1e30f, .highest = -1e30f };
+						auto bound = idl::TerrainNodeBounds{ .minY = 1e30f, .maxY = -1e30f };
 						for (uint32_t cz = 2 * nz; cz < std::min(2 * nz + 2, childAcrossZ); ++cz)
 						{
 							for (uint32_t cx = 2 * nx; cx < std::min(2 * nx + 2, childAcrossX);
@@ -212,8 +212,8 @@ namespace bgl
 							{
 								const idl::TerrainNodeBounds child =
 									bounds[childFirst + cz * childAcrossX + cx];
-								bound.lowest  = std::min(bound.lowest, child.lowest);
-								bound.highest = std::max(bound.highest, child.highest);
+								bound.minY = std::min(bound.minY, child.minY);
+								bound.maxY = std::max(bound.maxY, child.maxY);
 							}
 						}
 						bounds[first + nz * ownX + nx] = bound;

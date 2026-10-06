@@ -84,9 +84,9 @@ void NodeBox(Terrain terrain, Node node, TerrainNodeBounds bound, out float3 lo,
     let z1 = min(z0 + cells, terrain.samplesZ - 1u);
     let slack = cellSize * float(1u << node.level);
     lo = float3(
-        terrain.originAndCellSize.x + float(x0) * cellSize - slack, bound.lowest, terrain.originAndCellSize.z + float(z0) * cellSize - slack
+        terrain.originAndCellSize.x + float(x0) * cellSize - slack, bound.minY, terrain.originAndCellSize.z + float(z0) * cellSize - slack
     );
-    hi = float3(terrain.originAndCellSize.x + float(x1) * cellSize, bound.highest, terrain.originAndCellSize.z + float(z1) * cellSize);
+    hi = float3(terrain.originAndCellSize.x + float(x1) * cellSize, bound.maxY, terrain.originAndCellSize.z + float(z1) * cellSize);
 }
 
 float NearestDistance(float3 lo, float3 hi, float3 p)
