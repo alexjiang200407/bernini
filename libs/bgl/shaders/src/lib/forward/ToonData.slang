@@ -33,9 +33,9 @@ public struct ToonSurfaceLight : ISurfaceLight
  * An environment surface as a lit one, its lighting the engine's toon environment model under the
  * toon sun. What a registered environment surface is bound as, so it draws through the lit
  * programs -- the record, the reader, every layer and grass -- and the model adds no program
- * family of its own. Those programs hand it the material light, which it sets aside: a toon
- * model is lit by the toon sun alone, and here, unlike the character's own programs, nothing else
- * can hand it one.
+ * family of its own. Those programs hand it the material light, which it sets aside for the toon
+ * sun: a toon model is lit by that sun alone, and here, unlike the character's own programs,
+ * nothing else can hand it one. The model reads nothing of it yet; this is where it will.
  */
 public struct ToonEnvironmentLit<G : IToonEnvironmentSurfaceSource> : ILitSurfaceSource
 {
@@ -45,6 +45,6 @@ public struct ToonEnvironmentLit<G : IToonEnvironmentSurfaceSource> : ILitSurfac
 
     public static float4 Shade<R : IMaterialReader, L : ISurfaceLight>(R reader, L light, MaterialParams params)
     {
-        return ShadeToonEnvironment(G.Evaluate(reader, params), ToonSurfaceLight(), normalize(reader.WorldNormal()));
+        return ShadeToonEnvironment(G.Evaluate(reader, params), ToonSurfaceLight());
     }
 };

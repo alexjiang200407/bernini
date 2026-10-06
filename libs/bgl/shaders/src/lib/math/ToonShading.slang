@@ -155,19 +155,12 @@ public float4 ShadeToonCharacterFace<
     return ToonCel(surface, halfLambert, light.SunRadiance());
 }
 
-/**
- * The toon environment model: two tones over the half-Lambert term, the base colour and the base
- * colour times its shade, times the sun's radiance. A step of zero keeps every pixel lit. Alpha
- * is the base colour's, the coverage the blended layer reads.
- *
- * @param normal World space, unit.
- */
-public float4 ShadeToonEnvironment<L : ISurfaceLight>(ToonEnvironmentSurface surface, L light, float3 normal)
+// The toon environment model, flat until its look is designed: the base colour as pre-exposure
+// radiance, reading nothing of the light. The light is handed in all the same, so the model that
+// replaces this one changes nothing at its callers.
+public float4 ShadeToonEnvironment<L : ISurfaceLight>(ToonEnvironmentSurface surface, L light)
 {
-    let halfLambert = 0.5 * dot(normal, -light.SunDirection()) + 0.5;
-    let intoShade = saturate((surface.shadeStep - halfLambert) / max(surface.shadeFeather, 1e-5));
-    let tone = lerp(float3(1.0), surface.shade, intoShade);
-    return float4(surface.baseColor.rgb * tone * light.SunRadiance(), surface.baseColor.a);
+    return surface.baseColor;
 }
 
 /**

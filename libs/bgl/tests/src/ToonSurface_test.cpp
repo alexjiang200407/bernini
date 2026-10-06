@@ -103,9 +103,6 @@ struct FlatParams
     [Default(1.0, 1.0, 1.0, 1.0)]
     float4 baseColorFactor;
 
-    [Default(0.0)]
-    float shadeStep;
-
     ColorSlot baseColor;
 };
 
@@ -122,7 +119,6 @@ struct FlatEnvironment : IToonEnvironmentSurfaceSource
     {
         ToonEnvironmentSurface surface = ToonEnvironmentSurface();
         surface.baseColor = params.baseColorFactor * reader.Sample(params.baseColor, reader.Uv());
-        surface.shadeStep = params.shadeStep;
         return surface;
     }
 };
@@ -403,7 +399,7 @@ TEST_CASE(
 	}
 
 	{
-		INFO("an environment that says nothing of its shade is lit flat, away from the sun too");
+		INFO("the environment model is still flat");
 		const auto* environmentPng = "assets/golden/toon_cel_environment.got.png";
 		shoot(
 			plane(scene->CreateSurfaceMaterial(Toon("ToonEnvironment", c_Flat))),
@@ -411,28 +407,6 @@ TEST_CASE(
 			SphereCamera(),
 			environmentPng);
 		CHECK(middle(environmentPng, litRef) < c_Same);
-	}
-
-	{
-		// The environment's one shade defaults to the character's first, so the same reference
-		// serves: lit above its step, shaded below it, with nothing between.
-		INFO("an environment with a step shades in two tones over the same term");
-		auto stepped = Toon("ToonEnvironment", c_Flat);
-		stepped.values.push_back({ "shadeStep", glm::vec4(0.5f) });
-		const MaterialHandle environment = scene->CreateSurfaceMaterial(stepped);
-
-		const auto* litPng    = "assets/golden/toon_cel_environment_lit.got.png";
-		const auto* nearlyPng = "assets/golden/toon_cel_environment_nearly.got.png";
-		const auto* shadePng  = "assets/golden/toon_cel_environment_shade.got.png";
-		const auto* behindPng = "assets/golden/toon_cel_environment_behind.got.png";
-		shoot(plane(environment), lit, SphereCamera(), litPng);
-		shoot(plane(environment), nearly, SphereCamera(), nearlyPng);
-		shoot(plane(environment), first, SphereCamera(), shadePng);
-		shoot(plane(environment), behind, SphereCamera(), behindPng);
-		CHECK(middle(litPng, litRef) < c_Same);
-		CHECK(middle(nearlyPng, litRef) < c_Same);
-		CHECK(middle(shadePng, firstRef) < c_Same);
-		CHECK(middle(behindPng, firstRef) < c_Same);
 	}
 
 	{
