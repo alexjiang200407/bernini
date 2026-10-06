@@ -1,13 +1,15 @@
 # AI Viewer — what the renderer draws, as files an agent can read
 
-`bgl_ai_viewer` ([examples/bgl_ai_viewer](../examples/bgl_ai_viewer/src/main.cpp)) renders one
+`bgl_ai_viewer` ([apps/ai_viewer](../apps/ai_viewer/src/main.cpp)) renders one
 imported model headlessly, writes a PNG at each frame you name, plays a clip when the model is
 skinned, and reports what every frame graph pass cost on the GPU. **It is how an agent looks at a
 rendering change**: run it, then read the PNGs it names.
 
 It is the sibling of `bgl_pass_timings` ([Profiling](profiling.md) § Capturing a run headlessly),
-which asks only what a model *costs*. Both stand on `example_headless`
-([examples/headless](../examples/headless/headless)): the device, the framing and the pass summary.
+which asks only what a model *costs*. Both stand on `headless`
+([apps/headless](../apps/headless/headless)): the device, the framing and the pass summary. The
+viewer is an app rather than an example, so a release build has it too — the build benchmarks are
+taken on — while `bgl_pass_timings` needs `-DBERNINI_BUILD_EXAMPLES=ON` there.
 
 ## Running it
 

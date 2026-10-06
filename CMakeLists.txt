@@ -243,6 +243,13 @@ if (PROJECT_IS_TOP_LEVEL)
     endif()
 endif()
 
+# Outside the examples, which the release presets leave off: release is the build its benchmarks
+# are taken on.
+if (PROJECT_IS_TOP_LEVEL AND TARGET bgl)
+    add_subdirectory(apps/headless)
+    add_subdirectory(apps/ai_viewer)
+endif()
+
 if (BERNINI_BUILD_EXAMPLES AND TARGET bgl)
     add_subdirectory(examples)
 endif()
@@ -263,6 +270,10 @@ if (BERNINI_BUILD_EXAMPLES AND TARGET bgl)
 endif()
 if (TARGET editor)
     assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/apps/editor" "editor")
+endif()
+if (TARGET bgl_ai_viewer)
+    assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/apps/headless"  "apps")
+    assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/apps/ai_viewer" "apps")
 endif()
 
 
