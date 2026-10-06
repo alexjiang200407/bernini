@@ -1546,16 +1546,8 @@ namespace bgl
 			}
 		}
 
-		for (uint32_t index = 0, capacity = m_SceneRaw->TerrainCapacity(); index < capacity;
-		     ++index)
-		{
-			const TerrainMeta* terrain = m_SceneRaw->TerrainAt(index);
-			if (terrain == nullptr)
-			{
-				continue;
-			}
-
-			for (const TerrainGrassRecord& layer : terrain->grass)
+		m_SceneRaw->ForEachTerrain([&](const uint32_t slot, const TerrainMeta& terrain) {
+			for (const TerrainGrassRecord& layer : terrain.grass)
 			{
 				const Scene::GrassLookRef look = m_SceneRaw->GetGrassLook(layer.look);
 
@@ -1571,14 +1563,14 @@ namespace bgl
 				                    .terrainGrass = bgpu::idl::Entry{ .offset = layer.entry.index },
 				                    .windowTiles  = windowTiles });
 
-				BatchRefs& batch = byBucket[{ resolve(look), index + 1 }];
-				batch.heights    = terrain->heights;
+				BatchRefs& batch = byBucket[{ resolve(look), slot + 1 }];
+				batch.heights    = terrain.heights;
 				for (uint32_t tile = 0; tile < windowTiles * windowTiles; ++tile)
 				{
 					batch.refs.push_back(idl::GrassChunkRef{ .draw = draw, .chunk = tile });
 				}
 			}
-		}
+		});
 
 		auto refs = std::vector<idl::GrassChunkRef>();
 		m_GrassBatches.clear();
@@ -1611,27 +1603,19 @@ namespace bgl
 
 		m_TerrainBatches.clear();
 		m_TerrainDrawBuckets.reset();
-		for (uint32_t index = 0, capacity = m_SceneRaw->TerrainCapacity(); index < capacity;
-		     ++index)
-		{
-			const TerrainMeta* terrain = m_SceneRaw->TerrainAt(index);
-			if (terrain == nullptr)
-			{
-				continue;
-			}
-
+		m_SceneRaw->ForEachTerrain([this](uint32_t, const TerrainMeta& terrain) {
 			const uint32_t bucket = m_DrawBucketTable->Resolve(
 				GeometryStage::kTerrain,
-				terrain->material.materialType,
+				terrain.material.materialType,
 				LayerType::kOpaque);
 			m_TerrainBatches.push_back(
 				TerrainBatch{ .bucket         = bucket,
-			                  .record         = terrain->record.index,
-			                  .firstNodeBound = terrain->nodeBounds.index,
-			                  .nodeCount      = terrain->nodeBounds.count,
-			                  .heights        = terrain->heights });
+			                  .record         = terrain.record.index,
+			                  .firstNodeBound = terrain.nodeBounds.index,
+			                  .nodeCount      = terrain.nodeBounds.count,
+			                  .heights        = terrain.heights });
 			m_TerrainDrawBuckets.set(bucket);
-		}
+		});
 
 		m_TerrainDirty      = false;
 		m_SceneTerrainEpoch = epoch;

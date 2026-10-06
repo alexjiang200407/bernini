@@ -65,6 +65,7 @@
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Sampler.h>
 #include <bgpu/resource/Srv.h>
+#include <concepts>
 #include <core/containers/multi_slot_handle.h>
 #include <core/containers/slot_handle.h>
 #include <core/containers/slot_vector.h>
@@ -647,18 +648,18 @@ namespace bgl
 			return terrain.IsValid() && m_Terrains.valid(terrain.handle);
 		}
 
-		/** Slots a terrain may occupy: the bound a walk over TerrainAt runs to. */
-		[[nodiscard]] uint32_t
-		TerrainCapacity() const noexcept
+		/** Calls `visit(slot, terrain)` for every live terrain, in slot order. */
+		template <std::invocable<uint32_t, const TerrainMeta&> F>
+		void
+		ForEachTerrain(F&& visit) const
 		{
-			return m_Terrains.capacity();
-		}
-
-		/** The terrain in slot `index`, or null where no live terrain holds it. */
-		[[nodiscard]] const TerrainMeta*
-		TerrainAt(const uint32_t index) const noexcept
-		{
-			return m_Terrains.allocated(index) ? &m_Terrains[index] : nullptr;
+			for (uint32_t slot = 0, capacity = m_Terrains.capacity(); slot < capacity; ++slot)
+			{
+				if (m_Terrains.allocated(slot))
+				{
+					visit(slot, m_Terrains[slot]);
+				}
+			}
 		}
 
 		/** Moves whenever a terrain is created or deleted. */
