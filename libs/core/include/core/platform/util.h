@@ -24,6 +24,17 @@ namespace core
 	env_var(const char* name);
 
 	/**
+	 * Sets the environment variable `name` to `value`, for this process and every one it starts.
+	 *
+	 * Racing a read of the environment on another thread is undefined, the C runtime's own rule and
+	 * one no caller can check of the libraries it loaded, so this is for start-up.
+	 *
+	 * @return false if the environment could not be changed.
+	 */
+	[[nodiscard]] bool
+	set_env_var(const char* name, const char* value) noexcept;
+
+	/**
 	 * `path` with a leading `~` replaced by the user's home directory, or unchanged when it has none.
 	 *
 	 * A leading `~` is what a person writes in a config file and what no filesystem API expands.

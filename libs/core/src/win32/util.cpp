@@ -3,6 +3,7 @@
 #include <core/platform/util.h>
 #include <core/str/str.h>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -64,6 +65,12 @@ namespace core
 	process_id() noexcept
 	{
 		return static_cast<uint32_t>(GetCurrentProcessId());
+	}
+
+	bool
+	set_env_var(const char* name, const char* value) noexcept
+	{
+		return _putenv_s(name, value) == 0;
 	}
 
 	bool

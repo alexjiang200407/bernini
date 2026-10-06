@@ -5,6 +5,7 @@
 #include <core/platform/util.h>
 
 #include <cstdint>
+#include <cstdlib>
 #include <fcntl.h>
 #include <iostream>
 #include <mach-o/dyld.h>
@@ -32,6 +33,12 @@ namespace core
 	process_id() noexcept
 	{
 		return static_cast<uint32_t>(::getpid());
+	}
+
+	bool
+	set_env_var(const char* name, const char* value) noexcept
+	{
+		return ::setenv(name, value, 1) == 0;
 	}
 
 	namespace
