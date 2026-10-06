@@ -7,9 +7,9 @@ namespace bgl
 {
 	/**
 	 * How a terrain is cut into levels of detail, and how a level is chosen, as the CPU computes
-	 * it: the twin of the terrain stage's amplification shader (programs/forward/Terrain.slang),
-	 * which the scene uses to lay out a terrain's node bounds and the tests use to check the stage's
-	 * rule. Both read the same numbers off the terrain's record, so a change here is a change there.
+	 * it: the twin of the shaders' node layout (lib/terrain/nodes.slang) and the terrain stage's
+	 * level rule (programs/forward/Terrain.slang). The scene lays out a terrain's node bounds by
+	 * it, and the tests check the stage's rule against it.
 	 *
 	 * A node at level `l` is a square patch of `cTerrainPatchQuads << l` cells; level 0 is the
 	 * samples' own resolution, and the coarsest level has one node across the longer axis.
