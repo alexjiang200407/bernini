@@ -1,4 +1,5 @@
 #pragma once
+#include <cmath>
 #include <concepts>
 #include <core/glm.h>
 
@@ -26,6 +27,30 @@ namespace core
 			}
 		}
 		return true;
+	}
+
+	/** Whether `value` is finite and above zero: a length, a size or a rate a caller may pass. */
+	template <std::floating_point T>
+	[[nodiscard]] bool
+	is_finite_positive(const T value) noexcept
+	{
+		return std::isfinite(value) && value > T(0);
+	}
+
+	/** Whether `value` is finite and not below zero. */
+	template <std::floating_point T>
+	[[nodiscard]] bool
+	is_finite_non_negative(const T value) noexcept
+	{
+		return std::isfinite(value) && value >= T(0);
+	}
+
+	/** Whether `value` lies in [0, 1], which no NaN does: a share, a weight, a blend. */
+	template <std::floating_point T>
+	[[nodiscard]] bool
+	is_unit_interval(const T value) noexcept
+	{
+		return value >= T(0) && value <= T(1);
 	}
 
 	template <std::integral T, std::integral U>

@@ -21,6 +21,7 @@
 #include <core/containers/fixed_buffer.h>
 #include <core/containers/multi_slot_handle.h>
 #include <core/err/util.h>
+#include <core/math.h>
 #include <core/parallel_for.h>
 #include <cstddef>
 #include <cstdint>
@@ -52,12 +53,6 @@ namespace bgl
 		static_assert(
 			static_cast<uint64_t>(idl::cTerrainPatchQuads) << (idl::cTerrainMaxLevels - 1) >=
 			idl::cTerrainMaxSamples - 1);
-
-		[[nodiscard]] bool
-		IsPositive(const float value) noexcept
-		{
-			return std::isfinite(value) && value > 0.0f;
-		}
 
 		void
 		ValidateTerrain(const TerrainDesc& desc, const std::span<const SurfaceType> surfaces)
@@ -92,7 +87,8 @@ namespace bgl
 						field.samplesX,
 						field.samplesZ));
 			}
-			if (!IsPositive(field.cellSize) || !IsPositive(field.heightRange))
+			if (!core::is_finite_positive(field.cellSize) ||
+			    !core::is_finite_positive(field.heightRange))
 			{
 				refuse("cellSize and heightRange must be finite and positive");
 			}
@@ -100,7 +96,7 @@ namespace bgl
 			{
 				refuse("minHeight and origin must be finite");
 			}
-			if (!IsPositive(desc.pixelsPerCell))
+			if (!core::is_finite_positive(desc.pixelsPerCell))
 			{
 				refuse("pixelsPerCell must be finite and positive");
 			}

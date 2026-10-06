@@ -10,6 +10,7 @@
 #include <cmath>
 #include <core/containers/slot_handle.h>
 #include <core/err/util.h>
+#include <core/math.h>
 #include <cstddef>
 #include <cstdint>
 #include <format>
@@ -30,18 +31,6 @@ namespace bgl
 
 		constexpr float c_Vertical = std::numbers::pi_v<float> * 0.5f;
 
-		[[nodiscard]] bool
-		IsPositive(const float value) noexcept
-		{
-			return std::isfinite(value) && value > 0.0f;
-		}
-
-		[[nodiscard]] bool
-		IsNonNegative(const float value) noexcept
-		{
-			return std::isfinite(value) && value >= 0.0f;
-		}
-
 		void
 		ValidateLayer(const TerrainGrassDesc& layer, const size_t index)
 		{
@@ -49,24 +38,25 @@ namespace bgl
 				throw SceneError(std::format("AttachTerrainGrass: layer {}: {}", index, why));
 			};
 
-			if (!IsPositive(layer.spacing) || !IsPositive(layer.patchSize))
+			if (!core::is_finite_positive(layer.spacing) ||
+			    !core::is_finite_positive(layer.patchSize))
 			{
 				refuse("spacing and patchSize must be finite and positive");
 			}
-			if (!std::isfinite(layer.maxSlope) || layer.maxSlope < 0.0f ||
-			    layer.maxSlope > c_Vertical || !IsNonNegative(layer.slopeBlend))
+			if (!(layer.maxSlope >= 0.0f && layer.maxSlope <= c_Vertical) ||
+			    !core::is_finite_non_negative(layer.slopeBlend))
 			{
 				refuse("maxSlope must be in [0, pi/2] and slopeBlend finite and non-negative");
 			}
 			if (!std::isfinite(layer.minHeight) || !std::isfinite(layer.maxHeight) ||
-			    layer.minHeight > layer.maxHeight || !IsNonNegative(layer.heightBlend))
+			    layer.minHeight > layer.maxHeight ||
+			    !core::is_finite_non_negative(layer.heightBlend))
 			{
 				refuse(
 					"heights must be finite with minHeight <= maxHeight, and heightBlend finite "
 					"and non-negative");
 			}
-			if (!std::isfinite(layer.patchCoverage) || layer.patchCoverage < 0.0f ||
-			    layer.patchCoverage > 1.0f)
+			if (!core::is_unit_interval(layer.patchCoverage))
 			{
 				refuse("patchCoverage must be in [0, 1]");
 			}

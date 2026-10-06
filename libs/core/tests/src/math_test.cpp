@@ -2,6 +2,29 @@
 #include <core/math.h>
 #include <limits>
 
+TEST_CASE("A scalar range check refuses what is not a number", "[math]")
+{
+	const float infinity = std::numeric_limits<float>::infinity();
+	const float nan      = std::numeric_limits<float>::quiet_NaN();
+
+	CHECK(core::is_finite_positive(1e-30f));
+	CHECK_FALSE(core::is_finite_positive(0.0f));
+	CHECK_FALSE(core::is_finite_positive(infinity));
+	CHECK_FALSE(core::is_finite_positive(nan));
+
+	CHECK(core::is_finite_non_negative(0.0f));
+	CHECK(core::is_finite_non_negative(-0.0f));
+	CHECK_FALSE(core::is_finite_non_negative(-1e-30f));
+	CHECK_FALSE(core::is_finite_non_negative(infinity));
+	CHECK_FALSE(core::is_finite_non_negative(nan));
+
+	CHECK(core::is_unit_interval(0.0f));
+	CHECK(core::is_unit_interval(1.0));
+	CHECK_FALSE(core::is_unit_interval(1.0f + 1e-6f));
+	CHECK_FALSE(core::is_unit_interval(-1e-30f));
+	CHECK_FALSE(core::is_unit_interval(nan));
+}
+
 TEST_CASE("A vector is finite only when every one of its components is", "[math]")
 {
 	const float infinity = std::numeric_limits<float>::infinity();
