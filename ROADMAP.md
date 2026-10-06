@@ -380,11 +380,16 @@ and portability.
   - [ ] Static vs. Dynamic Shadow
   - [ ] Shadow LODs — bias 1–2 tiers coarser, but a unit posed per instance for the camera must not
     read the shared table for a cascade.
-- [ ] Terrain — **missing entirely and load-bearing**: the heightfield feeds the grounded test, foot
-  planting, corpse settling, slope cost, and the ground blood field.
-  - [ ] Heightfield representation + GPU-sampleable height/normal.
-  - [ ] Terrain rendering + LOD, with unbounded range in Forward World (the occluder phase).
-  - [ ] Terrain material layers.
+- [~] Terrain — the heightfield exists and draws ([Terrain](docs/terrain.md)); nothing feeds on it
+  yet: the grounded test, foot planting, corpse settling, slope cost and the ground blood field
+  still read `IScene::SetGround`'s plane, and `lib.terrain.heightfield` is what they will read.
+  - [x] Heightfield representation + GPU-sampleable height/normal — `assetlib::Heightfield`,
+    `IScene::CreateTerrain`, one `R16_UNORM` texture, `lib.terrain.heightfield`.
+  - [~] Terrain rendering + LOD — Forward Terrain: CDLOD patches built in the mesh stage, the level
+    chosen per node by screen size. Within the view's far plane; unbounded range (the occluder
+    phase) waits on reversed-Z under § Culling.
+  - [ ] Terrain material layers — a surface shades from where a pixel stands for now
+    (`ToonTerrain.slang` in the test project).
 - [ ] Scene Representation
 - [ ] Foliage
   - [x] Grass -- mesh-stage blades from a mesh source's POINTS clumps, wind, screen-size thinning,
@@ -502,7 +507,9 @@ and portability.
 ## Module 2: Game Logic
 
 - [ ] Level Editor for Battles
-  - [ ] Terrain Gen. using Noise + inputs: hilly, flat, mountainous etc
+  - [~] Terrain Gen. using Noise + inputs: hilly, flat, mountainous etc — the generator is
+    `terrainlib` (`terrain::Generate`: a seed and a shape, deterministic); the editor's tool over
+    it, and storing a result, are not.
   - [ ] Navmesh Gen.
   - [ ] Weather Editor
   - [ ] Drag and Drop Buildings & Meshes
