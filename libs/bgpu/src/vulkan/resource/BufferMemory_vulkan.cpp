@@ -5,6 +5,7 @@
 #include <bgpu/GpuContext.h>
 #include <core/err/util.h>
 #include <core/ref/SharedRef.h>
+#include <core/ref/WeakRef.h>
 #include <cstdint>
 #include <mutex>
 #include <string_view>
@@ -20,8 +21,8 @@ namespace bgpu
 		// as a bare VkBuffer.
 		struct Registry
 		{
-			std::mutex                                  mutex;
-			std::unordered_map<VkBuffer, BufferMemory*> buffers;
+			std::mutex                                                mutex;
+			std::unordered_map<VkBuffer, core::WeakRef<BufferMemory>> buffers;
 		};
 
 		Registry&
@@ -152,7 +153,7 @@ namespace bgpu
 		{
 			Registry&             registry = GetRegistry();
 			const std::lock_guard lock(registry.mutex);
-			registry.buffers.emplace(m_Buffer, this);
+			registry.buffers.emplace(m_Buffer, core::WeakRef<BufferMemory>(this));
 		}
 	}
 
@@ -176,14 +177,8 @@ namespace bgpu
 		if (found == registry.buffers.end())
 			return nullptr;
 
-		// The entry is not a reference: its last owner may have let go, with the destructor now
-		// waiting on this lock to erase it. A reference is taken only while one is still held.
-		BufferMemory* const memory = found->second;
-		if (!memory->TryAddRef())
-			return nullptr;
-		auto reference = core::SharedRef<BufferMemory>(memory);
-		memory->Release();
-		return reference;
+		// Null when the last owner has let go and the destructor waits on this lock to erase it.
+		return found->second.Lock();
 	}
 
 	void
