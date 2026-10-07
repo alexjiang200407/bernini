@@ -3,9 +3,7 @@
 #include "util/SkinnedSynth.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
-#include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/BMesh.h>
-#include <assetlib_structs/Grass.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/VertexLayout.h>
 #include <bgl/IGraphics.h>
@@ -94,36 +92,6 @@ struct CelCharacter : IToonCharacterSurfaceSource
 };
 )";
 
-	constexpr std::string_view c_ToonEnvironment = R"(import bgl.MaterialReader;
-import bgl.ToonEnvironmentSurface;
-
-struct FlatParams
-{
-    [Color]
-    [Default(1.0, 1.0, 1.0, 1.0)]
-    float4 baseColorFactor;
-
-    ColorSlot baseColor;
-};
-
-struct FlatEnvironment : IToonEnvironmentSurfaceSource
-{
-    typealias MaterialParams = FlatParams;
-
-    static float Coverage<R : IMaterialReader>(R reader, FlatParams params)
-    {
-        return params.baseColorFactor.a * reader.Sample(params.baseColor, reader.Uv()).a;
-    }
-
-    static ToonEnvironmentSurface Evaluate<R : IMaterialReader>(R reader, FlatParams params)
-    {
-        ToonEnvironmentSurface surface = ToonEnvironmentSurface();
-        surface.baseColor = params.baseColorFactor * reader.Sample(params.baseColor, reader.Uv());
-        return surface;
-    }
-};
-)";
-
 	void
 	Write(const std::filesystem::path& path, std::string_view text)
 	{
@@ -132,7 +100,7 @@ struct FlatEnvironment : IToonEnvironmentSurfaceSource
 		out << text;
 	}
 
-	// The two toon surfaces beside the suite's Unlit, the lit surface whose Shade is its colour
+	// The toon surface beside the suite's Unlit, the lit surface whose Shade is its colour
 	// and nothing else -- which is what flat toon has to draw.
 	std::filesystem::path
 	ToonSurfaceDir()
@@ -142,7 +110,6 @@ struct FlatEnvironment : IToonEnvironmentSurfaceSource
 		std::filesystem::remove_all(dir);
 		std::filesystem::create_directories(dir);
 		Write(dir / "ToonCharacter.slang", c_ToonCharacter);
-		Write(dir / "ToonEnvironment.slang", c_ToonEnvironment);
 		std::filesystem::copy_file("./shaders/tests/surfaces/Unlit.slang", dir / "Unlit.slang");
 		return dir;
 	}
@@ -236,7 +203,7 @@ struct FlatEnvironment : IToonEnvironmentSurfaceSource
 	}
 }
 
-// Registration of the toon contracts: each takes a slot in filename order beside a lit surface,
+// Registration of the toon contract: it takes a slot in filename order beside a lit surface,
 // under its own shading, with its parameters reflected exactly as any surface's are.
 TEST_CASE("A toon surface registers under its own model", "[surface][registry][toon]")
 {
@@ -244,15 +211,13 @@ TEST_CASE("A toon surface registers under its own model", "[surface][registry][t
 	REQUIRE(gfx != nullptr);
 
 	const std::span<const SurfaceType> types = gfx->GetSurfaceTypes();
-	REQUIRE(types.size() == 3u);
+	REQUIRE(types.size() == 2u);
 
 	CHECK(types[0].surfaceName == "ToonCharacter");
 	CHECK(types[0].kind == MaterialType::kGameStart);
 	CHECK(types[0].shading == SurfaceShading::kToonCharacter);
-	CHECK(types[1].surfaceName == "ToonEnvironment");
-	CHECK(types[1].shading == SurfaceShading::kToonEnvironment);
-	CHECK(types[2].surfaceName == "Unlit");
-	CHECK(types[2].shading == SurfaceShading::kLit);
+	CHECK(types[1].surfaceName == "Unlit");
+	CHECK(types[1].shading == SurfaceShading::kLit);
 
 	REQUIRE(types[0].params.values.size() == 4u);
 	CHECK(types[0].params.values[0].name == "baseColorFactor");
@@ -396,17 +361,6 @@ TEST_CASE(
 			alwaysPng);
 		CHECK(middle(behindPng, secondRef) < c_Same);
 		CHECK(middle(alwaysPng, litRef) < c_Same);
-	}
-
-	{
-		INFO("the environment model is still flat");
-		const auto* environmentPng = "assets/golden/toon_cel_environment.got.png";
-		shoot(
-			plane(scene->CreateSurfaceMaterial(Toon("ToonEnvironment", c_Flat))),
-			second,
-			SphereCamera(),
-			environmentPng);
-		CHECK(middle(environmentPng, litRef) < c_Same);
 	}
 
 	{
@@ -594,49 +548,6 @@ namespace
 		return mesh;
 	}
 
-	/** A field of `side` x `side` clumps over the plane's XY, growing along its normal. */
-	assetlib::BGrassFields
-	MakeField(const uint32_t side, const float spacing)
-	{
-		auto grass  = assetlib::BGrassFields();
-		grass.looks = { "unused.bgrass" };
-		grass.names = { "Ground" };
-
-		const float origin = -0.5f * spacing * static_cast<float>(side - 1);
-		for (uint32_t y = 0; y < side; ++y)
-		{
-			for (uint32_t x = 0; x < side; ++x)
-			{
-				grass.clumps.push_back(
-					assetlib::GrassClump{ .position = glm::vec3(
-											  origin + spacing * static_cast<float>(x),
-											  origin + spacing * static_cast<float>(y),
-											  0.0f),
-				                          .heightScale = 1.0f,
-				                          .normal      = glm::vec3(0.0f, 0.0f, 1.0f),
-				                          .color       = glm::u8vec4(255) });
-			}
-		}
-
-		auto field = assetlib::GrassField{ .mesh = 0, .look = 0, .firstChunk = 0, .chunkCount = 0 };
-		for (uint32_t first = 0; first < grass.clumps.size();
-		     first += assetlib::c_GrassClumpsPerChunk)
-		{
-			const auto count = std::min<uint32_t>(
-				assetlib::c_GrassClumpsPerChunk,
-				static_cast<uint32_t>(grass.clumps.size()) - first);
-			grass.chunks.push_back(
-				assetlib::GrassChunk{ .boundingCenter = glm::vec3(0.0f),
-			                          .boundingRadius = spacing * static_cast<float>(side),
-			                          .firstClump     = first,
-			                          .clumpCount     = count,
-			                          .maxHeightScale = 1.0f });
-			++field.chunkCount;
-		}
-		grass.fields = { field };
-		return grass;
-	}
-
 	/** Which of the two suns a frame turns on. */
 	enum class Sun
 	{
@@ -655,8 +566,8 @@ namespace
 }
 
 // The toon sun reaches every lane a toon character draws through, not the one at rest alone: a
-// level dissolving, a blade of grass and the shared blend program each light the character by the
-// toon sun and draw it black by the PBR sun. A binding missed in one of them draws black as well,
+// level dissolving and the shared blend program each light the character by the toon sun and draw
+// it black by the PBR sun. A binding missed in one of them draws black as well,
 // so each is shown lit.
 TEST_CASE("A toon character's every lane reads the toon sun", "[surface][render][toon]")
 {
@@ -729,51 +640,6 @@ TEST_CASE("A toon character's every lane reads the toon sun", "[surface][render]
 	}
 
 	{
-		INFO("on grass");
-		const auto black = scene->CreatePbrMaterial(
-			bgl::PbrMaterialDesc{ .baseColorFactor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f) });
-		const auto ground = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, black);
-
-		auto look            = bgl::GrassDesc();
-		look.material        = character;
-		look.blade.rootWidth = 0.05f;
-		const auto looks     = std::array<bgl::GrassHandle, 1>{ { scene->CreateGrass(look) } };
-		scene->AttachGrass(ground, MakeField(40, 0.12f), 0, looks);
-
-		const auto grass = [&](const Sun sun, const char* png) {
-			auto targetDesc     = bgl::RenderTargetDesc();
-			targetDesc.width    = 400;
-			targetDesc.height   = 300;
-			targetDesc.headless = true;
-			auto target         = gfx->CreateRenderTarget(targetDesc);
-			auto view           = gfx->CreateSceneView(scene, 4);
-			LightBy(*view, sun, glm::normalize(glm::vec3(0.0f, -1.0f, -0.5f)));
-			view->CreateStaticMeshInstance(
-				bgl::StaticMeshInstanceDesc().SetGeom(ground).SetTransform(
-					glm::rotate(
-						glm::mat4(1.0f),
-						glm::radians(-90.0f),
-						glm::vec3(1.0f, 0.0f, 0.0f))));
-
-			auto job     = bgl::RenderJob();
-			job.view     = view;
-			job.viewport = bgl::Viewport(400.0f, 300.0f);
-			job.camera   = bgl::Camera()
-			                   .LookAt(
-								   glm::vec3(0.0f, 3.0f, 6.0f),
-								   glm::vec3(0.0f),
-								   glm::vec3(0.0f, 1.0f, 0.0f))
-			                   .Perspective(glm::radians(60.0f), 400.0f / 300.0f, 0.1f, 200.0f);
-			for (int i = 0; i < 6; ++i) gfx->DrawFrame(target, job);
-			gfx->ScreenshotPng(target, png);
-			return bgl::test::MeanColor(png, 150, 120, 100, 80).r;
-		};
-
-		CHECK(grass(Sun::kToon, "assets/golden/toon_lanes_grass_toon.got.png") > 0.05f);
-		CHECK(grass(Sun::kPbr, "assets/golden/toon_lanes_grass_pbr.got.png") < 1e-3f);
-	}
-
-	{
 		INFO("blended");
 		const auto blended = scene->CreateSurfaceMaterial(Cel(c_Half, {}, LayerType::kBlend));
 		const auto plane   = scene->AddPlaneGeom(1, 1, 30.0f, 30.0f, blended);
@@ -802,101 +668,36 @@ TEST_CASE("A toon character's every lane reads the toon sun", "[surface][render]
 	}
 }
 
-// Toon grass (docs/grass.md § Toon grass): at a ground normal of 1 and 1 every blade takes the
-// ground's tone, under suns chosen so the ground and the faces blades turn to the camera disagree;
-// a root-to-tip tint then grades each blade within that tone.
-TEST_CASE(
-	"Toon grass on its ground normal takes the ground's one tone, graded root to tip",
-	"[surface][render][toon]")
+// Grass is environment, which shades PBR: a toon character's programs read a placement's rig, which
+// a blade has none of, so a look is refused one whether it is made with it or changed to it.
+TEST_CASE("A grass look refuses a toon character surface", "[surface][grass][toon]")
 {
+	using Catch::Matchers::ContainsSubstring;
+	using Catch::Matchers::MessageMatches;
+
 	auto gfx = bgl::test::CreateGraphics(ToonOptions());
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(ToonScene());
 
 	const auto character = scene->CreateSurfaceMaterial(Cel(c_Flat, {}));
-	const auto black     = scene->CreatePbrMaterial(
-		bgl::PbrMaterialDesc{ .baseColorFactor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f) });
+	auto       look      = bgl::GrassDesc();
+	look.material        = character;
+	CHECK_THROWS_MATCHES(
+		scene->CreateGrass(look),
+		SceneError,
+		MessageMatches(ContainsSubstring("CreateGrass: a toon character surface")));
 
-	const auto lawn =
-		[&](const float groundNear, const float groundFar, const glm::vec3& rootTint) {
-			auto look                      = bgl::GrassDesc();
-			look.color.rootTint            = rootTint;
-			look.material                  = character;
-			look.blade.rootWidth           = 0.05f;
-			look.lighting.groundNormalNear = groundNear;
-			look.lighting.groundNormalFar  = groundFar;
-			const auto looks  = std::array<bgl::GrassHandle, 1>{ { scene->CreateGrass(look) } };
-			const auto ground = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, black);
-			scene->AttachGrass(ground, MakeField(40, 0.12f), 0, looks);
-			return ground;
-		};
-
-	// The ground faces +Y once the plane is turned; the camera looks down at it from +Z.
-	const auto shoot = [&](const auto ground, const glm::vec3& toSun, const char* png) {
-		auto targetDesc       = bgl::RenderTargetDesc();
-		targetDesc.width      = 400;
-		targetDesc.height     = 300;
-		targetDesc.headless   = true;
-		targetDesc.taaEnabled = false;
-		auto target           = gfx->CreateRenderTarget(targetDesc);
-		auto view             = gfx->CreateSceneView(scene, 4);
-		LightBy(*view, Sun::kToon, -glm::normalize(toSun));
-		view->CreateStaticMeshInstance(
-			bgl::StaticMeshInstanceDesc().SetGeom(ground).SetTransform(
-				glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f))));
-
-		auto job     = bgl::RenderJob();
-		job.view     = view;
-		job.viewport = bgl::Viewport(400.0f, 300.0f);
-		job.camera =
-			bgl::Camera()
-				.LookAt(glm::vec3(0.0f, 3.0f, 6.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))
-				.Perspective(glm::radians(60.0f), 400.0f / 300.0f, 0.1f, 200.0f);
-		for (int i = 0; i < 3; ++i) gfx->DrawFrame(target, job);
-		gfx->ScreenshotPng(target, png);
-		return bgl::test::CoveredTones(png, 150, 120, 100, 80, 0.02f);
-	};
-
-	// Half-Lambert on the ground: 0.82 behind and above, past the base step; 0.36 in front and
-	// below, under it. On a face turned to the camera it is the other way about.
-	const auto behind  = glm::vec3(0.0f, 1.0f, -1.2f);
-	const auto inFront = glm::vec3(0.0f, -0.3f, 1.0f);
-
-	const auto white  = glm::vec3(1.0f);
-	const auto toon   = lawn(1.0f, 1.0f, white);
-	const auto lit    = shoot(toon, behind, "assets/golden/toon_grass_ground_lit.got.png");
-	const auto shaded = shoot(toon, inFront, "assets/golden/toon_grass_ground_shaded.got.png");
-	const auto mixed =
-		shoot(lawn(0.0f, 0.8f, white), behind, "assets/golden/toon_grass_default_blend.got.png");
-
-	INFO(
-		"lit: " << lit.maxDeviation << " over " << lit.covered
-				<< ", shaded: " << shaded.maxDeviation << " over " << shaded.covered
-				<< ", default blend: " << mixed.maxDeviation << " over " << mixed.covered);
-	REQUIRE(lit.covered > 1000);
-	REQUIRE(shaded.covered > 1000);
-	REQUIRE(mixed.covered > 1000);
-	CHECK(lit.maxDeviation < 0.02f);
-	CHECK(shaded.maxDeviation < 0.02f);
-	CHECK(shaded.mean.Luma() < lit.mean.Luma() - 0.05f);
-	CHECK(mixed.maxDeviation > 0.1f);
-
-	const auto graded    = lawn(1.0f, 1.0f, glm::vec3(0.3f));
-	const auto gradedLit = shoot(graded, behind, "assets/golden/toon_grass_graded_lit.got.png");
-	const auto gradedShaded =
-		shoot(graded, inFront, "assets/golden/toon_grass_graded_shaded.got.png");
-	INFO(
-		"graded lit: " << gradedLit.maxDeviation << " over " << gradedLit.covered
-					   << ", graded shaded: " << gradedShaded.maxDeviation);
-	REQUIRE(gradedLit.covered > 1000);
-	REQUIRE(gradedShaded.covered > 1000);
-	CHECK(gradedLit.maxDeviation > 0.1f);
-	CHECK(gradedLit.mean.Luma() < lit.mean.Luma() - 0.03f);
-	CHECK(gradedShaded.mean.Luma() < gradedLit.mean.Luma() - 0.03f);
+	look.material    = scene->CreatePbrMaterial(bgl::PbrMaterialDesc{});
+	const auto grass = scene->CreateGrass(look);
+	look.material    = character;
+	CHECK_THROWS_MATCHES(
+		scene->UpdateGrass(grass, look),
+		SceneError,
+		MessageMatches(ContainsSubstring("UpdateGrass: a toon character surface")));
 }
 
-// A document's model is its contract expectation, and the toon models are two contracts: a
-// material that expects one is refused a surface on the other, naming both.
+// A document's model is its contract expectation: a material that expects the toon model is
+// refused a surface on another, and a toon surface is refused a material expecting another model.
 TEST_CASE("A toon material is refused a surface on another model", "[surface][toon]")
 {
 	using Catch::Matchers::ContainsSubstring;
@@ -906,19 +707,19 @@ TEST_CASE("A toon material is refused a surface on another model", "[surface][to
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(ToonScene());
 
-	auto expectsEnvironment    = SurfaceMaterialDesc{ .surfaceName = "ToonCharacter" };
-	expectsEnvironment.shading = SurfaceShading::kToonEnvironment;
-	auto expectsCharacter      = SurfaceMaterialDesc{ .surfaceName = "Unlit" };
-	expectsCharacter.shading   = SurfaceShading::kToonCharacter;
-	auto expectsItsOwn         = SurfaceMaterialDesc{ .surfaceName = "ToonEnvironment" };
-	expectsItsOwn.shading      = SurfaceShading::kToonEnvironment;
+	auto expectsLit          = SurfaceMaterialDesc{ .surfaceName = "ToonCharacter" };
+	expectsLit.shading       = SurfaceShading::kLit;
+	auto expectsCharacter    = SurfaceMaterialDesc{ .surfaceName = "Unlit" };
+	expectsCharacter.shading = SurfaceShading::kToonCharacter;
+	auto expectsItsOwn       = SurfaceMaterialDesc{ .surfaceName = "ToonCharacter" };
+	expectsItsOwn.shading    = SurfaceShading::kToonCharacter;
 
 	CHECK_THROWS_MATCHES(
-		scene->CreateSurfaceMaterial(expectsEnvironment),
+		scene->CreateSurfaceMaterial(expectsLit),
 		SceneError,
 		MessageMatches(ContainsSubstring(
 			"surface 'ToonCharacter' is toon-lit as a character (IToonCharacterSurfaceSource), but "
-			"the material expects one that is toon-lit as an environment")));
+			"the material expects one that owns its lighting")));
 	CHECK_THROWS_MATCHES(
 		scene->CreateSurfaceMaterial(expectsCharacter),
 		SceneError,

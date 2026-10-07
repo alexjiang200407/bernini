@@ -12,12 +12,20 @@
 #include <bgl/types/MaterialHandle.h>
 #include <cstdint>
 #include <optional>
+#include <span>
 
 namespace bgl
 {
 	/** The game slot a kind names -- its surface's registration index -- or empty for an engine kind. */
 	[[nodiscard]] std::optional<uint32_t>
 	GameSlot(MaterialType material) noexcept;
+
+	/**
+	 * Whether `material` is drawn by a toon character surface among `surfaces`, whose programs read
+	 * a placement's toon shading rig -- which only a mesh placement carries.
+	 */
+	[[nodiscard]] bool
+	DrawsToonCharacter(MaterialType material, std::span<const SurfaceType> surfaces) noexcept;
 
 	/** The kind the records of the surface registered `slot`th carry. */
 	[[nodiscard]] MaterialType

@@ -1,20 +1,17 @@
 import bgl.LitSurfaceSource;
 import bgl.PbrSurface;
 import bgl.SurfaceSource;
-import bgl.ToonCharacterSurface;
 import idl.GrassLook;
 import idl.IPbrMaterial;
 import idl.ShadingParams;
 import lib.forward.GameSurface;
 import lib.forward.MaterialData;
 import lib.forward.MaterialShading;
-import lib.forward.ToonData;
 import lib.forward.common;
 import lib.forward.GrassData;
 import lib.forward.grass_vertex;
 import lib.geom.vertexdecode;
 import lib.math.PbrShading;
-import lib.math.ToonShading;
 
 // How far past the terminator the sun still shows through a blade, as a share of a right angle.
 static const float cGrassTranslucencyWrap = 0.5;
@@ -67,20 +64,6 @@ public extension MaterialData
 
         ForwardPSOut output;
         output.color = ShadeGrassSurface(input, record.EvaluateOnGrass(input.Surface()));
-        output.motion = ComputeMotionVector(input.Surface());
-        return output;
-    }
-
-    // A toon character on a blade: the lit grass program, lit by the toon sun, its tone tinted root to
-    // tip -- what parts one blade from the next when the cel step gives them all the ground's tone.
-    // The occlusion and translucency stay the PBR program's.
-    public ForwardPSOut GameToonGrassProgram<G : IToonCharacterSurfaceSource>(GrassVSOut input)
-    {
-        let record = LitGameRecord<ToonCharacterLit<G>>.Load(input.materialOffset);
-        let toned = record.ShadeOnGrassWith(input.Surface(), ToonSurfaceLight()).rgb;
-
-        ForwardPSOut output;
-        output.color = float4(toned * input.tint.rgb * exposure, 1.0);
         output.motion = ComputeMotionVector(input.Surface());
         return output;
     }

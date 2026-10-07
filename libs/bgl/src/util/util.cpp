@@ -36,6 +36,14 @@ namespace bgl
 		return kind - start;
 	}
 
+	bool
+	DrawsToonCharacter(MaterialType material, std::span<const SurfaceType> surfaces) noexcept
+	{
+		const std::optional<uint32_t> slot = GameSlot(material);
+		return slot.has_value() && *slot < surfaces.size() &&
+		       surfaces[*slot].shading == SurfaceShading::kToonCharacter;
+	}
+
 	MaterialType
 	GameSlotKind(uint32_t slot) noexcept
 	{

@@ -113,9 +113,7 @@ namespace bgl
 			}
 			// A character's programs read a placement's toon shading rig off its vertices; a
 			// terrain patch carries none, so its pixels have nothing to read.
-			if (const auto slot = GameSlot(kind);
-			    slot.has_value() && *slot < surfaces.size() &&
-			    surfaces[*slot].shading == SurfaceShading::kToonCharacter)
+			if (DrawsToonCharacter(kind, surfaces))
 			{
 				refuse(
 					"a toon character surface shades a placement's rig, which a terrain has none "

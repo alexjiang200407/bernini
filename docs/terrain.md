@@ -81,12 +81,11 @@ material draws through. No program is generated per surface for terrain, and cel
 whatever the material is. The bucket culls back faces in hardware and has no dissolve lane.
 
 A terrain takes an opaque material of any kind but a toon character surface, whose programs read a
-placement's shading rig off its vertices; `CreateTerrain` refuses that one. A toon ground is a
-surface on `IToonEnvironmentSurfaceSource` that picks its bands from the reader's world position
-and normal, drawn by the toon environment model, which paints the base colour flat until the
-environment's look is designed ([Game-Defined Surfaces](game_defined_surfaces.md)); the test
-project's `ToonTerrain.slang` is one, and it takes that look the day the model has it, with no
-change here.
+placement's shading rig off its vertices; `CreateTerrain` refuses that one. Ground is environment,
+and environment is PBR: a terrain's surface is an `ISurfaceSource` that picks its albedo and
+roughness from the reader's world position and normal
+([Game-Defined Surfaces](game_defined_surfaces.md)); the test project's `BandedTerrain.slang` is
+one.
 
 ## Reading the ground
 

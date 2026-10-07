@@ -1012,24 +1012,12 @@ TEST_CASE("a lit surface material round-trips its model", "[bmaterial][io][surfa
 	CHECK(restored.surface.textures[0].name == "base");
 }
 
-// Each toon model is its own contract expectation, so each name survives a round trip as itself:
-// a character material read back as an environment one would be lit by the other model.
+// The toon model is its own contract expectation, so its name survives a round trip as itself: a
+// character material read back as another model would be lit by that model.
 TEST_CASE("a toon surface material round-trips its model", "[bmaterial][io][surface][toon]")
 {
-	auto        model = ShadingModel::kToonCharacterSurface;
-	std::string name;
-
-	SECTION("character")
-	{
-		model = ShadingModel::kToonCharacterSurface;
-		name  = "toonCharacterSurface";
-	}
-
-	SECTION("environment")
-	{
-		model = ShadingModel::kToonEnvironmentSurface;
-		name  = "toonEnvironmentSurface";
-	}
+	const auto        model = ShadingModel::kToonCharacterSurface;
+	const std::string name  = "toonCharacterSurface";
 
 	BMaterial mat;
 	mat.name                = "flat";
@@ -1053,4 +1041,15 @@ TEST_CASE("a toon surface material round-trips its model", "[bmaterial][io][surf
 	CHECK(restored.surface.values[0].name == "baseColorFactor");
 	REQUIRE(restored.surface.textures.size() == 1u);
 	CHECK(restored.surface.textures[0].name == "baseColor");
+}
+
+// Environments are PBR, and no toon model draws them: a document naming a toon environment model is
+// refused rather than read as some other model.
+TEST_CASE("a material on a toon environment model is refused", "[bmaterial][io][toon]")
+{
+	const std::string text =
+		R"({"shadingModel":"toonEnvironmentSurface","name":"ground","surface":"Flat"})";
+	CHECK_THROWS_WITH(
+		AssetCodec<BMaterial>::Deserialize(std::as_bytes(std::span(text.data(), text.size()))),
+		Catch::Matchers::ContainsSubstring("unknown shading model 'toonEnvironmentSurface'"));
 }

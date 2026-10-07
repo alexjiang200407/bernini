@@ -539,11 +539,10 @@ import bgl.SurfaceSource;
 import bgl.SurfaceLight;
 import bgl.LitSurfaceSource;
 import bgl.ToonCharacterSurface;
-import bgl.ToonEnvironmentSurface;
 )";
 
-	// A game's character and environment surfaces, as the test project writes them: base colour
-	// through a colour slot, each on its own toon contract.
+	// A game's character surface, as the test project writes one: base colour through a colour
+	// slot, on the toon contract.
 	constexpr std::string_view c_ToonCharacter = R"(
 
 struct FlatParams
@@ -573,35 +572,6 @@ struct FlatCharacter : IToonCharacterSurfaceSource
 };
 )";
 
-	constexpr std::string_view c_ToonEnvironment = R"(
-
-struct FlatParams
-{
-    [Color]
-    [Default(1.0, 1.0, 1.0, 1.0)]
-    float4 baseColorFactor;
-
-    ColorSlot baseColor;
-};
-
-struct FlatEnvironment : IToonEnvironmentSurfaceSource
-{
-    typealias MaterialParams = FlatParams;
-
-    static float Coverage<R : IMaterialReader>(R reader, FlatParams params)
-    {
-        return params.baseColorFactor.a * reader.Sample(params.baseColor, reader.Uv()).a;
-    }
-
-    static ToonEnvironmentSurface Evaluate<R : IMaterialReader>(R reader, FlatParams params)
-    {
-        ToonEnvironmentSurface surface = ToonEnvironmentSurface();
-        surface.baseColor = params.baseColorFactor * reader.Sample(params.baseColor, reader.Uv());
-        return surface;
-    }
-};
-)";
-
 	bool
 	Conforms(slang::IModule* module, const char* structName, const char* interfaceName)
 	{
@@ -614,73 +584,42 @@ struct FlatEnvironment : IToonEnvironmentSurfaceSource
 	}
 }
 
-// The toon contracts compile as a game writes against them, and are two contracts rather than one
-// under two names: a character surface is not an environment surface, and neither is a PBR or a lit
-// one. What this cannot show is registration: which shading ReflectSurface reports a toon surface
-// under, and that it draws.
+// The toon contract compiles as a game writes against it, and is a contract of its own: a character
+// surface is neither a PBR nor a lit one. What this cannot show is registration: which shading
+// ReflectSurface reports a toon surface under, and that it draws.
 TEST_CASE(
 	"A toon surface conforms to its own model's contract alone",
 	"[surface][reflection][toon]")
 {
 	Session session;
 
-	SECTION("character")
-	{
-		slang::IModule* module = session.Load(
-			"ToonCharacterFlat",
-			std::string(c_AllContracts) + std::string(c_ToonCharacter));
-		CHECK(Conforms(module, "FlatCharacter", "IToonCharacterSurfaceSource"));
-		CHECK_FALSE(Conforms(module, "FlatCharacter", "IToonEnvironmentSurfaceSource"));
-		CHECK_FALSE(Conforms(module, "FlatCharacter", "ISurfaceSource"));
-		CHECK_FALSE(Conforms(module, "FlatCharacter", "ILitSurfaceSource"));
-	}
-
-	SECTION("environment")
-	{
-		slang::IModule* module = session.Load(
-			"ToonEnvironmentFlat",
-			std::string(c_AllContracts) + std::string(c_ToonEnvironment));
-		CHECK(Conforms(module, "FlatEnvironment", "IToonEnvironmentSurfaceSource"));
-		CHECK_FALSE(Conforms(module, "FlatEnvironment", "IToonCharacterSurfaceSource"));
-		CHECK_FALSE(Conforms(module, "FlatEnvironment", "ISurfaceSource"));
-		CHECK_FALSE(Conforms(module, "FlatEnvironment", "ILitSurfaceSource"));
-	}
+	slang::IModule* module = session.Load(
+		"ToonCharacterFlat",
+		std::string(c_AllContracts) + std::string(c_ToonCharacter));
+	CHECK(Conforms(module, "FlatCharacter", "IToonCharacterSurfaceSource"));
+	CHECK_FALSE(Conforms(module, "FlatCharacter", "ISurfaceSource"));
+	CHECK_FALSE(Conforms(module, "FlatCharacter", "ILitSurfaceSource"));
 }
 
-// Registration's half of the toon contracts: each reflects under its own shading, with its
+// Registration's half of the toon contract: it reflects under its own shading, with its
 // parameters laid out exactly as a PBR or lit surface's are, since the record is the same record.
 TEST_CASE("A toon surface reflects under its own model", "[surface][reflection][toon]")
 {
 	Session session;
 
-	SECTION("character")
-	{
-		const std::optional<ReflectedSurface> reflected = ReflectSurface(
-			session.Load(
-				"ToonCharacterFlat",
-				std::string(c_AllContracts) + std::string(c_ToonCharacter)),
-			"ToonCharacterFlat");
-		REQUIRE(reflected.has_value());
-		CHECK(reflected->sourceTypeName == "FlatCharacter");
-		CHECK(reflected->type.shading == SurfaceShading::kToonCharacter);
-		REQUIRE(reflected->type.params.values.size() == 1u);
-		CHECK(reflected->type.params.values[0].name == "baseColorFactor");
-		CHECK(reflected->type.params.values[0].isColor);
-		REQUIRE(reflected->type.params.textures.size() == 1u);
-		CHECK(reflected->type.params.textures[0].name == "baseColor");
-	}
-
-	SECTION("environment")
-	{
-		const std::optional<ReflectedSurface> reflected = ReflectSurface(
-			session.Load(
-				"ToonEnvironmentFlat",
-				std::string(c_AllContracts) + std::string(c_ToonEnvironment)),
-			"ToonEnvironmentFlat");
-		REQUIRE(reflected.has_value());
-		CHECK(reflected->sourceTypeName == "FlatEnvironment");
-		CHECK(reflected->type.shading == SurfaceShading::kToonEnvironment);
-	}
+	const std::optional<ReflectedSurface> reflected = ReflectSurface(
+		session.Load(
+			"ToonCharacterFlat",
+			std::string(c_AllContracts) + std::string(c_ToonCharacter)),
+		"ToonCharacterFlat");
+	REQUIRE(reflected.has_value());
+	CHECK(reflected->sourceTypeName == "FlatCharacter");
+	CHECK(reflected->type.shading == SurfaceShading::kToonCharacter);
+	REQUIRE(reflected->type.params.values.size() == 1u);
+	CHECK(reflected->type.params.values[0].name == "baseColorFactor");
+	CHECK(reflected->type.params.values[0].isColor);
+	REQUIRE(reflected->type.params.textures.size() == 1u);
+	CHECK(reflected->type.params.textures[0].name == "baseColor");
 }
 
 TEST_CASE("A toon surface is held to one contract", "[surface][reflection][toon]")
@@ -689,8 +628,9 @@ TEST_CASE("A toon surface is held to one contract", "[surface][reflection][toon]
 
 	Session session;
 
-	// Two toon contracts cannot meet on one struct -- their Evaluates differ by return type alone,
-	// which Slang refuses -- but a toon and a lit one can, having no member in common but Coverage.
+	// A toon and a PBR contract cannot meet on one struct -- their Evaluates differ by return type
+	// alone, which Slang refuses -- but a toon and a lit one can, having no member in common but
+	// Coverage.
 	SECTION("one struct conforms to a toon model and to the lit contract")
 	{
 		const std::string body =
@@ -712,15 +652,15 @@ struct Both : ILitSurfaceSource, IToonCharacterSurfaceSource
 				"contract")));
 	}
 
-	SECTION("a character surface and an environment surface in one file")
+	SECTION("a character surface and a PBR surface in one file")
 	{
 		std::string body = std::string(c_AllContracts) + std::string(c_ToonCharacter);
 		body += R"(
-struct AlsoEnvironment : IToonEnvironmentSurfaceSource
+struct AlsoPbr : ISurfaceSource
 {
     typealias MaterialParams = FlatParams;
     static float Coverage<R : IMaterialReader>(R reader, FlatParams params) { return 1.0; }
-    static ToonEnvironmentSurface Evaluate<R : IMaterialReader>(R reader, FlatParams params) { return ToonEnvironmentSurface(); }
+    static PbrSurface Evaluate<R : IMaterialReader>(R reader, FlatParams params) { return PbrSurface(); }
 };
 )";
 		CHECK_THROWS_MATCHES(
@@ -738,6 +678,6 @@ struct AlsoEnvironment : IToonEnvironmentSurfaceSource
 			std::runtime_error,
 			Catch::Matchers::Message(
 				"surface 'Nothing': no struct in the module conforms to ISurfaceSource, "
-				"ILitSurfaceSource, IToonCharacterSurfaceSource or IToonEnvironmentSurfaceSource"));
+				"ILitSurfaceSource or IToonCharacterSurfaceSource"));
 	}
 }

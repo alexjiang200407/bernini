@@ -261,7 +261,7 @@ Overview of all the Frame Graph Passes
 **[Game-Defined Surfaces](./docs/game_defined_surfaces.md)**
 
 A shading function the game writes and the engine draws through: the `ISurfaceSource` contract and
-its siblings — the lit one and the two toon models, character and environment — the three
+its siblings — the lit one and the toon character model — the three
 rules a file keeps, where the `.slang` lives in a project and when it is read, the three
 document keys a `.bmaterial` adds, what is refused and at which of the two places, and the
 boundaries — a bake per routed data slot and nothing else, no hot reload, no scene inputs; the

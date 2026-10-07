@@ -2,8 +2,7 @@ import bgl.MaterialReader;
 
 /**
  * What the toon character model reads off a surface: the material's half of shading a character,
- * the engine's toon lighting the other. A model apart from the environment's
- * (bgl.ToonEnvironmentSurface) because the two are different artists' work and grow apart.
+ * the engine's toon lighting the other. Characters alone are toon; an environment is PBR.
  *
  * The cel model is three tones over the half-Lambert term `0.5 * dot(N, L) + 0.5`: lit, first
  * shade and second shade, each `baseColor` times its tint. The steps are values of that term; a
