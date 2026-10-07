@@ -23,19 +23,24 @@
 #	include <bgpu/pipeline/ComputePipeline.h>
 #	include <bgpu/resource/Buffer.h>
 #	include <bgpu/resource/NativeBufferDesc.h>
+#	include <bgpu/resource/NativeTextureDesc.h>
 #	include <bgpu/resource/Readback.h>
 #	include <bgpu/resource/ResourceManager.h>
 #	include <bgpu/resource/Shader.h>
+#	include <bgpu/resource/Texture.h>
 #	include <bgpu/types/Barrier.h>
 #	include <bgpu/types/ComputeState.h>
+#	include <bgpu/types/Format.h>
 #	include <bgpu/types/NativeObject.h>
 #	include <bgpu/types/QueueType.h>
 #	include <bgpu/uniforms/Uniforms.h>
 #	include <catch2/catch_test_macros.hpp>
 #	include <core/ref/SharedRef.h>
 #	include <cstdint>
+#	include <cstring>
 #	include <set>
 #	include <string>
+#	include <utility>
 #	include <vector>
 
 namespace
@@ -52,10 +57,11 @@ namespace
 	// One owner's submission objects, made as a device would make them.
 	struct Owner
 	{
-		explicit Owner(const bgpu::GpuContextRef& context, bgpu::QueueType type) :
-			rm(core::SharedRef<bgpu::ResourceManager>::Make(
-				context,
-				bgpu::ResourceManagerDesc::ComputeOnly())),
+		explicit Owner(
+			const bgpu::GpuContextRef&       context,
+			bgpu::QueueType                  type,
+			const bgpu::ResourceManagerDesc& desc = bgpu::ResourceManagerDesc::ComputeOnly()) :
+			rm(core::SharedRef<bgpu::ResourceManager>::Make(context, desc)),
 			queue(core::SharedRef<bgpu::CommandQueue>::Make(context, type)),
 			alloc(core::SharedRef<bgpu::CommandAllocator>::Make(context)),
 			list(core::SharedRef<bgpu::CommandList>::Make(bgpu::CommandListDesc{ type }, rm))
@@ -232,6 +238,69 @@ TEST_CASE("A Vulkan queue's GPU wait orders it after another queue's work", "[vu
 	consumer.rm->DestroyReadbackBuffer(rb, false);
 	consumer.rm->DestroyBuffer(imported, false);
 	producer.rm->DestroyBuffer(shared, false);
+}
+
+// A texture's first transition belongs to its image, not its maker: an owner that imports it before
+// the maker has submitted anything submits the transition itself, and the maker, submitting later,
+// does not repeat it and discard what was written. The context is strict, so a texture used while
+// still UNDEFINED ends the case.
+TEST_CASE(
+	"A Vulkan texture imported before its maker submits is in its layout, and kept once written",
+	"[vulkan][import]")
+{
+	auto context  = DebugContext();
+	auto producer = Owner(context, bgpu::QueueType::kGraphics, bgpu::ResourceManagerDesc());
+	auto consumer = Owner(context, bgpu::QueueType::kGraphics, bgpu::ResourceManagerDesc());
+
+	auto desc           = bgpu::TextureDesc();
+	desc.width          = 4;
+	desc.height         = 1;
+	desc.format         = bgpu::Format::RGBA8_UNORM;
+	desc.initialLayout  = bgpu::BarrierLayout::kCopyDest;
+	desc.debugName      = "made";
+	const auto made     = producer.rm->CreateTexture(desc);
+	const auto imported = consumer.rm->ImportNativeTexture(
+		bgpu::NativeTextureDesc()
+			.SetObject(
+				bgpu::NativeObjectType::kVkImage,
+				producer.rm->GetNativeTexture(made, bgpu::NativeObjectType::kVkImage))
+			.SetTexture(desc));
+	REQUIRE(consumer.rm->ValidTextureHandle(imported));
+
+	constexpr auto c_Texels =
+		std::to_array<uint8_t>({ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 });
+	const auto source     = bgpu::TextureSubresourceData{ c_Texels.data(), 16, 16 };
+	const auto layout     = consumer.rm->GetTextureReadbackLayout(imported);
+	const auto consumerRb = MakeReadback(*consumer.rm, layout.totalBytes);
+	const auto producerRb = MakeReadback(*producer.rm, layout.totalBytes);
+	const auto copyToCopy = bgpu::TextureBarrierDesc()
+	                            .AddSyncBefore(bgpu::BarrierSyncFlag::kCopy)
+	                            .AddAccessBefore(bgpu::BarrierAccessFlag::kCopyDest)
+	                            .SetLayoutBefore(bgpu::BarrierLayout::kCopyDest)
+	                            .AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+	                            .AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource)
+	                            .SetLayoutAfter(bgpu::BarrierLayout::kCopySource);
+
+	consumer.Run([&](bgpu::ICommandList& list) {
+		list.WriteTexture(imported, { &source, 1 });
+		list.Barrier(imported, copyToCopy);
+		list.CopyTextureToReadback(consumerRb, imported);
+	});
+	producer.Run([&](bgpu::ICommandList& list) { list.CopyTextureToReadback(producerRb, made); });
+
+	for (const auto& [rm, rb] :
+	     { std::pair{ consumer.rm.Get(), consumerRb }, std::pair{ producer.rm.Get(), producerRb } })
+	{
+		const auto* read = static_cast<const uint8_t*>(rm->MapReadback(rb));
+		REQUIRE(read != nullptr);
+		CHECK(std::memcmp(read + layout.offset, c_Texels.data(), c_Texels.size()) == 0);
+		rm->UnmapReadback(rb);
+	}
+
+	producer.rm->DestroyReadbackBuffer(producerRb, false);
+	consumer.rm->DestroyReadbackBuffer(consumerRb, false);
+	consumer.rm->DestroyTexture(imported, false);
+	producer.rm->DestroyTexture(made, false);
 }
 
 // Two owners on one queue submit under one lock, and one with a wait on a later submission of its own

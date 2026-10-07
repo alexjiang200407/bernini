@@ -235,11 +235,13 @@ against D3D12 and Metal:
   layout, which is `VkDrawMeshTasksIndirectCommandEXT`; a count dispatch draws at most one, as
   D3D12's `ExecuteIndirect` here does. The stencil reference is baked into the pipeline, so unlike
   D3D12 it is honoured.
-* **A new texture reaches `GENERAL` at its first submission.** An image is born `UNDEFINED`, so the
-  manager keeps the transitions of the textures it made, and the queue that next submits a list
-  recorded against it submits them first, from a command buffer of its own: the list's allocator
-  may be recording another list by then. A transition taken at `Open` instead would race a list
-  submitted ahead of one opened earlier.
+* **A new texture reaches `GENERAL` at its first submission.** An image is born `UNDEFINED`, and
+  whether it still owes that transition is its `ImageMemory`'s to say. Every manager holding it —
+  its maker, and any that imported it before the maker submitted — keeps it pending, and the queue
+  that next submits a list recorded against one of them claims the transition and submits it
+  first, from a command buffer of its own (the list's allocator may be recording another list by
+  then); the others skip it, rather than repeat it and discard what was written. A transition taken
+  at `Open` instead would race a list submitted ahead of one opened earlier.
 * **Queues are the context's.** A queue of a type is the one the fewest owners hold among the
   families the type prefers — a compute family without graphics for compute, a transfer-only one
   for copies — spilling to another family before two owners share a `VkQueue`. Owners on one queue

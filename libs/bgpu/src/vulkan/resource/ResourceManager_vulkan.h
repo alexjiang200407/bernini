@@ -353,12 +353,14 @@ namespace bgpu
 		core::slot_vector<Dsv>            m_Dsvs;
 		core::slot_vector<Sampler>        m_Samplers;
 
-		// The images made and not yet submitted, with the aspects their transition names.
+		// The textures this manager holds whose image may still owe its first transition: made
+		// here, or imported before their maker submitted one. Whichever manager submits first
+		// records it (ImageMemory::ClaimInitialLayout).
 		struct PendingLayout
 		{
-			VkImage            image       = VK_NULL_HANDLE;
-			VkImageAspectFlags aspects     = 0;
-			uint32_t           textureSlot = 0xFFFFFFFF;
+			core::SharedRef<ImageMemory> memory;
+			VkImageAspectFlags           aspects     = 0;
+			uint32_t                     textureSlot = 0xFFFFFFFF;
 		};
 		std::vector<PendingLayout> m_PendingLayouts;
 

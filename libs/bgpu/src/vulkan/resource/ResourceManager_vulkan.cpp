@@ -439,7 +439,10 @@ namespace bgpu
 
 		auto texture = Texture(std::move(memory), desc, true);
 		if (desc.initialLayout != BarrierLayout::kUndefined)
-			m_PendingLayouts.push_back({ texture.GetVkImage(), texture.GetAspects(), slot.index });
+		{
+			texture.GetMemory()->AwaitInitialLayout();
+			m_PendingLayouts.push_back({ texture.GetMemory(), texture.GetAspects(), slot.index });
+		}
 		m_Textures[slot] = std::move(texture);
 		return TextureHandle{ slot };
 	}
@@ -476,9 +479,19 @@ namespace bgpu
 			return TextureHandle{};
 		}
 
-		// Already in the layout its desc names, so no initial transition; and charged to its maker.
-		m_Textures[slot] = memory != nullptr ? Texture(std::move(memory), desc.texture, false) :
-		                                       Texture(image, desc.texture);
+		// A foreign image is in the layout its desc names. One a manager made may not have reached
+		// it yet, if its maker has submitted nothing since, so this manager may take that over.
+		// Either way its bytes stay charged to its maker.
+		if (memory == nullptr)
+		{
+			m_Textures[slot] = Texture(image, desc.texture);
+			return TextureHandle{ slot };
+		}
+
+		auto texture = Texture(std::move(memory), desc.texture, false);
+		if (texture.GetMemory()->AwaitsInitialLayout())
+			m_PendingLayouts.push_back({ texture.GetMemory(), texture.GetAspects(), slot.index });
+		m_Textures[slot] = std::move(texture);
 		return TextureHandle{ slot };
 	}
 
@@ -1081,6 +1094,9 @@ namespace bgpu
 		const std::lock_guard lock(m_PoolMutex);
 		for (const PendingLayout& pending : m_PendingLayouts)
 		{
+			if (!pending.memory->ClaimInitialLayout())
+				continue;
+
 			auto barrier          = VkImageMemoryBarrier2();
 			barrier.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
 			barrier.dstStageMask  = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
@@ -1089,7 +1105,7 @@ namespace bgpu
 			barrier.newLayout     = VK_IMAGE_LAYOUT_GENERAL;
 			barrier.srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
 			barrier.dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
-			barrier.image                       = pending.image;
+			barrier.image                       = pending.memory->GetVkImage();
 			barrier.subresourceRange.aspectMask = pending.aspects;
 			barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
 			barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;

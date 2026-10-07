@@ -1,5 +1,6 @@
 #pragma once
 #include "volk_vulkan.h"
+#include <atomic>
 #include <bgpu/GpuContext.h>
 #include <core/ref/Ref.h>
 #include <core/ref/RefCounter.h>
@@ -62,6 +63,29 @@ namespace bgpu
 			return m_Context;
 		}
 
+		/**
+		 * Whether the image still owes its transition out of `UNDEFINED`, and the one caller that
+		 * clears it records the transition. Kept here, not in a manager, because every manager that
+		 * holds the image may be the first to submit work that uses it.
+		 */
+		[[nodiscard]] bool
+		AwaitsInitialLayout() const noexcept
+		{
+			return m_AwaitsInitialLayout.load(std::memory_order_acquire);
+		}
+
+		void
+		AwaitInitialLayout() noexcept
+		{
+			m_AwaitsInitialLayout.store(true, std::memory_order_release);
+		}
+
+		[[nodiscard]] bool
+		ClaimInitialLayout() noexcept
+		{
+			return m_AwaitsInitialLayout.exchange(false, std::memory_order_acq_rel);
+		}
+
 	private:
 		void
 		Destroy() noexcept;
@@ -71,5 +95,7 @@ namespace bgpu
 		VkImage        m_Image          = VK_NULL_HANDLE;
 		VkDeviceMemory m_Memory         = VK_NULL_HANDLE;
 		uint64_t       m_AllocationSize = 0;
+
+		std::atomic<bool> m_AwaitsInitialLayout = false;
 	};
 }

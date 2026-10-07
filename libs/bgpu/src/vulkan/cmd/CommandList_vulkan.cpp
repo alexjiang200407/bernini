@@ -691,17 +691,21 @@ namespace bgpu
 			extent.height = std::min(extent.height, mip.height);
 		};
 
+		// Every layer the views share, so a draw's SV_RenderTargetArrayIndex reaches each slice of
+		// an array or 3D target as on D3D12.
+		uint32_t layers = UINT32_MAX;
+
 		auto colors = core::static_vector<VkRenderingAttachmentInfo, c_MaxRenderTargets>();
 		for (const RtvHandle& handle : frameBuffer.colorAttachments)
 		{
 			const Rtv& rtv = m_ResourceManager->GetRtv(handle);
 			colors.push_back(LoadAndStore(rtv.GetVkImageView()));
 			fit(GetTexture(rtv.GetTextureHandle()).GetMipExtent(rtv.GetRange().baseMipLevel));
+			layers = std::min(layers, rtv.GetRange().layerCount);
 		}
 
 		auto info                 = VkRenderingInfo();
 		info.sType                = VK_STRUCTURE_TYPE_RENDERING_INFO;
-		info.layerCount           = 1;
 		info.colorAttachmentCount = static_cast<uint32_t>(colors.size());
 		info.pColorAttachments    = colors.data();
 
@@ -716,7 +720,9 @@ namespace bgpu
 			if ((texture.GetAspects() & VK_IMAGE_ASPECT_STENCIL_BIT) != 0)
 				info.pStencilAttachment = &depth;
 			fit(texture.GetMipExtent(dsv.GetRange().baseMipLevel));
+			layers = std::min(layers, dsv.GetRange().layerCount);
 		}
+		info.layerCount = layers == UINT32_MAX ? 1 : layers;
 
 		// D3D12 rasterizes with no target at all; the viewports then bound the area drawn.
 		if (extent.width == UINT32_MAX)
@@ -765,6 +771,11 @@ namespace bgpu
 		// Each viewport is flipped, origin at its bottom edge and height negative, which mirrors
 		// D3D's clip space, +y up, into Vulkan's, +y down: the same SPIR-V draws the image D3D12 does.
 		const ViewportState& state = m_MeshletState->viewportState;
+		// D3D12 takes any counts; Vulkan draws with at least one viewport, and a scissor for each.
+		core::ensure(!state.viewports.empty(), "A mesh dispatch needs a viewport");
+		core::ensure(
+			state.viewports.size() == state.scissorRects.size(),
+			"A mesh dispatch needs one scissor rect per viewport");
 		auto viewports = core::static_vector<VkViewport, ViewportState::c_MaxViewports>();
 		for (const Viewport& viewport : state.viewports)
 		{

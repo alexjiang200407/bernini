@@ -43,6 +43,13 @@ namespace bgpu
 			return m_Image;
 		}
 
+		/** The memory behind an image a bgpu manager made; null for a borrowed one. */
+		[[nodiscard]] const core::SharedRef<ImageMemory>&
+		GetMemory() const noexcept
+		{
+			return m_Memory;
+		}
+
 		[[nodiscard]] const TextureDesc&
 		GetDesc() const noexcept
 		{
