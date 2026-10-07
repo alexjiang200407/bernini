@@ -39,6 +39,7 @@
 #include <core/ref/SharedRef.h>
 #include <cstdint>
 #include <exception>
+#include <limits>
 #include <mutex>
 #include <spdlog/spdlog.h>
 #include <string_view>
@@ -145,7 +146,7 @@ namespace bgpu
 			return BufferHandle{};
 		}
 
-		uint32_t descriptorIndex = 0xFFFFFFFF;
+		uint32_t descriptorIndex = std::numeric_limits<uint32_t>::max();
 		try
 		{
 			descriptorIndex = m_Table.Allocate();
@@ -274,7 +275,7 @@ namespace bgpu
 			m_Buffers[buffer.slot].GetDesc().byteSize % desc.stride == 0,
 			"A structured view must divide the buffer it views");
 
-		uint32_t   descriptorIndex = 0xFFFFFFFF;
+		uint32_t   descriptorIndex = std::numeric_limits<uint32_t>::max();
 		const auto slot            = AddView(m_BufferSrvs, buffer, desc.debugName, descriptorIndex);
 		if (slot.is_null())
 			return BufferSrvHandle{};
@@ -322,7 +323,7 @@ namespace bgpu
 			bufferDesc.byteSize % desc.stride == 0,
 			"A structured view must divide the buffer it views");
 
-		uint32_t   descriptorIndex = 0xFFFFFFFF;
+		uint32_t   descriptorIndex = std::numeric_limits<uint32_t>::max();
 		const auto slot            = AddView(m_BufferUavs, buffer, desc.debugName, descriptorIndex);
 		if (slot.is_null())
 			return BufferUavHandle{};
@@ -575,7 +576,7 @@ namespace bgpu
 			return SrvHandle{};
 		}
 
-		uint32_t descriptorIndex = 0xFFFFFFFF;
+		uint32_t descriptorIndex = std::numeric_limits<uint32_t>::max();
 		try
 		{
 			descriptorIndex = m_Table.Allocate();
@@ -589,11 +590,12 @@ namespace bgpu
 
 		const Texture& texture = TextureAt(textureHandle);
 
-		auto range         = VkImageSubresourceRange();
-		range.aspectMask   = ViewAspect(texture.GetAspects(), desc.format);
-		range.baseMipLevel = 0;
-		range.levelCount =
-			desc.mipLevels == uint32_t(-1) ? VK_REMAINING_MIP_LEVELS : desc.mipLevels;
+		auto range           = VkImageSubresourceRange();
+		range.aspectMask     = ViewAspect(texture.GetAspects(), desc.format);
+		range.baseMipLevel   = 0;
+		range.levelCount     = desc.mipLevels == std::numeric_limits<uint32_t>::max() ?
+		                           VK_REMAINING_MIP_LEVELS :
+		                           desc.mipLevels;
 		range.baseArrayLayer = 0;
 		range.layerCount     = ViewLayerCount(desc.dimension, desc.arraySize);
 

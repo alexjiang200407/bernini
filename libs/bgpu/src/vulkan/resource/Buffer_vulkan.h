@@ -5,6 +5,7 @@
 #include <bgpu/resource/Buffer.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
+#include <limits>
 #include <utility>
 
 namespace bgpu
@@ -65,7 +66,7 @@ namespace bgpu
 
 	private:
 		BufferDesc                    m_Desc;
-		uint32_t                      m_DescriptorIndex = 0xFFFFFFFF;
+		uint32_t                      m_DescriptorIndex = std::numeric_limits<uint32_t>::max();
 		core::SharedRef<BufferMemory> m_Memory;
 
 		// The size asked for, not the driver's: alignment padding differs per backend.

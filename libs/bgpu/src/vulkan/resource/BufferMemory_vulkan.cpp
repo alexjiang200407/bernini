@@ -175,7 +175,15 @@ namespace bgpu
 		const auto            found = registry.buffers.find(buffer);
 		if (found == registry.buffers.end())
 			return nullptr;
-		return core::SharedRef<BufferMemory>(found->second);
+
+		// The entry is not a reference: its last owner may have let go, with the destructor now
+		// waiting on this lock to erase it. A reference is taken only while one is still held.
+		BufferMemory* const memory = found->second;
+		if (!memory->TryAddRef())
+			return nullptr;
+		auto reference = core::SharedRef<BufferMemory>(memory);
+		memory->Release();
+		return reference;
 	}
 
 	void

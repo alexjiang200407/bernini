@@ -29,6 +29,23 @@ namespace core
 			return ++m_RefCount;
 		}
 
+		/**
+		 * A reference added only while one is still held: false once the count has reached zero,
+		 * when the object is being destroyed. What a registry that finds objects by a raw pointer it
+		 * does not own takes, since the last Release may race the lookup.
+		 */
+		[[nodiscard]] bool
+		TryAddRef() noexcept
+		{
+			unsigned long count = m_RefCount.load();
+			while (count != 0)
+			{
+				if (m_RefCount.compare_exchange_weak(count, count + 1))
+					return true;
+			}
+			return false;
+		}
+
 		unsigned long
 		Release()
 		{

@@ -193,6 +193,18 @@ namespace bgpu
 		Submitted(uint64_t fenceValue) noexcept;
 
 	private:
+		/**
+		 * The command buffer, for any command but a draw: the rendering a draw began is ended first.
+		 * Every recording but a draw's reaches the buffer through this, so none can be made inside
+		 * rendering by forgetting to end it.
+		 */
+		[[nodiscard]] VkCommandBuffer
+		Commands() noexcept;
+
+		/** The command buffer, for a draw: inside the rendering ApplyMeshletState began. */
+		[[nodiscard]] VkCommandBuffer
+		DrawCommands() const noexcept;
+
 		/** Ends the rendering a draw began, if one is open. */
 		void
 		EndRendering() noexcept;
@@ -214,6 +226,7 @@ namespace bgpu
 		 */
 		void
 		BindSets(
+			VkCommandBuffer                               commands,
 			VkPipelineBindPoint                           bindPoint,
 			VkPipelineLayout                              layout,
 			VkDescriptorSetLayout                         constantsLayout,
@@ -238,6 +251,8 @@ namespace bgpu
 		ResourceManagerRef m_ResourceManager;
 		UploadRing         m_UploadRing;
 
+		// Recorded into directly only by Open, Close and the rendering bracket; every other
+		// command goes through Commands() or DrawCommands().
 		VkCommandBuffer             m_CommandBuffer = VK_NULL_HANDLE;
 		CommandAllocator*           m_Allocator     = nullptr;
 		std::optional<ComputeState> m_ComputeState;

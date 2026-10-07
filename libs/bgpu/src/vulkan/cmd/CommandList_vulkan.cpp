@@ -45,6 +45,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <numeric>
 #include <span>
 #include <spdlog/spdlog.h>
@@ -217,7 +218,7 @@ namespace bgpu
 		const size_t       gpuBufferOffset,
 		const size_t       byteSize) noexcept
 	{
-		EndRendering();
+		const VkCommandBuffer commands = Commands();
 		core::ensure(m_Open, "WriteBuffer on a closed command list");
 		if (byteSize == 0)
 			return;
@@ -235,7 +236,7 @@ namespace bgpu
 		region.srcOffset = staged.offset;
 		region.dstOffset = gpuBufferOffset;
 		region.size      = byteSize;
-		vkCmdCopyBuffer(m_CommandBuffer, staged.buffer, buffer.GetVkBuffer(), 1, &region);
+		vkCmdCopyBuffer(commands, staged.buffer, buffer.GetVkBuffer(), 1, &region);
 	}
 
 	void
@@ -246,7 +247,7 @@ namespace bgpu
 		const uint64_t     srcOffset,
 		const uint64_t     byteSize) noexcept
 	{
-		EndRendering();
+		const VkCommandBuffer commands = Commands();
 		if (byteSize == 0)
 			return;
 
@@ -263,12 +264,7 @@ namespace bgpu
 		region.srcOffset = srcOffset;
 		region.dstOffset = dstOffset;
 		region.size      = byteSize;
-		vkCmdCopyBuffer(
-			m_CommandBuffer,
-			srcBuffer.GetVkBuffer(),
-			dstBuffer.GetVkBuffer(),
-			1,
-			&region);
+		vkCmdCopyBuffer(commands, srcBuffer.GetVkBuffer(), dstBuffer.GetVkBuffer(), 1, &region);
 	}
 
 	void
@@ -276,7 +272,7 @@ namespace bgpu
 		const ReadbackBufferHandle dst,
 		const BufferHandle         src) noexcept
 	{
-		EndRendering();
+		const VkCommandBuffer commands  = Commands();
 		const Buffer&         srcBuffer = GetBuffer(src);
 		const ReadbackBuffer& readback  = m_ResourceManager->GetReadbackBuffer(dst);
 		const uint64_t        byteSize  = srcBuffer.GetDesc().byteSize;
@@ -286,12 +282,7 @@ namespace bgpu
 
 		auto region = VkBufferCopy();
 		region.size = byteSize;
-		vkCmdCopyBuffer(
-			m_CommandBuffer,
-			srcBuffer.GetVkBuffer(),
-			readback.GetVkBuffer(),
-			1,
-			&region);
+		vkCmdCopyBuffer(commands, srcBuffer.GetVkBuffer(), readback.GetVkBuffer(), 1, &region);
 	}
 
 	void
@@ -307,7 +298,7 @@ namespace bgpu
 		const std::span<const BufferHandle>      handles,
 		const std::span<const BufferBarrierDesc> barriers) noexcept
 	{
-		EndRendering();
+		const VkCommandBuffer commands = Commands();
 		core::ensure(
 			handles.size() == barriers.size(),
 			"Barrier handle/desc spans must match in size");
@@ -338,7 +329,7 @@ namespace bgpu
 		dependency.sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
 		dependency.bufferMemoryBarrierCount = static_cast<uint32_t>(vkBarriers.size());
 		dependency.pBufferMemoryBarriers    = vkBarriers.data();
-		vkCmdPipelineBarrier2(m_CommandBuffer, &dependency);
+		vkCmdPipelineBarrier2(commands, &dependency);
 	}
 
 	void
@@ -346,7 +337,7 @@ namespace bgpu
 		const std::span<const TextureHandle>      handles,
 		const std::span<const TextureBarrierDesc> barriers) noexcept
 	{
-		EndRendering();
+		const VkCommandBuffer commands = Commands();
 		core::ensure(
 			handles.size() == barriers.size(),
 			"Barrier handle/desc spans must match in size");
@@ -377,10 +368,13 @@ namespace bgpu
 			barrier.subresourceRange.aspectMask   = texture.GetAspects();
 			barrier.subresourceRange.baseMipLevel = desc.baseMipLevel;
 			barrier.subresourceRange.levelCount =
-				desc.mipCount == uint32_t(-1) ? VK_REMAINING_MIP_LEVELS : desc.mipCount;
+				desc.mipCount == std::numeric_limits<uint32_t>::max() ? VK_REMAINING_MIP_LEVELS :
+																		desc.mipCount;
 			barrier.subresourceRange.baseArrayLayer = desc.baseArrayLayer;
 			barrier.subresourceRange.layerCount =
-				desc.layerCount == uint32_t(-1) ? VK_REMAINING_ARRAY_LAYERS : desc.layerCount;
+				desc.layerCount == std::numeric_limits<uint32_t>::max() ?
+					VK_REMAINING_ARRAY_LAYERS :
+					desc.layerCount;
 			vkBarriers.push_back(barrier);
 		}
 
@@ -388,7 +382,7 @@ namespace bgpu
 		dependency.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
 		dependency.imageMemoryBarrierCount = static_cast<uint32_t>(vkBarriers.size());
 		dependency.pImageMemoryBarriers    = vkBarriers.data();
-		vkCmdPipelineBarrier2(m_CommandBuffer, &dependency);
+		vkCmdPipelineBarrier2(commands, &dependency);
 	}
 
 	void
@@ -417,11 +411,11 @@ namespace bgpu
 		const VkImageSubresourceRange& range,
 		const VkClearColorValue&       value) noexcept
 	{
-		EndRendering();
+		const VkCommandBuffer commands = Commands();
 		core::ensure(m_Open, "A clear on a closed command list");
-		vkCmdClearColorImage(m_CommandBuffer, image, VK_IMAGE_LAYOUT_GENERAL, &value, 1, &range);
+		vkCmdClearColorImage(commands, image, VK_IMAGE_LAYOUT_GENERAL, &value, 1, &range);
 		ClearToAttachment(
-			m_CommandBuffer,
+			commands,
 			image,
 			range,
 			VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -434,17 +428,11 @@ namespace bgpu
 		const VkImageSubresourceRange&  range,
 		const VkClearDepthStencilValue& value) noexcept
 	{
-		EndRendering();
+		const VkCommandBuffer commands = Commands();
 		core::ensure(m_Open, "A clear on a closed command list");
-		vkCmdClearDepthStencilImage(
-			m_CommandBuffer,
-			image,
-			VK_IMAGE_LAYOUT_GENERAL,
-			&value,
-			1,
-			&range);
+		vkCmdClearDepthStencilImage(commands, image, VK_IMAGE_LAYOUT_GENERAL, &value, 1, &range);
 		ClearToAttachment(
-			m_CommandBuffer,
+			commands,
 			image,
 			range,
 			VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
@@ -458,7 +446,7 @@ namespace bgpu
 		const TextureHandle                           handle,
 		const std::span<const TextureSubresourceData> subresources) noexcept
 	{
-		EndRendering();
+		const VkCommandBuffer commands = Commands();
 		core::ensure(m_Open, "WriteTexture on a closed command list");
 		if (subresources.empty())
 			return;
@@ -530,7 +518,7 @@ namespace bgpu
 		}
 
 		vkCmdCopyBufferToImage(
-			m_CommandBuffer,
+			commands,
 			staged.buffer,
 			texture.GetVkImage(),
 			VK_IMAGE_LAYOUT_GENERAL,
@@ -543,7 +531,7 @@ namespace bgpu
 		const ReadbackBufferHandle dst,
 		const TextureHandle        src) noexcept
 	{
-		EndRendering();
+		const VkCommandBuffer       commands = Commands();
 		const Texture&              texture  = GetTexture(src);
 		const ReadbackBuffer&       readback = m_ResourceManager->GetReadbackBuffer(dst);
 		const TextureReadbackLayout layout   = texture.GetReadbackLayout();
@@ -561,7 +549,7 @@ namespace bgpu
 		region.imageSubresource.layerCount = 1;
 		region.imageExtent                 = texture.GetMipExtent(0);
 		vkCmdCopyImageToBuffer(
-			m_CommandBuffer,
+			commands,
 			texture.GetVkImage(),
 			VK_IMAGE_LAYOUT_GENERAL,
 			readback.GetVkBuffer(),
@@ -572,6 +560,7 @@ namespace bgpu
 	void
 	CommandList::BeginEvent(const std::string_view name) noexcept
 	{
+		const VkCommandBuffer commands = Commands();
 		if (vkCmdBeginDebugUtilsLabelEXT == nullptr)
 			return;
 
@@ -579,14 +568,15 @@ namespace bgpu
 		auto       label      = VkDebugUtilsLabelEXT();
 		label.sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
 		label.pLabelName      = terminated.c_str();
-		vkCmdBeginDebugUtilsLabelEXT(m_CommandBuffer, &label);
+		vkCmdBeginDebugUtilsLabelEXT(commands, &label);
 	}
 
 	void
 	CommandList::EndEvent() noexcept
 	{
+		const VkCommandBuffer commands = Commands();
 		if (vkCmdEndDebugUtilsLabelEXT != nullptr)
-			vkCmdEndDebugUtilsLabelEXT(m_CommandBuffer);
+			vkCmdEndDebugUtilsLabelEXT(commands);
 	}
 
 	void
@@ -595,7 +585,7 @@ namespace bgpu
 		const uint32_t  startSlot,
 		const uint32_t  endSlot) noexcept
 	{
-		EndRendering();
+		const VkCommandBuffer commands = Commands();
 		core::ensure(m_Open, "BeginTiming on a closed command list");
 		core::ensure(m_TimingPool == VK_NULL_HANDLE, "BeginTiming while a timed span is open");
 		core::ensure(
@@ -606,10 +596,10 @@ namespace bgpu
 		m_TimingPool    = heap.As<TimestampHeap>()->GetVkQueryPool();
 		m_TimingEndSlot = endSlot;
 
-		vkCmdResetQueryPool(m_CommandBuffer, m_TimingPool, startSlot, 1);
-		vkCmdResetQueryPool(m_CommandBuffer, m_TimingPool, endSlot, 1);
+		vkCmdResetQueryPool(commands, m_TimingPool, startSlot, 1);
+		vkCmdResetQueryPool(commands, m_TimingPool, endSlot, 1);
 		vkCmdWriteTimestamp2(
-			m_CommandBuffer,
+			commands,
 			VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 			m_TimingPool,
 			startSlot);
@@ -618,10 +608,11 @@ namespace bgpu
 	bool
 	CommandList::EndTiming() noexcept
 	{
+		const VkCommandBuffer commands = Commands();
 		core::ensure(m_TimingPool != VK_NULL_HANDLE, "EndTiming without a timed span open");
 
 		vkCmdWriteTimestamp2(
-			m_CommandBuffer,
+			commands,
 			VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 			m_TimingPool,
 			m_TimingEndSlot);
@@ -635,7 +626,7 @@ namespace bgpu
 		const uint32_t  first,
 		const uint32_t  count) noexcept
 	{
-		EndRendering();
+		const VkCommandBuffer commands = Commands();
 		core::ensure(m_Open, "ResolveTimestamps on a closed command list");
 		core::ensure(first + count <= heap.GetCapacity(), "ResolveTimestamps outside the heap");
 		if (count == 0)
@@ -653,11 +644,11 @@ namespace bgpu
 		dependency.sType              = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
 		dependency.memoryBarrierCount = 1;
 		dependency.pMemoryBarriers    = &barrier;
-		vkCmdPipelineBarrier2(m_CommandBuffer, &dependency);
+		vkCmdPipelineBarrier2(commands, &dependency);
 
 		const auto* timestamps = heap.As<TimestampHeap>();
 		vkCmdCopyQueryPoolResults(
-			m_CommandBuffer,
+			commands,
 			timestamps->GetVkQueryPool(),
 			first,
 			count,
@@ -673,6 +664,22 @@ namespace bgpu
 		m_MeshletState = gfxState;
 	}
 
+	VkCommandBuffer
+	CommandList::Commands() noexcept
+	{
+		EndRendering();
+		return m_CommandBuffer;
+	}
+
+	VkCommandBuffer
+	CommandList::DrawCommands() const noexcept
+	{
+		core::ensure(
+			m_Rendering,
+			"A draw is recorded inside the rendering ApplyMeshletState began");
+		return m_CommandBuffer;
+	}
+
 	void
 	CommandList::EndRendering() noexcept
 	{
@@ -685,7 +692,8 @@ namespace bgpu
 	void
 	CommandList::BeginRendering(const FrameBuffer& frameBuffer) noexcept
 	{
-		auto       extent = VkExtent2D{ UINT32_MAX, UINT32_MAX };
+		auto       extent = VkExtent2D{ std::numeric_limits<uint32_t>::max(),
+			                            std::numeric_limits<uint32_t>::max() };
 		const auto fit    = [&extent](const VkExtent3D& mip) {
 			extent.width  = std::min(extent.width, mip.width);
 			extent.height = std::min(extent.height, mip.height);
@@ -693,7 +701,7 @@ namespace bgpu
 
 		// Every layer the views share, so a draw's SV_RenderTargetArrayIndex reaches each slice of
 		// an array or 3D target as on D3D12.
-		uint32_t layers = UINT32_MAX;
+		uint32_t layers = std::numeric_limits<uint32_t>::max();
 
 		auto colors = core::static_vector<VkRenderingAttachmentInfo, c_MaxRenderTargets>();
 		for (const RtvHandle& handle : frameBuffer.colorAttachments)
@@ -722,10 +730,10 @@ namespace bgpu
 			fit(texture.GetMipExtent(dsv.GetRange().baseMipLevel));
 			layers = std::min(layers, dsv.GetRange().layerCount);
 		}
-		info.layerCount = layers == UINT32_MAX ? 1 : layers;
+		info.layerCount = layers == std::numeric_limits<uint32_t>::max() ? 1 : layers;
 
 		// D3D12 rasterizes with no target at all; the viewports then bound the area drawn.
-		if (extent.width == UINT32_MAX)
+		if (extent.width == std::numeric_limits<uint32_t>::max())
 		{
 			extent = VkExtent2D{ 0, 0 };
 			for (const Viewport& viewport : m_MeshletState->viewportState.viewports)
@@ -758,10 +766,11 @@ namespace bgpu
 		const MeshletKernel& kernel   = *m_MeshletState->kernel;
 		const auto*          pipeline = kernel.pipeline->As<MeshletPipeline>();
 		vkCmdBindPipeline(
-			m_CommandBuffer,
+			DrawCommands(),
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
 			pipeline->GetVkPipeline());
 		BindSets(
+			DrawCommands(),
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
 			pipeline->GetVkPipelineLayout(),
 			pipeline->GetConstantsSetLayout(),
@@ -800,11 +809,11 @@ namespace bgpu
 				});
 		}
 		vkCmdSetViewportWithCount(
-			m_CommandBuffer,
+			DrawCommands(),
 			static_cast<uint32_t>(viewports.size()),
 			viewports.data());
 		vkCmdSetScissorWithCount(
-			m_CommandBuffer,
+			DrawCommands(),
 			static_cast<uint32_t>(scissors.size()),
 			scissors.data());
 	}
@@ -817,7 +826,7 @@ namespace bgpu
 	{
 		ApplyMeshletState();
 		vkCmdDrawMeshTasksEXT(
-			m_CommandBuffer,
+			DrawCommands(),
 			threadGroupCountX,
 			threadGroupCountY,
 			threadGroupCountZ);
@@ -835,7 +844,7 @@ namespace bgpu
 			"MeshletState.indirectArgs must be set for DispatchMeshIndirect");
 
 		vkCmdDrawMeshTasksIndirectEXT(
-			m_CommandBuffer,
+			DrawCommands(),
 			GetBuffer(m_MeshletState->indirectArgs).GetVkBuffer(),
 			static_cast<VkDeviceSize>(argIdx) * sizeof(VkDrawMeshTasksIndirectCommandEXT),
 			1,
@@ -855,7 +864,7 @@ namespace bgpu
 
 		// At most one, as D3D12's ExecuteIndirect here is given.
 		vkCmdDrawMeshTasksIndirectCountEXT(
-			m_CommandBuffer,
+			DrawCommands(),
 			GetBuffer(m_MeshletState->indirectArgs).GetVkBuffer(),
 			static_cast<VkDeviceSize>(argIdx) * sizeof(VkDrawMeshTasksIndirectCommandEXT),
 			GetBuffer(m_MeshletState->commandCounts).GetVkBuffer(),
@@ -916,7 +925,7 @@ namespace bgpu
 		const uint32_t threadGroupCountY,
 		const uint32_t threadGroupCountZ) noexcept
 	{
-		EndRendering();
+		const VkCommandBuffer commands = Commands();
 		core::ensure(m_ComputeState.has_value(), "Compute state must be set before dispatch");
 		core::ensure(
 			m_ComputeState->kernel != nullptr && m_ComputeState->kernel->pipeline.IsInitialized(),
@@ -925,22 +934,21 @@ namespace bgpu
 		const ComputeKernel& kernel   = *m_ComputeState->kernel;
 		const auto*          pipeline = kernel.pipeline->As<ComputePipeline>();
 
-		vkCmdBindPipeline(
-			m_CommandBuffer,
-			VK_PIPELINE_BIND_POINT_COMPUTE,
-			pipeline->GetVkPipeline());
+		vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->GetVkPipeline());
 		BindSets(
+			commands,
 			VK_PIPELINE_BIND_POINT_COMPUTE,
 			pipeline->GetVkPipelineLayout(),
 			pipeline->GetConstantsSetLayout(),
 			pipeline->GetConstantBufferBindings(),
 			kernel.uniforms);
 
-		vkCmdDispatch(m_CommandBuffer, threadGroupCountX, threadGroupCountY, threadGroupCountZ);
+		vkCmdDispatch(commands, threadGroupCountX, threadGroupCountY, threadGroupCountZ);
 	}
 
 	void
 	CommandList::BindSets(
+		const VkCommandBuffer                         commands,
 		const VkPipelineBindPoint                     bindPoint,
 		const VkPipelineLayout                        layout,
 		const VkDescriptorSetLayout                   constantsLayout,
@@ -983,7 +991,7 @@ namespace bgpu
 		}
 
 		vkCmdBindDescriptorSets(
-			m_CommandBuffer,
+			commands,
 			bindPoint,
 			layout,
 			firstSet,

@@ -3,6 +3,7 @@
 #include <bgpu/resource/Srv.h>
 #include <bgpu/resource/Texture.h>
 #include <cstdint>
+#include <limits>
 #include <utility>
 
 namespace bgpu
@@ -48,6 +49,6 @@ namespace bgpu
 		SrvDesc       m_Desc;
 		ImageView     m_View;
 		TextureHandle m_Texture;
-		uint32_t      m_DescriptorIndex = 0xFFFFFFFF;
+		uint32_t      m_DescriptorIndex = std::numeric_limits<uint32_t>::max();
 	};
 }

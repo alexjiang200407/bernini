@@ -28,6 +28,7 @@
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
+#include <limits>
 #include <mutex>
 #include <string_view>
 #include <vector>
@@ -67,11 +68,11 @@ namespace bgpu
 	struct PendingDeletion
 	{
 		PendingType type      = PendingType::kInvalid;
-		uint32_t    slotIndex = 0xFFFFFFFF;
+		uint32_t    slotIndex = std::numeric_limits<uint32_t>::max();
 
 		// Set for the kinds that hold a bindless descriptor, which must outlive in-flight work as the
 		// resource does, so it is handed back when the gate clears rather than at destroy time.
-		uint32_t descriptorIndex = 0xFFFFFFFF;
+		uint32_t descriptorIndex = std::numeric_limits<uint32_t>::max();
 	};
 
 	// Deferred destroys captured at the same gate share it, freed as a group once every queue in
@@ -321,7 +322,7 @@ namespace bgpu
 		RetireDeferred(
 			PendingType type,
 			uint32_t    slotIndex,
-			uint32_t    descriptorIndex = 0xFFFFFFFF) noexcept;
+			uint32_t    descriptorIndex = std::numeric_limits<uint32_t>::max()) noexcept;
 
 		/**
 		 * The texture `handle` names.
@@ -360,7 +361,7 @@ namespace bgpu
 		{
 			core::SharedRef<ImageMemory> memory;
 			VkImageAspectFlags           aspects     = 0;
-			uint32_t                     textureSlot = 0xFFFFFFFF;
+			uint32_t                     textureSlot = std::numeric_limits<uint32_t>::max();
 		};
 		std::vector<PendingLayout> m_PendingLayouts;
 
