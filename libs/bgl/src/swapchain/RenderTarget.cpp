@@ -1,29 +1,29 @@
-#include "RenderTarget_d3d12.h"
+#include "swapchain/RenderTarget.h"
 #include "gfx/frame_constants.h"
+#include "swapchain/Swapchain.h"
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/constants/constants.h>
 #include <bgpu/device/Device.h>
 #include <bgpu/resource/NativeTextureDesc.h>
-#include <bgpu/types/NativeObject.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/Format.h>
+#include <cstdint>
+#include <format>
 #include <spdlog/spdlog.h>
-
-namespace
-{
-	using bgpu::d3d12ErrChecker;
-}
+#include <utility>
 
 namespace bgl
 {
 	RenderTarget::RenderTarget(
-		const RenderTargetDesc&  desc,
-		bgpu::DeviceRef          device,
-		bgpu::CommandQueueRef    queue,
-		bgpu::ResourceManagerRef resourceManager,
-		bool                     enableDebug) :
+		const RenderTargetDesc&    desc,
+		std::unique_ptr<Swapchain> swapchain,
+		bgpu::DeviceRef            device,
+		bgpu::CommandQueueRef      queue,
+		bgpu::ResourceManagerRef   resourceManager) :
 		m_Device(std::move(device)), m_CommandQueue(std::move(queue)),
 		m_ResourceManager(std::move(resourceManager)), m_Headless(desc.headless),
-		m_TaaEnabled(desc.taaEnabled), m_TaaAllocated(desc.taaEnabled), m_EnableDebug(enableDebug),
-		m_Wnd(desc.wnd)
+		m_TaaEnabled(desc.taaEnabled), m_TaaAllocated(desc.taaEnabled),
+		m_Swapchain(std::move(swapchain))
 	{
 		SetSize(
 			static_cast<uint32_t>(desc.width),
@@ -33,15 +33,15 @@ namespace bgl
 		SetTaaSharpness(desc.taaSharpness);
 		SetPostProcess(desc.postProcess);
 
-		for (UINT i = 0; i < c_SwapchainImageCount; i++)
+		for (uint32_t i = 0; i < c_SwapchainImageCount; i++)
 		{
 			m_CommandAllocator[i] = m_Device->CreateCommandAllocator();
 		}
 
+		core::ensure(m_Headless == (m_Swapchain == nullptr), "A windowed target needs a swapchain");
 		if (!m_Headless)
 		{
-			HWND hwnd = m_Wnd ? static_cast<HWND>(m_Wnd) : GetActiveWindow();
-			CreateSwapchain(hwnd);
+			m_SlotImage[0] = m_Swapchain->GetCurrentImage();
 			CreateRenderTargets();
 		}
 		else
@@ -57,99 +57,52 @@ namespace bgl
 		// Idle the GPU so no in-flight frame still references the backbuffers we free.
 		m_CommandQueue->Flush();
 
-		if (m_SwapChain)
-		{
-			m_SwapChain->SetFullscreenState(FALSE, nullptr);
-		}
-
 		DestroyRenderTargets();
 
-		m_SwapChain.Reset();
+		m_Swapchain.reset();
 
-		for (UINT i = 0; i < c_SwapchainImageCount; i++)
+		for (uint32_t i = 0; i < c_SwapchainImageCount; i++)
 		{
 			m_CommandAllocator[i].Reset();
 		}
 	}
 
 	void
-	RenderTarget::CreateSwapchain(HWND hWnd)
+	RenderTarget::CreateRenderTargets()
 	{
-		DXGI_SWAP_CHAIN_DESC1 sd = {};
-		sd.Width                 = GetWidth();
-		sd.Height                = GetHeight();
-		sd.Format                = DXGI_FORMAT_B8G8R8A8_UNORM;
-		sd.BufferCount           = c_SwapchainImageCount;
-		sd.BufferUsage           = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-		sd.SwapEffect            = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-		sd.Scaling               = DXGI_SCALING_STRETCH;
-		sd.AlphaMode             = DXGI_ALPHA_MODE_IGNORE;
-		sd.SampleDesc.Count      = 1;
-
-		wrl::ComPtr<IDXGIFactory4> factory;
-		UINT                       factoryFlags = m_EnableDebug ? DXGI_CREATE_FACTORY_DEBUG : 0;
-		CreateDXGIFactory2(factoryFlags, IID_PPV_ARGS(&factory)) >> d3d12ErrChecker;
-
-		wrl::ComPtr<IDXGISwapChain1> swap;
-
-		auto* d3d12CommandQueue =
-			m_CommandQueue->GetNativeObject(bgpu::NativeObjectType::kD3D12CommandQueue)
-				.As<ID3D12CommandQueue>();
-		factory->CreateSwapChainForHwnd(d3d12CommandQueue, hWnd, &sd, nullptr, nullptr, &swap) >>
-			d3d12ErrChecker;
-
-		swap->QueryInterface(IID_PPV_ARGS(&m_SwapChain)) >> d3d12ErrChecker;
-		// NO_WINDOW_CHANGES stops DXGI hooking the window's message queue. Without it a Present issued
-		// from a thread other than the window's can deadlock against that queue, and bgl resizes the
-		// swapchain itself rather than letting DXGI respond to window changes.
-		factory->MakeWindowAssociation(hWnd, DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER) >>
-			d3d12ErrChecker;
-
-		m_FrameIndex = m_SwapChain->GetCurrentBackBufferIndex();
+		CreateBackbuffers();
+		CreateAttachments();
 	}
 
 	void
-	RenderTarget::CreateRenderTargets()
+	RenderTarget::CreateBackbuffers()
 	{
+		const std::vector<bgpu::NativeTextureDesc> images = m_Swapchain->GetImages();
+		m_BackBuffers.assign(images.size(), {});
+		m_ImageDrawn.assign(images.size(), false);
+
+		for (uint32_t i = 0; i < images.size(); i++)
 		{
-			bgpu::TextureDesc textureDesc{};
-			textureDesc.format        = bgpu::Format::BGRA8_UNORM;
-			textureDesc.width         = GetWidth();
-			textureDesc.height        = GetHeight();
-			textureDesc.dimension     = bgpu::TextureDimension::kTexture2D;
-			textureDesc.usage         = bgpu::TextureUsageFlag::kRenderTarget;
-			textureDesc.initialLayout = bgpu::BarrierLayout::kPresent;
+			m_BackBuffers[i].textureHandle = m_ResourceManager->ImportNativeTexture(images[i]);
 
-			for (UINT i = 0; i < c_SwapchainImageCount; i++)
-			{
-				wrl::ComPtr<ID3D12Resource> backBuffer;
-				m_SwapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)) >> d3d12ErrChecker;
+			auto rtvDesc      = bgpu::RtvDesc();
+			rtvDesc.format    = m_Swapchain->GetViewFormat();
+			rtvDesc.debugName = std::format("Back Buffer RTV: {}", i);
 
-				m_BackBuffers[i].textureHandle = m_ResourceManager->ImportNativeTexture(
-					bgpu::NativeTextureDesc()
-						.SetObject(
-							bgpu::NativeObjectType::kD3D12Resource,
-							bgpu::NativeObject{ backBuffer.Get() })
-						.SetTexture(textureDesc));
-
-				bgpu::RtvDesc rtvDesc;
-				rtvDesc.format    = bgpu::Format::SBGRA8_UNORM;
-				rtvDesc.debugName = std::format("Back Buffer RTV: {}", i);
-
-				m_BackBuffers[i].rtvHandle =
-					m_ResourceManager->CreateRtv(m_BackBuffers[i].textureHandle, rtvDesc);
-			}
+			m_BackBuffers[i].rtvHandle =
+				m_ResourceManager->CreateRtv(m_BackBuffers[i].textureHandle, rtvDesc);
 		}
-
-		CreateAttachments();
 	}
 
 	void
 	RenderTarget::CreateOffscreenRenderTargets()
 	{
 		{
-			for (auto i = 0u; i < c_SwapchainImageCount; i++)
+			m_BackBuffers.assign(c_SwapchainImageCount, {});
+			for (uint32_t i = 0; i < c_SwapchainImageCount; i++)
 			{
+				m_SlotImage[i] = i;
+
 				auto texDesc      = bgpu::TextureDesc();
 				texDesc.width     = GetWidth();
 				texDesc.height    = GetHeight();
@@ -367,21 +320,47 @@ namespace bgl
 	void
 	RenderTarget::PresentAndAdvance() noexcept
 	{
-		const UINT index = m_FrameIndex;
+		const uint32_t slot = m_FrameIndex;
 
-		if (!m_Headless)
+		if (m_Swapchain)
 		{
-			m_SwapChain->Present(1, 0) >> d3d12ErrChecker;
+			m_ImageDrawn[m_SlotImage[slot]] = true;
+			if (m_Swapchain->Present(m_FenceValues[slot]))
+			{
+				ReimportBackbuffers();
+				return;
+			}
 		}
 
 		// Recorded before advancing: a readback samples the frame that was just presented, not the
 		// one about to be recorded.
-		m_LastPresentedIndex = index;
+		m_LastPresentedIndex = slot;
 		m_Presented          = true;
 
-		// The swapchain, not arithmetic, decides which backbuffer comes next when there is one.
-		m_FrameIndex = m_Headless ? (index + 1) % c_SwapchainImageCount :
-		                            m_SwapChain->GetCurrentBackBufferIndex();
+		m_FrameIndex = (slot + 1) % c_SwapchainImageCount;
+		if (m_Swapchain)
+		{
+			m_SlotImage[m_FrameIndex] = m_Swapchain->GetCurrentImage();
+		}
+	}
+
+	void
+	RenderTarget::ReimportBackbuffers()
+	{
+		DestroyBackbuffers();
+		CreateBackbuffers();
+		ResetFrameRing();
+	}
+
+	bgpu::BarrierLayout
+	RenderTarget::GetBackbufferLayout(const uint32_t frameIndex) const noexcept
+	{
+		core::ensure(frameIndex < c_SwapchainImageCount, "Frame index out of range");
+		if (m_Swapchain && m_Swapchain->StartsUndefined() && !m_ImageDrawn[m_SlotImage[frameIndex]])
+		{
+			return bgpu::BarrierLayout::kUndefined;
+		}
+		return bgpu::BarrierLayout::kPresent;
 	}
 
 	void
@@ -391,15 +370,9 @@ namespace bgl
 
 		SetSize(width, height, GetRenderScale());
 
-		if (!m_Headless)
+		if (m_Swapchain)
 		{
-			m_SwapChain->ResizeBuffers(
-				c_SwapchainImageCount,
-				width,
-				height,
-				DXGI_FORMAT_B8G8R8A8_UNORM,
-				0) >>
-				d3d12ErrChecker;
+			m_Swapchain->Resize(width, height);
 		}
 
 		RecreateRenderTargets();
@@ -424,15 +397,24 @@ namespace bgl
 	void
 	RenderTarget::RecreateRenderTargets()
 	{
-		if (!m_Headless)
+		if (m_Swapchain)
 		{
-			m_FrameIndex = m_SwapChain->GetCurrentBackBufferIndex();
 			CreateRenderTargets();
 		}
 		else
 		{
-			m_FrameIndex = 0;
 			CreateOffscreenRenderTargets();
+		}
+		ResetFrameRing();
+	}
+
+	void
+	RenderTarget::ResetFrameRing() noexcept
+	{
+		m_FrameIndex = 0;
+		if (m_Swapchain)
+		{
+			m_SlotImage[0] = m_Swapchain->GetCurrentImage();
 		}
 
 		// The backbuffers these fences described no longer exist, so the next frame must not wait
@@ -449,30 +431,34 @@ namespace bgl
 	void
 	RenderTarget::DestroyRenderTargets()
 	{
+		DestroyBackbuffers();
+		DestroyHistoryAttachments();
+		DestroyRenderAttachments();
+	}
+
+	void
+	RenderTarget::DestroyBackbuffers() noexcept
+	{
 		// Every handle is checked before it is released, as the Metal backend's counterpart does.
 		// A view is null when it was never made -- a windowed target's swapchain images get no
 		// SRV -- and also when its pool was exhausted, because CreateRtv reports that by returning
 		// a null handle rather than throwing. Cleared afterwards so a second teardown is a no-op.
-		for (UINT i = 0; i < c_SwapchainImageCount; i++)
+		for (const TextureRtvSrvHandle& backBuffer : m_BackBuffers)
 		{
-			if (!m_BackBuffers[i].srvHandle.IsNull())
+			if (!backBuffer.srvHandle.IsNull())
 			{
-				m_ResourceManager->DestroySrv(m_BackBuffers[i].srvHandle, false);
+				m_ResourceManager->DestroySrv(backBuffer.srvHandle, false);
 			}
-			if (!m_BackBuffers[i].rtvHandle.IsNull())
+			if (!backBuffer.rtvHandle.IsNull())
 			{
-				m_ResourceManager->DestroyRtv(m_BackBuffers[i].rtvHandle, false);
+				m_ResourceManager->DestroyRtv(backBuffer.rtvHandle, false);
 			}
-			if (!m_BackBuffers[i].textureHandle.IsNull())
+			if (!backBuffer.textureHandle.IsNull())
 			{
-				m_ResourceManager->DestroyTexture(m_BackBuffers[i].textureHandle, false);
+				m_ResourceManager->DestroyTexture(backBuffer.textureHandle, false);
 			}
-
-			m_BackBuffers[i] = {};
 		}
-
-		DestroyHistoryAttachments();
-		DestroyRenderAttachments();
+		m_BackBuffers.clear();
 	}
 
 	void
@@ -574,11 +560,13 @@ namespace bgl
 		bgpu::ResourceManagerRef resourceManager,
 		bool                     enableDebug)
 	{
+		auto swapchain =
+			desc.headless ? nullptr : CreateBackendSwapchain(desc, device, queue, enableDebug);
 		return core::SharedRef<RenderTarget>::Make(
 			desc,
+			std::move(swapchain),
 			std::move(device),
 			std::move(queue),
-			std::move(resourceManager),
-			enableDebug);
+			std::move(resourceManager));
 	}
 }

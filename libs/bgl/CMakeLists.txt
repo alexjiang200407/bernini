@@ -113,14 +113,16 @@ file(GLOB_RECURSE BGL_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
 )
-list(FILTER BGL_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
+# src/swapchain is the target every backend that presents through a Swapchain shares; such a
+# backend compiles it, and Metal, whose target is its own, does not.
+list(FILTER BGL_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal|swapchain)/.*")
 list(REMOVE_ITEM BGL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/selfcheck.cpp)
 
 file(GLOB_RECURSE BGL_PRIVATE_HEADERS CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp
 )
-list(FILTER BGL_PRIVATE_HEADERS EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
+list(FILTER BGL_PRIVATE_HEADERS EXCLUDE REGEX ".*/src/(d3d12|metal|swapchain)/.*")
 
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${BGL_SOURCES} ${BGL_PRIVATE_HEADERS})
 

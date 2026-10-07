@@ -1,6 +1,8 @@
 #pragma once
 #include "gfx/RenderTargetBase.h"
 #include "gfx/frame_constants.h"
+#include "swapchain/Swapchain.h"
+#include <array>
 #include <bgl/IGraphics.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandQueue.h>
@@ -9,8 +11,12 @@
 #include <bgpu/resource/Dsv.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Rtv.h>
+#include <bgpu/types/Barrier.h>
 #include <core/err/util.h>
 #include <core/ref/RefCounter.h>
+#include <cstdint>
+#include <memory>
+#include <vector>
 
 namespace bgl
 {
@@ -35,20 +41,24 @@ namespace bgl
 	};
 
 	/**
-	 * A per-output swapchain (windowed) or offscreen backbuffer ring (headless) plus a
-	 * depth buffer, owned independently of Graphics so one renderer can drive many
-	 * outputs. The frame ring is reached through RenderTargetBase, so frame-driving code
-	 * needs neither this type nor D3D12.
+	 * A window's swapchain (windowed) or offscreen backbuffer ring (headless) plus the attachments a
+	 * frame renders into, owned independently of Graphics so one renderer can drive many outputs.
+	 * Every backend whose window is a `Swapchain` shares it; only the swapchain is the backend's.
+	 *
+	 * The frame ring's slots -- allocator, fence -- go round-robin, and each is mapped to the image
+	 * the swapchain handed out for it, since a swapchain may hold more images than the ring has
+	 * slots.
 	 */
 	class RenderTarget : public core::RefCounter<RenderTargetBase>
 	{
 	public:
+		/** `swapchain` is null for a headless target, and required for a windowed one. */
 		RenderTarget(
-			const RenderTargetDesc&  desc,
-			bgpu::DeviceRef          device,
-			bgpu::CommandQueueRef    queue,
-			bgpu::ResourceManagerRef resourceManager,
-			bool                     enableDebug);
+			const RenderTargetDesc&    desc,
+			std::unique_ptr<Swapchain> swapchain,
+			bgpu::DeviceRef            device,
+			bgpu::CommandQueueRef      queue,
+			bgpu::ResourceManagerRef   resourceManager);
 
 		~RenderTarget() noexcept override;
 
@@ -104,21 +114,30 @@ namespace bgl
 		GetBackbufferTexture(uint32_t frameIndex) const noexcept override
 		{
 			core::ensure(frameIndex < c_SwapchainImageCount, "Frame index out of range");
-			return m_BackBuffers[frameIndex].textureHandle;
+			return m_BackBuffers[m_SlotImage[frameIndex]].textureHandle;
 		}
 
 		[[nodiscard]] bgpu::RtvHandle
 		GetBackbufferRtv(uint32_t frameIndex) const noexcept override
 		{
 			core::ensure(frameIndex < c_SwapchainImageCount, "Frame index out of range");
-			return m_BackBuffers[frameIndex].rtvHandle;
+			return m_BackBuffers[m_SlotImage[frameIndex]].rtvHandle;
 		}
 
 		[[nodiscard]] bgpu::SrvHandle
 		GetBackbufferSrv(uint32_t frameIndex) const noexcept override
 		{
 			core::ensure(frameIndex < c_SwapchainImageCount, "Frame index out of range");
-			return m_BackBuffers[frameIndex].srvHandle;
+			return m_BackBuffers[m_SlotImage[frameIndex]].srvHandle;
+		}
+
+		[[nodiscard]] bgpu::BarrierLayout
+		GetBackbufferLayout(uint32_t frameIndex) const noexcept override;
+
+		[[nodiscard]] bool
+		IsCapturable() const noexcept override
+		{
+			return m_Swapchain == nullptr || m_Swapchain->CanReadPresented();
 		}
 
 		[[nodiscard]] bool
@@ -287,9 +306,6 @@ namespace bgl
 		SetRenderScale(float scale) override;
 
 	private:
-		void
-		CreateSwapchain(HWND hWnd);
-
 		// Rebuilds every backbuffer handle and attachment against the sizes now recorded, and
 		// resets the frame ring -- the half a resize and a scale change have in common.
 		void
@@ -297,6 +313,21 @@ namespace bgl
 
 		void
 		CreateRenderTargets();
+
+		// The swapchain's images, imported, with their views.
+		void
+		CreateBackbuffers();
+
+		void
+		DestroyBackbuffers() noexcept;
+
+		// After the swapchain remade its images at the size it had: the attachments stay.
+		void
+		ReimportBackbuffers();
+
+		// Slot 0 next, on the image the swapchain holds, and no fence to wait on.
+		void
+		ResetFrameRing() noexcept;
 
 		void
 		CreateOffscreenRenderTargets();
@@ -325,19 +356,24 @@ namespace bgl
 		bgpu::CommandQueueRef    m_CommandQueue;
 		bgpu::ResourceManagerRef m_ResourceManager;
 
-		bool  m_Headless       = false;
-		bool  m_TaaEnabled     = false;
-		bool  m_OutlineEnabled = true;
-		bool  m_TaaAllocated   = false;
-		bool  m_EnableDebug    = false;
-		void* m_Wnd            = nullptr;
+		bool m_Headless       = false;
+		bool m_TaaEnabled     = false;
+		bool m_OutlineEnabled = true;
+		bool m_TaaAllocated   = false;
 
-		wrl::ComPtr<IDXGISwapChain3> m_SwapChain;
+		// Null when headless.
+		std::unique_ptr<Swapchain> m_Swapchain;
 
-		UINT                m_FrameIndex         = 0;
-		UINT                m_LastPresentedIndex = 0;
-		bool                m_Presented          = false;
-		TextureRtvSrvHandle m_BackBuffers[c_SwapchainImageCount];
+		uint32_t m_FrameIndex         = 0;
+		uint32_t m_LastPresentedIndex = 0;
+		bool     m_Presented          = false;
+
+		// One per swapchain image, or per ring slot when headless.
+		std::vector<TextureRtvSrvHandle> m_BackBuffers;
+		// Which of m_BackBuffers each ring slot draws into.
+		std::array<uint32_t, c_SwapchainImageCount> m_SlotImage{};
+		// Per swapchain image: whether a frame has drawn it since the swapchain made it.
+		std::vector<bool>   m_ImageDrawn;
 		TextureDsvHandle    m_DepthBuffer;
 		TextureRtvHandle    m_MotionVectors;
 		TextureRtvSrvHandle m_SceneColor;
@@ -346,10 +382,10 @@ namespace bgl
 
 		// Allocated only when m_TaaAllocated; a target that never resolves pays neither the memory nor
 		// the two RTV slots.
-		std::array<TextureRtvSrvHandle, 2> m_History;
-		uint32_t                           m_CurrentHistoryIndex                = 0;
-		bool                               m_HistoryValid                       = false;
-		UINT64                             m_FenceValues[c_SwapchainImageCount] = { 0, 0 };
+		std::array<TextureRtvSrvHandle, 2>          m_History;
+		uint32_t                                    m_CurrentHistoryIndex = 0;
+		bool                                        m_HistoryValid        = false;
+		std::array<uint64_t, c_SwapchainImageCount> m_FenceValues{};
 
 		bgpu::CommandAllocatorRef m_CommandAllocator[c_SwapchainImageCount];
 	};
