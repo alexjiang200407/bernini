@@ -73,6 +73,12 @@ link_once_per_process(spdlog::spdlog)
 # expands to nothing and no call site changes. Declared at the root, set per preset.
 if (BERNINI_PROFILING)
     link_once_per_process(Tracy::TracyClient)
+
+    # Not unused: the link is what has dyld initialise CoreFoundation before Tracy's worker starts.
+    # See docs/profiling.md.
+    if (APPLE)
+        target_link_libraries(core_process PRIVATE "-framework CoreFoundation")
+    endif()
 else()
     target_include_directories(core_process SYSTEM PUBLIC
         $<TARGET_PROPERTY:Tracy::TracyClient,INTERFACE_INCLUDE_DIRECTORIES>)
