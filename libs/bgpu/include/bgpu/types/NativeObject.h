@@ -20,6 +20,10 @@ namespace bgpu
 		kMtlBuffer,
 		kVkBuffer,
 		kVkImage,
+		kVkInstance,
+		kVkPhysicalDevice,
+		kVkDevice,
+		kVkQueue,  // a NativeVkQueue
 	};
 
 	/**

@@ -2,6 +2,7 @@
 #include "shadercache/ShaderCache_vulkan.h"
 #include <bgpu/GpuContext.h>
 #include <bgpu/device/Device.h>
+#include <bgpu/types/NativeObject.h>
 #include <bgpu/types/QueueType.h>
 #include <bgpu/uniforms/Uniforms.h>
 #include <core/ref/RefCounter.h>
@@ -76,6 +77,9 @@ namespace bgpu
 		[[nodiscard]] Uniforms
 		CreateUniforms(IComputePipeline const* pipeline, const std::string& cbufferName)
 			const noexcept override;
+
+		[[nodiscard]] NativeObject
+		GetNativeObject(NativeObjectType type) const noexcept override;
 
 	private:
 		GpuContextRef                m_Context;

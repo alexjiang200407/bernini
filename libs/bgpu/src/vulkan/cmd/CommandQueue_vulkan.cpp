@@ -10,6 +10,8 @@
 #include <bgpu/GpuContext.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/types/NativeObject.h>
+#include <bgpu/types/NativeVkQueue.h>
 #include <bgpu/types/QueueType.h>
 #include <core/containers/static_vector.h>
 #include <core/err/util.h>
@@ -40,6 +42,11 @@ namespace bgpu
 		info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 		info.pNext = &timeline;
 		EnsureVk(vkCreateSemaphore(m_Device, &info, nullptr, &m_Fence), "vkCreateSemaphore");
+
+		m_Native = NativeVkQueue{ .queue      = m_Queue.queue,
+			                      .family     = m_Queue.family,
+			                      .timeline   = m_Fence,
+			                      .submitLock = m_Queue.submitLock };
 
 		auto poolInfo             = VkCommandPoolCreateInfo();
 		poolInfo.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -302,5 +309,13 @@ namespace bgpu
 		vkGetPhysicalDeviceProperties(GetVulkanHandles(*m_Context).physicalDevice, &properties);
 		const double nanosecondsPerTick = properties.limits.timestampPeriod;
 		return nanosecondsPerTick > 0.0 ? 1e9 / nanosecondsPerTick : 0.0;
+	}
+
+	NativeObject
+	CommandQueue::GetNativeObject(const NativeObjectType type) const noexcept
+	{
+		if (type == NativeObjectType::kVkQueue)
+			return { &m_Native };
+		return {};
 	}
 }

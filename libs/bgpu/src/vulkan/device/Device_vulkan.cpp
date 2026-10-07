@@ -3,6 +3,7 @@
 #include "cmd/CommandList_vulkan.h"
 #include "cmd/CommandQueue_vulkan.h"
 #include "cmd/TimestampHeap_vulkan.h"
+#include "native_device_vulkan.h"
 #include "pipeline/ComputePipeline_vulkan.h"
 #include "pipeline/MeshletPipeline_vulkan.h"
 #include "resource/ResourceManager_vulkan.h"
@@ -17,6 +18,7 @@
 #include <bgpu/pipeline/MeshletPipeline.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Shader.h>
+#include <bgpu/types/NativeObject.h>
 #include <bgpu/types/QueueType.h>
 #include <bgpu/uniforms/Uniforms.h>
 #include <core/err/util.h>
@@ -122,6 +124,23 @@ namespace bgpu
 	{
 		core::ensure(pipeline != nullptr, "Pipeline pointer cannot be null");
 		return Uniforms(pipeline, cbufferName);
+	}
+
+	NativeObject
+	Device::GetNativeObject(const NativeObjectType type) const noexcept
+	{
+		const VulkanHandles handles = GetVulkanHandles(*m_Context);
+		switch (type)
+		{
+		case NativeObjectType::kVkInstance:
+			return { handles.instance };
+		case NativeObjectType::kVkPhysicalDevice:
+			return { handles.physicalDevice };
+		case NativeObjectType::kVkDevice:
+			return { handles.device };
+		default:
+			return {};
+		}
 	}
 
 	DeviceRef

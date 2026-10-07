@@ -4,6 +4,8 @@
 #include <atomic>
 #include <bgpu/GpuContext.h>
 #include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/types/NativeObject.h>
+#include <bgpu/types/NativeVkQueue.h>
 #include <bgpu/types/QueueType.h>
 #include <core/ref/RefCounter.h>
 #include <cstdint>
@@ -79,6 +81,9 @@ namespace bgpu
 		[[nodiscard]] double
 		GetTimestampFrequency() const noexcept override;
 
+		[[nodiscard]] NativeObject
+		GetNativeObject(NativeObjectType type) const noexcept override;
+
 		[[nodiscard]] QueueType
 		GetType() const noexcept
 		{
@@ -137,6 +142,10 @@ namespace bgpu
 		VulkanQueue   m_Queue;
 		QueueType     m_Type;
 		VkSemaphore   m_Fence = VK_NULL_HANDLE;
+
+		// What GetNativeObject(kVkQueue) answers; mutable because that call is const and hands out a
+		// pointer to it.
+		mutable NativeVkQueue m_Native;
 
 		// Atomic because the resource manager's sweep reads any registered queue's counters from
 		// whichever owner's thread runs it; writes stay under m_FenceMutex.
