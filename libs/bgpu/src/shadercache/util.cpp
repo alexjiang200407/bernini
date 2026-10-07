@@ -4,7 +4,19 @@
 #include <core/io/ByteReader.h>
 #include <core/io/ByteWriter.h>
 #include <cstdint>
+#include <filesystem>
+#include <spdlog/spdlog.h>
+#include <string>
 #include <utility>
+
+#if defined(_WIN32)
+#	define WIN32_LEAN_AND_MEAN
+#	include <Windows.h>  // IWYU pragma: keep
+#	include <fileapi.h>
+#	include <handleapi.h>
+#	include <winbase.h>
+#	include <winnt.h>
+#endif
 
 namespace bgpu::shader_cache
 {
@@ -55,5 +67,44 @@ namespace bgpu::shader_cache
 		for (uint32_t i = 0; i < elementCount; ++i) layout.element.push_back(ReadLayout(reader));
 
 		return layout;
+	}
+
+	PipelineLibraryClaim::PipelineLibraryClaim(const std::filesystem::path& directory) noexcept
+	{
+#if defined(_WIN32)
+		const std::filesystem::path lockPath =
+			directory / (std::string(c_PipelineLibraryFile) + ".lock");
+
+		// No sharing, so a second opener is refused rather than queued, and delete-on-close so the
+		// claim ends with the process however it ends.
+		const HANDLE lock = CreateFileW(
+			lockPath.wstring().c_str(),
+			GENERIC_WRITE,
+			0,
+			nullptr,
+			CREATE_ALWAYS,
+			FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE,
+			nullptr);
+
+		if (lock == INVALID_HANDLE_VALUE)
+		{
+			spdlog::debug(
+				"Another writer holds {}; this device builds its pipelines without the driver "
+				"library",
+				lockPath.string());
+			return;
+		}
+		m_Lock = lock;
+#else
+		(void)directory;
+#endif
+	}
+
+	PipelineLibraryClaim::~PipelineLibraryClaim() noexcept
+	{
+#if defined(_WIN32)
+		if (m_Lock != nullptr)
+			CloseHandle(m_Lock);
+#endif
 	}
 }

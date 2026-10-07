@@ -35,6 +35,7 @@
 #	include <bgpu/types/QueueType.h>
 #	include <bgpu/uniforms/Uniforms.h>
 #	include <catch2/catch_test_macros.hpp>
+#	include <catch2/generators/catch_generators.hpp>
 #	include <core/ref/SharedRef.h>
 #	include <cstdint>
 #	include <cstring>
@@ -153,6 +154,38 @@ TEST_CASE("A Vulkan list writes, copies and reads back a buffer", "[vulkan][subm
 	owner.rm->DestroyReadbackBuffer(rb, false);
 	owner.rm->DestroyBuffer(copied, false);
 	owner.rm->DestroyBuffer(staged, false);
+}
+
+// A buffer cleared whole and then partly rewritten in one pass, as the renderer's per-draw state is:
+// the second copy must land after the first, which two Vulkan transfers do not promise without a
+// barrier between them. Under synchronization validation a strict context ends on the hazard.
+TEST_CASE("Two Vulkan copies into one buffer land in the order recorded", "[vulkan][submit]")
+{
+	auto desc                     = bgpu::GpuContextDesc();
+	desc.enableDebugLayer         = true;
+	desc.enableGPUValidationLayer = true;
+	desc.strictError              = true;
+	auto context                  = bgpu::CreateGpuContext(desc);
+	auto owner                    = Owner(context, bgpu::QueueType::kCompute);
+
+	constexpr auto c_Zeros = std::to_array<uint32_t>({ 0, 0, 0, 0, 0, 0, 0, 0 });
+	constexpr auto c_Part  = std::to_array<uint32_t>({ 7, 8 });
+	const auto     buffer  = owner.rm->CreateStructBuffer(
+		bgpu::StructBufferDesc().SetElement<uint32_t>().SetElementCount(8).SetDebugName(
+			"cleared, then patched"));
+	const auto rb = MakeReadback(*owner.rm, sizeof(c_Zeros));
+
+	owner.Run([&](bgpu::ICommandList& list) {
+		list.WriteBuffer(buffer, c_Zeros.data(), sizeof(c_Zeros));
+		list.WriteBuffer(buffer, c_Part.data(), 2 * sizeof(uint32_t), sizeof(c_Part));
+		list.Barrier(buffer, CopyToCopy());
+		list.CopyBufferToReadback(rb, buffer);
+	});
+
+	CHECK(ReadBack(*owner.rm, rb, 8) == std::vector<uint32_t>{ 0, 0, 7, 8, 0, 0, 0, 0 });
+
+	owner.rm->DestroyReadbackBuffer(rb, false);
+	owner.rm->DestroyBuffer(buffer, false);
 }
 
 // The constant buffer is a uniform-buffer descriptor written per dispatch, and the buffer it names is
@@ -332,13 +365,18 @@ TEST_CASE("Vulkan owners share a queue only when every one is taken", "[vulkan][
 	for (const bgpu::VulkanQueue& queue : taken) bgpu::ReleaseVulkanQueue(*context, queue);
 }
 
+// On a graphics queue too, where a timestamp is not available to a copy that merely follows a
+// barrier: the resolve has to wait for it, or it copies nothing.
 TEST_CASE("A timed Vulkan span writes both of its slots", "[vulkan][submit][timing]")
 {
 	auto context = DebugContext();
 	if (!bgpu::TimestampHeap::Supported(*context))
 		SKIP("The device cannot time a span");
 
-	auto       owner  = Owner(context, bgpu::QueueType::kCompute);
+	const auto type = GENERATE(bgpu::QueueType::kCompute, bgpu::QueueType::kGraphics);
+	CAPTURE(type);
+
+	auto       owner  = Owner(context, type);
 	auto       heap   = core::SharedRef<bgpu::TimestampHeap>::Make(context, 2);
 	const auto buffer = owner.rm->CreateStructBuffer(
 		bgpu::StructBufferDesc().SetElement<uint32_t>().SetElementCount(1024).SetDebugName(
@@ -355,6 +393,7 @@ TEST_CASE("A timed Vulkan span writes both of its slots", "[vulkan][submit][timi
 	auto ticks = std::array<uint64_t, 2>{};
 	heap->Read(0, ticks);
 	CHECK(ticks[0] != bgpu::ITimestampHeap::c_UnwrittenTimestamp);
+	CHECK(ticks[1] != bgpu::ITimestampHeap::c_UnwrittenTimestamp);
 	CHECK(ticks[1] >= ticks[0]);
 	CHECK(owner.queue->GetTimestampFrequency() > 0.0);
 

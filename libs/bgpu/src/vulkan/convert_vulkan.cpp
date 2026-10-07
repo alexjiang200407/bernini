@@ -201,8 +201,7 @@ namespace bgpu
 		case BarrierLayout::kUndefined:
 			return VK_IMAGE_LAYOUT_UNDEFINED;
 		case BarrierLayout::kPresent:
-			core::fatal(
-				"BarrierLayout::kPresent is a swapchain's, and the Vulkan backend has none yet");
+			return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 		case BarrierLayout::kCommon:
 		case BarrierLayout::kGenericRead:
 		case BarrierLayout::kShaderResource:
@@ -560,12 +559,15 @@ namespace bgpu
 			result |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
 		if (sync & BarrierSyncFlag::kComputeShader)
 			result |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+		// A target's clear is part of its target work on D3D12; here it is vkCmdClear*Image, a
+		// transfer, so the clear stage joins the attachment stages.
 		if (sync & BarrierSyncFlag::kRenderTarget)
-			result |= VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+			result |=
+				VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_CLEAR_BIT;
 		if (sync & BarrierSyncFlag::kDepthStencil)
 		{
 			result |= VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
-			          VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+			          VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_CLEAR_BIT;
 		}
 		if (sync & BarrierSyncFlag::kIndirectArgument)
 			result |= VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
@@ -595,13 +597,14 @@ namespace bgpu
 			result |= VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
 		if (access & BarrierAccessFlag::kRenderTarget)
 		{
-			result |=
-				VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+			result |= VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT |
+			          VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT;
 		}
 		if (access & BarrierAccessFlag::kDepthWrite)
 		{
 			result |= VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-			          VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+			          VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+			          VK_ACCESS_2_TRANSFER_WRITE_BIT;
 		}
 		if (access & BarrierAccessFlag::kDepthRead)
 			result |= VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT;

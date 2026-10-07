@@ -933,6 +933,11 @@ TEST_CASE(
 		exportedType = bgpu::NativeObjectType::kD3D12Resource;
 		exported     = rm->GetNativeBuffer(produced, exportedType);
 	}
+	if (!exported)
+	{
+		exportedType = bgpu::NativeObjectType::kVkBuffer;
+		exported     = rm->GetNativeBuffer(produced, exportedType);
+	}
 	REQUIRE(exported);
 	const bgl::ExternalBufferRef imported = s.gfx->ImportBuffer(
 		bgpu::NativeBufferDesc()

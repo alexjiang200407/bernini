@@ -1,9 +1,12 @@
 #pragma once
+#include "shadercache/util.h"
+#include "volk_vulkan.h"
 #include <bgpu/GpuContext.h>
 #include <bgpu/ProgramCache.h>
 #include <bgpu/reflection/ReflectedLayout.h>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -37,14 +40,20 @@ namespace bgpu
 	};
 
 	/**
-	 * The Vulkan half of the shader cache: its programs in the context's program cache. No driver
-	 * pipeline cache is kept beside them yet. See docs/shader_cache.md.
+	 * The Vulkan half of the shader cache: its programs in the context's program cache, and a
+	 * VkPipelineCache of driver-compiled pipelines saved beside them. See docs/shader_cache.md.
 	 */
 	class ShaderCache
 	{
 	public:
-		/** @pre context->GetProgramCache() is not null. */
-		explicit ShaderCache(GpuContextRef context);
+		/**
+		 * `usePipelineCache` false keeps the programs but drops the driver layer; pass false when
+		 * GPU validation is on, since a pipeline replayed from the cache was compiled without its
+		 * instrumentation.
+		 *
+		 * @pre context->GetProgramCache() is not null.
+		 */
+		ShaderCache(GpuContextRef context, bool usePipelineCache);
 
 		ShaderCache(const ShaderCache&) = delete;
 		ShaderCache(ShaderCache&&)      = delete;
@@ -52,7 +61,7 @@ namespace bgpu
 		operator=(const ShaderCache&) = delete;
 		ShaderCache&
 		operator=(ShaderCache&&) = delete;
-		~ShaderCache()           = default;
+		~ShaderCache() noexcept;
 
 		/** Stable key for a pipeline's shader composition: every shader's module and entry point. */
 		[[nodiscard]] uint64_t
@@ -65,9 +74,31 @@ namespace bgpu
 		void
 		Store(uint64_t key, const CachedProgram& program) const;
 
+		/**
+		 * The driver's cache every pipeline is created through, or null when this device keeps
+		 * none. Vulkan synchronizes it internally, so pipelines built in parallel share it.
+		 */
+		[[nodiscard]] VkPipelineCache
+		GetVkPipelineCache() const noexcept
+		{
+			return m_PipelineCache;
+		}
+
 	private:
 		// Held so the program cache below outlives this.
 		GpuContextRef       m_Context;
 		const ProgramCache& m_Programs;
+
+		// Null when GPU validation is on, and when another writer holds the directory's library.
+		VkPipelineCache m_PipelineCache = VK_NULL_HANDLE;
+		// Released after the cache is written.
+		std::unique_ptr<shader_cache::PipelineLibraryClaim> m_Claim;
 	};
+
+	/** The driver cache a pipeline is created through: `cache`'s, or none without one. */
+	[[nodiscard]] inline VkPipelineCache
+	PipelineCacheOf(const ShaderCache* cache) noexcept
+	{
+		return cache != nullptr ? cache->GetVkPipelineCache() : VK_NULL_HANDLE;
+	}
 }

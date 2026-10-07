@@ -1,6 +1,7 @@
 #include "pipeline/ComputePipeline_vulkan.h"
 #include "native_device_vulkan.h"
 #include "pipeline/PipelineLayout_vulkan.h"
+#include "shadercache/ShaderCache_vulkan.h"
 #include "volk_vulkan.h"
 #include "vulkan_util.h"
 #include <bgpu/GpuContext.h>
@@ -60,8 +61,13 @@ namespace bgpu
 		info.stage  = stage;
 		info.layout = m_Layout.layout;
 
-		const VkResult created =
-			vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &m_Pipeline);
+		const VkResult created = vkCreateComputePipelines(
+			device,
+			PipelineCacheOf(cache),
+			1,
+			&info,
+			nullptr,
+			&m_Pipeline);
 		vkDestroyShaderModule(device, module, nullptr);
 		EnsureVk(created, "vkCreateComputePipelines");
 

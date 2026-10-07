@@ -2,6 +2,7 @@
 #include <DemoWindow.h>
 #include <FlyCamera.h>
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_events.h>
 #include <SDL3/SDL_messagebox.h>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/ImageData.h>
@@ -50,6 +51,7 @@ main(int argc, char** argv)
 		opts.height       = static_cast<int>(height);
 		opts.title        = "Bernini bgl_sphere";
 		opts.borderless   = true;
+		opts.resizable    = true;
 		opts.captureMouse = true;
 
 		auto wnd = demo::DemoWindow{ opts };
@@ -104,7 +106,7 @@ main(int argc, char** argv)
 
 		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(sphere));
 
-		const float aspect = static_cast<float>(width) / static_cast<float>(height);
+		auto aspect = static_cast<float>(width) / static_cast<float>(height);
 
 		auto camera = bgl::Camera();
 		camera
@@ -123,7 +125,22 @@ main(int argc, char** argv)
 		auto clock = demo::DeltaClock{};
 		while (!wnd.ShouldClose())
 		{
-			demo::PumpEvents();
+			// The target follows the window: DXGI would stretch a stale size into it, but a Vulkan
+			// swapchain's images are the window's size and nothing else.
+			demo::PumpEvents([&](const SDL_Event& event) {
+				if (event.type != SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED || event.window.data1 <= 0 ||
+				    event.window.data2 <= 0)
+					return;
+
+				width  = static_cast<uint32_t>(event.window.data1);
+				height = static_cast<uint32_t>(event.window.data2);
+				graphics->Resize(target, width, height);
+
+				aspect = static_cast<float>(width) / static_cast<float>(height);
+				camera.Perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f);
+				job.camera   = camera;
+				job.viewport = bgl::Viewport(static_cast<float>(width), static_cast<float>(height));
+			});
 
 			if (demo::ApplyFlyCam(camera, clock.Tick()))
 			{

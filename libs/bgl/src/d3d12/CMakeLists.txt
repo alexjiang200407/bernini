@@ -1,13 +1,16 @@
+# With the render target every swapchain backend shares (src/swapchain), which bgl_objects leaves out.
 file(GLOB_RECURSE BGL_DX12_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../swapchain/*.cpp
 )
 file(GLOB_RECURSE BGL_DX12_HEADERS CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../swapchain/*.h
 )
 
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" PREFIX "Source Files" FILES ${BGL_DX12_SOURCES} ${BGL_DX12_HEADERS})
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/.." PREFIX "Source Files" FILES ${BGL_DX12_SOURCES} ${BGL_DX12_HEADERS})
 
 add_library(bgl_d3d12 OBJECT
     ${BGL_DX12_SOURCES}

@@ -60,6 +60,7 @@ namespace
 		facts.synchronization    = true;
 		facts.mutableDescriptors = true;
 		facts.graphics           = true;
+		facts.presentation       = true;
 		return facts;
 	}
 
@@ -257,6 +258,12 @@ TEST_CASE(
 	CHECK_THAT(
 		bgpu::DescribeUnmetRequirements(lacking),
 		ContainsSubstring("graphics card with mesh shaders"));
+
+	auto noPresentation         = Rtx2060OnVulkan();
+	noPresentation.presentation = false;
+	CHECK(
+		Requirements(bgpu::CheckSystemRequirements(noPresentation)) ==
+		std::vector{ bgpu::Requirement::kVulkanGraphics });
 }
 
 // A 1.3 driver that hides a feature 1.3 makes mandatory is out of date or broken: the player is told

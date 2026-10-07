@@ -11,7 +11,7 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
 - Public headers under `./include/bgpu`, namespace `bgpu`. The RHI's interfaces and plain-old-data
   descriptors are there (`cmd/`, `device/`, `pipeline/`, `resource/`, `uniforms/`, `types/`,
   `buffer/`); their backend implementations are under `./src/d3d12` and `./src/metal`, one per
-  binary. `./src/vulkan` is a third, with nothing above `bgpu` built on it yet. Nothing outside
+  binary. `./src/vulkan` is a third, with only the renderer built on it yet. Nothing outside
   `src/<backend>` includes a backend header (d3d12, metal-cpp or volk) — what a
   caller needs of a backend it asks for with `GetNativeObject(NativeObjectType)` / `GetNativeTexture`,
   an untyped `NativeObject`, so no RHI header names a backend type.
@@ -86,7 +86,7 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
 
 ## Vulkan (`./src/vulkan`)
 
-The context and the whole RHI; nothing above `bgpu` is built on this backend yet
+The context and the whole RHI; only the renderer is built on this backend yet
 ([docs/bgpu.md § Vulkan](../../docs/bgpu.md#vulkan)), and every case in `bgpu_tests` runs on it.
 
 - **A mesh dispatch draws inside dynamic rendering**, which the list opens at the first draw on a

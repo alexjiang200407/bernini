@@ -605,7 +605,7 @@ namespace bgl
 			rt.GetBackbufferTexture(index),
 			AccessState{ bgpu::BarrierSyncFlag::kNone,
 		                 bgpu::BarrierAccessFlag::kNone,
-		                 bgpu::BarrierLayout::kPresent });
+		                 rt.GetBackbufferLayout(index) });
 
 		// Resumes the state the graph tracked last frame; the target creates them in
 		// render-target / depth-write.
@@ -1422,6 +1422,11 @@ namespace bgl
 		{
 			throw GraphicsError(
 				std::format("{} cannot be called between BeginFrame and EndFrame", caller));
+		}
+		if (!target->As<RenderTargetBase>()->IsCapturable())
+		{
+			throw GraphicsError(
+				std::format("{}: this target's presented image cannot be read back", caller));
 		}
 
 		const auto free = std::ranges::find_if(m_Captures, [](const CaptureSlot& slot) {

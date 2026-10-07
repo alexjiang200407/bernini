@@ -80,15 +80,18 @@ TEST_CASE("A Vulkan pipeline is built from its cached program", "[vulkan][shader
 	uint32_t compiledOffset = 0;
 	{
 		auto context = DebugContext(cacheDir);
-		auto cache   = bgpu::ShaderCache(context);
+		auto cache   = bgpu::ShaderCache(context, true);
 		auto pipeline =
 			core::SharedRef<bgpu::ComputePipeline>::Make(context, &cache, EntrySquare(context));
 		compiledOffset = OffsetOf(pipeline->GetUniformLayoutEntry("gUniforms"), "outBuffer");
 	}
 
+	// The driver's cache is written as the shader cache goes, for the next device to start from.
+	CHECK(std::filesystem::exists(cacheDir / "pipelines.psolib"));
+
 	// A context of its own, so the second build cannot reuse the first one's Slang session.
 	auto context = DebugContext(cacheDir);
-	auto cache   = bgpu::ShaderCache(context);
+	auto cache   = bgpu::ShaderCache(context, true);
 
 	auto program = bgpu::CachedProgram();
 	REQUIRE(cache.TryLoad(cache.ComputeKey({ { "bgpu.CSEntrySquare", "main" } }), program));

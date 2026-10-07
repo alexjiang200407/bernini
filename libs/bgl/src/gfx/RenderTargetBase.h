@@ -19,6 +19,7 @@
 #include <bgpu/resource/Rtv.h>
 #include <bgpu/resource/Srv.h>
 #include <bgpu/resource/Texture.h>
+#include <bgpu/types/Barrier.h>
 #include <cmath>
 #include <cstdint>
 #include <utility>
@@ -390,6 +391,25 @@ namespace bgl
 		AdvanceFrameCount() noexcept
 		{
 			++m_FrameCount;
+		}
+
+		/**
+		 * The layout `frameIndex`'s backbuffer is in when its frame starts: `kPresent` once a frame
+		 * has drawn it, and until then the layout it was made in -- `kUndefined` for a swapchain
+		 * image that starts so, `kCommon` for an offscreen one.
+		 */
+		[[nodiscard]] virtual bgpu::BarrierLayout
+		GetBackbufferLayout(uint32_t frameIndex) const noexcept
+		{
+			(void)frameIndex;
+			return bgpu::BarrierLayout::kPresent;
+		}
+
+		/** Whether the last presented backbuffer may be read back, as a capture does. */
+		[[nodiscard]] virtual bool
+		IsCapturable() const noexcept
+		{
+			return true;
 		}
 
 		/**

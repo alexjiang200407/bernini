@@ -78,6 +78,9 @@ float4x4 PaletteAt(ComputeBuffer<float4> source, uint slot)
 
 // The skinning matrix of `bone` at this frame's clock, from whichever source the placement drew:
 // its palette, its pose-pool slice, or its rig's table between two frames -- as ResolveSkinnedPose.
+// Inlined: called out of line, Slang 2026.7.1 passes a struct read from a buffer to the asserting accessors
+// below it by a PhysicalStorageBuffer pointer, which SPIR-V rejects (docs/known_issues.md).
+[ForceInline]
 float4x4 SkinOf(MeshInstance mesh, uint placement, uint bone, out Rig rig)
 {
     let kind = PlaybackType(gUniforms.playbackBuffer.LoadTag(mesh.playback));
@@ -121,6 +124,7 @@ float4x4 SkinOf(MeshInstance mesh, uint placement, uint bone, out Rig rig)
 
 // The head's frame in the world: the placement's transform, the head bone's model transform if the
 // rig names one -- its stored skin matrix with the inverse bind taken back out -- and the rig's own.
+[ForceInline] // As SkinOf.
 float4x4 HeadWorld(MeshInstance mesh, uint placement, ToonShadingRig toon)
 {
     var model = IdentityTransform();

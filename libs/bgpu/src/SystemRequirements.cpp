@@ -137,7 +137,7 @@ namespace bgpu
 			unmet.push_back({ Requirement::kVulkanSynchronization, facts.gpuName });
 		if (!facts.mutableDescriptors)
 			unmet.push_back({ Requirement::kVulkanMutableDescriptors, facts.gpuName });
-		if (!facts.graphics)
+		if (!facts.graphics || !facts.presentation)
 			unmet.push_back({ Requirement::kVulkanGraphics, facts.gpuName });
 		return unmet;
 	}

@@ -62,10 +62,10 @@ set_property(CACHE PLATFORM PROPERTY STRINGS WINDOWS MACOS WEB)
 # nothing that needs CreateGraphics is declared. It is spelled rather than left unset because the
 # default above means unset is no longer reachable.
 #
-# VULKAN is a backend bgpu runs compute on and nothing draws with yet: it has the RHI's compute half
-# and no renderer, so everything above bgpu builds as it does for NONE (docs/bgpu.md, "Vulkan").
+# VULKAN is a backend being brought up on Windows: it has the RHI and the renderer, and nothing above
+# the renderer is built on it yet (docs/bgpu.md, "Vulkan").
 set(RENDERER_BACKEND "${_bernini_backend}" CACHE STRING
-    "Graphics backend: DX12, METAL, VULKAN for bgpu's compute alone, or NONE for bgl's objects alone")
+    "Graphics backend: DX12, METAL, VULKAN, or NONE for bgl's objects alone")
 set_property(CACHE RENDERER_BACKEND PROPERTY STRINGS DX12 METAL VULKAN NONE)
 if (NOT RENDERER_BACKEND MATCHES "^(DX12|METAL|VULKAN|NONE)$")
     message(FATAL_ERROR
@@ -74,8 +74,16 @@ endif()
 
 # Whether bgl can be built: CreateGraphics is defined inside a renderer backend.
 set(BERNINI_HAS_RENDERER OFF)
-if (RENDERER_BACKEND MATCHES "^(DX12|METAL)$")
+if (RENDERER_BACKEND MATCHES "^(DX12|METAL|VULKAN)$")
     set(BERNINI_HAS_RENDERER ON)
+endif()
+
+# Whether what is built on the renderer is: the crowd, the editor, the apps, every example and every
+# suite above bgl. Not on Vulkan, whose renderer is being brought up with gamelib and bgl_sphere
+# alone above it -- the example that proves it presents (examples/CMakeLists.txt).
+set(BERNINI_HAS_RENDERER_CONSUMERS OFF)
+if (RENDERER_BACKEND MATCHES "^(DX12|METAL)$")
+    set(BERNINI_HAS_RENDERER_CONSUMERS ON)
 endif()
 
 # Shader debug info and the dbg_raise() bodies, in lockstep with BERNINI_GPU_DEBUG below. A
@@ -160,7 +168,7 @@ add_custom_target(copy_assets DEPENDS "${ASSET_STAMP}")
 # code is linked in, and a texture bake runs an order of magnitude slower.
 set(CMAKE_FIND_PACKAGE_TARGETS_GLOBAL ON)
 
-if (PROJECT_IS_TOP_LEVEL AND BERNINI_HAS_RENDERER)
+if (PROJECT_IS_TOP_LEVEL AND BERNINI_HAS_RENDERER_CONSUMERS)
     find_package(Qt6 QUIET COMPONENTS Core Gui Widgets)
 endif()
 
@@ -168,7 +176,7 @@ endif()
 # embedded with add_subdirectory, renderer-free tools and builds without the editor stay static.
 set(_bernini_editor_sdk_default OFF)
 set(_bernini_editor_sdk_eligible OFF)
-if (PROJECT_IS_TOP_LEVEL AND BERNINI_HAS_RENDERER AND Qt6_FOUND)
+if (PROJECT_IS_TOP_LEVEL AND BERNINI_HAS_RENDERER_CONSUMERS AND Qt6_FOUND)
     set(_bernini_editor_sdk_default ON)
     set(_bernini_editor_sdk_eligible ON)
 endif()
@@ -187,6 +195,11 @@ option(BERNINI_SHARED_RENDERER "Build bgl as a shared library (BERNINI_EDITOR_SD
 if (BERNINI_SHARED_RENDERER AND NOT BERNINI_HAS_RENDERER)
     message(FATAL_ERROR
         "BERNINI_SHARED_RENDERER needs a renderer, and RENDERER_BACKEND is ${RENDERER_BACKEND}")
+endif()
+# Vulkan's renderer reaches volk's function pointers, which bgpu defines; nothing has built it as a
+# DLL beside a shared bgpu, so it is static while it is brought up.
+if (BERNINI_SHARED_RENDERER AND RENDERER_BACKEND STREQUAL "VULKAN")
+    message(FATAL_ERROR "BERNINI_SHARED_RENDERER is not built on Vulkan yet")
 endif()
 set(_bernini_renderer_library_type STATIC)
 if (BERNINI_SHARED_RENDERER OR BERNINI_EDITOR_SDK)
@@ -241,6 +254,8 @@ add_subdirectory(libs/assetlib)
 # gamelib is the seam: the only library that links both the renderer and the asset layer.
 if (TARGET bgl)
     add_subdirectory(libs/gamelib)
+endif()
+if (BERNINI_HAS_RENDERER_CONSUMERS)
     # Compute beside the renderer on the device they share; it links bgpu, never bgl.
     add_subdirectory(libs/crowdlib)
     # The crowd drawn GPU to GPU: the one library that links both the renderer and the crowd.
@@ -250,7 +265,7 @@ endif()
 # Qt is not a vcpkg dependency, so an embedded build would look for one the consumer never asked
 # for and occasionally find it.
 if (PROJECT_IS_TOP_LEVEL)
-    if (Qt6_FOUND AND TARGET bgl)
+    if (Qt6_FOUND AND BERNINI_HAS_RENDERER_CONSUMERS)
         add_subdirectory(apps/editor)
     elseif (NOT Qt6_FOUND)
         message(STATUS "Qt6 not found - skipping editor (set CMAKE_PREFIX_PATH to your Qt install to enable it)")
@@ -259,7 +274,7 @@ endif()
 
 # Outside the examples, which the release presets leave off: release is the build its benchmarks
 # are taken on.
-if (PROJECT_IS_TOP_LEVEL AND TARGET bgl)
+if (PROJECT_IS_TOP_LEVEL AND BERNINI_HAS_RENDERER_CONSUMERS)
     add_subdirectory(apps/headless)
     add_subdirectory(apps/ai_viewer)
 endif()
@@ -355,7 +370,7 @@ endif()
 # A game built against this build rather than compiled into its own: every build directory carries
 # the package for exactly what it built, so a consumer's preset names the engine build it matches.
 # Top-level only -- embedded, the consumer already has the targets. See docs/embedding.md.
-if (PROJECT_IS_TOP_LEVEL AND TARGET gamelib)
+if (PROJECT_IS_TOP_LEVEL AND TARGET gamelib AND BERNINI_HAS_RENDERER_CONSUMERS)
     set(BERNINI_PACKAGE_DIR "${CMAKE_BINARY_DIR}/bernini_sdk")
     set(BERNINI_PACKAGE_TARGETS
         core_process core assetlib_structs bgpu bgl_headers bgl_idl bgl_objects

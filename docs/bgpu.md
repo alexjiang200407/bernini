@@ -121,7 +121,7 @@ every test get the check without asking for it, and nothing can turn it off.
 | | a driver that lays a buffer out as the shaders declare it | `scalarBlockLayout`, what `ScalarDataLayout` compiles to in SPIR-V |
 | | a driver with the fences and barriers the RHI is written in | `timelineSemaphore` and `synchronization2`, D3D12's fence values and enhanced barriers; both mandatory in 1.3, so a driver that hides them is told to update |
 | | a driver with one bindless array for buffers and textures | `VK_EXT_mutable_descriptor_type`: Slang lowers a buffer handle and a texture handle to the same binding, as D3D12 indexes one CBV/SRV/UAV heap; a mesh-shading GPU without it has an old driver |
-| | the graphics RHI's draws and states | `dynamicRendering`, `drawIndirectCount`, and the core features D3D12's blend, raster and sampler states can ask for: `independentBlend`, `dualSrcBlend`, `fillModeNonSolid`, `depthClamp`, `multiViewport`, `samplerAnisotropy`, `samplerFilterMinmax`, `samplerMirrorClampToEdge`, `textureCompressionBC` |
+| | the graphics RHI's draws and states | `dynamicRendering`, `drawIndirectCount`, and the core features D3D12's blend, raster and sampler states can ask for: `independentBlend`, `dualSrcBlend`, `fillModeNonSolid`, `depthClamp`, `multiViewport`, `samplerAnisotropy`, `samplerFilterMinmax`, `samplerMirrorClampToEdge`, `textureCompressionBC`, and `fragmentStoresAndAtomics`, for a pixel shader that writes a buffer as D3D12's may; then `VK_KHR_swapchain`, to present |
 
 An Intel Mac is refused even when its GPU supports Metal 3: the engine is built and tested on Apple
 silicon only.
@@ -145,10 +145,10 @@ refused, even when a second GPU would pass, because the engine does not choose a
 ## Vulkan
 
 `RENDERER_BACKEND=VULKAN` is a third backend being brought up on Windows ahead of the Linux build
-that needs it: **the context and the whole RHI**, every case of `bgpu_tests` included. Nothing
-above `bgpu` is built — no renderer, no crowd libraries, no editor; the renderer's backend half and
-its swapchain are the next step. D3D12 stays the Windows default; only the
-`windows-clang-vulkan-debug` preset selects this.
+that needs it: **the context, the whole RHI and the renderer** (`bgl`'s `bgl_vulkan`), which presents
+to a window. Above the renderer only `gamelib` and the `bgl_sphere` example are built — no crowd
+libraries, no editor, no other app or example. D3D12 stays the Windows
+default; only the `windows-clang-vulkan-debug` preset selects this.
 
 * **The first physical device, as D3D12 takes DXGI's first adapter.** The loader sorts what it
   enumerates — by the adapter order Windows prefers, and on Linux discrete before integrated — so
@@ -218,8 +218,8 @@ against D3D12 and Metal:
   which a texture is in, where Vulkan needs it at every copy, clear, attachment and descriptor; in
   the one layout valid for all of them, a descriptor written once is right for every read and a
   barrier keeps D3D12's meaning — its syncs and accesses, and a discard from `kUndefined`. On a
-  driver with `VK_KHR_unified_image_layouts` it costs nothing. `kPresent` is a swapchain's and ends
-  the process until there is one.
+  driver with `VK_KHR_unified_image_layouts` it costs nothing. `kPresent` is `PRESENT_SRC_KHR`, the
+  one other layout, and only a swapchain's image may be in it: `CreateTexture` refuses it.
 * **A clear is `vkCmdClearColorImage` or `vkCmdClearDepthStencilImage`** over the view's
   subresources: in `GENERAL` it needs no render pass. An integer target's clear converts D3D12's
   floats to its own type. A render target view of a 3D texture names a range of its depth slices,
@@ -269,9 +269,11 @@ against D3D12 and Metal:
 * **A constant buffer is a uniform-buffer descriptor written per dispatch**, its bytes in the
   list's upload ring as on D3D12 and its set from the command allocator, which is a command pool
   per queue family and resets with both.
-* **One allocation per buffer and per texture**, as D3D12 commits one resource for each. A
-  renderer's thousands of textures are what would reach `maxMemoryAllocationCount` and need a
-  suballocator.
+* **One allocation per buffer and per texture**, as D3D12 commits one resource for each. Measured
+  with the renderer on Vulkan, the most live at once was 205 over all of `bgl_tests` and 85 in
+  `bgl_sphere`, against the 4096 `maxMemoryAllocationCount` the spec guarantees (NVIDIA reports no
+  limit at all). What would reach it is a game's texture set, streamed, and that is when a
+  suballocator -- the Vulkan Memory Allocator -- earns its dependency.
 * **A texture's readback rows are 256-byte aligned**, as D3D12's footprint is, rounded up to a whole
   number of blocks, so `GetTextureReadbackLayout` reads the same on both.
 * **An exported buffer is a `VkBuffer`** (`NativeObjectType::kVkBuffer`). Vulkan counts no
@@ -280,7 +282,22 @@ against D3D12 and Metal:
   manager made is refused. **An exported texture is a `VkImage`** (`kVkImage`), held the same way
   (`ImageMemory`) when a manager made it; one no manager made — a swapchain's — is borrowed, since
   nothing can add a reference to it, and its maker keeps it alive while the handle lives.
-* **The program cache holds SPIR-V and reflection**; there is no driver pipeline cache yet.
+* **The program cache holds SPIR-V and reflection**, and a `VkPipelineCache` every pipeline is
+  created through is the driver layer beside it, written to `pipelines.psolib` by the one device
+  that claims the directory -- on Windows only: elsewhere nothing claims it and no driver cache is
+  kept ([shader_cache.md](shader_cache.md)).
+* **A renderer presents beside the RHI, not through it.** `IDevice::GetNativeObject` answers
+  `kVkInstance`, `kVkPhysicalDevice` and `kVkDevice`, and `ICommandQueue::GetNativeObject` answers
+  `kVkQueue` with a `NativeVkQueue`: the `VkQueue`, its family, its timeline semaphore -- the queue's
+  fence -- and the submit lock every owner of that `VkQueue` holds. `vkQueuePresentKHR` waits only on
+  a binary semaphore, so `bgl`'s swapchain submits an empty batch that waits on the timeline at the
+  frame's fence and signals one, under that lock. The instance enables `VK_KHR_surface` and
+  `VK_KHR_win32_surface`, the device `VK_KHR_swapchain`.
+* **A buffer two copies of one list write is ordered between them**: a pass that clears a buffer
+  whole and then rewrites part of it expects the writes to land in order, which two transfers do not
+  promise, so the list barriers a second copy into a buffer it copied into since its last barrier.
+  A target's clear is in `kRenderTarget`'s and `kDepthStencil`'s scope, as on D3D12, though here it
+  is a transfer.
 
 `bgpu_tests` `[vulkan]` pins the device and its queues, the bindless and synchronization features it
 was created with, a validation message in the log, a leaked object named in it and a kernel compiled

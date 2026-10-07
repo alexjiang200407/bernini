@@ -252,7 +252,9 @@ flowchart TD
 * **`Resize(target, w, h)`** — @pre not between `BeginFrame`/`EndFrame`; both dimensions non-zero.
   @throws `GraphicsError` otherwise. `w`/`h` are the *output* size; the render size is re-derived
   from the target's scale. Recreates backbuffers, depth, scene colour and the velocity buffer,
-  invalidating anything that cached them.
+  invalidating anything that cached them. A windowed target's window is the caller's to follow: on
+  D3D12 a stale size is stretched into the window, but on Vulkan the swapchain's images are the
+  window's size, and a present that finds them out of date makes the target that size itself.
 * **`SetRenderScale(target, scale)`** — @pre not between `BeginFrame`/`EndFrame`; `scale` positive
   and finite. @throws `GraphicsError` otherwise. Recreates only what the geometry passes draw into,
   at the new render size; the presented size and every capture are unchanged, and the accumulation
@@ -282,7 +284,8 @@ flowchart TD
 * **`SubmitCapture(target)`** — @pre not mid-frame; fewer than `c_MaxPendingCaptures` captures in
   flight. @post returns a ticket that **must** be spent by `TryResolveCapture` or `DiscardCapture`;
   leaking tickets exhausts the slots and the next submit throws. Captures the *last presented*
-  backbuffer, so it reflects the frame before it, not one still being recorded.
+  backbuffer, so it reflects the frame before it, not one still being recorded. Throws for a windowed
+  target on Vulkan, whose presented image belongs to the presentation engine.
 * **`TryResolveCapture(ticket)`** — @throws `GraphicsError` if the ticket is null or already spent.
   Returning an image spends it; `nullopt` leaves it live for a later call.
 * **`DiscardCapture(ticket)`** — `noexcept`, and spending a ticket twice is a no-op, so teardown paths

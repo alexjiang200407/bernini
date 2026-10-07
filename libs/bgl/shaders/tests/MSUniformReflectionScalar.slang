@@ -17,7 +17,21 @@ public struct AllScalarUniforms
 
 ConstantBuffer<AllScalarUniforms> gUniforms;
 
+struct NoVertex
+{
+    float4 position : SV_Position;
+    float value : TEXCOORD;
+};
+
+// Reflection only, so it draws nothing: one vertex and no primitive. SPIR-V requires a mesh stage
+// to declare its outputs, and Slang emits a vertex of system values alone as an input, which DXIL
+// refuses -- hence the user value.
 [shader("mesh")]
 [numthreads(1, 1, 1)]
 [outputtopology("triangle")]
-void main() {}
+void main(OutputVertices<NoVertex, 1> verts, OutputIndices<uint3, 1> tris)
+{
+    SetMeshOutputCounts(1, 0);
+    verts[0].position = float4(0.0, 0.0, 0.0, 1.0);
+    verts[0].value = 0.0;
+}

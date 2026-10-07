@@ -41,9 +41,11 @@ when this doc disagrees, trust the source, then fix this doc.
 * **Both backends implement it; the entry contents differ.** D3D12 stores DXIL and a root parameter
   index per cbuffer, and backs the library with an `ID3D12PipelineLibrary`. Metal stores MSL per
   *stage* and that stage's `[[buffer(N)]]` indices, and backs the library with an
-  `MTL::BinaryArchive`. Vulkan, whose RHI is the compute half so far, stores SPIR-V and each
-  cbuffer's binding and set, and keeps no driver library yet
-  ([ShaderCache_vulkan.h](libs/bgpu/src/vulkan/shadercache/ShaderCache_vulkan.h)). The split is why the backends' shared code
+  `MTL::BinaryArchive`. Vulkan stores SPIR-V and each cbuffer's binding and set, and backs the
+  library with one `VkPipelineCache` every pipeline is created through, read at start and written
+  whole at the end; data whose header names another device or driver is not handed to it
+  ([ShaderCache_vulkan.h](libs/bgpu/src/vulkan/shadercache/ShaderCache_vulkan.h)). The one-writer
+  claim on the library is shared by D3D12 and Vulkan (`shader_cache::PipelineLibraryClaim`). The split is why the backends' shared code
   ([bgpu/src/shadercache/util.h](libs/bgpu/src/shadercache/util.h)) is only
   the `ReflectedLayout` encoding, while each backend owns a `ShaderCache` of its own: its entry
   encoding and its driver library. A cache directory is written by one backend and is not portable
@@ -159,7 +161,7 @@ the context built, kept until the context dies (`bgpu::FindPipelineState` /
 `SharePipelineState`). A second renderer on the same context reuses those objects instead of
 building its own. That is the only layer that saves anything under GPU-based validation: the
 debug layer patches each new PSO object on first use, so without sharing every test case repays
-the patching (tens of seconds a case). D3D12 only; Metal renderers build their own.
+the patching (tens of seconds a case). D3D12 only; Metal and Vulkan renderers build their own.
 
 Under GPU-based validation the `PLIB` layer is absent: no pipeline library exists, so a PSO the
 context does not already hold takes the `CreatePipelineState` path and none is stored (see Risky

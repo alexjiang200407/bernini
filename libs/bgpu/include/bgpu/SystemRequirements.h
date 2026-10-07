@@ -125,8 +125,13 @@ namespace bgpu
 		// What the graphics RHI draws with and its states can ask for: dynamic rendering, a count
 		// buffer for indirect dispatches, and the core features behind D3D12's blend, raster and
 		// sampler states (independent and dual-source blend, wireframe, depth clamp, several
-		// viewports, anisotropic, min/max and mirror-once sampling, BC textures).
+		// viewports, anisotropic, min/max and mirror-once sampling, BC textures), and buffer writes
+		// from a pixel shader.
 		bool graphics = false;
+
+		// VK_KHR_swapchain: a renderer presents to a window. Checked with `graphics`, as part of
+		// Requirement::kVulkanGraphics.
+		bool presentation = false;
 	};
 
 	/** Every requirement `facts` fall short of, in the enumeration's order. Empty when they meet all. */

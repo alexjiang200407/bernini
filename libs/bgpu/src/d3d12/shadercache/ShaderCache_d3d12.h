@@ -1,9 +1,11 @@
 #pragma once
+#include "shadercache/util.h"
 #include <bgpu/GpuContext.h>
 #include <bgpu/ProgramCache.h>
 #include <bgpu/reflection/ReflectedLayout.h>
 #include <core/type_traits.h>
 #include <cstdint>
+#include <memory>
 #include <string_view>
 
 namespace bgpu
@@ -107,12 +109,7 @@ namespace bgpu
 		bool                                m_PsoLibraryDirty = false;
 		std::mutex                          m_PsoLibraryMutex;
 
-		// Held for as long as this cache may write the library, so the claim below is the OS's to
-		// arbitrate and a killed process releases it with nothing to clean up.
-		HANDLE m_PsoLibraryLock = nullptr;
-
-		/** Whether this cache is the one writer of the directory's driver library. */
-		[[nodiscard]] bool
-		ClaimPipelineLibrary();
+		// Held for as long as this cache may write the library, and released after the write.
+		std::unique_ptr<shader_cache::PipelineLibraryClaim> m_Claim;
 	};
 }
