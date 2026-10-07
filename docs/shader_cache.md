@@ -18,8 +18,8 @@ when this doc disagrees, trust the source, then fix this doc.
   **not** a `bgpu::I*` interface — see [Render Hardware Interface](docs/rhi.md). Nothing about it
   crosses the RHI boundary: the directory is the GPU context's, beside its `clientShaderDir`, whose
   files are in the salt. The `Device` builds a `ShaderCache` when the context has a program cache
-  and threads it through pipeline creation. A future Vulkan backend reads the same directory and
-  backs its driver layer with `VkPipelineCache`; what an entry holds is the backend's private
+  and threads it through pipeline creation. The Vulkan backend reads the same directory, and its driver
+  layer, when it has one, is a `VkPipelineCache`; what an entry holds is the backend's private
   business.
 
 * **The program layer is the GPU context's, and every owner of the device shares it.** The salt
@@ -41,7 +41,9 @@ when this doc disagrees, trust the source, then fix this doc.
 * **Both backends implement it; the entry contents differ.** D3D12 stores DXIL and a root parameter
   index per cbuffer, and backs the library with an `ID3D12PipelineLibrary`. Metal stores MSL per
   *stage* and that stage's `[[buffer(N)]]` indices, and backs the library with an
-  `MTL::BinaryArchive`. The split is why the backends' shared code
+  `MTL::BinaryArchive`. Vulkan, whose RHI is the compute half so far, stores SPIR-V and each
+  cbuffer's binding and set, and keeps no driver library yet
+  ([ShaderCache_vulkan.h](libs/bgpu/src/vulkan/shadercache/ShaderCache_vulkan.h)). The split is why the backends' shared code
   ([bgpu/src/shadercache/util.h](libs/bgpu/src/shadercache/util.h)) is only
   the `ReflectedLayout` encoding, while each backend owns a `ShaderCache` of its own: its entry
   encoding and its driver library. A cache directory is written by one backend and is not portable

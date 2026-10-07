@@ -10,12 +10,9 @@
 #include <bgpu/pipeline/ComputeKernel.h>
 #include <bgpu/pipeline/ComputePipeline.h>
 #include <bgpu/resource/Buffer.h>
-#include <bgpu/resource/Dsv.h>
 #include <bgpu/resource/Readback.h>
 #include <bgpu/resource/ResourceManager.h>
-#include <bgpu/resource/Rtv.h>
 #include <bgpu/resource/Sampler.h>
-#include <bgpu/resource/Srv.h>
 #include <bgpu/resource/Texture.h>
 #include <bgpu/types/Barrier.h>
 #include <bgpu/types/ComputeState.h>
@@ -25,6 +22,12 @@
 #include <core/containers/slot_handle.h>
 #include <cstdint>
 #include <vector>
+
+#if !defined(RENDERER_BACKEND_VULKAN)
+#	include <bgpu/resource/Dsv.h>
+#	include <bgpu/resource/Rtv.h>
+#	include <bgpu/resource/Srv.h>
+#endif
 
 // What a compute client beside the renderer does, with nothing of the renderer in the process: this
 // suite links bgpu and no renderer. Its own device on the shared context, its own resource manager with its
@@ -169,6 +172,8 @@ TEST_CASE("A resource pool of zero refuses every create from it", "[compute][ren
 		rm->DestroyBuffer(buffer, false);
 	}
 
+	// Vulkan has no textures yet, so a pool that holds some is one it cannot fill.
+#if !defined(RENDERER_BACKEND_VULKAN)
 	SECTION("textures, but no view, target, depth or readback")
 	{
 		auto desc               = bgpu::ResourceManagerDesc::ComputeOnly();
@@ -210,4 +215,5 @@ TEST_CASE("A resource pool of zero refuses every create from it", "[compute][ren
 		rm->DestroyTexture(color, false);
 		rm->DestroyTexture(depth, false);
 	}
+#endif
 }

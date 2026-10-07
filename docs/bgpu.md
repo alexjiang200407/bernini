@@ -119,6 +119,7 @@ every test get the check without asking for it, and nothing can turn it off.
 | | a driver at Vulkan 1.3 | `VkPhysicalDeviceProperties::apiVersion`; below it nothing else is checked, since an old driver hides what the GPU can do |
 | | a mesh stage and bindless | `VK_EXT_mesh_shader` with its `meshShader` and `taskShader` features, the second being D3D12's amplification stage; the descriptor-indexing features a runtime array of sampled images, storage images or storage buffers needs |
 | | a driver that lays a buffer out as the shaders declare it | `scalarBlockLayout`, what `ScalarDataLayout` compiles to in SPIR-V |
+| | a driver with the fences and barriers the RHI is written in | `timelineSemaphore` and `synchronization2`, D3D12's fence values and enhanced barriers; both mandatory in 1.3, so a driver that hides them is told to update |
 
 An Intel Mac is refused even when its GPU supports Metal 3: the engine is built and tested on Apple
 silicon only.
@@ -141,11 +142,12 @@ refused, even when a second GPU would pass, because the engine does not choose a
 
 ## Vulkan
 
-`RENDERER_BACKEND=VULKAN` is the first part of a third backend, brought up on Windows ahead of the
-Linux build that needs it: **the context, and nothing built on it.** `CreateGpuContext` is defined
-and `CreateDevice` is not, so the build treats it as it treats `NONE` everywhere above `bgpu` — no
-renderer, no crowd libraries, no editor — and `bgpu_tests` is the cases under
-`libs/bgpu/tests/src/context`, the ones that need a context and no RHI. D3D12 stays the Windows
+`RENDERER_BACKEND=VULKAN` is a third backend being brought up on Windows ahead of the Linux build
+that needs it: **the context and the RHI's compute half.** `CreateDevice` gives an owner buffers,
+queues, command lists and compute pipelines; textures, samplers, targets and the meshlet pipeline
+end the process naming what is missing (a pool of them sized at zero still refuses a create, as on
+every backend). Nothing above `bgpu` is built — no renderer, no crowd libraries, no editor — and
+`bgpu_tests` runs everything but the cases that need textures or a draw. D3D12 stays the Windows
 default; only the `windows-clang-vulkan-debug` preset selects this.
 
 * **The first physical device, as D3D12 takes DXGI's first adapter.** The loader sorts what it
@@ -191,12 +193,50 @@ default; only the `windows-clang-vulkan-debug` preset selects this.
 * **`enableGPUValidationLayer` is GPU-assisted validation**, switched on through the layer's
   settings when the instance is created. Unlike D3D12's it is the instance's, so it ends with the
   context.
-* **The sessions compile to SPIR-V**, at the same profile as every other backend. bgpu's own Slang
-  tree compiles to it unchanged; a bindless handle becomes an index into a descriptor array of
-  runtime size, which is the descriptor-indexing requirement.
+* **The sessions compile to SPIR-V**, at the same profile as every other backend, packing buffers
+  as FXC does (`ForceDXLayout`): the C++ mirrors `bgpu_idlgen` generates are D3D12's layout on
+  every backend but Metal, and std140 would move a constant-buffer member after an 8-byte handle to
+  the next 16-byte row. A bindless handle becomes an index into a descriptor array of runtime size,
+  which is the descriptor-indexing requirement, in set 1 (`BindlessSpaceIndex`); constant buffers
+  are set 0.
 
-`bgpu_tests` `[vulkan]` pins the device and its queues, a bindless layout the device accepts, a
-validation message in the log, a leaked object named in it, and a kernel compiled to SPIR-V.
+The RHI keeps D3D12's semantics wherever Vulkan's are stricter, since every owner was written
+against D3D12 and Metal:
+
+* **A fence value is a timeline semaphore's value**, and a barrier is synchronization2's, which is
+  why both are in the bar. Vulkan waits only inside a submission, so `InsertWait*` holds the wait
+  until the queue's next `ExecuteCommandList` or `Flush`.
+* **Every recording opens with a full memory barrier.** D3D12 decays every resource's state between
+  `ExecuteCommandLists` calls; Vulkan orders nothing between two submissions on one queue.
+* **Buffers are shared by every queue family** (concurrent sharing): D3D12 has no queue-family
+  ownership to transfer.
+* **Queues are the context's.** A queue of a type is the one the fewest owners hold among the
+  families the type prefers — a compute family without graphics for compute, a transfer-only one
+  for copies — spilling to another family before two owners share a `VkQueue`. Owners on one queue
+  submit under that queue's lock in the context. One with a GPU wait on a later submission of its
+  own can stall, which is why sharing comes last.
+* **Every buffer is a storage-buffer descriptor in its manager's bindless table**, binding 2 of set
+  1, where Slang's SPIR-V reads a buffer handle. Every table has the same fixed-size layout
+  (`BindlessTable::c_Capacity`), so any device's pipeline layout is compatible with any manager's
+  set. A second view (`CreateBufferSrv`, `CreateBufferUav`) is a second descriptor onto the same
+  buffer: a storage-buffer descriptor has no stride.
+* **A constant buffer is a uniform-buffer descriptor written per dispatch**, its bytes in the
+  list's upload ring as on D3D12 and its set from the command allocator, which is a command pool
+  per queue family and resets with both.
+* **One allocation per buffer**, as D3D12 commits one resource per buffer. The textures of the
+  graphics half are what would need a suballocator.
+* **An exported buffer is a `VkBuffer`** (`NativeObjectType::kVkBuffer`). Vulkan counts no
+  references to one, so its memory is ref-counted and found by `VkBuffer` in a process-wide
+  registry: an import keeps it alive past the producer's release, and an import of a buffer no
+  manager made is refused.
+* **The program cache holds SPIR-V and reflection**; there is no driver pipeline cache yet.
+
+`bgpu_tests` `[vulkan]` pins the device and its queues, the bindless and synchronization features it
+was created with, a validation message in the log, a leaked object named in it and a kernel compiled
+to SPIR-V; then each backend class on its own: the manager's descriptors and deferred frees, an
+import outliving its producer, a constant buffer at D3D12's offsets, a pipeline from its cached
+program, a recording read back, a kernel dispatched, a wait between two queues, how owners spread
+over the queues, and a timed span.
 
 ## Threading & Synchronization
 

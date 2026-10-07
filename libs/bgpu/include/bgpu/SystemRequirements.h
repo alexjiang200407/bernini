@@ -34,6 +34,7 @@ namespace bgpu
 		kVulkanMeshShaders,
 		kVulkanDescriptorIndexing,
 		kVulkanScalarBlockLayout,
+		kVulkanSynchronization,
 	};
 
 	struct UnmetRequirement
@@ -110,6 +111,10 @@ namespace bgpu
 
 		// What a ScalarDataLayout buffer compiles to in SPIR-V.
 		bool scalarBlockLayout = false;
+
+		// Timeline semaphores and synchronization2: the RHI's fences and barriers, D3D12's fence
+		// values and enhanced barriers. A conformant 1.3 driver has both.
+		bool synchronization = false;
 	};
 
 	/** Every requirement `facts` fall short of, in the enumeration's order. Empty when they meet all. */

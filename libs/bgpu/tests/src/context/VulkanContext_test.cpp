@@ -176,6 +176,69 @@ TEST_CASE(
 	CHECK(captured.CountAtOrAbove(spdlog::level::warn) == 0);
 }
 
+// The RHI's fences are timeline semaphores and its barriers synchronization2's, and the layer refuses
+// both on a device created without the feature, as it refuses the bindless layout above.
+TEST_CASE(
+	"The Vulkan device is created with the synchronization features the bar names",
+	"[device][vulkan]")
+{
+	auto                      context = bgpu::CreateGpuContext(DebugDesc(bgpu::LogLevel::kWarn));
+	const bgpu::VulkanHandles handles = bgpu::GetVulkanHandles(*context);
+
+	const auto captured = CapturedLog();
+
+	auto timeline          = VkSemaphoreTypeCreateInfo();
+	timeline.sType         = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
+	timeline.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+	timeline.initialValue  = 0;
+
+	auto semaphoreInfo  = VkSemaphoreCreateInfo();
+	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	semaphoreInfo.pNext = &timeline;
+
+	VkSemaphore semaphore = VK_NULL_HANDLE;
+	REQUIRE(vkCreateSemaphore(handles.device, &semaphoreInfo, nullptr, &semaphore) == VK_SUCCESS);
+	vkDestroySemaphore(handles.device, semaphore, nullptr);
+
+	auto poolInfo             = VkCommandPoolCreateInfo();
+	poolInfo.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolInfo.queueFamilyIndex = 0;
+
+	VkCommandPool pool = VK_NULL_HANDLE;
+	REQUIRE(vkCreateCommandPool(handles.device, &poolInfo, nullptr, &pool) == VK_SUCCESS);
+
+	auto bufferInfo               = VkCommandBufferAllocateInfo();
+	bufferInfo.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	bufferInfo.commandPool        = pool;
+	bufferInfo.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	bufferInfo.commandBufferCount = 1;
+
+	VkCommandBuffer commands = VK_NULL_HANDLE;
+	REQUIRE(vkAllocateCommandBuffers(handles.device, &bufferInfo, &commands) == VK_SUCCESS);
+
+	auto begin  = VkCommandBufferBeginInfo();
+	begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	REQUIRE(vkBeginCommandBuffer(commands, &begin) == VK_SUCCESS);
+
+	auto barrier          = VkMemoryBarrier2();
+	barrier.sType         = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+	barrier.srcStageMask  = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+	barrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
+	barrier.dstStageMask  = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+	barrier.dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
+
+	auto dependency               = VkDependencyInfo();
+	dependency.sType              = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	dependency.memoryBarrierCount = 1;
+	dependency.pMemoryBarriers    = &barrier;
+	vkCmdPipelineBarrier2(commands, &dependency);
+
+	REQUIRE(vkEndCommandBuffer(commands) == VK_SUCCESS);
+	vkDestroyCommandPool(handles.device, pool, nullptr);
+
+	CHECK(captured.CountAtOrAbove(spdlog::level::warn) == 0);
+}
+
 // The messenger is the only route a validation message has out of the layer. A message the suite
 // submits itself goes down the same route as one the layer raises, without needing an invalid call.
 TEST_CASE("A Vulkan validation message is written to the log", "[device][vulkan]")

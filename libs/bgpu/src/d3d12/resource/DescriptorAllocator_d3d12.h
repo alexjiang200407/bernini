@@ -1,4 +1,5 @@
 #pragma once
+#include "resource/DescriptorIndexPool.h"
 
 namespace bgpu
 {
@@ -32,11 +33,17 @@ namespace bgpu
 		 */
 		[[nodiscard]]
 		uint32_t
-		Allocate();
+		Allocate()
+		{
+			return m_Indices.Allocate();
+		}
 
 		/** Returns the index to the free list. Asserts if it is not currently allocated. */
 		void
-		Free(uint32_t index) noexcept;
+		Free(uint32_t index) noexcept
+		{
+			m_Indices.Free(index);
+		}
 
 		[[nodiscard]]
 		D3D12_CPU_DESCRIPTOR_HANDLE
@@ -53,16 +60,13 @@ namespace bgpu
 		uint32_t
 		GetCapacity() const noexcept
 		{
-			return m_Capacity;
+			return m_Indices.GetCapacity();
 		}
 
 	private:
 		wrl::ComPtr<ID3D12DescriptorHeap> m_Heap;
 		D3D12_CPU_DESCRIPTOR_HANDLE       m_HeapStart     = {};
 		uint32_t                          m_IncrementSize = 0;
-		uint32_t                          m_Capacity      = 0;
-		uint32_t                          m_NextUntouched = 0;
-		std::vector<uint32_t>             m_FreeIndices;
-		std::vector<bool>                 m_Allocated;
+		DescriptorIndexPool               m_Indices;
 	};
 }

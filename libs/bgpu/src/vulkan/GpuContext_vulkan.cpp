@@ -10,9 +10,13 @@
 #include <core/log/log.h>
 #include <core/platform/util.h>
 #include <core/ref/SharedRef.h>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
+#include <mutex>
 #include <slang.h>
+#include <span>
 #include <spdlog/spdlog.h>
 #include <string_view>
 #include <system_error>
@@ -46,6 +50,7 @@ namespace bgpu
 		{
 			VkPhysicalDeviceFeatures2             features2  = {};
 			VkPhysicalDeviceVulkan12Features      vulkan12   = {};
+			VkPhysicalDeviceVulkan13Features      vulkan13   = {};
 			VkPhysicalDeviceMeshShaderFeaturesEXT meshShader = {};
 
 			FeatureChain() noexcept
@@ -53,7 +58,9 @@ namespace bgpu
 				features2.sType  = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 				features2.pNext  = &vulkan12;
 				vulkan12.sType   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-				vulkan12.pNext   = &meshShader;
+				vulkan12.pNext   = &vulkan13;
+				vulkan13.sType   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+				vulkan13.pNext   = &meshShader;
 				meshShader.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
 			}
 
@@ -146,6 +153,8 @@ namespace bgpu
 					return supported.vulkan12.*feature == VK_TRUE;
 				});
 			facts.scalarBlockLayout = supported.vulkan12.scalarBlockLayout == VK_TRUE;
+			facts.synchronization   = supported.vulkan12.timelineSemaphore == VK_TRUE &&
+			                          supported.vulkan13.synchronization2 == VK_TRUE;
 			return facts;
 		}
 
@@ -198,6 +207,12 @@ namespace bgpu
 			GetHandles() const noexcept
 			{
 				return { m_Instance, m_PhysicalDevice, m_Device };
+			}
+
+			[[nodiscard]] std::span<const VkQueueFamilyProperties>
+			GetQueueFamilies() const noexcept
+			{
+				return m_QueueFamilies;
 			}
 
 		private:
@@ -321,11 +336,12 @@ namespace bgpu
 			{
 				uint32_t familyCount = 0;
 				vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &familyCount, nullptr);
-				auto families = std::vector<VkQueueFamilyProperties>(familyCount);
+				m_QueueFamilies.resize(familyCount);
 				vkGetPhysicalDeviceQueueFamilyProperties(
 					m_PhysicalDevice,
 					&familyCount,
-					families.data());
+					m_QueueFamilies.data());
+				const std::vector<VkQueueFamilyProperties>& families = m_QueueFamilies;
 
 				uint32_t mostQueues = 0;
 				for (const VkQueueFamilyProperties& family : families)
@@ -352,6 +368,8 @@ namespace bgpu
 				required.meshShader.meshShader      = VK_TRUE;
 				required.meshShader.taskShader      = VK_TRUE;
 				required.vulkan12.scalarBlockLayout = VK_TRUE;
+				required.vulkan12.timelineSemaphore = VK_TRUE;
+				required.vulkan13.synchronization2  = VK_TRUE;
 				for (VkBool32 VkPhysicalDeviceVulkan12Features::* const feature :
 				     c_DescriptorIndexingFeatures)
 					required.vulkan12.*feature = VK_TRUE;
@@ -373,8 +391,60 @@ namespace bgpu
 					ThrowFailed("vkCreateDevice", created);
 
 				volkLoadDevice(m_Device);
+
+				for (uint32_t family = 0; family < familyCount; ++family)
+				{
+					for (uint32_t index = 0; index < families[family].queueCount; ++index)
+					{
+						auto slot   = QueueSlot();
+						slot.family = family;
+						vkGetDeviceQueue(m_Device, family, index, &slot.queue);
+						m_Queues.push_back(std::move(slot));
+					}
+				}
 			}
 
+		public:
+			[[nodiscard]] VulkanQueue
+			AcquireQueue(const std::span<const uint32_t> families) const noexcept
+			{
+				core::ensure(!families.empty(), "A queue is taken from at least one family");
+
+				const std::lock_guard lock(m_QueueTableLock);
+				QueueSlot*            best         = nullptr;
+				size_t                bestPriority = 0;
+				for (QueueSlot& slot : m_Queues)
+				{
+					const auto preferred = std::ranges::find(families, slot.family);
+					if (preferred == families.end())
+						continue;
+
+					const auto priority = static_cast<size_t>(preferred - families.begin());
+					if (best == nullptr || slot.holders < best->holders ||
+					    (slot.holders == best->holders && priority < bestPriority))
+					{
+						best         = &slot;
+						bestPriority = priority;
+					}
+				}
+				core::ensure(best != nullptr, "No queue in the families asked for");
+
+				++best->holders;
+				return { best->queue, best->family, best->submitLock.get() };
+			}
+
+			void
+			ReleaseQueue(const VulkanQueue& queue) const noexcept
+			{
+				const std::lock_guard lock(m_QueueTableLock);
+				const auto slot = std::ranges::find(m_Queues, queue.queue, &QueueSlot::queue);
+				core::ensure(
+					slot != m_Queues.end() && slot->holders > 0,
+					"Releasing a queue nothing took");
+				--slot->holders;
+			}
+
+		private:
 			// The validation layer names every object that outlived the device as the device is
 			// destroyed, through the messenger, so the messenger goes after it.
 			void
@@ -429,6 +499,20 @@ namespace bgpu
 			VkPhysicalDevice         m_PhysicalDevice = VK_NULL_HANDLE;
 			VkDevice                 m_Device         = VK_NULL_HANDLE;
 			bool                     m_GpuValidation  = false;
+
+			std::vector<VkQueueFamilyProperties> m_QueueFamilies;
+
+			// Every queue of every family, with how many owners hold it. Owners come and go after
+			// the device is made, so the table is mutable under its own lock.
+			struct QueueSlot
+			{
+				VkQueue                     queue      = VK_NULL_HANDLE;
+				uint32_t                    family     = 0;
+				uint32_t                    holders    = 0;
+				std::unique_ptr<std::mutex> submitLock = std::make_unique<std::mutex>();
+			};
+			mutable std::vector<QueueSlot> m_Queues;
+			mutable std::mutex             m_QueueTableLock;
 		};
 	}
 
@@ -438,6 +522,30 @@ namespace bgpu
 		const auto* vulkan = dynamic_cast<const Context*>(&context);
 		core::ensure(vulkan != nullptr, "The GPU context is not a Vulkan one");
 		return vulkan->GetHandles();
+	}
+
+	std::span<const VkQueueFamilyProperties>
+	GetVulkanQueueFamilies(const GpuContext& context) noexcept
+	{
+		const auto* vulkan = dynamic_cast<const Context*>(&context);
+		core::ensure(vulkan != nullptr, "The GPU context is not a Vulkan one");
+		return vulkan->GetQueueFamilies();
+	}
+
+	VulkanQueue
+	AcquireVulkanQueue(const GpuContext& context, const std::span<const uint32_t> families) noexcept
+	{
+		const auto* vulkan = dynamic_cast<const Context*>(&context);
+		core::ensure(vulkan != nullptr, "The GPU context is not a Vulkan one");
+		return vulkan->AcquireQueue(families);
+	}
+
+	void
+	ReleaseVulkanQueue(const GpuContext& context, const VulkanQueue& queue) noexcept
+	{
+		const auto* vulkan = dynamic_cast<const Context*>(&context);
+		core::ensure(vulkan != nullptr, "The GPU context is not a Vulkan one");
+		vulkan->ReleaseQueue(queue);
 	}
 
 	GpuContextRef

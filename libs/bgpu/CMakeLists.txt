@@ -17,8 +17,8 @@ list(FILTER BGPU_HEADERS EXCLUDE REGEX ".*/src/(d3d12|metal|vulkan)/.*")
 # The backend's half: the device creation, the RHI's implementation, and on Metal the one
 # translation unit that emits metal-cpp's symbols for the whole process. Without a backend only the
 # compiler and the RHI's neutral half are built -- bgl_objects still compiles against them
-# -- and CreateGpuContext and CreateDevice have no definition. Vulkan's half is the context alone:
-# CreateGpuContext is defined and CreateDevice is not.
+# -- and CreateGpuContext and CreateDevice have no definition. Vulkan's half is the context and the
+# RHI's compute half: buffers, queues, command lists and compute pipelines (docs/bgpu.md, "Vulkan").
 set(BGPU_BACKEND_DIR "")
 set(BGPU_BACKEND_HAS_RHI OFF)
 if(RENDERER_BACKEND STREQUAL "DX12")
@@ -29,6 +29,7 @@ elseif(RENDERER_BACKEND STREQUAL "METAL")
 	set(BGPU_BACKEND_HAS_RHI ON)
 elseif(RENDERER_BACKEND STREQUAL "VULKAN")
 	set(BGPU_BACKEND_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/vulkan")
+	set(BGPU_BACKEND_HAS_RHI ON)
 endif()
 if(BGPU_BACKEND_DIR)
 	file(GLOB_RECURSE BGPU_BACKEND_SOURCES CONFIGURE_DEPENDS ${BGPU_BACKEND_DIR}/*.cpp)
@@ -367,12 +368,13 @@ if (BUILD_TESTS AND NOT RENDERER_BACKEND STREQUAL "NONE")
 
 	add_executable(bgpu_tests ${BGPU_TESTS_SOURCES})
 
-	# The backend's own root too: a backend-only case reaches one of its classes, which include each
-	# other unprefixed.
+	# The backend's own root and bgpu's too: a backend-only case reaches one of its classes, which
+	# include each other and the neutral sources unprefixed.
 	target_include_directories(bgpu_tests
 		PRIVATE
 			${CMAKE_CURRENT_SOURCE_DIR}/tests/src
 			${BGPU_BACKEND_DIR}
+			${CMAKE_CURRENT_SOURCE_DIR}/src
 	)
 
 	if(RENDERER_BACKEND STREQUAL "VULKAN")

@@ -452,8 +452,8 @@ The same two `bgpu::GpuContextDesc` flags, applied when the Vulkan context creat
 as `[Vulkan] ...`, and `enableGPUValidationLayer` adds GPU-assisted validation on top. The layer
 is staged beside the executables by the build, so no Vulkan SDK is needed; where it comes from,
 what `strictError` covers and how a leaked object is reported are in
-[bgpu.md § Vulkan](docs/bgpu.md#vulkan). There is no RHI on Vulkan yet, so nothing above the
-context runs under it.
+[bgpu.md § Vulkan](docs/bgpu.md#vulkan). Vulkan has only the RHI's compute half so far, so
+`bgpu_tests` is all that runs under it.
 
 ---
 

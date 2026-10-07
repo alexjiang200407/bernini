@@ -1,6 +1,6 @@
-// The ring is D3D12's: Metal stages each write in a buffer of its own, which the command buffer
-// retains until it completes.
-#if defined(RENDERER_BACKEND_DX12)
+// The ring is D3D12's and Vulkan's: Metal stages each write in a buffer of its own, which the command
+// buffer retains until it completes.
+#if defined(RENDERER_BACKEND_DX12) || defined(RENDERER_BACKEND_VULKAN)
 
 // Held through SharedRef via `auto` and dereferenced: both need the complete type, which
 // include-cleaner cannot see through the template.

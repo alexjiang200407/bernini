@@ -11,7 +11,7 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
 - Public headers under `./include/bgpu`, namespace `bgpu`. The RHI's interfaces and plain-old-data
   descriptors are there (`cmd/`, `device/`, `pipeline/`, `resource/`, `uniforms/`, `types/`,
   `buffer/`); their backend implementations are under `./src/d3d12` and `./src/metal`, one per
-  binary. `./src/vulkan` is a third backend's context, with no RHI yet. Nothing outside
+  binary. `./src/vulkan` is a third backend's context and the RHI's compute half. Nothing outside
   `src/<backend>` includes a backend header (d3d12, metal-cpp or volk) — what a
   caller needs of a backend it asks for with `GetNativeObject(NativeObjectType)` / `GetNativeTexture`,
   an untyped `NativeObject`, so no RHI header names a backend type.
@@ -24,7 +24,8 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
 - Error handling: `core::ensure` for internal problems; throw for the caller's.
 - Verification: `just test bgpu` — `[compute]` is an owner with no renderer in the process — then the
   renderer's suite, `bgl_tests`, which drives the same RHI harder. The cases under
-  `./tests/src/context` need a context and no RHI; a backend with no RHI builds those alone.
+  `./tests/src/context` need a context and no RHI; a backend with no RHI builds those alone. Those
+  under `./tests/src/vulkan` drive the Vulkan backend's classes directly.
 
 ## D3D12 (`./src/d3d12`)
 
@@ -85,9 +86,18 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
 
 ## Vulkan (`./src/vulkan`)
 
-The context only: `CreateGpuContext` is defined and `CreateDevice` is not, so nothing above `bgpu`
-is built on this backend ([docs/bgpu.md § Vulkan](../../docs/bgpu.md#vulkan)).
+The context and the RHI's compute half: buffers, queues, command lists and compute pipelines.
+Nothing above `bgpu` is built on this backend ([docs/bgpu.md § Vulkan](../../docs/bgpu.md#vulkan)).
 
+- **A texture, sampler, view, target or meshlet entry point ends the process** through
+  `NotOnVulkanYet` (`./src/vulkan/vulkan_util.h`), naming itself; a create from a pool sized at zero
+  is refused first, as on every backend. A case that needs one is compiled out on Vulkan
+  (`#if !defined(RENDERER_BACKEND_VULKAN)`), and the graphics half deletes those guards.
+- **Every Vulkan object holds the context** (`GpuContextRef`), directly or through what owns it:
+  the context destroys the `VkDevice`, so nothing of the RHI may outlive it.
+- **A call that cannot fail but for a fault** is `EnsureVk(result, "vkName")`; one that fails for
+  want of memory throws inside a create and the manager logs it and returns a null handle, as D3D12's
+  does.
 - PCH is `./src/vulkan/pch.h`. Implementation files take a `_vulkan` suffix.
 - Vulkan is reached through **volk**: include `"volk_vulkan.h"`, never `<vulkan/vulkan.h>`, whose
   prototypes name symbols nothing links. The function pointers are defined once per process by
@@ -97,7 +107,10 @@ is built on this backend ([docs/bgpu.md § Vulkan](../../docs/bgpu.md#vulkan)).
   `std::runtime_error` for a fault, with the `VkResult` named by `string_VkResult`.
 - The validation layer is staged beside the executables by this library's build, and the context
   points the loader at it. A new instance or device extension, feature or layer setting is enabled
-  in `GpuContext_vulkan.cpp`, the one place either object is created.
+  in `GpuContext_vulkan.cpp`, the one place either object is created, and a feature joins the
+  minimum requirements with it.
+- The queues are the context's, every one of every family; `AcquireVulkanQueue` hands an owner one,
+  with the lock its submissions take.
 - `just build --preset windows-clang-vulkan-debug`, then
   `just test bgpu --no-build --build-dir build/ninja-clang-vulkan-debug`: the suite builds and runs
   the configured preset's unless it is told otherwise.
