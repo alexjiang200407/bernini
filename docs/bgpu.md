@@ -269,9 +269,11 @@ against D3D12 and Metal:
 * **A constant buffer is a uniform-buffer descriptor written per dispatch**, its bytes in the
   list's upload ring as on D3D12 and its set from the command allocator, which is a command pool
   per queue family and resets with both.
-* **One allocation per buffer and per texture**, as D3D12 commits one resource for each. A
-  renderer's thousands of textures are what would reach `maxMemoryAllocationCount` and need a
-  suballocator.
+* **One allocation per buffer and per texture**, as D3D12 commits one resource for each. Measured
+  with the renderer on Vulkan, the most live at once was 205 over all of `bgl_tests` and 85 in
+  `bgl_sphere`, against the 4096 `maxMemoryAllocationCount` the spec guarantees (NVIDIA reports no
+  limit at all). What would reach it is a game's texture set, streamed, and that is when a
+  suballocator -- the Vulkan Memory Allocator -- earns its dependency.
 * **A texture's readback rows are 256-byte aligned**, as D3D12's footprint is, rounded up to a whole
   number of blocks, so `GetTextureReadbackLayout` reads the same on both.
 * **An exported buffer is a `VkBuffer`** (`NativeObjectType::kVkBuffer`). Vulkan counts no
