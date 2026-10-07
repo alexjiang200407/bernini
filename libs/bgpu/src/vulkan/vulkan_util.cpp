@@ -2,6 +2,7 @@
 #include "volk_vulkan.h"
 #include <core/err/util.h>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vulkan/vk_enum_string_helper.h>
@@ -52,26 +53,19 @@ namespace bgpu
 				    (properties.memoryTypes[i].propertyFlags & flags) == flags)
 					return i;
 			}
-			return UINT32_MAX;
+			return std::numeric_limits<uint32_t>::max();
 		};
 
-		if (const uint32_t best = find(required | preferred); best != UINT32_MAX)
+		if (const uint32_t best = find(required | preferred);
+		    best != std::numeric_limits<uint32_t>::max())
 			return best;
-		if (const uint32_t fallback = find(required); fallback != UINT32_MAX)
+		if (const uint32_t fallback = find(required);
+		    fallback != std::numeric_limits<uint32_t>::max())
 			return fallback;
 
 		core::throw_runtime_error(
 			"no Vulkan memory type in 0x{:x} has the properties 0x{:x}",
 			typeBits,
 			required);
-	}
-
-	void
-	NotOnVulkanYet(const std::string_view entryPoint) noexcept
-	{
-		core::fatal(
-			"{} is not implemented on Vulkan yet: textures, render targets and the meshlet "
-			"pipeline arrive with the graphics RHI",
-			entryPoint);
 	}
 }

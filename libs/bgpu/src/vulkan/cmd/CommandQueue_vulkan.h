@@ -8,6 +8,7 @@
 #include <core/ref/RefCounter.h>
 #include <cstdint>
 #include <mutex>
+#include <span>
 #include <vector>
 
 namespace bgpu
@@ -21,6 +22,10 @@ namespace bgpu
 	 *
 	 * Vulkan waits only inside a submission, so a GPU wait (InsertWait*) is held until the next
 	 * ExecuteCommandList or Flush submits it.
+	 *
+	 * A list is submitted behind the initial transitions of every texture its manager made since the
+	 * last submission (ResourceManager::TakeInitialLayouts), recorded into a command buffer of the
+	 * queue's own, since the list's allocator may be recording another list by then.
 	 */
 	class CommandQueue final : public core::RefCounter<ICommandQueue>
 	{
@@ -99,17 +104,32 @@ namespace bgpu
 			uint64_t    value     = 0;
 		};
 
+		// A command buffer of the queue's own, reused once the submission that ran it completes.
+		struct Prologue
+		{
+			VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+			uint64_t        fenceValue    = 0;
+		};
+
 		void
 		AddWait(VkSemaphore semaphore, uint64_t value) const noexcept;
 
 		/**
-		 * Submits `commandBuffer` (none when null) behind every held wait, signalling the next fence
+		 * A command buffer holding `barriers`, ready to submit at the next fence value.
+		 *
+		 * @pre m_FenceMutex is held.
+		 */
+		[[nodiscard]] VkCommandBuffer
+		RecordPrologue(std::span<const VkImageMemoryBarrier2> barriers) noexcept;
+
+		/**
+		 * Submits `commandBuffers`, in order, behind every held wait, signalling the next fence
 		 * value, which it returns.
 		 *
 		 * @pre m_FenceMutex is held.
 		 */
 		uint64_t
-		SubmitLocked(VkCommandBuffer commandBuffer) noexcept;
+		SubmitLocked(std::span<const VkCommandBuffer> commandBuffers) noexcept;
 
 		// Declared first, destroyed last: the queue and the semaphore are its device's.
 		GpuContextRef m_Context;
@@ -126,5 +146,9 @@ namespace bgpu
 		// Serializes submissions and the held waits. InsertWait* is const on the interface.
 		mutable std::mutex               m_FenceMutex;
 		mutable std::vector<PendingWait> m_PendingWaits;
+
+		// Under m_FenceMutex.
+		VkCommandPool         m_ProloguePool = VK_NULL_HANDLE;
+		std::vector<Prologue> m_Prologues;
 	};
 }

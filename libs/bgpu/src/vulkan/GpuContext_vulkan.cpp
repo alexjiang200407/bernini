@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <memory>
 #include <mutex>
+#include <numeric>
 #include <slang.h>
 #include <span>
 #include <spdlog/spdlog.h>
@@ -45,13 +46,31 @@ namespace bgpu
 				&VkPhysicalDeviceVulkan12Features::shaderStorageBufferArrayNonUniformIndexing,
 			});
 
+		// The core features of the graphics bar, read and enabled from the same lists.
+		constexpr auto c_GraphicsFeatures = std::to_array<VkBool32 VkPhysicalDeviceFeatures::*>({
+			&VkPhysicalDeviceFeatures::independentBlend,
+			&VkPhysicalDeviceFeatures::dualSrcBlend,
+			&VkPhysicalDeviceFeatures::fillModeNonSolid,
+			&VkPhysicalDeviceFeatures::depthClamp,
+			&VkPhysicalDeviceFeatures::multiViewport,
+			&VkPhysicalDeviceFeatures::samplerAnisotropy,
+			&VkPhysicalDeviceFeatures::textureCompressionBC,
+		});
+		constexpr auto c_GraphicsFeatures12 =
+			std::to_array<VkBool32 VkPhysicalDeviceVulkan12Features::*>({
+				&VkPhysicalDeviceVulkan12Features::drawIndirectCount,
+				&VkPhysicalDeviceVulkan12Features::samplerFilterMinmax,
+				&VkPhysicalDeviceVulkan12Features::samplerMirrorClampToEdge,
+			});
+
 		/** The feature structs the minimum requirements name, chained as Vulkan takes them. */
 		struct FeatureChain
 		{
-			VkPhysicalDeviceFeatures2             features2  = {};
-			VkPhysicalDeviceVulkan12Features      vulkan12   = {};
-			VkPhysicalDeviceVulkan13Features      vulkan13   = {};
-			VkPhysicalDeviceMeshShaderFeaturesEXT meshShader = {};
+			VkPhysicalDeviceFeatures2                        features2         = {};
+			VkPhysicalDeviceVulkan12Features                 vulkan12          = {};
+			VkPhysicalDeviceVulkan13Features                 vulkan13          = {};
+			VkPhysicalDeviceMeshShaderFeaturesEXT            meshShader        = {};
+			VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT mutableDescriptor = {};
 
 			FeatureChain() noexcept
 			{
@@ -62,6 +81,9 @@ namespace bgpu
 				vulkan13.sType   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
 				vulkan13.pNext   = &meshShader;
 				meshShader.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
+				meshShader.pNext = &mutableDescriptor;
+				mutableDescriptor.sType =
+					VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MUTABLE_DESCRIPTOR_TYPE_FEATURES_EXT;
 			}
 
 			FeatureChain(const FeatureChain&) = delete;
@@ -101,6 +123,18 @@ namespace bgpu
 
 			if (!core::set_env_var(c_LayerPathVariable, directory.string().c_str()))
 				spdlog::warn("could not add {} to {}", directory.string(), c_LayerPathVariable);
+		}
+
+		// What the validation layer warns of itself when GPU validation turns its heavier checks on:
+		// that they are slow beside the core checks, and that it raised a device limit it needs.
+		// Neither is about a call of this process.
+		[[nodiscard]] bool
+		IsLayerSetupNotice(const char* messageId) noexcept
+		{
+			if (messageId == nullptr)
+				return false;
+			const auto id = std::string_view(messageId);
+			return id == "VALIDATION-SETTINGS" || id == "WARNING-Setting-Limit-Adjusted";
 		}
 
 		[[nodiscard]] bool
@@ -155,6 +189,21 @@ namespace bgpu
 			facts.scalarBlockLayout = supported.vulkan12.scalarBlockLayout == VK_TRUE;
 			facts.synchronization   = supported.vulkan12.timelineSemaphore == VK_TRUE &&
 			                          supported.vulkan13.synchronization2 == VK_TRUE;
+			facts.mutableDescriptors =
+				HasExtension(physicalDevice, VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME) &&
+				supported.mutableDescriptor.mutableDescriptorType == VK_TRUE;
+			facts.graphics =
+				supported.vulkan13.dynamicRendering == VK_TRUE &&
+				std::ranges::all_of(
+					c_GraphicsFeatures,
+					[&supported](const VkBool32 VkPhysicalDeviceFeatures::* feature) {
+						return supported.features2.features.*feature == VK_TRUE;
+					}) &&
+				std::ranges::all_of(
+					c_GraphicsFeatures12,
+					[&supported](const VkBool32 VkPhysicalDeviceVulkan12Features::* feature) {
+						return supported.vulkan12.*feature == VK_TRUE;
+					});
 			return facts;
 		}
 
@@ -238,19 +287,26 @@ namespace bgpu
 				messenger.pfnUserCallback = &Context::LogMessage;
 				messenger.pUserData       = this;
 
-				const VkBool32 enabled     = VK_TRUE;
-				auto           gpuAssisted = VkLayerSettingEXT();
-				gpuAssisted.pLayerName     = c_ValidationLayer;
-				gpuAssisted.pSettingName   = "gpuav_enable";
-				gpuAssisted.type           = VK_LAYER_SETTING_TYPE_BOOL32_EXT;
-				gpuAssisted.valueCount     = 1;
-				gpuAssisted.pValues        = &enabled;
+				// GPU validation is D3D12's GPU-based validation's two halves: what shaders reach,
+				// checked on the GPU, and whether barriers order every access, checked by
+				// synchronization validation.
+				const VkBool32 enabled  = VK_TRUE;
+				auto           settings = std::array<VkLayerSettingEXT, 2>();
+				for (VkLayerSettingEXT& setting : settings)
+				{
+					setting.pLayerName = c_ValidationLayer;
+					setting.type       = VK_LAYER_SETTING_TYPE_BOOL32_EXT;
+					setting.valueCount = 1;
+					setting.pValues    = &enabled;
+				}
+				settings[0].pSettingName = "gpuav_enable";
+				settings[1].pSettingName = "validate_sync";
 
 				auto layerSettings         = VkLayerSettingsCreateInfoEXT();
 				layerSettings.sType        = VK_STRUCTURE_TYPE_LAYER_SETTINGS_CREATE_INFO_EXT;
 				layerSettings.pNext        = &messenger;
-				layerSettings.settingCount = 1;
-				layerSettings.pSettings    = &gpuAssisted;
+				layerSettings.settingCount = static_cast<uint32_t>(settings.size());
+				layerSettings.pSettings    = settings.data();
 
 				auto layers     = std::vector<const char*>();
 				auto extensions = std::vector<const char*>();
@@ -364,18 +420,27 @@ namespace bgpu
 					queues.push_back(queue);
 				}
 
-				auto required                       = FeatureChain();
-				required.meshShader.meshShader      = VK_TRUE;
-				required.meshShader.taskShader      = VK_TRUE;
-				required.vulkan12.scalarBlockLayout = VK_TRUE;
-				required.vulkan12.timelineSemaphore = VK_TRUE;
-				required.vulkan13.synchronization2  = VK_TRUE;
+				auto required                                    = FeatureChain();
+				required.meshShader.meshShader                   = VK_TRUE;
+				required.meshShader.taskShader                   = VK_TRUE;
+				required.vulkan12.scalarBlockLayout              = VK_TRUE;
+				required.vulkan12.timelineSemaphore              = VK_TRUE;
+				required.vulkan13.synchronization2               = VK_TRUE;
+				required.vulkan13.dynamicRendering               = VK_TRUE;
+				required.mutableDescriptor.mutableDescriptorType = VK_TRUE;
 				for (VkBool32 VkPhysicalDeviceVulkan12Features::* const feature :
 				     c_DescriptorIndexingFeatures)
 					required.vulkan12.*feature = VK_TRUE;
+				for (VkBool32 VkPhysicalDeviceVulkan12Features::* const feature :
+				     c_GraphicsFeatures12)
+					required.vulkan12.*feature = VK_TRUE;
+				for (VkBool32 VkPhysicalDeviceFeatures::* const feature : c_GraphicsFeatures)
+					required.features2.features.*feature = VK_TRUE;
 
-				const auto extensions =
-					std::to_array<const char*>({ VK_EXT_MESH_SHADER_EXTENSION_NAME });
+				const auto extensions = std::to_array<const char*>({
+					VK_EXT_MESH_SHADER_EXTENSION_NAME,
+					VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME,
+				});
 
 				auto info                    = VkDeviceCreateInfo();
 				info.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -484,12 +549,17 @@ namespace bgpu
 					spdlog::debug("[Vulkan] {}", message);
 
 				// Only what the validation layer says of this process's own calls is strict: the
-				// loader warns, as the general type, of other software's broken layers and drivers.
-				const bool  severe = severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT &&
-				                     (types & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT) != 0;
-				const auto* self   = static_cast<const Context*>(context);
+				// loader warns, as the general type, of other software's broken layers and drivers,
+				// and the layer warns of its own setup when GPU validation is on.
+				const bool severe = severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT &&
+				                    (types & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT) != 0 &&
+				                    !IsLayerSetupNotice(data->pMessageIdName);
+				const auto* self  = static_cast<const Context*>(context);
 				if (severe && self->GetDesc().strictError)
-					core::fatal("[Vulkan] strict error: {}", message);
+					core::fatal(
+						"[Vulkan] strict error ({}): {}",
+						data->pMessageIdName != nullptr ? data->pMessageIdName : "no id",
+						message);
 
 				return VK_FALSE;
 			}
@@ -530,6 +600,20 @@ namespace bgpu
 		const auto* vulkan = dynamic_cast<const Context*>(&context);
 		core::ensure(vulkan != nullptr, "The GPU context is not a Vulkan one");
 		return vulkan->GetQueueFamilies();
+	}
+
+	VulkanSharing
+	GetVulkanSharing(const GpuContext& context)
+	{
+		const size_t familyCount = GetVulkanQueueFamilies(context).size();
+		if (familyCount < 2)
+			return {};
+
+		auto sharing     = VulkanSharing();
+		sharing.mode     = VK_SHARING_MODE_CONCURRENT;
+		sharing.families = std::vector<uint32_t>(familyCount);
+		std::iota(sharing.families.begin(), sharing.families.end(), 0U);
+		return sharing;
 	}
 
 	VulkanQueue

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <mutex>
 #include <span>
+#include <vector>
 
 namespace bgpu
 {
@@ -29,6 +30,20 @@ namespace bgpu
 	/** The device's queue families, indexed by family; every one was created with all its queues. */
 	[[nodiscard]] std::span<const VkQueueFamilyProperties>
 	GetVulkanQueueFamilies(const GpuContext& context) noexcept;
+
+	/**
+	 * Concurrent sharing over every queue family, or exclusive when there is one: D3D12 has no
+	 * queue-family ownership, so every buffer and image may be used by every family. `families`
+	 * holds the indices `pQueueFamilyIndices` points at.
+	 */
+	struct VulkanSharing
+	{
+		VkSharingMode         mode = VK_SHARING_MODE_EXCLUSIVE;
+		std::vector<uint32_t> families;
+	};
+
+	[[nodiscard]] VulkanSharing
+	GetVulkanSharing(const GpuContext& context);
 
 	/**
 	 * One of the device's queues, taken by an owner. Vulkan requires a queue's submissions to be

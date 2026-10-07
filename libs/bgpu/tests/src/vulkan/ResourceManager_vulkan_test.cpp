@@ -8,6 +8,7 @@
 
 #	include "native_device_vulkan.h"
 #	include "resource/BufferMemory_vulkan.h"
+#	include "resource/ImageMemory_vulkan.h"
 #	include "resource/ResourceManager_vulkan.h"
 #	include "volk_vulkan.h"
 
@@ -16,6 +17,9 @@
 #	include <bgpu/cmd/CommandQueue.h>
 #	include <bgpu/resource/Buffer.h>
 #	include <bgpu/resource/NativeBufferDesc.h>
+#	include <bgpu/resource/NativeTextureDesc.h>
+#	include <bgpu/resource/Texture.h>
+#	include <bgpu/types/Format.h>
 #	include <bgpu/resource/Readback.h>
 #	include <bgpu/resource/ResourceManager.h>
 #	include <bgpu/types/NativeObject.h>
@@ -266,6 +270,88 @@ TEST_CASE("A Vulkan import of a buffer no manager made is refused", "[vulkan][im
 	          .IsNull());
 
 	vkDestroyBuffer(device, foreign, nullptr);
+}
+
+namespace
+{
+	bgpu::TextureDesc
+	SmallTexture(const char* debugName)
+	{
+		auto desc      = bgpu::TextureDesc();
+		desc.width     = 4;
+		desc.height    = 4;
+		desc.format    = bgpu::Format::RGBA8_UNORM;
+		desc.debugName = debugName;
+		return desc;
+	}
+}
+
+// An image is held as a buffer is: an import of one a manager made keeps it alive past its maker's
+// release, and the image goes when both have let go.
+TEST_CASE("An imported Vulkan texture outlives its producer's release", "[vulkan][import]")
+{
+	auto context = DebugContext();
+	auto producer =
+		core::SharedRef<bgpu::ResourceManager>::Make(context, bgpu::ResourceManagerDesc());
+	auto consumer =
+		core::SharedRef<bgpu::ResourceManager>::Make(context, bgpu::ResourceManagerDesc());
+
+	const auto made     = producer->CreateTexture(SmallTexture("produced"));
+	const auto exported = producer->GetNativeTexture(made, bgpu::NativeObjectType::kVkImage);
+	REQUIRE(exported);
+	CHECK_FALSE(producer->GetNativeTexture(made, bgpu::NativeObjectType::kD3D12Resource));
+
+	const auto imported = consumer->ImportNativeTexture(
+		bgpu::NativeTextureDesc()
+			.SetObject(bgpu::NativeObjectType::kVkImage, exported)
+			.SetTexture(SmallTexture("imported")));
+	REQUIRE(consumer->ValidTextureHandle(imported));
+	CHECK(
+		consumer->GetNativeTexture(imported, bgpu::NativeObjectType::kVkImage).pointer ==
+		exported.pointer);
+
+	auto* const image = exported.As<VkImage_T>();
+	producer->DestroyTexture(made, false);
+	CHECK(bgpu::ImageMemory::Find(image) != nullptr);
+
+	consumer->DestroyTexture(imported, false);
+	CHECK(bgpu::ImageMemory::Find(image) == nullptr);
+}
+
+// A swapchain's images are the swapchain's: the manager views one and never destroys it.
+TEST_CASE("A Vulkan image no manager made is borrowed, not destroyed", "[vulkan][import]")
+{
+	auto context = DebugContext();
+	auto rm = core::SharedRef<bgpu::ResourceManager>::Make(context, bgpu::ResourceManagerDesc());
+
+	auto info          = VkImageCreateInfo();
+	info.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	info.imageType     = VK_IMAGE_TYPE_2D;
+	info.format        = VK_FORMAT_R8G8B8A8_UNORM;
+	info.extent        = VkExtent3D{ 4, 4, 1 };
+	info.mipLevels     = 1;
+	info.arrayLayers   = 1;
+	info.samples       = VK_SAMPLE_COUNT_1_BIT;
+	info.tiling        = VK_IMAGE_TILING_OPTIMAL;
+	info.usage         = VK_IMAGE_USAGE_SAMPLED_BIT;
+	info.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
+	info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+	const VkDevice device  = bgpu::GetVulkanHandles(*context).device;
+	VkImage        foreign = VK_NULL_HANDLE;
+	REQUIRE(vkCreateImage(device, &info, nullptr, &foreign) == VK_SUCCESS);
+
+	const auto borrowed = rm->ImportNativeTexture(
+		bgpu::NativeTextureDesc()
+			.SetObject(bgpu::NativeObjectType::kVkImage, bgpu::NativeObject{ foreign })
+			.SetTexture(SmallTexture("foreign")));
+	REQUIRE(rm->ValidTextureHandle(borrowed));
+	CHECK(rm->GetNativeTexture(borrowed, bgpu::NativeObjectType::kVkImage).pointer == foreign);
+	CHECK(bgpu::ImageMemory::Find(foreign) == nullptr);
+
+	// The layer would report a second destroy of the image, or a leak of it, as the context dies.
+	rm->DestroyTexture(borrowed, false);
+	vkDestroyImage(device, foreign, nullptr);
 }
 
 TEST_CASE("A Vulkan readback buffer is mapped for the CPU", "[vulkan][readback]")

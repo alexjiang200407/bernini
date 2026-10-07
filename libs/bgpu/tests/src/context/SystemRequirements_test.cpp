@@ -58,6 +58,8 @@ namespace
 		facts.descriptorIndexing = true;
 		facts.scalarBlockLayout  = true;
 		facts.synchronization    = true;
+		facts.mutableDescriptors = true;
+		facts.graphics           = true;
 		return facts;
 	}
 
@@ -217,12 +219,44 @@ TEST_CASE("A Vulkan GPU without mesh shaders or bindless is refused", "[sysreq]"
 	everything.descriptorIndexing = false;
 	everything.scalarBlockLayout  = false;
 	everything.synchronization    = false;
+	everything.mutableDescriptors = false;
+	everything.graphics           = false;
 	CHECK(
 		Requirements(bgpu::CheckSystemRequirements(everything)) ==
 		std::vector{ bgpu::Requirement::kVulkanMeshShaders,
 	                 bgpu::Requirement::kVulkanDescriptorIndexing,
 	                 bgpu::Requirement::kVulkanScalarBlockLayout,
-	                 bgpu::Requirement::kVulkanSynchronization });
+	                 bgpu::Requirement::kVulkanSynchronization,
+	                 bgpu::Requirement::kVulkanMutableDescriptors,
+	                 bgpu::Requirement::kVulkanGraphics });
+}
+
+// Every mesh-shading GPU has had the extension for years, so a driver without it is the thing to
+// change; the graphics features are the GPU's own, and one without them is refused as the mesh stage
+// is.
+TEST_CASE(
+	"A Vulkan driver without mutable descriptors is told to update; a GPU without the graphics "
+	"features is refused",
+	"[sysreq]")
+{
+	using Catch::Matchers::ContainsSubstring;
+
+	auto oldDriver                                  = Rtx2060OnVulkan();
+	oldDriver.mutableDescriptors                    = false;
+	const std::vector<bgpu::UnmetRequirement> stale = bgpu::CheckSystemRequirements(oldDriver);
+	CHECK(Requirements(stale) == std::vector{ bgpu::Requirement::kVulkanMutableDescriptors });
+	CHECK_THAT(bgpu::DescribeUnmetRequirements(stale), ContainsSubstring("graphics driver"));
+	CHECK_THAT(
+		bgpu::DescribeUnmetRequirements(stale),
+		!ContainsSubstring("graphics card with mesh shaders"));
+
+	auto noGraphics                                   = Rtx2060OnVulkan();
+	noGraphics.graphics                               = false;
+	const std::vector<bgpu::UnmetRequirement> lacking = bgpu::CheckSystemRequirements(noGraphics);
+	CHECK(Requirements(lacking) == std::vector{ bgpu::Requirement::kVulkanGraphics });
+	CHECK_THAT(
+		bgpu::DescribeUnmetRequirements(lacking),
+		ContainsSubstring("graphics card with mesh shaders"));
 }
 
 // A 1.3 driver that hides a feature 1.3 makes mandatory is out of date or broken: the player is told

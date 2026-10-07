@@ -11,7 +11,7 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
 - Public headers under `./include/bgpu`, namespace `bgpu`. The RHI's interfaces and plain-old-data
   descriptors are there (`cmd/`, `device/`, `pipeline/`, `resource/`, `uniforms/`, `types/`,
   `buffer/`); their backend implementations are under `./src/d3d12` and `./src/metal`, one per
-  binary. `./src/vulkan` is a third backend's context and the RHI's compute half. Nothing outside
+  binary. `./src/vulkan` is a third, with nothing above `bgpu` built on it yet. Nothing outside
   `src/<backend>` includes a backend header (d3d12, metal-cpp or volk) — what a
   caller needs of a backend it asks for with `GetNativeObject(NativeObjectType)` / `GetNativeTexture`,
   an untyped `NativeObject`, so no RHI header names a backend type.
@@ -86,13 +86,16 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
 
 ## Vulkan (`./src/vulkan`)
 
-The context and the RHI's compute half: buffers, queues, command lists and compute pipelines.
-Nothing above `bgpu` is built on this backend ([docs/bgpu.md § Vulkan](../../docs/bgpu.md#vulkan)).
+The context and the whole RHI; nothing above `bgpu` is built on this backend yet
+([docs/bgpu.md § Vulkan](../../docs/bgpu.md#vulkan)), and every case in `bgpu_tests` runs on it.
 
-- **A texture, sampler, view, target or meshlet entry point ends the process** through
-  `NotOnVulkanYet` (`./src/vulkan/vulkan_util.h`), naming itself; a create from a pool sized at zero
-  is refused first, as on every backend. A case that needs one is compiled out on Vulkan
-  (`#if !defined(RENDERER_BACKEND_VULKAN)`), and the graphics half deletes those guards.
+- **A mesh dispatch draws inside dynamic rendering**, which the list opens at the first draw on a
+  frame buffer and ends before any other command; nothing outside `CommandList_vulkan.cpp` sees it.
+- **Barriers are checked by synchronization validation**, which `enableGPUValidationLayer` turns
+  on; `bgpu_tests` takes it from the environment: `VK_KHRONOS_VALIDATION_VALIDATE_SYNC=1 just test
+  bgpu --no-build --build-dir build/ninja-clang-vulkan-debug` ([docs/gfx_debug.md § 9](../../docs/gfx_debug.md)).
+- **Every texture is in `VK_IMAGE_LAYOUT_GENERAL`** after its first submission; `ConvertImageLayout`
+  maps every RHI layout but `kUndefined` to it, so nothing here tracks a texture's layout.
 - **Every Vulkan object holds the context** (`GpuContextRef`), directly or through what owns it:
   the context destroys the `VkDevice`, so nothing of the RHI may outlive it.
 - **A call that cannot fail but for a fault** is `EnsureVk(result, "vkName")`; one that fails for

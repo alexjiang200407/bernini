@@ -120,6 +120,8 @@ every test get the check without asking for it, and nothing can turn it off.
 | | a mesh stage and bindless | `VK_EXT_mesh_shader` with its `meshShader` and `taskShader` features, the second being D3D12's amplification stage; the descriptor-indexing features a runtime array of sampled images, storage images or storage buffers needs |
 | | a driver that lays a buffer out as the shaders declare it | `scalarBlockLayout`, what `ScalarDataLayout` compiles to in SPIR-V |
 | | a driver with the fences and barriers the RHI is written in | `timelineSemaphore` and `synchronization2`, D3D12's fence values and enhanced barriers; both mandatory in 1.3, so a driver that hides them is told to update |
+| | a driver with one bindless array for buffers and textures | `VK_EXT_mutable_descriptor_type`: Slang lowers a buffer handle and a texture handle to the same binding, as D3D12 indexes one CBV/SRV/UAV heap; a mesh-shading GPU without it has an old driver |
+| | the graphics RHI's draws and states | `dynamicRendering`, `drawIndirectCount`, and the core features D3D12's blend, raster and sampler states can ask for: `independentBlend`, `dualSrcBlend`, `fillModeNonSolid`, `depthClamp`, `multiViewport`, `samplerAnisotropy`, `samplerFilterMinmax`, `samplerMirrorClampToEdge`, `textureCompressionBC` |
 
 An Intel Mac is refused even when its GPU supports Metal 3: the engine is built and tested on Apple
 silicon only.
@@ -143,12 +145,10 @@ refused, even when a second GPU would pass, because the engine does not choose a
 ## Vulkan
 
 `RENDERER_BACKEND=VULKAN` is a third backend being brought up on Windows ahead of the Linux build
-that needs it: **the context and the RHI's compute half.** `CreateDevice` gives an owner buffers,
-queues, command lists and compute pipelines; textures, samplers, targets and the meshlet pipeline
-end the process naming what is missing (a pool of them sized at zero still refuses a create, as on
-every backend). Nothing above `bgpu` is built — no renderer, no crowd libraries, no editor — and
-`bgpu_tests` runs everything but the cases that need textures or a draw. D3D12 stays the Windows
-default; only the `windows-clang-vulkan-debug` preset selects this.
+that needs it: **the context and the whole RHI**, every case of `bgpu_tests` included. Nothing
+above `bgpu` is built — no renderer, no crowd libraries, no editor; the renderer's backend half and
+its swapchain are the next step. D3D12 stays the Windows default; only the
+`windows-clang-vulkan-debug` preset selects this.
 
 * **The first physical device, as D3D12 takes DXGI's first adapter.** The loader sorts what it
   enumerates — by the adapter order Windows prefers, and on Linux discrete before integrated — so
@@ -190,9 +190,12 @@ default; only the `windows-clang-vulkan-debug` preset selects this.
   child still alive is a validation error naming the object, raised while the messenger is still
   attached, so it reaches the log — and ends the process under `strictError` — as D3D12's
   live-object report does.
-* **`enableGPUValidationLayer` is GPU-assisted validation**, switched on through the layer's
-  settings when the instance is created. Unlike D3D12's it is the instance's, so it ends with the
-  context.
+* **`enableGPUValidationLayer` is GPU-assisted and synchronization validation**, switched on
+  through the layer's settings when the instance is created: between them they check what D3D12's
+  GPU-based validation does, shader accesses and whether barriers order every access. Unlike
+  D3D12's it is the instance's, so it ends with the context. The layer warns of its own setup when
+  they are on, and a strict context does not end on those notices
+  ([gfx_debug.md § 9](docs/gfx_debug.md)).
 * **The sessions compile to SPIR-V**, at the same profile as every other backend, packing buffers
   as FXC does (`ForceDXLayout`): the C++ mirrors `bgpu_idlgen` generates are D3D12's layout on
   every backend but Metal, and std140 would move a constant-buffer member after an 8-byte handle to
@@ -208,27 +211,75 @@ against D3D12 and Metal:
   until the queue's next `ExecuteCommandList` or `Flush`.
 * **Every recording opens with a full memory barrier.** D3D12 decays every resource's state between
   `ExecuteCommandLists` calls; Vulkan orders nothing between two submissions on one queue.
-* **Buffers are shared by every queue family** (concurrent sharing): D3D12 has no queue-family
-  ownership to transfer.
+* **Buffers and images are shared by every queue family** (concurrent sharing): D3D12 has no
+  queue-family ownership to transfer.
+* **Every texture is in `VK_IMAGE_LAYOUT_GENERAL`**, whatever layout a barrier names but
+  `kUndefined`. D3D12 runs a copy, an SRV read or a clear in more than one layout and never says
+  which a texture is in, where Vulkan needs it at every copy, clear, attachment and descriptor; in
+  the one layout valid for all of them, a descriptor written once is right for every read and a
+  barrier keeps D3D12's meaning — its syncs and accesses, and a discard from `kUndefined`. On a
+  driver with `VK_KHR_unified_image_layouts` it costs nothing. `kPresent` is a swapchain's and ends
+  the process until there is one.
+* **A clear is `vkCmdClearColorImage` or `vkCmdClearDepthStencilImage`** over the view's
+  subresources: in `GENERAL` it needs no render pass. An integer target's clear converts D3D12's
+  floats to its own type. A render target view of a 3D texture names a range of its depth slices,
+  reached as the layers of a 2D-array view, so such a texture is made 2D-array compatible.
+* **A mesh dispatch draws inside dynamic rendering, opened lazily.** D3D12 binds targets and
+  draws; Vulkan draws between `vkCmdBeginRendering` and `vkCmdEndRendering`. The first mesh
+  dispatch begins rendering on its meshlet state's frame buffer, loading and storing every
+  attachment as D3D12 keeps them; draws on that same frame buffer stay inside it, and every other
+  command ends it first. A meshlet pipeline is made for dynamic rendering into its desc's formats,
+  with its viewports and scissors, any number of each, set per draw.
+* **D3D's clip space, through a negative-height viewport.** Every viewport is flipped — origin at
+  its bottom edge, height negative — which mirrors D3D's +y-up clip space into Vulkan's +y-down, so
+  the same SPIR-V draws the image D3D12 draws and D3D12's winding rule carries over unchanged.
+  Slang's `-fvk-invert-y` would flip only the positions a mesh stage writes, and change the program
+  cache's contents. Depth clip off is depth clamp on. An indirect dispatch reads D3D12's argument
+  layout, which is `VkDrawMeshTasksIndirectCommandEXT`; a count dispatch draws at most one, as
+  D3D12's `ExecuteIndirect` here does. The stencil reference is baked into the pipeline, so unlike
+  D3D12 it is honoured.
+* **A new texture reaches `GENERAL` at its first submission.** An image is born `UNDEFINED`, and
+  whether it still owes that transition is its `ImageMemory`'s to say. Every manager holding it —
+  its maker, and any that imported it before the maker submitted — keeps it pending, and the queue
+  that next submits a list recorded against one of them claims the transition and submits it
+  first, from a command buffer of its own (the list's allocator may be recording another list by
+  then); the others skip it, rather than repeat it and discard what was written. A transition taken
+  at `Open` instead would race a list submitted ahead of one opened earlier.
 * **Queues are the context's.** A queue of a type is the one the fewest owners hold among the
   families the type prefers — a compute family without graphics for compute, a transfer-only one
   for copies — spilling to another family before two owners share a `VkQueue`. Owners on one queue
   submit under that queue's lock in the context. One with a GPU wait on a later submission of its
   own can stall, which is why sharing comes last.
-* **Every buffer is a storage-buffer descriptor in its manager's bindless table**, binding 2 of set
-  1, where Slang's SPIR-V reads a buffer handle. Every table has the same fixed-size layout
-  (`BindlessTable::c_Capacity`), so any device's pipeline layout is compatible with any manager's
-  set. A second view (`CreateBufferSrv`, `CreateBufferUav`) is a second descriptor onto the same
-  buffer: a storage-buffer descriptor has no stride.
+* **Every buffer and every texture view is a descriptor in its manager's bindless table**, binding 2
+  of set 1, where Slang's SPIR-V reads a buffer handle and a texture handle alike. The binding is a
+  mutable array of storage buffers and sampled images (`VK_EXT_mutable_descriptor_type`, in the
+  bar), so buffers and views take indices from one space, as D3D12's CBV/SRV/UAV heap gives them.
+  Samplers are binding 0, indexed by their pool slot as D3D12's sampler heap is. Every table has
+  the same fixed-size layout (`BindlessTable::c_Capacity`, `c_SamplerCapacity`), so any device's
+  pipeline layout is compatible with any manager's set. A second view of a buffer
+  (`CreateBufferSrv`, `CreateBufferUav`) is a second descriptor onto it: a storage-buffer
+  descriptor has no stride.
+* **A depth texture's view reads one aspect of the image's own format**: stencil for `X24G8_UINT`
+  and `X32G8_UINT`, depth for anything else, `R32_FLOAT` included. A colour texture is made
+  format-mutable, so its view may read another format of its class as a D3D12 typeless texture's
+  does. `D24S8` is `D32_SFLOAT_S8_UINT`, as Metal makes it `Depth32Float_Stencil8`: AMD has no
+  24-bit depth.
+* **A sampler's border is transparent black, opaque black or opaque white**, the three Vulkan has
+  without `VK_EXT_custom_border_color`; any other ends the process. No caller sets one.
 * **A constant buffer is a uniform-buffer descriptor written per dispatch**, its bytes in the
   list's upload ring as on D3D12 and its set from the command allocator, which is a command pool
   per queue family and resets with both.
-* **One allocation per buffer**, as D3D12 commits one resource per buffer. The textures of the
-  graphics half are what would need a suballocator.
+* **One allocation per buffer and per texture**, as D3D12 commits one resource for each. A
+  renderer's thousands of textures are what would reach `maxMemoryAllocationCount` and need a
+  suballocator.
+* **A texture's readback rows are 256-byte aligned**, as D3D12's footprint is, rounded up to a whole
+  number of blocks, so `GetTextureReadbackLayout` reads the same on both.
 * **An exported buffer is a `VkBuffer`** (`NativeObjectType::kVkBuffer`). Vulkan counts no
   references to one, so its memory is ref-counted and found by `VkBuffer` in a process-wide
   registry: an import keeps it alive past the producer's release, and an import of a buffer no
-  manager made is refused.
+  manager made is refused. **An exported texture is a `VkImage`** (`kVkImage`), held the same way
+  (`ImageMemory`) when a manager made it; one no manager made — a swapchain's — is borrowed, since
+  nothing can add a reference to it, and its maker keeps it alive while the handle lives.
 * **The program cache holds SPIR-V and reflection**; there is no driver pipeline cache yet.
 
 `bgpu_tests` `[vulkan]` pins the device and its queues, the bindless and synchronization features it
@@ -236,7 +287,10 @@ was created with, a validation message in the log, a leaked object named in it a
 to SPIR-V; then each backend class on its own: the manager's descriptors and deferred frees, an
 import outliving its producer, a constant buffer at D3D12's offsets, a pipeline from its cached
 program, a recording read back, a kernel dispatched, a wait between two queues, how owners spread
-over the queues, and a timed span.
+over the queues, and a timed span. `TextureRoundTrip_test` runs on every backend: a texture written
+and read back, one a kernel samples through its view and a sampler, and a colour and a depth target
+read back as what they were cleared to. `MeshDispatch_test` pins which way up a mesh dispatch draws
+and how many groups an indirect one runs, a count of zero included.
 
 ## Threading & Synchronization
 

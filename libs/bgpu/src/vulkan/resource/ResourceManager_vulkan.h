@@ -2,13 +2,19 @@
 #include "resource/BindlessTable_vulkan.h"
 #include "resource/BufferMemory_vulkan.h"
 #include "resource/Buffer_vulkan.h"
+#include "resource/Dsv_vulkan.h"
 #include "resource/ReadbackBuffer_vulkan.h"
+#include "resource/Rtv_vulkan.h"
+#include "resource/Sampler_vulkan.h"
+#include "resource/Srv_vulkan.h"
+#include "resource/Texture_vulkan.h"
 #include "volk_vulkan.h"
 #include <bgpu/GpuContext.h>
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/Dsv.h>
 #include <bgpu/resource/NativeBufferDesc.h>
+#include <bgpu/resource/NativeTextureDesc.h>
 #include <bgpu/resource/Readback.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Rtv.h>
@@ -22,6 +28,7 @@
 #include <core/ref/RefCounter.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
+#include <limits>
 #include <mutex>
 #include <string_view>
 #include <vector>
@@ -51,16 +58,21 @@ namespace bgpu
 		kBufferSrv,
 		kBufferUav,
 		kReadback,
+		kTexture,
+		kSrv,
+		kRtv,
+		kDsv,
+		kSampler,
 	};
 
 	struct PendingDeletion
 	{
 		PendingType type      = PendingType::kInvalid;
-		uint32_t    slotIndex = 0xFFFFFFFF;
+		uint32_t    slotIndex = std::numeric_limits<uint32_t>::max();
 
 		// Set for the kinds that hold a bindless descriptor, which must outlive in-flight work as the
 		// resource does, so it is handed back when the gate clears rather than at destroy time.
-		uint32_t descriptorIndex = 0xFFFFFFFF;
+		uint32_t descriptorIndex = std::numeric_limits<uint32_t>::max();
 	};
 
 	// Deferred destroys captured at the same gate share it, freed as a group once every queue in
@@ -72,10 +84,12 @@ namespace bgpu
 	};
 
 	/**
-	 * The Vulkan resource manager: buffers, their second views and readbacks, each buffer and view a
-	 * descriptor in the manager's bindless table. Textures, samplers and their views are the
-	 * graphics RHI's; a pool of them sized at zero refuses every create, as on every backend, and any
-	 * other use ends the process naming what is missing.
+	 * The Vulkan resource manager: buffers, their second views and readbacks, textures, their views
+	 * and samplers, each buffer, view and sampler a descriptor in the manager's bindless table.
+	 *
+	 * Every texture is in `VK_IMAGE_LAYOUT_GENERAL` from its first submission on: a new image is
+	 * `UNDEFINED`, so the manager keeps the transitions of the textures it has made, and the queue
+	 * that next submits a list recorded against it submits them first (TakeInitialLayouts).
 	 */
 	class ResourceManager final : public core::RefCounter<IResourceManager>
 	{
@@ -125,6 +139,17 @@ namespace bgpu
 
 		TextureHandle
 		CreateTexture(const TextureDesc& desc) noexcept override;
+
+		[[nodiscard]] NativeObject
+		GetNativeTexture(TextureHandle handle, NativeObjectType type) const noexcept override;
+
+		/**
+		 * An image a bgpu manager made is kept alive by the reference this adds; one none made -- a
+		 * swapchain's -- is borrowed, and its maker keeps it alive while the handle lives, since
+		 * Vulkan cannot add a reference to it.
+		 */
+		[[nodiscard]] TextureHandle
+		ImportNativeTexture(const NativeTextureDesc& desc) noexcept override;
 
 		[[nodiscard]] SamplerHandle
 		CreateSampler(const SamplerDesc& desc) noexcept override;
@@ -241,6 +266,14 @@ namespace bgpu
 		ClearDsv(ICommandList* cmdList, DsvHandle handle, float depth, uint8_t stencil) noexcept
 			override;
 
+		/**
+		 * Appends the transition of every texture made since the last call, out of `UNDEFINED`
+		 * into the layout textures keep, and forgets them: the caller submits them ahead of any
+		 * work that may use one.
+		 */
+		void
+		TakeInitialLayouts(std::vector<VkImageMemoryBarrier2>& barriers) noexcept;
+
 		/** The set a command list binds at BindlessTable::c_Set for every dispatch. */
 		[[nodiscard]] VkDescriptorSet
 		GetBindlessSet() const noexcept
@@ -289,7 +322,22 @@ namespace bgpu
 		RetireDeferred(
 			PendingType type,
 			uint32_t    slotIndex,
-			uint32_t    descriptorIndex = 0xFFFFFFFF) noexcept;
+			uint32_t    descriptorIndex = std::numeric_limits<uint32_t>::max()) noexcept;
+
+		/**
+		 * The texture `handle` names.
+		 *
+		 * @pre `handle` is valid.
+		 */
+		[[nodiscard]] const Texture&
+		TextureAt(TextureHandle handle) const noexcept;
+
+		/**
+		 * Drops the pending initial transition of the texture in pool slot `textureSlot`, if any: its
+		 * image is going before any submission made it.
+		 */
+		void
+		ForgetInitialLayout(uint32_t textureSlot) noexcept;
 
 		// Declared first, destroyed last: every Vulkan object below belongs to its device.
 		GpuContextRef       m_Context;
@@ -300,12 +348,29 @@ namespace bgpu
 		core::slot_vector<uint32_t>       m_BufferSrvs;
 		core::slot_vector<uint32_t>       m_BufferUavs;
 		core::slot_vector<ReadbackBuffer> m_ReadbackBuffers;
+		core::slot_vector<Texture>        m_Textures;
+		core::slot_vector<Srv>            m_Srvs;
+		core::slot_vector<Rtv>            m_Rtvs;
+		core::slot_vector<Dsv>            m_Dsvs;
+		core::slot_vector<Sampler>        m_Samplers;
+
+		// The textures this manager holds whose image may still owe its first transition: made
+		// here, or imported before their maker submitted one. Whichever manager submits first
+		// records it (ImageMemory::ClaimInitialLayout).
+		struct PendingLayout
+		{
+			core::SharedRef<ImageMemory> memory;
+			VkImageAspectFlags           aspects     = 0;
+			uint32_t                     textureSlot = std::numeric_limits<uint32_t>::max();
+		};
+		std::vector<PendingLayout> m_PendingLayouts;
 
 		std::vector<PendingDeletionBatch>                          m_PendingBatches;
 		core::static_vector<ICommandQueue*, c_MaxRegisteredQueues> m_RegisteredQueues;
 
 		// Serializes slot allocation, retirement and reclamation, the descriptor table, the deletion
-		// batches and the queue registry. Get*/Valid* reads stay lockless: the pools never move.
+		// batches, the pending layouts and the queue registry. Get*/Valid* reads stay lockless: the
+		// pools never move.
 		mutable std::mutex m_PoolMutex;
 	};
 }
