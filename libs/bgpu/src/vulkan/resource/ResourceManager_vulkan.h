@@ -2,7 +2,9 @@
 #include "resource/BindlessTable_vulkan.h"
 #include "resource/BufferMemory_vulkan.h"
 #include "resource/Buffer_vulkan.h"
+#include "resource/Dsv_vulkan.h"
 #include "resource/ReadbackBuffer_vulkan.h"
+#include "resource/Rtv_vulkan.h"
 #include "resource/Sampler_vulkan.h"
 #include "resource/Srv_vulkan.h"
 #include "resource/Texture_vulkan.h"
@@ -57,6 +59,8 @@ namespace bgpu
 		kReadback,
 		kTexture,
 		kSrv,
+		kRtv,
+		kDsv,
 		kSampler,
 	};
 
@@ -345,6 +349,8 @@ namespace bgpu
 		core::slot_vector<ReadbackBuffer> m_ReadbackBuffers;
 		core::slot_vector<Texture>        m_Textures;
 		core::slot_vector<Srv>            m_Srvs;
+		core::slot_vector<Rtv>            m_Rtvs;
+		core::slot_vector<Dsv>            m_Dsvs;
 		core::slot_vector<Sampler>        m_Samplers;
 
 		// The images made and not yet submitted, with the aspects their transition names.

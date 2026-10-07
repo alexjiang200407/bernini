@@ -1,11 +1,14 @@
 #include "resource/ResourceManager_vulkan.h"
+#include "cmd/CommandList_vulkan.h"
 #include "convert_vulkan.h"
 #include "native_device_vulkan.h"
 #include "resource/BindlessTable_vulkan.h"
 #include "resource/BoundedPool.h"
 #include "resource/BufferMemory_vulkan.h"
+#include "resource/Dsv_vulkan.h"
 #include "resource/ImageMemory_vulkan.h"
 #include "resource/ImageView_vulkan.h"
+#include "resource/Rtv_vulkan.h"
 #include "resource/Sampler_vulkan.h"
 #include "resource/Srv_vulkan.h"
 #include "resource/Texture_vulkan.h"
@@ -26,6 +29,7 @@
 #include <bgpu/resource/Texture.h>
 #include <bgpu/types/Barrier.h>
 #include <bgpu/types/Format.h>
+#include <bgpu/types/FormatInfo.h>
 #include <bgpu/types/NativeObject.h>
 #include <bgpu/types/TextureDimension.h>
 #include <bgpu/uniforms/DescriptorHandle.h>
@@ -69,6 +73,10 @@ namespace bgpu
 			info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 			if (cube)
 				info.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+			// A render target view of a 3D texture names a range of its depth slices, which Vulkan
+			// reaches as the layers of a 2D-array view.
+			if (volume && desc.usage.any(TextureUsageFlag::kRenderTarget))
+				info.flags |= VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT;
 			// An SRV may read a colour texture in another format of its class, as one of D3D12's
 			// typeless textures is read.
 			if (FormatAspects(desc.format) == VK_IMAGE_ASPECT_COLOR_BIT)
@@ -107,7 +115,8 @@ namespace bgpu
 		m_Table(GetVulkanHandles(*m_Context).device, desc.maxCbvSrvUavs),
 		m_Buffers(desc.maxBuffers), m_BufferSrvs(desc.maxBufferSrvs),
 		m_BufferUavs(desc.maxBufferUavs), m_ReadbackBuffers(desc.maxReadbackBuffers),
-		m_Textures(desc.maxTextures), m_Srvs(desc.maxSrvs), m_Samplers(desc.maxSamplers)
+		m_Textures(desc.maxTextures), m_Srvs(desc.maxSrvs), m_Rtvs(desc.maxRtvs),
+		m_Dsvs(desc.maxDsvs), m_Samplers(desc.maxSamplers)
 	{
 		core::ensure(desc.maxBuffers > 0, "maxBuffers must be greater than zero");
 		core::ensure(
@@ -603,27 +612,148 @@ namespace bgpu
 	RtvHandle
 	ResourceManager::CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) noexcept
 	{
-		(void)textureHandle;
-		(void)desc;
 		if (m_Desc.maxRtvs == 0)
 		{
 			spdlog::error("CreateRtv: RTV pool exhausted");
 			return RtvHandle{};
 		}
-		NotOnVulkanYet("IResourceManager::CreateRtv");
+
+		const std::lock_guard lock(m_PoolMutex);
+		core::ensure(ValidTextureHandle(textureHandle), "CreateRtv on an invalid texture");
+		const Texture& texture = TextureAt(textureHandle);
+		core::ensure(
+			texture.GetDesc().usage.any(TextureUsageFlag::kRenderTarget),
+			"CreateRtv on a texture made without kRenderTarget");
+
+		const auto slot = TryAllocateBounded(m_Rtvs);
+		if (slot.is_null())
+		{
+			spdlog::error("CreateRtv '{}': RTV pool exhausted", desc.debugName);
+			return RtvHandle{};
+		}
+
+		auto range         = VkImageSubresourceRange();
+		range.aspectMask   = VK_IMAGE_ASPECT_COLOR_BIT;
+		range.baseMipLevel = desc.mipSlice;
+		range.levelCount   = 1;
+
+		auto type = VK_IMAGE_VIEW_TYPE_2D;
+		switch (desc.dimension)
+		{
+		case TextureDimension::kTexture1D:
+			type             = VK_IMAGE_VIEW_TYPE_1D;
+			range.layerCount = 1;
+			break;
+		case TextureDimension::kTexture2D:
+		case TextureDimension::kTexture2DMS:
+			range.layerCount = 1;
+			break;
+		case TextureDimension::kTexture1DArray:
+			type                 = VK_IMAGE_VIEW_TYPE_1D_ARRAY;
+			range.baseArrayLayer = desc.firstArraySlice;
+			range.layerCount     = desc.arraySize;
+			break;
+		case TextureDimension::kTexture2DArray:
+		case TextureDimension::kTexture2DMSArray:
+			type                 = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+			range.baseArrayLayer = desc.firstArraySlice;
+			range.layerCount     = desc.arraySize;
+			break;
+		case TextureDimension::kTexture3D:
+			type                 = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+			range.baseArrayLayer = desc.firstWSlice;
+			range.layerCount     = desc.wSize;
+			break;
+		case TextureDimension::kUnknown:
+		case TextureDimension::kTextureCube:
+		case TextureDimension::kTextureCubeArray:
+			core::fatal(
+				"An RTV of dimension {} is not one D3D12 has",
+				static_cast<int>(desc.dimension));
+		}
+
+		const VkFormat format =
+			desc.format == Format::UNKNOWN ? texture.GetVkFormat() : ConvertFormat(desc.format);
+		auto view = ImageView(
+			GetVulkanHandles(*m_Context).device,
+			texture.GetVkImage(),
+			type,
+			format,
+			range,
+			desc.debugName);
+		m_Rtvs[slot] = Rtv(std::move(view), range, textureHandle, desc);
+		return RtvHandle{ slot.index, slot.generation };
 	}
 
 	DsvHandle
 	ResourceManager::CreateDsv(TextureHandle textureHandle, const DsvDesc& desc) noexcept
 	{
-		(void)textureHandle;
-		(void)desc;
 		if (m_Desc.maxDsvs == 0)
 		{
 			spdlog::error("CreateDsv: DSV pool exhausted");
 			return DsvHandle{};
 		}
-		NotOnVulkanYet("IResourceManager::CreateDsv");
+
+		const std::lock_guard lock(m_PoolMutex);
+		core::ensure(ValidTextureHandle(textureHandle), "CreateDsv on an invalid texture");
+		const Texture& texture = TextureAt(textureHandle);
+		core::ensure(
+			texture.GetDesc().usage.any(TextureUsageFlag::kDepthStencil),
+			"CreateDsv on a texture made without kDepthStencil");
+
+		const auto slot = TryAllocateBounded(m_Dsvs);
+		if (slot.is_null())
+		{
+			spdlog::error("CreateDsv '{}': DSV pool exhausted", desc.debugName);
+			return DsvHandle{};
+		}
+
+		// Every aspect the image has: a depth attachment is written as both.
+		auto range         = VkImageSubresourceRange();
+		range.aspectMask   = texture.GetAspects();
+		range.baseMipLevel = desc.mipSlice;
+		range.levelCount   = 1;
+
+		auto type = VK_IMAGE_VIEW_TYPE_2D;
+		switch (desc.dimension)
+		{
+		case TextureDimension::kTexture1D:
+			type             = VK_IMAGE_VIEW_TYPE_1D;
+			range.layerCount = 1;
+			break;
+		case TextureDimension::kTexture2D:
+		case TextureDimension::kTexture2DMS:
+			range.layerCount = 1;
+			break;
+		case TextureDimension::kTexture1DArray:
+			type                 = VK_IMAGE_VIEW_TYPE_1D_ARRAY;
+			range.baseArrayLayer = desc.firstArraySlice;
+			range.layerCount     = desc.arraySize;
+			break;
+		case TextureDimension::kTexture2DArray:
+		case TextureDimension::kTexture2DMSArray:
+		case TextureDimension::kTextureCube:
+		case TextureDimension::kTextureCubeArray:
+			type                 = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+			range.baseArrayLayer = desc.firstArraySlice;
+			range.layerCount     = desc.arraySize;
+			break;
+		case TextureDimension::kUnknown:
+		case TextureDimension::kTexture3D:
+			core::fatal(
+				"A DSV of dimension {} is not one D3D12 has",
+				static_cast<int>(desc.dimension));
+		}
+
+		auto view = ImageView(
+			GetVulkanHandles(*m_Context).device,
+			texture.GetVkImage(),
+			type,
+			texture.GetVkFormat(),
+			range,
+			desc.debugName);
+		m_Dsvs[slot] = Dsv(std::move(view), range, textureHandle, desc);
+		return DsvHandle{ slot.index, slot.generation };
 	}
 
 	void
@@ -722,15 +852,35 @@ namespace bgpu
 	void
 	ResourceManager::DestroyRtv(RtvHandle handle, bool deferred) noexcept
 	{
-		(void)deferred;
+		const std::lock_guard lock(m_PoolMutex);
 		core::ensure(ValidRtvHandle(handle), "Cannot destroy invalid RTV handle");
+
+		if (deferred)
+		{
+			m_Rtvs.retire_slot(handle.idx);
+			RetireDeferred(PendingType::kRtv, handle.idx);
+		}
+		else
+		{
+			m_Rtvs.release_slot(handle.idx);
+		}
 	}
 
 	void
 	ResourceManager::DestroyDsv(DsvHandle handle, bool deferred) noexcept
 	{
-		(void)deferred;
+		const std::lock_guard lock(m_PoolMutex);
 		core::ensure(ValidDsvHandle(handle), "Cannot destroy invalid DSV handle");
+
+		if (deferred)
+		{
+			m_Dsvs.retire_slot(handle.idx);
+			RetireDeferred(PendingType::kDsv, handle.idx);
+		}
+		else
+		{
+			m_Dsvs.release_slot(handle.idx);
+		}
 	}
 
 	void
@@ -839,6 +989,12 @@ namespace bgpu
 				m_Srvs.reclaim_slot(pending.slotIndex);
 				m_Table.Free(pending.descriptorIndex);
 				break;
+			case PendingType::kRtv:
+				m_Rtvs.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingType::kDsv:
+				m_Dsvs.reclaim_slot(pending.slotIndex);
+				break;
 			case PendingType::kSampler:
 				m_Samplers.reclaim_slot(pending.slotIndex);
 				break;
@@ -858,29 +1014,27 @@ namespace bgpu
 	const Rtv&
 	ResourceManager::GetRtv(RtvHandle handle) const noexcept
 	{
-		(void)handle;
-		NotOnVulkanYet("IResourceManager::GetRtv");
+		core::ensure(ValidRtvHandle(handle), "GetRtv of an invalid RTV handle");
+		return m_Rtvs[handle.idx];
 	}
 
 	const Dsv&
 	ResourceManager::GetDsv(DsvHandle handle) const noexcept
 	{
-		(void)handle;
-		NotOnVulkanYet("IResourceManager::GetDsv");
+		core::ensure(ValidDsvHandle(handle), "GetDsv of an invalid DSV handle");
+		return m_Dsvs[handle.idx];
 	}
 
 	TextureHandle
 	ResourceManager::GetRtvTexture(RtvHandle handle) const noexcept
 	{
-		(void)handle;
-		NotOnVulkanYet("IResourceManager::GetRtvTexture");
+		return GetRtv(handle).GetTextureHandle();
 	}
 
 	TextureHandle
 	ResourceManager::GetDsvTexture(DsvHandle handle) const noexcept
 	{
-		(void)handle;
-		NotOnVulkanYet("IResourceManager::GetDsvTexture");
+		return GetDsv(handle).GetTextureHandle();
 	}
 
 	const Buffer&
@@ -1029,24 +1183,37 @@ namespace bgpu
 	bool
 	ResourceManager::ValidRtvHandle(const RtvHandle& handle) const noexcept
 	{
-		(void)handle;
-		return false;
+		return m_Rtvs.valid(core::slot_handle{ handle.idx, handle.generation }) &&
+		       !m_Rtvs[handle.idx].IsNull();
 	}
 
 	bool
 	ResourceManager::ValidDsvHandle(const DsvHandle& handle) const noexcept
 	{
-		(void)handle;
-		return false;
+		return m_Dsvs.valid(core::slot_handle{ handle.idx, handle.generation }) &&
+		       !m_Dsvs[handle.idx].IsNull();
 	}
 
 	void
 	ResourceManager::ClearRtv(ICommandList* cmdList, RtvHandle handle, float clearVal[4]) noexcept
 	{
-		(void)cmdList;
-		(void)handle;
-		(void)clearVal;
-		NotOnVulkanYet("IResourceManager::ClearRtv");
+		core::ensure(cmdList != nullptr, "ClearRtv needs a command list");
+		const Rtv&     rtv     = GetRtv(handle);
+		const Texture& texture = GetTexture(rtv.GetTextureHandle());
+
+		// D3D12 takes floats and converts them to an integer target's own type.
+		const FormatInfo info  = GetFormatInfo(texture.GetDesc().format);
+		auto             value = VkClearColorValue();
+		for (int i = 0; i < 4; ++i)
+		{
+			if (info.kind != FormatKind::kInteger)
+				value.float32[i] = clearVal[i];
+			else if (info.isSigned)
+				value.int32[i] = static_cast<int32_t>(clearVal[i]);
+			else
+				value.uint32[i] = static_cast<uint32_t>(clearVal[i]);
+		}
+		cmdList->As<CommandList>()->ClearColor(texture.GetVkImage(), rtv.GetRange(), value);
 	}
 
 	void
@@ -1056,10 +1223,12 @@ namespace bgpu
 		float         depth,
 		uint8_t       stencil) noexcept
 	{
-		(void)cmdList;
-		(void)handle;
-		(void)depth;
-		(void)stencil;
-		NotOnVulkanYet("IResourceManager::ClearDsv");
+		core::ensure(cmdList != nullptr, "ClearDsv needs a command list");
+		const Dsv&     dsv     = GetDsv(handle);
+		const Texture& texture = GetTexture(dsv.GetTextureHandle());
+		cmdList->As<CommandList>()->ClearDepthStencil(
+			texture.GetVkImage(),
+			dsv.GetRange(),
+			VkClearDepthStencilValue{ depth, stencil });
 	}
 }

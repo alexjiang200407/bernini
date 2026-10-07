@@ -163,6 +163,20 @@ namespace bgpu
 			return m_CommandBuffer;
 		}
 
+		/** Clears `range` of `image` to `value`; a colour target's ClearRtv. */
+		void
+		ClearColor(
+			VkImage                        image,
+			const VkImageSubresourceRange& range,
+			const VkClearColorValue&       value) noexcept;
+
+		/** Clears `range` of `image` to `value`; a depth target's ClearDsv. */
+		void
+		ClearDepthStencil(
+			VkImage                         image,
+			const VkImageSubresourceRange&  range,
+			const VkClearDepthStencilValue& value) noexcept;
+
 		/** The manager every handle this list records is one of. */
 		[[nodiscard]] ResourceManager&
 		GetResourceManager() const noexcept;

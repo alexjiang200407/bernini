@@ -145,12 +145,11 @@ refused, even when a second GPU would pass, because the engine does not choose a
 ## Vulkan
 
 `RENDERER_BACKEND=VULKAN` is a third backend being brought up on Windows ahead of the Linux build
-that needs it: **the context, the RHI's compute half and its textures.** `CreateDevice` gives an
-owner buffers, textures with their shader views, samplers, queues, command lists and compute
-pipelines; render and depth targets and the meshlet pipeline end the process naming what is
-missing (a pool of them sized at zero still refuses a create, as on every backend). Nothing above
-`bgpu` is built — no renderer, no crowd libraries, no editor — and `bgpu_tests` runs everything but
-the cases that need a target or a draw. D3D12 stays the Windows default; only the
+that needs it: **the context and the RHI but its draws.** `CreateDevice` gives an owner buffers,
+textures with their shader, render and depth views, samplers, queues, command lists and compute
+pipelines; the meshlet pipeline and its dispatches end the process naming what is missing. Nothing
+above `bgpu` is built — no renderer, no crowd libraries, no editor — and `bgpu_tests` runs
+everything but the cases that draw. D3D12 stays the Windows default; only the
 `windows-clang-vulkan-debug` preset selects this.
 
 * **The first physical device, as D3D12 takes DXGI's first adapter.** The loader sorts what it
@@ -220,6 +219,10 @@ against D3D12 and Metal:
   barrier keeps D3D12's meaning — its syncs and accesses, and a discard from `kUndefined`. On a
   driver with `VK_KHR_unified_image_layouts` it costs nothing. `kPresent` is a swapchain's and ends
   the process until there is one.
+* **A clear is `vkCmdClearColorImage` or `vkCmdClearDepthStencilImage`** over the view's
+  subresources: in `GENERAL` it needs no render pass. An integer target's clear converts D3D12's
+  floats to its own type. A render target view of a 3D texture names a range of its depth slices,
+  reached as the layers of a 2D-array view, so such a texture is made 2D-array compatible.
 * **A new texture reaches `GENERAL` at its first submission.** An image is born `UNDEFINED`, so the
   manager keeps the transitions of the textures it made, and the queue that next submits a list
   recorded against it submits them first, from a command buffer of its own: the list's allocator
@@ -268,7 +271,8 @@ to SPIR-V; then each backend class on its own: the manager's descriptors and def
 import outliving its producer, a constant buffer at D3D12's offsets, a pipeline from its cached
 program, a recording read back, a kernel dispatched, a wait between two queues, how owners spread
 over the queues, and a timed span. `TextureRoundTrip_test` runs on every backend: a texture written
-and read back, and one a kernel samples through its view and a sampler.
+and read back, one a kernel samples through its view and a sampler, and a colour and a depth target
+read back as what they were cleared to.
 
 ## Threading & Synchronization
 

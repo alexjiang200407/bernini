@@ -333,17 +333,39 @@ namespace bgpu
 	void
 	CommandList::Barrier(const RtvHandle handle, const TextureBarrierDesc& barrier) noexcept
 	{
-		(void)handle;
-		(void)barrier;
-		NotOnVulkanYet("ICommandList::Barrier on a render target");
+		Barrier(m_ResourceManager->GetRtvTexture(handle), barrier);
 	}
 
 	void
 	CommandList::Barrier(const DsvHandle handle, const TextureBarrierDesc& barrier) noexcept
 	{
-		(void)handle;
-		(void)barrier;
-		NotOnVulkanYet("ICommandList::Barrier on a depth target");
+		Barrier(m_ResourceManager->GetDsvTexture(handle), barrier);
+	}
+
+	void
+	CommandList::ClearColor(
+		const VkImage                  image,
+		const VkImageSubresourceRange& range,
+		const VkClearColorValue&       value) noexcept
+	{
+		core::ensure(m_Open, "A clear on a closed command list");
+		vkCmdClearColorImage(m_CommandBuffer, image, VK_IMAGE_LAYOUT_GENERAL, &value, 1, &range);
+	}
+
+	void
+	CommandList::ClearDepthStencil(
+		const VkImage                   image,
+		const VkImageSubresourceRange&  range,
+		const VkClearDepthStencilValue& value) noexcept
+	{
+		core::ensure(m_Open, "A clear on a closed command list");
+		vkCmdClearDepthStencilImage(
+			m_CommandBuffer,
+			image,
+			VK_IMAGE_LAYOUT_GENERAL,
+			&value,
+			1,
+			&range);
 	}
 
 	void

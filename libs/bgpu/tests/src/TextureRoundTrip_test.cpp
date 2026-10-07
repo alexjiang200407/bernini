@@ -9,12 +9,15 @@
 #include <bgpu/pipeline/ComputeKernel.h>
 #include <bgpu/pipeline/ComputePipeline.h>
 #include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/Dsv.h>
 #include <bgpu/resource/Readback.h>
 #include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Rtv.h>
 #include <bgpu/resource/Sampler.h>
 #include <bgpu/resource/Srv.h>
 #include <bgpu/resource/Texture.h>
 #include <bgpu/types/Barrier.h>
+#include <bgpu/types/Color.h>
 #include <bgpu/types/ComputeState.h>
 #include <bgpu/types/Format.h>
 #include <bgpu/types/QueueType.h>
@@ -48,19 +51,19 @@ namespace
 		bgpu::CommandAllocatorRef alloc;
 		bgpu::CommandListRef      list;
 
-		Owner()
+		explicit Owner(const bgpu::QueueType type = bgpu::QueueType::kCompute)
 		{
 			auto contextDesc             = bgpu::GpuContextDesc();
 			contextDesc.enableDebugLayer = true;
 			context                      = bgpu::CreateGpuContext(contextDesc);
 			device                       = bgpu::CreateDevice(context);
 			rm    = device->CreateResourceManager(bgpu::ResourceManagerDesc());
-			queue = device->CreateCommandQueue(bgpu::QueueType::kCompute);
+			queue = device->CreateCommandQueue(type);
 			rm->RegisterQueue(queue.Get());
 
 			auto listDesc = bgpu::CommandListDesc();
-			listDesc.type = bgpu::QueueType::kCompute;
-			alloc         = device->CreateCommandAllocator(bgpu::QueueType::kCompute);
+			listDesc.type = type;
+			alloc         = device->CreateCommandAllocator(type);
 			list          = device->CreateCommandList(listDesc, alloc, rm);
 		}
 
@@ -256,4 +259,100 @@ TEST_CASE("A compute kernel samples a texture through its view and a sampler", "
 	owner.rm->DestroySampler(sampler, false);
 	owner.rm->DestroySrv(srv, false);
 	owner.rm->DestroyTexture(texture, false);
+}
+
+TEST_CASE("A cleared colour and depth target read back as their clear values", "[render][rhi]")
+{
+	auto owner = Owner(bgpu::QueueType::kGraphics);
+
+	auto colorDesc          = bgpu::TextureDesc();
+	colorDesc.width         = 8;
+	colorDesc.height        = 8;
+	colorDesc.format        = bgpu::Format::RGBA8_UNORM;
+	colorDesc.usage         = bgpu::TextureUsageFlag::kRenderTarget;
+	colorDesc.initialLayout = bgpu::BarrierLayout::kRenderTarget;
+	colorDesc.debugName     = "cleared color";
+	colorDesc.clearValue.SetColor(bgpu::Color(0.0f, 1.0f, 0.2f, 0.6f));
+	const auto color = owner.rm->CreateTexture(colorDesc);
+
+	auto depthDesc          = bgpu::TextureDesc();
+	depthDesc.width         = 8;
+	depthDesc.height        = 8;
+	depthDesc.format        = bgpu::Format::D32;
+	depthDesc.usage         = bgpu::TextureUsageFlag::kDepthStencil;
+	depthDesc.initialLayout = bgpu::BarrierLayout::kDepthWrite;
+	depthDesc.debugName     = "cleared depth";
+	depthDesc.clearValue.SetDepthStencil(0.25f, 0);
+	const auto depth = owner.rm->CreateTexture(depthDesc);
+
+	auto rtvDesc       = bgpu::RtvDesc();
+	rtvDesc.format     = bgpu::Format::RGBA8_UNORM;
+	const auto rtv     = owner.rm->CreateRtv(color, rtvDesc);
+	auto       dsvDesc = bgpu::DsvDesc();
+	dsvDesc.format     = bgpu::Format::D32;
+	const auto dsv     = owner.rm->CreateDsv(depth, dsvDesc);
+	REQUIRE(owner.rm->ValidRtvHandle(rtv));
+	REQUIRE(owner.rm->ValidDsvHandle(dsv));
+	CHECK(owner.rm->GetRtvTexture(rtv) == color);
+	CHECK(owner.rm->GetDsvTexture(dsv) == depth);
+
+	const auto colorLayout = owner.rm->GetTextureReadbackLayout(color);
+	const auto depthLayout = owner.rm->GetTextureReadbackLayout(depth);
+	CHECK(depthLayout.rowSizeBytes == 8 * sizeof(float));
+
+	auto rbDesc        = bgpu::ReadbackBufferDesc();
+	rbDesc.byteSize    = colorLayout.totalBytes;
+	rbDesc.debugName   = "cleared color readback";
+	const auto colorRb = owner.rm->CreateReadbackBuffer(rbDesc);
+	rbDesc.byteSize    = depthLayout.totalBytes;
+	rbDesc.debugName   = "cleared depth readback";
+	const auto depthRb = owner.rm->CreateReadbackBuffer(rbDesc);
+
+	owner.list->Open(owner.queue.Get(), owner.alloc.Get());
+	float clear[4] = { 0.0f, 1.0f, 0.2f, 0.6f };
+	owner.rm->ClearRtv(owner.list.Get(), rtv, clear);
+	owner.rm->ClearDsv(owner.list.Get(), dsv, 0.25f, 0);
+	owner.list->Barrier(
+		rtv,
+		bgpu::TextureBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kRenderTarget)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kRenderTarget)
+			.SetLayoutBefore(bgpu::BarrierLayout::kRenderTarget)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource)
+			.SetLayoutAfter(bgpu::BarrierLayout::kCopySource));
+	owner.list->Barrier(
+		dsv,
+		bgpu::TextureBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kDepthStencil)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kDepthWrite)
+			.SetLayoutBefore(bgpu::BarrierLayout::kDepthWrite)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource)
+			.SetLayoutAfter(bgpu::BarrierLayout::kCopySource));
+	owner.list->CopyTextureToReadback(colorRb, color);
+	owner.list->CopyTextureToReadback(depthRb, depth);
+	owner.Submit();
+
+	const auto* texels = static_cast<const uint8_t*>(owner.rm->MapReadback(colorRb));
+	REQUIRE(texels != nullptr);
+	CHECK(texels[colorLayout.offset + 0] == 0);
+	CHECK(texels[colorLayout.offset + 1] == 255);
+	CHECK(texels[colorLayout.offset + 2] == 51);
+	CHECK(texels[colorLayout.offset + 3] == 153);
+	owner.rm->UnmapReadback(colorRb);
+
+	const auto* depths = static_cast<const std::byte*>(owner.rm->MapReadback(depthRb));
+	REQUIRE(depths != nullptr);
+	auto first = 0.0f;
+	std::memcpy(&first, depths + depthLayout.offset, sizeof(first));
+	CHECK(first == 0.25f);
+	owner.rm->UnmapReadback(depthRb);
+
+	owner.rm->DestroyReadbackBuffer(depthRb, false);
+	owner.rm->DestroyReadbackBuffer(colorRb, false);
+	owner.rm->DestroyDsv(dsv, false);
+	owner.rm->DestroyRtv(rtv, false);
+	owner.rm->DestroyTexture(depth, false);
+	owner.rm->DestroyTexture(color, false);
 }

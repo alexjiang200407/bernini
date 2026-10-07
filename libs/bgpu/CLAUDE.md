@@ -11,7 +11,7 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
 - Public headers under `./include/bgpu`, namespace `bgpu`. The RHI's interfaces and plain-old-data
   descriptors are there (`cmd/`, `device/`, `pipeline/`, `resource/`, `uniforms/`, `types/`,
   `buffer/`); their backend implementations are under `./src/d3d12` and `./src/metal`, one per
-  binary. `./src/vulkan` is a third backend's context, the RHI's compute half and its textures. Nothing outside
+  binary. `./src/vulkan` is a third backend's context and all of the RHI but its draws. Nothing outside
   `src/<backend>` includes a backend header (d3d12, metal-cpp or volk) — what a
   caller needs of a backend it asks for with `GetNativeObject(NativeObjectType)` / `GetNativeTexture`,
   an untyped `NativeObject`, so no RHI header names a backend type.
@@ -86,13 +86,12 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
 
 ## Vulkan (`./src/vulkan`)
 
-The context and the RHI's compute half and textures: buffers, textures, their shader views,
-samplers, queues, command lists and compute pipelines. Nothing above `bgpu` is built on this
+The context and all of the RHI but its draws: buffers, textures and their shader, render and depth
+views, samplers, queues, command lists and compute pipelines. Nothing above `bgpu` is built on this
 backend ([docs/bgpu.md § Vulkan](../../docs/bgpu.md#vulkan)).
 
-- **A render or depth target or a meshlet entry point ends the process** through `NotOnVulkanYet`
-  (`./src/vulkan/vulkan_util.h`), naming itself; a create from a pool sized at zero is refused
-  first, as on every backend. A case that needs one is compiled out on Vulkan
+- **A meshlet entry point ends the process** through `NotOnVulkanYet`
+  (`./src/vulkan/vulkan_util.h`), naming itself. A case that needs one is compiled out on Vulkan
   (`#if !defined(RENDERER_BACKEND_VULKAN)`), and the graphics half deletes those guards.
 - **Every texture is in `VK_IMAGE_LAYOUT_GENERAL`** after its first submission; `ConvertImageLayout`
   maps every RHI layout but `kUndefined` to it, so nothing here tracks a texture's layout.
