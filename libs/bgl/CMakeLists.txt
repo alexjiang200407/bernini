@@ -179,8 +179,9 @@ enable_coverage(bgl_objects)
 
 # CreateGraphics is only ever defined inside a backend, and the shader step compiles for the
 # backend's IR, so nothing below can be built without one.
-if(RENDERER_BACKEND STREQUAL "NONE")
-	message(STATUS "RENDERER_BACKEND=NONE - bgl_objects only (no bgl runtime, shaders or tests)")
+if(NOT BERNINI_HAS_RENDERER)
+	message(STATUS
+		"RENDERER_BACKEND=${RENDERER_BACKEND} - bgl_objects only (no bgl runtime, shaders or tests)")
 	return()
 endif()
 

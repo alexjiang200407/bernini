@@ -25,16 +25,18 @@ namespace bgpu
 
 	struct GpuContextDesc
 	{
-		// D3D12's API validation layer, and the info-queue callback that routes its messages into
+		// D3D12's API validation layer or Vulkan's, and the callback that routes its messages into
 		// the log. Metal's validators are environment variables the runtime reads before this
 		// process gets a say (docs/gfx_debug.md), so there the flag only labels the run.
 		bool enableDebugLayer = false;
 
-		// GPU-based validation on top of the debug layer: every shader is patched, so device
-		// creation is several times slower and no driver pipeline library is written.
+		// GPU-based validation on top of the debug layer, GPU-assisted validation on Vulkan: every
+		// shader is patched, so device creation is several times slower and no driver pipeline
+		// library is written.
 		bool enableGPUValidationLayer = false;
 
 		// Loads the PIX GPU capturer before the device exists, which is the only time it can be.
+		// D3D12 only.
 		bool enablePixDebug = false;
 
 		// A debug-layer warning or error ends the process instead of being logged, and so does an
@@ -191,8 +193,8 @@ namespace bgpu
 	 * hands it to every owner. Another may follow once the last holder has dropped it.
 	 *
 	 * @throws UnsupportedSystem if the machine is below the engine's minimum requirements
-	 *         (SystemRequirements.h); std::runtime_error if no device can be created, or a context
-	 *         is already live.
+	 *         (SystemRequirements.h); std::runtime_error if no device can be created, a context is
+	 *         already live, or on Vulkan the debug layer was asked for and is not installed.
 	 */
 	BGPU_API GpuContextRef
 	CreateGpuContext(const GpuContextDesc& desc);

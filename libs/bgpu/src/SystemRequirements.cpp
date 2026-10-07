@@ -15,6 +15,7 @@ namespace bgpu
 		constexpr uint32_t c_MeshShaderTier1      = 10;
 		constexpr uint32_t c_ResourceBindingTier3 = 3;
 		constexpr uint32_t c_MinimumMacOsMajor    = 13;
+		constexpr uint32_t c_Vulkan13             = (1U << 22U) | (3U << 12U);
 		constexpr auto     c_NeedsAMetal3Gpu =
 			std::string_view("A graphics processor that supports Metal 3");
 		constexpr auto c_NeedsAMeshShadingGpu = std::string_view(
@@ -42,12 +43,28 @@ namespace bgpu
 			case Requirement::kD3d12Device:
 			case Requirement::kD3d12MeshShaderTier1:
 			case Requirement::kD3d12ResourceBindingTier3:
+			case Requirement::kVulkanDevice:
+			case Requirement::kVulkanMeshShaders:
+			case Requirement::kVulkanDescriptorIndexing:
 				return c_NeedsAMeshShadingGpu;
 			case Requirement::kD3d12ShaderModel66:
 			case Requirement::kD3d12EnhancedBarriers:
+			case Requirement::kVulkan13:
+			case Requirement::kVulkanScalarBlockLayout:
 				return c_NeedsACurrentDriver;
 			}
 			return "";
+		}
+
+		// Vulkan packs a version as variant.major.minor.patch in 3, 7, 10 and 12 bits.
+		[[nodiscard]] std::string
+		VulkanVersion(const uint32_t packed)
+		{
+			return std::format(
+				"Vulkan {}.{}.{}",
+				(packed >> 22U) & 0x7FU,
+				(packed >> 12U) & 0x3FFU,
+				packed & 0xFFFU);
 		}
 	}
 
@@ -89,6 +106,30 @@ namespace bgpu
 			unmet.push_back({ Requirement::kD3d12ShaderModel66, facts.gpuName });
 		if (!facts.enhancedBarriers)
 			unmet.push_back({ Requirement::kD3d12EnhancedBarriers, facts.gpuName });
+		return unmet;
+	}
+
+	std::vector<UnmetRequirement>
+	CheckSystemRequirements(const VulkanSystemFacts& facts)
+	{
+		if (!facts.device)
+			return { { Requirement::kVulkanDevice, facts.gpuName } };
+
+		if (facts.apiVersion < c_Vulkan13)
+		{
+			return {
+				{ Requirement::kVulkan13,
+				  std::format("{} with {}", facts.gpuName, VulkanVersion(facts.apiVersion)) }
+			};
+		}
+
+		auto unmet = std::vector<UnmetRequirement>();
+		if (!facts.meshShaders)
+			unmet.push_back({ Requirement::kVulkanMeshShaders, facts.gpuName });
+		if (!facts.descriptorIndexing)
+			unmet.push_back({ Requirement::kVulkanDescriptorIndexing, facts.gpuName });
+		if (!facts.scalarBlockLayout)
+			unmet.push_back({ Requirement::kVulkanScalarBlockLayout, facts.gpuName });
 		return unmet;
 	}
 

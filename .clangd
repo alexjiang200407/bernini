@@ -32,6 +32,12 @@ Diagnostics:
       # metal-cpp, reached through metal_cpp.h -- see .clang-tidy.
       - ".*/metal_cpp\\.h"
       - ".*/(Metal|Foundation|QuartzCore)/.*"
+      # Vulkan, reached through volk_vulkan.h -- see .clang-tidy.
+      - ".*[/\\\\]volk_vulkan\\.h"
+      - ".*[/\\\\]volk\\.h"
+      - ".*[/\\\\]vk_platform\\.h"
+      - ".*[/\\\\]vulkan(_[a-z0-9]+)?\\.h"
+      - ".*[/\\\\]vk_video[/\\\\].*"
       # The platform C library's internals -- see .clang-tidy for why.
       - ".*/sys/_types/.*"
       - ".*/sys/signal\\.h"

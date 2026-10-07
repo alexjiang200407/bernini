@@ -87,6 +87,13 @@
       }
     },
     {
+      "name": "vulkan",
+      "hidden": true,
+      "cacheVariables": {
+        "RENDERER_BACKEND": "VULKAN"
+      }
+    },
+    {
       "name": "msvc",
       "hidden": true,
       "cacheVariables": {
@@ -240,6 +247,21 @@
       }
     },
     {
+      "name": "windows-clang-vulkan-debug",
+      "displayName": "Windows Clang Debug ninja - Vulkan (the GPU context only: no RHI or renderer yet)",
+      "binaryDir": "${sourceDir}/build/ninja-clang-vulkan-debug",
+      "inherits": [
+        "vcpkg",
+        "windows",
+        "clang",
+        "vulkan",
+        "debug"
+      ],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
       "name": "macos-clang-metal-debug",
       "displayName": "macOS Clang Debug ninja - Metal",
       "binaryDir": "${sourceDir}/build/macos-metal-debug",
@@ -328,6 +350,10 @@
     {
       "name": "windows-clang-dx12-gbv",
       "configurePreset": "windows-clang-dx12-gbv"
+    },
+    {
+      "name": "windows-clang-vulkan-debug",
+      "configurePreset": "windows-clang-vulkan-debug"
     },
     {
       "name": "macos-clang-metal-debug",

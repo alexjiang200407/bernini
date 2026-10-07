@@ -134,4 +134,9 @@ CheckOptions:
   # json_fwd.hpp and *defined* in json.hpp, and include-cleaner names where a symbol is declared.
   # Left alone it writes json_fwd.hpp into ten files and removes the header carrying the
   # definition, which compiles right up until something touches the type.
-  misc-include-cleaner.IgnoreHeaders: '.*/glm/.*;.*/glm\.h;.*/RmlUi/.*;.*/nlohmann/.*;.*/metal_cpp\.h;.*/(Metal|Foundation|QuartzCore)/.*;.*/sys/_types/.*;.*/sys/signal\.h;.*/mach/(arm|arm64|i386|x86_64)/.*'
+  #
+  # Vulkan is metal-cpp's shape once more: `volk_vulkan.h` is the way in (libs/bgpu/CLAUDE.md), and
+  # it must be, since a Khronos header included without volk declares prototypes for functions
+  # nothing links. Left to itself the tool writes <vulkan/vulkan_core.h> beside it. The Khronos
+  # headers are matched by file name, so bgpu's own src/vulkan directory stays checked.
+  misc-include-cleaner.IgnoreHeaders: '.*/glm/.*;.*/glm\.h;.*/RmlUi/.*;.*/nlohmann/.*;.*/metal_cpp\.h;.*/(Metal|Foundation|QuartzCore)/.*;.*[/\\]volk_vulkan\.h;.*[/\\]volk\.h;.*[/\\]vulkan(_[a-z0-9]+)?\.h;.*[/\\]vk_platform\.h;.*[/\\]vk_video[/\\].*;.*/sys/_types/.*;.*/sys/signal\.h;.*/mach/(arm|arm64|i386|x86_64)/.*'
