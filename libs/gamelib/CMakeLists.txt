@@ -79,8 +79,9 @@ enable_strict_compiler(gamelib)
 enable_coverage(gamelib)
 
 # The suite drives a real scene through IGraphics, which needs a backend -- either backend:
-# the DX12-only gate predated the Metal one being able to stand a device up.
-if (BUILD_TESTS)
+# the DX12-only gate predated the Metal one being able to stand a device up. Not on Vulkan yet,
+# whose renderer has bgl_sphere alone above it (the root CMakeLists.txt).
+if (BUILD_TESTS AND BERNINI_HAS_RENDERER_CONSUMERS)
 	find_package(Catch2 CONFIG REQUIRED)
 
 	file(GLOB_RECURSE GAMELIB_TESTS_SOURCES CONFIGURE_DEPENDS

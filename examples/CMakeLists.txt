@@ -1,6 +1,14 @@
 
 add_subdirectory(util)
 
+# Vulkan's renderer is proven to present by the one example; the rest follow its other consumers.
+if (NOT BERNINI_HAS_RENDERER_CONSUMERS)
+    add_subdirectory(bgl_sphere)
+    set_target_properties(bgl_sphere PROPERTIES
+        VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+    return()
+endif()
+
 add_subdirectory(bgl_window)
 add_subdirectory(bgl_base)
 add_subdirectory(bgl_sphere)

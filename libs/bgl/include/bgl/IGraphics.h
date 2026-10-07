@@ -196,7 +196,8 @@ namespace bgl
 		 * Reads `target`'s last presented backbuffer back into a tightly packed RGBA8 image,
 		 * blocking until the GPU copy completes -- SubmitCapture + TryResolveCapture in one call.
 		 *
-		 * @throws GraphicsError if called between BeginFrame and EndFrame.
+		 * @throws GraphicsError if called between BeginFrame and EndFrame, or for a windowed target
+		 *         on Vulkan, whose presented image belongs to the presentation engine.
 		 */
 		virtual assetlib::ImageData
 		ScreenshotToMemory(const RenderTargetRef& target) = 0;
@@ -206,8 +207,9 @@ namespace bgl
 		 * without waiting for the GPU. Every ticket must be spent with TryResolveCapture or
 		 * DiscardCapture.
 		 *
-		 * @throws GraphicsError if called between BeginFrame and EndFrame, or if
-		 *         c_MaxPendingCaptures captures are already in flight.
+		 * @throws GraphicsError if called between BeginFrame and EndFrame, if
+		 *         c_MaxPendingCaptures captures are already in flight, or for a windowed target on
+		 *         Vulkan, whose presented image belongs to the presentation engine.
 		 */
 		virtual CaptureTicket
 		SubmitCapture(const RenderTargetRef& target) = 0;

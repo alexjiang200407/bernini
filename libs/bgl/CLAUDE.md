@@ -63,11 +63,15 @@ provides higher level abstractions of Mesh, Light and Material while hiding the 
 
 ## bgl_vulkan
 
-- The renderer's Vulkan half, brought up on Windows: the swapchain (`Swapchain_vulkan.cpp`). The RHI's
-  Vulkan backend is `bgpu`'s, and so is volk: its function pointers are bgpu's, loaded with the
-  context, and reached here through `"volk_vulkan.h"`.
-- Nothing above the renderer is built on Vulkan yet (the root `CMakeLists.txt`,
-  `BERNINI_HAS_RENDERER_CONSUMERS`).
+- The renderer's Vulkan half, brought up on Windows: `VulkanSwapchain` (`Swapchain_vulkan.cpp`), a
+  `VkSwapchainKHR` over the window's HWND whose images are imported as borrowed textures. It
+  acquires with a fence and waits for it, as DXGI's present blocks for a buffer, and presents behind
+  the frame's fence value through the queue's `NativeVkQueue`. A present that finds the window
+  resized remakes the images at the window's size, and the target takes it on. The RHI's Vulkan
+  backend is `bgpu`'s, and so is volk: its function pointers are bgpu's, loaded with the context,
+  and reached here through `"volk_vulkan.h"`.
+- Above the renderer only `gamelib` and `bgl_sphere`, the example that proves it presents, are built
+  on Vulkan (the root `CMakeLists.txt`, `BERNINI_HAS_RENDERER_CONSUMERS`).
 - PCH is `./libs/bgl/src/vulkan/pch.h`. Implementation files take a `_vulkan` suffix.
 - CMake: `./src/vulkan/CMakeLists.txt`
 

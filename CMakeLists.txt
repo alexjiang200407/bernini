@@ -78,8 +78,9 @@ if (RENDERER_BACKEND MATCHES "^(DX12|METAL|VULKAN)$")
     set(BERNINI_HAS_RENDERER ON)
 endif()
 
-# Whether what is built on the renderer is: the crowd, the editor, the apps and the examples. Not on
-# Vulkan, whose renderer is being brought up with nothing above it.
+# Whether what is built on the renderer is: the crowd, the editor, the apps, every example and every
+# suite above bgl. Not on Vulkan, whose renderer is being brought up with gamelib and bgl_sphere
+# alone above it -- the example that proves it presents (examples/CMakeLists.txt).
 set(BERNINI_HAS_RENDERER_CONSUMERS OFF)
 if (RENDERER_BACKEND MATCHES "^(DX12|METAL)$")
     set(BERNINI_HAS_RENDERER_CONSUMERS ON)
@@ -246,8 +247,10 @@ set(FG_BUILD_TEST OFF CACHE BOOL "" FORCE)
 add_subdirectory(libs/bgl)
 add_subdirectory(libs/assetlib)
 # gamelib is the seam: the only library that links both the renderer and the asset layer.
-if (BERNINI_HAS_RENDERER_CONSUMERS)
+if (TARGET bgl)
     add_subdirectory(libs/gamelib)
+endif()
+if (BERNINI_HAS_RENDERER_CONSUMERS)
     # Compute beside the renderer on the device they share; it links bgpu, never bgl.
     add_subdirectory(libs/crowdlib)
     # The crowd drawn GPU to GPU: the one library that links both the renderer and the crowd.
@@ -271,7 +274,7 @@ if (PROJECT_IS_TOP_LEVEL AND BERNINI_HAS_RENDERER_CONSUMERS)
     add_subdirectory(apps/ai_viewer)
 endif()
 
-if (BERNINI_BUILD_EXAMPLES AND BERNINI_HAS_RENDERER_CONSUMERS)
+if (BERNINI_BUILD_EXAMPLES AND TARGET bgl)
     add_subdirectory(examples)
 endif()
 
@@ -286,7 +289,7 @@ endif()
 if (TARGET crowdlib)
     assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/libs/crowdlib" "gfx")
 endif()
-if (BERNINI_BUILD_EXAMPLES AND BERNINI_HAS_RENDERER_CONSUMERS)
+if (BERNINI_BUILD_EXAMPLES AND TARGET bgl)
     assign_folder("${CMAKE_CURRENT_SOURCE_DIR}/examples" "examples")
 endif()
 if (TARGET editor)
@@ -362,7 +365,7 @@ endif()
 # A game built against this build rather than compiled into its own: every build directory carries
 # the package for exactly what it built, so a consumer's preset names the engine build it matches.
 # Top-level only -- embedded, the consumer already has the targets. See docs/embedding.md.
-if (PROJECT_IS_TOP_LEVEL AND TARGET gamelib)
+if (PROJECT_IS_TOP_LEVEL AND TARGET gamelib AND BERNINI_HAS_RENDERER_CONSUMERS)
     set(BERNINI_PACKAGE_DIR "${CMAKE_BINARY_DIR}/bernini_sdk")
     set(BERNINI_PACKAGE_TARGETS
         core_process core assetlib_structs bgpu bgl_headers bgl_idl bgl_objects
