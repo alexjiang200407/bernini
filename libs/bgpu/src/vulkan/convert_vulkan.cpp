@@ -201,8 +201,7 @@ namespace bgpu
 		case BarrierLayout::kUndefined:
 			return VK_IMAGE_LAYOUT_UNDEFINED;
 		case BarrierLayout::kPresent:
-			core::fatal(
-				"BarrierLayout::kPresent is a swapchain's, and the Vulkan backend has none yet");
+			return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 		case BarrierLayout::kCommon:
 		case BarrierLayout::kGenericRead:
 		case BarrierLayout::kShaderResource:

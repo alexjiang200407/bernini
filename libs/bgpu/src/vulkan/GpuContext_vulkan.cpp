@@ -204,6 +204,7 @@ namespace bgpu
 					[&supported](const VkBool32 VkPhysicalDeviceVulkan12Features::* feature) {
 						return supported.vulkan12.*feature == VK_TRUE;
 					});
+			facts.presentation = HasExtension(physicalDevice, VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 			return facts;
 		}
 
@@ -309,7 +310,10 @@ namespace bgpu
 				layerSettings.pSettings    = settings.data();
 
 				auto layers     = std::vector<const char*>();
-				auto extensions = std::vector<const char*>();
+				auto extensions = std::vector<const char*>({ VK_KHR_SURFACE_EXTENSION_NAME });
+#if defined(_WIN32)
+				extensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+#endif
 
 				auto info             = VkInstanceCreateInfo();
 				info.sType            = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -440,6 +444,7 @@ namespace bgpu
 				const auto extensions = std::to_array<const char*>({
 					VK_EXT_MESH_SHADER_EXTENSION_NAME,
 					VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME,
+					VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 				});
 
 				auto info                    = VkDeviceCreateInfo();

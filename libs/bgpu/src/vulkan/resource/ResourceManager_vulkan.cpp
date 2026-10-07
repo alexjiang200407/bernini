@@ -409,8 +409,13 @@ namespace bgpu
 			return TextureHandle{};
 		}
 		core::ensure(desc.format != Format::UNKNOWN, "A texture needs a format");
-		// Refused here, before an image exists: kPresent ends the process.
-		(void)ConvertImageLayout(desc.initialLayout);
+		if (desc.initialLayout == BarrierLayout::kPresent)
+		{
+			spdlog::error(
+				"CreateTexture '{}': only a swapchain's image may be in kPresent",
+				desc.debugName);
+			return TextureHandle{};
+		}
 
 		auto                info    = ImageInfoOf(desc);
 		const VulkanSharing sharing = GetVulkanSharing(*m_Context);

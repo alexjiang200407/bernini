@@ -36,8 +36,8 @@ namespace bgpu
 
 	/**
 	 * Every layout but `kUndefined` is `GENERAL`, the one layout valid for every copy, clear,
-	 * attachment and descriptor, so nothing has to know the layout a texture is in. `kPresent` is a
-	 * swapchain's, and ends the process until there is one.
+	 * attachment and descriptor, so nothing has to know the layout a texture is in. `kPresent` is
+	 * `PRESENT_SRC_KHR`, which only a swapchain's image may be in.
 	 */
 	[[nodiscard]] VkImageLayout
 	ConvertImageLayout(BarrierLayout layout) noexcept;
