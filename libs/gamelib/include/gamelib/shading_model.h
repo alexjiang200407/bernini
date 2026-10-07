@@ -19,8 +19,6 @@ namespace game
 			return assetlib::ShadingModel::kLitSurface;
 		case bgl::SurfaceShading::kToonCharacter:
 			return assetlib::ShadingModel::kToonCharacterSurface;
-		case bgl::SurfaceShading::kToonEnvironment:
-			return assetlib::ShadingModel::kToonEnvironmentSurface;
 		}
 		return assetlib::ShadingModel::kPbrSurface;
 	}
@@ -40,8 +38,6 @@ namespace game
 			return bgl::SurfaceShading::kLit;
 		case assetlib::ShadingModel::kToonCharacterSurface:
 			return bgl::SurfaceShading::kToonCharacter;
-		case assetlib::ShadingModel::kToonEnvironmentSurface:
-			return bgl::SurfaceShading::kToonEnvironment;
 		case assetlib::ShadingModel::kPbr:
 		case assetlib::ShadingModel::kPbrSurface:
 		case assetlib::ShadingModel::kCount:

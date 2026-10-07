@@ -118,12 +118,14 @@ namespace bgl
 		 * Creates a grass look: the blade shape, density, response to what bends it and
 		 * lighting terms a static geom's grass fields are drawn with. See GrassDesc.
 		 *
-		 * @throws SceneError if `desc.material` is invalid, materialless (kNull, kAssert) or in the
-		 *         kBlend layer; a length is not finite and positive where GrassDesc says so; a share
-		 *         is outside [0, 1]; `minHeight > maxHeight`; the segment counts are not
-		 *         1 <= far <= near <= c_MaxGrassBladeSegments; `bladesPerClump` is outside
-		 *         [1, c_MaxGrassBladesPerClump]; `fadeEnd <= fadeStart`; or a colour, `widening`,
-		 *         `gustResponse` or `translucency` is negative or not finite.
+		 * @throws SceneError if `desc.material` is invalid, materialless (kNull, kAssert), in the
+		 *         kBlend layer or drawn by a toon character surface, whose programs read a
+		 *         placement's rig, which a blade has none of; a length is not finite and positive
+		 *         where GrassDesc says so; a share is outside [0, 1]; `minHeight > maxHeight`; the
+		 *         segment counts are not 1 <= far <= near <= c_MaxGrassBladeSegments;
+		 *         `bladesPerClump` is outside [1, c_MaxGrassBladesPerClump]; `fadeEnd <= fadeStart`;
+		 *         or a colour, `widening`, `gustResponse` or `translucency` is negative or not
+		 *         finite.
 		 */
 		virtual GrassHandle
 		CreateGrass(const GrassDesc& desc) = 0;

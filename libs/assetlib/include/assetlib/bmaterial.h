@@ -35,8 +35,7 @@ namespace assetlib
 	isSurfaceModel(ShadingModel model) noexcept
 	{
 		return model == ShadingModel::kPbrSurface || model == ShadingModel::kLitSurface ||
-		       model == ShadingModel::kToonCharacterSurface ||
-		       model == ShadingModel::kToonEnvironmentSurface;
+		       model == ShadingModel::kToonCharacterSurface;
 	}
 
 	/**

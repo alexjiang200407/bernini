@@ -2,7 +2,6 @@ import bgl.LitSurfaceSource;
 import bgl.MaterialReader;
 import bgl.SurfaceLight;
 import bgl.ToonCharacterSurface;
-import bgl.ToonEnvironmentSurface;
 import idl.ToonShadingRigBlock;
 import idl.ToonShadingRigLimits;
 
@@ -155,18 +154,10 @@ public float4 ShadeToonCharacterFace<
     return ToonCel(surface, halfLambert, light.SunRadiance());
 }
 
-// The toon environment model, flat until its look is designed: the base colour as pre-exposure
-// radiance, reading nothing of the light. The light is handed in all the same, so the model that
-// replaces this one changes nothing at its callers.
-public float4 ShadeToonEnvironment<L : ISurfaceLight>(ToonEnvironmentSurface surface, L light)
-{
-    return surface.baseColor;
-}
-
 /**
  * A character surface as a lit one, its lighting the engine's toon character model. What a
  * registered character surface is bound as, so it draws through the lit programs -- the record,
- * the reader, every layer and grass -- and the model adds no program family of its own.
+ * the reader and every layer -- and the model adds no program family of its own.
  */
 public struct ToonCharacterLit<G : IToonCharacterSurfaceSource> : ILitSurfaceSource
 {

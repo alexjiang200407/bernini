@@ -21,8 +21,8 @@ namespace bgl
 
 	/**
 	 * Reads the one surface out of a game's compiled module: the struct conforming to one surface
-	 * contract — `ISurfaceSource`, `ILitSurfaceSource`, `IToonCharacterSurfaceSource` or
-	 * `IToonEnvironmentSurfaceSource`, and `SurfaceType::shading` says which — its
+	 * contract — `ISurfaceSource`, `ILitSurfaceSource` or `IToonCharacterSurfaceSource`, and
+	 * `SurfaceType::shading` says which — its
 	 * `MaterialParams` fields at the offsets a record holds them at, the texture fields among them
 	 * by their declared type, and the defaults on the values that are left.
 	 *

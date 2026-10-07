@@ -1,11 +1,13 @@
 #include "scene/GeomRollback.h"
 #include "scene/Scene.h"
+#include "util/util.h"
 #include <algorithm>
 #include <assetlib_structs/BGrassFields.h>
 #include <assetlib_structs/Grass.h>
 #include <bgl/GeomType.h>
 #include <bgl/IScene.h>
 #include <bgl/MaterialType.h>
+#include <bgl/SurfaceType.h>
 #include <bgl/glm.h>
 #include <bgl/idl/Constants.h>
 #include <bgl/idl/GrassChunk.h>
@@ -141,7 +143,7 @@ namespace bgl
 	}
 
 	void
-	Scene::ValidateGrass(const GrassDesc& desc, const std::string_view caller)
+	Scene::ValidateGrass(const GrassDesc& desc, const std::string_view caller) const
 	{
 		const auto refuse = [caller](const std::string_view why) {
 			throw SceneError(std::format("{}: {}", caller, why));
@@ -156,6 +158,10 @@ namespace bgl
 		if (desc.material.layerType == LayerType::kBlend)
 		{
 			refuse("a blended material has no opaque program for a solid blade to draw through");
+		}
+		if (DrawsToonCharacter(kind, m_Surfaces))
+		{
+			refuse("a toon character surface shades a placement's rig, which a blade has none of");
 		}
 
 		const GrassBladeDesc& blade = desc.blade;

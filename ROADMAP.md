@@ -1,7 +1,7 @@
 # Bernini Engine Roadmap
 
 A 3D engine targeting a **battle game**: many skinned, instanced units under a single
-directional sun, forward-rendered, PBR now and an ink/toon path later, with a dedicated
+directional sun, forward-rendered, toon characters on stylised-PBR environments, with a dedicated
 authoring editor. The game ships cross-platform (Windows / Linux / Xbox) on devices with bindless
 resource access and a mesh stage; a device below that bar is out of scope, not a lower tier. The
 editor is Windows-only.
@@ -392,7 +392,7 @@ and portability.
     chosen per node by screen size. Within the view's far plane; unbounded range (the occluder
     phase) waits on reversed-Z under § Culling.
   - [ ] Terrain material layers — a surface shades from where a pixel stands for now
-    (`ToonTerrain.slang` in the test project).
+    (`BandedTerrain.slang` in the test project).
 - [ ] Scene Representation
 - [ ] Foliage
   - [x] Grass -- mesh-stage blades from a mesh source's POINTS clumps, wind, screen-size thinning,
