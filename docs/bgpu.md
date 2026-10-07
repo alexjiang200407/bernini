@@ -36,6 +36,7 @@ rm->RegisterQueue(queue.Get());
 * **What lives here is what must precede the device or be shared through it.** The D3D12 debug
   layer, GPU-based validation, the DXGI and D3D12 info queues and the callback that routes their
   messages into the log, the PIX capturer load, Metal's validation-from-environment detection, the
+  Vulkan instance with its validation layer and messenger ([§ Vulkan](#vulkan)), the
   device itself, the `bgpu.log` file, and the Slang sessions
   ([src/SlangSessions.h](../libs/bgpu/src/SlangSessions.h)) with their search paths. With
   the debug layer on, the context's destructor reports live objects into `bgpu.log`, so a leak is
@@ -114,6 +115,10 @@ every test get the check without asking for it, and nothing can turn it off.
 | Windows | a D3D12 device at feature level 12_0 | `D3D12CreateDevice` on DXGI's first adapter, the one every owner draws on |
 | | a mesh stage and bindless | `MeshShaderTier` 1 (`OPTIONS7`), `ResourceBindingTier` 3 (`OPTIONS`) |
 | | a driver new enough for the shaders and barriers | shader model 6.6, the profile the sessions compile to; `EnhancedBarriersSupported` (`OPTIONS12`) |
+| Vulkan | a Vulkan device | the first physical device the loader enumerates, the system's preferred one |
+| | a driver at Vulkan 1.3 | `VkPhysicalDeviceProperties::apiVersion`; below it nothing else is checked, since an old driver hides what the GPU can do |
+| | a mesh stage and bindless | `VK_EXT_mesh_shader` with its `meshShader` and `taskShader` features, the second being D3D12's amplification stage; the descriptor-indexing features a runtime array of sampled images, storage images or storage buffers needs |
+| | a driver that lays a buffer out as the shaders declare it | `scalarBlockLayout`, what `ScalarDataLayout` compiles to in SPIR-V |
 
 An Intel Mac is refused even when its GPU supports Metal 3: the engine is built and tested on Apple
 silicon only.
@@ -130,9 +135,68 @@ refused, even when a second GPU would pass, because the engine does not choose a
   `core::show_fatal_message` (`core/platform/util.h`) is the native dialog for a game's `main` to
   call in its catch.
 * **The checks are separate from the reading.** Each backend reads plain facts off its device
-  (`AppleSystemFacts`, `D3d12SystemFacts`), and `CheckSystemRequirements` decides on them. So
-  `bgpu_tests` `[sysreq]` pins both backends' checks on any machine, including the machines that
-  fail them, which no test machine is.
+  (`AppleSystemFacts`, `D3d12SystemFacts`, `VulkanSystemFacts`), and `CheckSystemRequirements`
+  decides on them. So `bgpu_tests` `[sysreq]` pins every backend's checks on any machine, including
+  the machines that fail them, which no test machine is.
+
+## Vulkan
+
+`RENDERER_BACKEND=VULKAN` is the first part of a third backend, brought up on Windows ahead of the
+Linux build that needs it: **the context, and nothing built on it.** `CreateGpuContext` is defined
+and `CreateDevice` is not, so the build treats it as it treats `NONE` everywhere above `bgpu` — no
+renderer, no crowd libraries, no editor — and `bgpu_tests` is the cases under
+`libs/bgpu/tests/src/context`, the ones that need a context and no RHI. D3D12 stays the Windows
+default; only the `windows-clang-vulkan-debug` preset selects this.
+
+* **The first physical device, as D3D12 takes DXGI's first adapter.** The loader sorts what it
+  enumerates — by the adapter order Windows prefers, and on Linux discrete before integrated — so
+  the engine still does not choose between GPUs: the machine's settings do.
+* **The device is created with what the minimum requirements name, and no other feature.** One list
+  in [GpuContext_vulkan.cpp](../libs/bgpu/src/vulkan/GpuContext_vulkan.cpp) is both what is read
+  off the physical device and what is enabled on the logical one, so a requirement that is checked
+  is one an owner can use. A feature the RHI comes to need is added there and to the requirements
+  together.
+* **It is created with every queue of every family.** A Vulkan device's queues are fixed when it
+  is made, and here each owner takes queues of its own afterwards, so the context cannot know how
+  many will be asked for. Asking for all of them leaves that to the RHI.
+* **volk, not the loader's import library.** The function pointers are filled when the context is
+  created and cleared when it is destroyed, so nothing links `vulkan-1` and a machine with no
+  Vulkan driver starts and is refused with `UnsupportedSystem`. It also means no Vulkan call is
+  valid without a live context. The handles are `GetVulkanHandles`
+  ([native_device_vulkan.h](../libs/bgpu/src/vulkan/native_device_vulkan.h)), private to the
+  backend as the D3D12 device is.
+* **The validation layer comes with the build.** `enableDebugLayer` enables
+  `VK_LAYER_KHRONOS_validation`, which vcpkg builds and `bgpu`'s build stages beside the
+  executables, as the Agility SDK's debug layer is — so it needs no Vulkan SDK on the machine and
+  is the same version everywhere. The loader does not search an executable's directory, so the
+  context adds it through `VK_ADD_LAYER_PATH` in its own environment before creating the instance;
+  a value already set there is left alone. Asked for and not found, the context throws rather than
+  running unvalidated. The loader ignores that variable in an elevated process.
+
+  The layer is built from an overlay port (`cmake/ports/vulkan-validationlayers`) for one reason:
+  vcpkg's links a shared mimalloc, whose redirect DLL replaces the C runtime's allocator for the
+  whole process as it loads. Enabling a debug layer must not change the allocator under the
+  engine, so the overlay builds the layer without it, slower and self-contained in one DLL.
+* **Every message goes to `bgpu.log`; only the validation layer's are strict.** A debug-utils
+  messenger writes each message as `[Vulkan] ...` at its own severity, and `logLevel` filters them
+  as it does everything else. `strictError` ends the process on a warning or error of the
+  validation type only: the loader reports other software's broken layers and drivers as general
+  warnings and errors, which are the machine's and not this process's. An overlay or injector whose
+  implicit layer fails to load leaves an `[error] [Vulkan] Failed to open dynamic library` line in
+  the log at every context; it is not a finding.
+* **An object that outlives the context is named by the layer.** Destroying the device with a
+  child still alive is a validation error naming the object, raised while the messenger is still
+  attached, so it reaches the log — and ends the process under `strictError` — as D3D12's
+  live-object report does.
+* **`enableGPUValidationLayer` is GPU-assisted validation**, switched on through the layer's
+  settings when the instance is created. Unlike D3D12's it is the instance's, so it ends with the
+  context.
+* **The sessions compile to SPIR-V**, at the same profile as every other backend. bgpu's own Slang
+  tree compiles to it unchanged; a bindless handle becomes an index into a descriptor array of
+  runtime size, which is the descriptor-indexing requirement.
+
+`bgpu_tests` `[vulkan]` pins the device and its queues, a bindless layout the device accepts, a
+validation message in the log, a leaked object named in it, and a kernel compiled to SPIR-V.
 
 ## Threading & Synchronization
 

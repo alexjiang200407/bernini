@@ -28,6 +28,12 @@ namespace bgpu
 		kD3d12ResourceBindingTier3,
 		kD3d12ShaderModel66,
 		kD3d12EnhancedBarriers,
+
+		kVulkanDevice,
+		kVulkan13,
+		kVulkanMeshShaders,
+		kVulkanDescriptorIndexing,
+		kVulkanScalarBlockLayout,
 	};
 
 	struct UnmetRequirement
@@ -79,12 +85,42 @@ namespace bgpu
 		bool     enhancedBarriers    = false;
 	};
 
+	/**
+	 * What the Vulkan context reads of the machine's first physical device. The version is Vulkan's
+	 * packed one, so the check compiles on every backend.
+	 */
+	struct VulkanSystemFacts
+	{
+		// A physical device was enumerated. Without one nothing else could be read.
+		bool        device = false;
+		std::string gpuName;
+
+		uint32_t apiVersion = 0;  // VkPhysicalDeviceProperties::apiVersion: 0x00403000 is 1.3
+
+		// Read only from a 1.3 device. Below it they are unknown rather than unmet, so they are not
+		// checked: an old driver hides what the GPU can do.
+
+		// VK_EXT_mesh_shader with its meshShader and taskShader features: the engine's mesh programs
+		// have an amplification stage, which Vulkan calls the task stage.
+		bool meshShaders = false;
+
+		// Bindless: descriptor arrays of runtime size, partially bound, updated after bind and
+		// indexed non-uniformly, for sampled images, storage images and storage buffers.
+		bool descriptorIndexing = false;
+
+		// What a ScalarDataLayout buffer compiles to in SPIR-V.
+		bool scalarBlockLayout = false;
+	};
+
 	/** Every requirement `facts` fall short of, in the enumeration's order. Empty when they meet all. */
 	[[nodiscard]] BGPU_API std::vector<UnmetRequirement>
 						   CheckSystemRequirements(const AppleSystemFacts& facts);
 
 	[[nodiscard]] BGPU_API std::vector<UnmetRequirement>
 						   CheckSystemRequirements(const D3d12SystemFacts& facts);
+
+	[[nodiscard]] BGPU_API std::vector<UnmetRequirement>
+						   CheckSystemRequirements(const VulkanSystemFacts& facts);
 
 	/**
 	 * A message a player can act on: that this computer cannot run the game, and every requirement

@@ -1,28 +1,34 @@
 # The GPU layer, owned by no renderer: the process's device and the compiler for it, which the
 # application creates and hands to every library that runs work on the device, and the RHI each of
 # them builds its own queues, resource managers and pipelines from -- bgl, and a client that
-# runs its own compute beside the frame. It names both backends, and it holds process-wide state, so
+# runs its own compute beside the frame. It names every backend, and it holds process-wide state, so
 # it is built as the renderer is (docs/core_process.md, "Linkage").
 file(GLOB_RECURSE BGPU_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 )
-list(FILTER BGPU_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
+list(FILTER BGPU_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal|vulkan)/.*")
 
 file(GLOB_RECURSE BGPU_HEADERS CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/include/bgpu/*.h
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
 )
-list(FILTER BGPU_HEADERS EXCLUDE REGEX ".*/src/(d3d12|metal)/.*")
+list(FILTER BGPU_HEADERS EXCLUDE REGEX ".*/src/(d3d12|metal|vulkan)/.*")
 
 # The backend's half: the device creation, the RHI's implementation, and on Metal the one
 # translation unit that emits metal-cpp's symbols for the whole process. Without a backend only the
 # compiler and the RHI's neutral half are built -- bgl_objects still compiles against them
-# -- and CreateGpuContext and CreateDevice have no definition.
+# -- and CreateGpuContext and CreateDevice have no definition. Vulkan's half is the context alone:
+# CreateGpuContext is defined and CreateDevice is not.
 set(BGPU_BACKEND_DIR "")
+set(BGPU_BACKEND_HAS_RHI OFF)
 if(RENDERER_BACKEND STREQUAL "DX12")
 	set(BGPU_BACKEND_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/d3d12")
+	set(BGPU_BACKEND_HAS_RHI ON)
 elseif(RENDERER_BACKEND STREQUAL "METAL")
 	set(BGPU_BACKEND_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/metal")
+	set(BGPU_BACKEND_HAS_RHI ON)
+elseif(RENDERER_BACKEND STREQUAL "VULKAN")
+	set(BGPU_BACKEND_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/vulkan")
 endif()
 if(BGPU_BACKEND_DIR)
 	file(GLOB_RECURSE BGPU_BACKEND_SOURCES CONFIGURE_DEPENDS ${BGPU_BACKEND_DIR}/*.cpp)
@@ -71,6 +77,8 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	target_compile_definitions(bgpu PUBLIC RENDERER_BACKEND_DX12)
 elseif(RENDERER_BACKEND STREQUAL "METAL")
 	target_compile_definitions(bgpu PUBLIC RENDERER_BACKEND_METAL)
+elseif(RENDERER_BACKEND STREQUAL "VULKAN")
+	target_compile_definitions(bgpu PUBLIC RENDERER_BACKEND_VULKAN)
 endif()
 
 if(BGPU_BACKEND_DIR)
@@ -114,6 +122,16 @@ elseif(RENDERER_BACKEND STREQUAL "METAL")
 	# and the definitions would be skipped, so this one file compiles without it.
 	set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/metal/MetalImpl.cpp
 		PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+elseif(RENDERER_BACKEND STREQUAL "VULKAN")
+	# volk loads the system's Vulkan loader at runtime and calls through function pointers of its
+	# own, so nothing links vulkan-1 and a machine with no Vulkan starts and is refused in words
+	# (SystemRequirements.h). Its header-only target: the pointers are defined once per process, by
+	# src/vulkan/VolkImpl.cpp, which a PCH that includes the header first would guard out.
+	find_package(volk CONFIG REQUIRED)
+	find_package(VulkanUtilityLibraries CONFIG REQUIRED)
+	target_link_libraries(bgpu PRIVATE volk::volk_headers Vulkan::UtilityHeaders)
+	set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/src/vulkan/VolkImpl.cpp
+		PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 endif()
 
 enable_strict_compiler(bgpu)
@@ -151,6 +169,37 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	# in bgpu: every D3D12 executable links this OBJECT library itself.
 	add_library(bgpu_d3d12_agility OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/src/d3d12/agility/D3D12Agility.cpp)
 	enable_strict_compiler(bgpu_d3d12_agility)
+elseif(RENDERER_BACKEND STREQUAL "VULKAN")
+	# The validation layer is found by the loader through a manifest, so nothing imports it either.
+	# Staged beside the executables, where the context adds its directory to the loader's search
+	# (GpuContext_vulkan.cpp), so the debug layer needs no Vulkan SDK on the machine. The port
+	# exports no target, and the optimized build is taken in every configuration: the debug one
+	# validates several times slower and shares no state with the binary that loads it.
+	set(BGPU_VULKAN_LAYER_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin")
+	set(BGPU_VULKAN_LAYER_FILES
+		"${BGPU_VULKAN_LAYER_DIR}/VkLayer_khronos_validation.json"
+		"${BGPU_VULKAN_LAYER_DIR}/VkLayer_khronos_validation.dll")
+	if(EXISTS "${BGPU_VULKAN_LAYER_DIR}/VkLayer_khronos_validation.json")
+		# A target of its own rather than a POST_BUILD step, which runs only when bgpu relinks: a
+		# layer vcpkg rebuilt would leave the staged copy stale.
+		set(BGPU_VULKAN_LAYER_STAMP "${CMAKE_CURRENT_BINARY_DIR}/vulkan_layer.stamp")
+		add_custom_command(
+			OUTPUT  "${BGPU_VULKAN_LAYER_STAMP}"
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+					${BGPU_VULKAN_LAYER_FILES}
+					"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+			COMMAND ${CMAKE_COMMAND} -E touch "${BGPU_VULKAN_LAYER_STAMP}"
+			DEPENDS ${BGPU_VULKAN_LAYER_FILES}
+			COMMENT "Staging the Vulkan validation layer"
+			VERBATIM)
+		add_custom_target(bgpu_stage_vulkan_layer ALL DEPENDS "${BGPU_VULKAN_LAYER_STAMP}")
+		add_dependencies(bgpu bgpu_stage_vulkan_layer)
+	else()
+		message(STATUS
+			"No Vulkan validation layer in ${BGPU_VULKAN_LAYER_DIR}: GpuContextDesc::enableDebugLayer "
+			"needs one installed on the machine")
+	endif()
 endif()
 
 # The RHI's Slang half: the offset primitives (idl.Entry, idl.Range ...), the buffer family that reads
@@ -310,6 +359,12 @@ if (BUILD_TESTS AND NOT RENDERER_BACKEND STREQUAL "NONE")
 		${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp
 	)
 
+	# A backend with a context and no RHI builds the context's cases alone: every other one reaches
+	# CreateDevice, which it does not define.
+	if(NOT BGPU_BACKEND_HAS_RHI)
+		list(FILTER BGPU_TESTS_SOURCES INCLUDE REGEX ".*/tests/src/context/.*")
+	endif()
+
 	add_executable(bgpu_tests ${BGPU_TESTS_SOURCES})
 
 	# The backend's own root too: a backend-only case reaches one of its classes, which include each
@@ -319,6 +374,11 @@ if (BUILD_TESTS AND NOT RENDERER_BACKEND STREQUAL "NONE")
 			${CMAKE_CURRENT_SOURCE_DIR}/tests/src
 			${BGPU_BACKEND_DIR}
 	)
+
+	if(RENDERER_BACKEND STREQUAL "VULKAN")
+		# A Vulkan-only case calls through the pointers bgpu's VolkImpl.cpp defines.
+		target_link_libraries(bgpu_tests PRIVATE volk::volk_headers)
+	endif()
 
 	if(RENDERER_BACKEND STREQUAL "DX12")
 		# The Agility SDK's two exports must be the executable's.

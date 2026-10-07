@@ -1,4 +1,5 @@
 #include <core/platform/util.h>
+#include <cstdlib>
 #include <iostream>
 #include <string_view>
 
@@ -23,6 +24,12 @@ namespace core
 	sync_directory(const std::filesystem::path&) noexcept
 	{
 		return true;
+	}
+
+	bool
+	set_env_var(const char* name, const char* value) noexcept
+	{
+		return ::setenv(name, value, 1) == 0;
 	}
 
 	void

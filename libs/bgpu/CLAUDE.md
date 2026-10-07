@@ -11,7 +11,8 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
 - Public headers under `./include/bgpu`, namespace `bgpu`. The RHI's interfaces and plain-old-data
   descriptors are there (`cmd/`, `device/`, `pipeline/`, `resource/`, `uniforms/`, `types/`,
   `buffer/`); their backend implementations are under `./src/d3d12` and `./src/metal`, one per
-  binary. Nothing outside `src/<backend>` includes a backend header (d3d12 or metal-cpp) — what a
+  binary. `./src/vulkan` is a third backend's context, with no RHI yet. Nothing outside
+  `src/<backend>` includes a backend header (d3d12, metal-cpp or volk) — what a
   caller needs of a backend it asks for with `GetNativeObject(NativeObjectType)` / `GetNativeTexture`,
   an untyped `NativeObject`, so no RHI header names a backend type.
 - **Nothing here names the renderer.** `bgpu_selfcheck` compiles every public header alone, with no
@@ -22,7 +23,8 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
   `BGPU_CONTEXT_HEADERS` against those headers alone; a new context header joins the list.
 - Error handling: `core::ensure` for internal problems; throw for the caller's.
 - Verification: `just test bgpu` — `[compute]` is an owner with no renderer in the process — then the
-  renderer's suite, `bgl_tests`, which drives the same RHI harder.
+  renderer's suite, `bgl_tests`, which drives the same RHI harder. The cases under
+  `./tests/src/context` need a context and no RHI; a backend with no RHI builds those alone.
 
 ## D3D12 (`./src/d3d12`)
 
@@ -80,6 +82,25 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
   METAL_DEVICE_WRAPPER_TYPE=1 just run bgpu_tests                        # API validation
   METAL_DEVICE_WRAPPER_TYPE=1 MTL_SHADER_VALIDATION=1 just run bgpu_tests  # + GPU validation
   ```
+
+## Vulkan (`./src/vulkan`)
+
+The context only: `CreateGpuContext` is defined and `CreateDevice` is not, so nothing above `bgpu`
+is built on this backend ([docs/bgpu.md § Vulkan](../../docs/bgpu.md#vulkan)).
+
+- PCH is `./src/vulkan/pch.h`. Implementation files take a `_vulkan` suffix.
+- Vulkan is reached through **volk**: include `"volk_vulkan.h"`, never `<vulkan/vulkan.h>`, whose
+  prototypes name symbols nothing links. The function pointers are defined once per process by
+  `./src/vulkan/VolkImpl.cpp`, loaded by the context and cleared when it is destroyed, so no Vulkan
+  call is valid without a live context.
+- Error handling: creating the context throws — `UnsupportedSystem` for a machine below the bar,
+  `std::runtime_error` for a fault, with the `VkResult` named by `string_VkResult`.
+- The validation layer is staged beside the executables by this library's build, and the context
+  points the loader at it. A new instance or device extension, feature or layer setting is enabled
+  in `GpuContext_vulkan.cpp`, the one place either object is created.
+- `just build --preset windows-clang-vulkan-debug`, then
+  `just test bgpu --no-build --build-dir build/ninja-clang-vulkan-debug`: the suite builds and runs
+  the configured preset's unless it is told otherwise.
 
 ## Shaders (`./shaders`)
 
