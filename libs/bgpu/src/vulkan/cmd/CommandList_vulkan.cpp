@@ -166,6 +166,7 @@ namespace bgpu
 
 		m_Allocator     = allocator->As<CommandAllocator>();
 		m_CommandBuffer = m_Allocator->TakeCommandBuffer(family);
+		m_TimedSlots.clear();
 
 		auto begin  = VkCommandBufferBeginInfo();
 		begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -598,6 +599,8 @@ namespace bgpu
 
 		vkCmdResetQueryPool(commands, m_TimingPool, startSlot, 1);
 		vkCmdResetQueryPool(commands, m_TimingPool, endSlot, 1);
+		m_TimedSlots.emplace_back(m_TimingPool, startSlot);
+		m_TimedSlots.emplace_back(m_TimingPool, endSlot);
 		vkCmdWriteTimestamp2(
 			commands,
 			VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
@@ -632,8 +635,7 @@ namespace bgpu
 		if (count == 0)
 			return;
 
-		// The copy writes a query only once it is available, so the writes it copies must be done:
-		// without the wait flag, a slot no span wrote is skipped rather than waited on forever.
+		// The copy's writes to the readback are ordered after every command before it.
 		auto barrier          = VkMemoryBarrier2();
 		barrier.sType         = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
 		barrier.srcStageMask  = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
@@ -647,6 +649,15 @@ namespace bgpu
 		vkCmdPipelineBarrier2(commands, &dependency);
 
 		const auto* timestamps = heap.As<TimestampHeap>();
+		for (uint32_t slot = first; slot < first + count; ++slot)
+		{
+			core::ensure(
+				std::ranges::contains(m_TimedSlots, std::pair(timestamps->GetVkQueryPool(), slot)),
+				"ResolveTimestamps of a slot no span of this list wrote");
+		}
+
+		// Waits for each slot: on a graphics queue the barrier above leaves the copy free to run
+		// before a timestamp is available, and it then copies nothing.
 		vkCmdCopyQueryPoolResults(
 			commands,
 			timestamps->GetVkQueryPool(),
@@ -655,7 +666,7 @@ namespace bgpu
 			timestamps->GetReadbackVkBuffer(),
 			static_cast<VkDeviceSize>(first) * sizeof(uint64_t),
 			sizeof(uint64_t),
-			VK_QUERY_RESULT_64_BIT);
+			VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
 	}
 
 	void

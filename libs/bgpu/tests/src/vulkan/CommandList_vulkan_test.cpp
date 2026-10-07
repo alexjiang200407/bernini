@@ -35,6 +35,7 @@
 #	include <bgpu/types/QueueType.h>
 #	include <bgpu/uniforms/Uniforms.h>
 #	include <catch2/catch_test_macros.hpp>
+#	include <catch2/generators/catch_generators.hpp>
 #	include <core/ref/SharedRef.h>
 #	include <cstdint>
 #	include <cstring>
@@ -332,13 +333,18 @@ TEST_CASE("Vulkan owners share a queue only when every one is taken", "[vulkan][
 	for (const bgpu::VulkanQueue& queue : taken) bgpu::ReleaseVulkanQueue(*context, queue);
 }
 
+// On a graphics queue too, where a timestamp is not available to a copy that merely follows a
+// barrier: the resolve has to wait for it, or it copies nothing.
 TEST_CASE("A timed Vulkan span writes both of its slots", "[vulkan][submit][timing]")
 {
 	auto context = DebugContext();
 	if (!bgpu::TimestampHeap::Supported(*context))
 		SKIP("The device cannot time a span");
 
-	auto       owner  = Owner(context, bgpu::QueueType::kCompute);
+	const auto type = GENERATE(bgpu::QueueType::kCompute, bgpu::QueueType::kGraphics);
+	CAPTURE(type);
+
+	auto       owner  = Owner(context, type);
 	auto       heap   = core::SharedRef<bgpu::TimestampHeap>::Make(context, 2);
 	const auto buffer = owner.rm->CreateStructBuffer(
 		bgpu::StructBufferDesc().SetElement<uint32_t>().SetElementCount(1024).SetDebugName(
@@ -355,6 +361,7 @@ TEST_CASE("A timed Vulkan span writes both of its slots", "[vulkan][submit][timi
 	auto ticks = std::array<uint64_t, 2>{};
 	heap->Read(0, ticks);
 	CHECK(ticks[0] != bgpu::ITimestampHeap::c_UnwrittenTimestamp);
+	CHECK(ticks[1] != bgpu::ITimestampHeap::c_UnwrittenTimestamp);
 	CHECK(ticks[1] >= ticks[0]);
 	CHECK(owner.queue->GetTimestampFrequency() > 0.0);
 

@@ -20,6 +20,8 @@
 #include <optional>
 #include <span>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace bgpu
 {
@@ -277,5 +279,9 @@ namespace bgpu
 		// records into it.
 		VkQueryPool m_TimingPool    = VK_NULL_HANDLE;
 		uint32_t    m_TimingEndSlot = 0;
+
+		// Every slot a span of this list wrote: a resolve waits for its slots, so one no span wrote
+		// would never become available and hang the queue.
+		std::vector<std::pair<VkQueryPool, uint32_t>> m_TimedSlots;
 	};
 }
