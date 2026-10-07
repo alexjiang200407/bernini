@@ -89,42 +89,49 @@ namespace bgpu
 	std::vector<uint32_t>
 	QueueFamiliesFor(const QueueType type, const std::span<const VkQueueFamilyProperties> families)
 	{
-		constexpr VkQueueFlags c_Graphics = VK_QUEUE_GRAPHICS_BIT;
-		constexpr VkQueueFlags c_Compute  = VK_QUEUE_COMPUTE_BIT;
-		constexpr VkQueueFlags c_Transfer = VK_QUEUE_TRANSFER_BIT;
-
-		// Graphics and compute families support transfers whether or not they say so.
-		const auto kind = [](const VkQueueFlags flags) -> int {
-			if ((flags & c_Graphics) != 0 && (flags & c_Compute) != 0)
-				return 2;
-			if ((flags & c_Compute) != 0)
-				return 1;
-			if ((flags & c_Transfer) != 0)
-				return 0;
-			return -1;
+		enum class FamilyKind : uint8_t
+		{
+			kNone,
+			kTransferOnly,
+			kComputeOnly,
+			kGraphicsCompute,
 		};
 
-		// The kinds a type may use, best first.
-		auto order = std::vector<int>();
+		// Graphics and compute families support transfers whether or not they say so.
+		const auto kindOf = [](const VkQueueFlags flags) {
+			const bool graphics = (flags & VK_QUEUE_GRAPHICS_BIT) != 0;
+			const bool compute  = (flags & VK_QUEUE_COMPUTE_BIT) != 0;
+			if (graphics && compute)
+				return FamilyKind::kGraphicsCompute;
+			if (compute)
+				return FamilyKind::kComputeOnly;
+			if ((flags & VK_QUEUE_TRANSFER_BIT) != 0)
+				return FamilyKind::kTransferOnly;
+			return FamilyKind::kNone;
+		};
+
+		auto order = std::vector<FamilyKind>();
 		switch (type)
 		{
 		case QueueType::kGraphics:
-			order = { 2 };
+			order = { FamilyKind::kGraphicsCompute };
 			break;
 		case QueueType::kCompute:
-			order = { 1, 2 };
+			order = { FamilyKind::kComputeOnly, FamilyKind::kGraphicsCompute };
 			break;
 		case QueueType::kCopy:
-			order = { 0, 1, 2 };
+			order = { FamilyKind::kTransferOnly,
+				      FamilyKind::kComputeOnly,
+				      FamilyKind::kGraphicsCompute };
 			break;
 		}
 
 		auto result = std::vector<uint32_t>();
-		for (const int wanted : order)
+		for (const FamilyKind wanted : order)
 		{
 			for (uint32_t i = 0; i < families.size(); ++i)
 			{
-				if (families[i].queueCount > 0 && kind(families[i].queueFlags) == wanted)
+				if (families[i].queueCount > 0 && kindOf(families[i].queueFlags) == wanted)
 					result.push_back(i);
 			}
 		}

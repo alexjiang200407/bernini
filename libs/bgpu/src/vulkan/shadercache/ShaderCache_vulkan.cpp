@@ -2,7 +2,6 @@
 #include "shadercache/util.h"  // IWYU pragma: keep
 #include <bgpu/GpuContext.h>
 #include <bgpu/ProgramCache.h>
-#include <core/err/util.h>
 #include <core/io/ByteReader.h>
 #include <core/io/ByteWriter.h>
 #include <cstddef>

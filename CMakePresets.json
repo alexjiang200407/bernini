@@ -248,7 +248,7 @@
     },
     {
       "name": "windows-clang-vulkan-debug",
-      "displayName": "Windows Clang Debug ninja - Vulkan (the GPU context only: no RHI or renderer yet)",
+      "displayName": "Windows Clang Debug ninja - Vulkan (bgpu's compute half: no renderer yet)",
       "binaryDir": "${sourceDir}/build/ninja-clang-vulkan-debug",
       "inherits": [
         "vcpkg",
