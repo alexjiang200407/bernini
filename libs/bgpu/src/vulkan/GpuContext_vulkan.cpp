@@ -55,6 +55,8 @@ namespace bgpu
 			&VkPhysicalDeviceFeatures::multiViewport,
 			&VkPhysicalDeviceFeatures::samplerAnisotropy,
 			&VkPhysicalDeviceFeatures::textureCompressionBC,
+			// D3D12 lets a pixel shader write a UAV; the renderer's write the GPU assert channel.
+			&VkPhysicalDeviceFeatures::fragmentStoresAndAtomics,
 		});
 		constexpr auto c_GraphicsFeatures12 =
 			std::to_array<VkBool32 VkPhysicalDeviceVulkan12Features::*>({

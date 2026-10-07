@@ -121,7 +121,7 @@ every test get the check without asking for it, and nothing can turn it off.
 | | a driver that lays a buffer out as the shaders declare it | `scalarBlockLayout`, what `ScalarDataLayout` compiles to in SPIR-V |
 | | a driver with the fences and barriers the RHI is written in | `timelineSemaphore` and `synchronization2`, D3D12's fence values and enhanced barriers; both mandatory in 1.3, so a driver that hides them is told to update |
 | | a driver with one bindless array for buffers and textures | `VK_EXT_mutable_descriptor_type`: Slang lowers a buffer handle and a texture handle to the same binding, as D3D12 indexes one CBV/SRV/UAV heap; a mesh-shading GPU without it has an old driver |
-| | the graphics RHI's draws and states | `dynamicRendering`, `drawIndirectCount`, and the core features D3D12's blend, raster and sampler states can ask for: `independentBlend`, `dualSrcBlend`, `fillModeNonSolid`, `depthClamp`, `multiViewport`, `samplerAnisotropy`, `samplerFilterMinmax`, `samplerMirrorClampToEdge`, `textureCompressionBC` |
+| | the graphics RHI's draws and states | `dynamicRendering`, `drawIndirectCount`, and the core features D3D12's blend, raster and sampler states can ask for: `independentBlend`, `dualSrcBlend`, `fillModeNonSolid`, `depthClamp`, `multiViewport`, `samplerAnisotropy`, `samplerFilterMinmax`, `samplerMirrorClampToEdge`, `textureCompressionBC`, and `fragmentStoresAndAtomics`, for a pixel shader that writes a buffer as D3D12's may; then `VK_KHR_swapchain`, to present |
 
 An Intel Mac is refused even when its GPU supports Metal 3: the engine is built and tested on Apple
 silicon only.
