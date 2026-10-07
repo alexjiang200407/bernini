@@ -257,7 +257,9 @@ against D3D12 and Metal:
 * **An exported buffer is a `VkBuffer`** (`NativeObjectType::kVkBuffer`). Vulkan counts no
   references to one, so its memory is ref-counted and found by `VkBuffer` in a process-wide
   registry: an import keeps it alive past the producer's release, and an import of a buffer no
-  manager made is refused. An image's memory is held the same way (`ImageMemory`).
+  manager made is refused. **An exported texture is a `VkImage`** (`kVkImage`), held the same way
+  (`ImageMemory`) when a manager made it; one no manager made — a swapchain's — is borrowed, since
+  nothing can add a reference to it, and its maker keeps it alive while the handle lives.
 * **The program cache holds SPIR-V and reflection**; there is no driver pipeline cache yet.
 
 `bgpu_tests` `[vulkan]` pins the device and its queues, the bindless and synchronization features it

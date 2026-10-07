@@ -316,6 +316,11 @@ Everything else is self-explanatory from the header.
   to a buffer, one the manager counts, so only a buffer a manager made can be imported; what nothing guards is *reuse*: the
   consumer waits on the producer's queue before reading (`bgpu::QueuePoint`,
   `InsertWaitForQueueFence`), and the producer waits on the consumer's before writing again.
+* **`GetNativeTexture` / `ImportNativeTexture`** — a texture's native object, a `kD3D12Resource` on
+  D3D12, a `kMtlTexture` on Metal and a `kVkImage` on Vulkan; the import adopts one made outside the
+  manager -- a swapchain's backbuffer -- in the layout its desc names. Metal adopts none. On Vulkan an
+  image a manager made is kept alive by the import, as a buffer is, and one no manager made is
+  borrowed: its maker keeps it alive while the handle lives.
 
 ### ICommandList
 

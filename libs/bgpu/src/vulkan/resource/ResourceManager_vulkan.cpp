@@ -17,6 +17,7 @@
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/Dsv.h>
 #include <bgpu/resource/NativeBufferDesc.h>
+#include <bgpu/resource/NativeTextureDesc.h>
 #include <bgpu/resource/Readback.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Rtv.h>
@@ -432,6 +433,44 @@ namespace bgpu
 		if (desc.initialLayout != BarrierLayout::kUndefined)
 			m_PendingLayouts.push_back({ texture.GetVkImage(), texture.GetAspects(), slot.index });
 		m_Textures[slot] = std::move(texture);
+		return TextureHandle{ slot };
+	}
+
+	NativeObject
+	ResourceManager::GetNativeTexture(TextureHandle handle, NativeObjectType type) const noexcept
+	{
+		if (type != NativeObjectType::kVkImage || !ValidTextureHandle(handle))
+			return {};
+		return NativeObject{ TextureAt(handle).GetVkImage() };
+	}
+
+	TextureHandle
+	ResourceManager::ImportNativeTexture(const NativeTextureDesc& desc) noexcept
+	{
+		if (desc.type != NativeObjectType::kVkImage || desc.IsNull())
+			return TextureHandle{};
+		core::ensure(desc.texture.format != Format::UNKNOWN, "An imported texture needs a format");
+
+		auto* const image  = desc.object.As<VkImage_T>();
+		auto        memory = ImageMemory::Find(image);
+		core::ensure(
+			memory == nullptr || GetVulkanHandles(*memory->GetContext()).device ==
+									 GetVulkanHandles(*m_Context).device,
+			"ImportNativeTexture of another device's image");
+
+		const std::lock_guard lock(m_PoolMutex);
+		const auto            slot = TryAllocateBounded(m_Textures);
+		if (slot.is_null())
+		{
+			spdlog::error(
+				"ImportNativeTexture '{}': texture pool exhausted",
+				desc.texture.debugName);
+			return TextureHandle{};
+		}
+
+		// Already in the layout its desc names, so no initial transition; and charged to its maker.
+		m_Textures[slot] = memory != nullptr ? Texture(std::move(memory), desc.texture, false) :
+		                                       Texture(image, desc.texture);
 		return TextureHandle{ slot };
 	}
 

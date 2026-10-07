@@ -12,6 +12,7 @@
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/Dsv.h>
 #include <bgpu/resource/NativeBufferDesc.h>
+#include <bgpu/resource/NativeTextureDesc.h>
 #include <bgpu/resource/Readback.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Rtv.h>
@@ -133,6 +134,17 @@ namespace bgpu
 
 		TextureHandle
 		CreateTexture(const TextureDesc& desc) noexcept override;
+
+		[[nodiscard]] NativeObject
+		GetNativeTexture(TextureHandle handle, NativeObjectType type) const noexcept override;
+
+		/**
+		 * An image a bgpu manager made is kept alive by the reference this adds; one none made -- a
+		 * swapchain's -- is borrowed, and its maker keeps it alive while the handle lives, since
+		 * Vulkan cannot add a reference to it.
+		 */
+		[[nodiscard]] TextureHandle
+		ImportNativeTexture(const NativeTextureDesc& desc) noexcept override;
 
 		[[nodiscard]] SamplerHandle
 		CreateSampler(const SamplerDesc& desc) noexcept override;
