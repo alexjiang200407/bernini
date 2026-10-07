@@ -33,23 +33,23 @@
 #include <utility>
 #include <vector>
 
-// A bound read off a measurement, for a figure the two backends disagree on. The hash is a
-// per-pixel threshold and the resolve a temporal filter, so the same scene converges to a different
-// noise floor on each; every figure below was measured on Apple silicon, and D3D12 has read its own
-// since the file was written. Asserted where it was measured, reported where it was not -- a
-// threshold tuned on one backend cannot fail the other without saying what a passing figure there
-// would even be.
+// A bound read off a measurement, for a figure the backends disagree on. The hash is a per-pixel
+// threshold and the resolve a temporal filter, so the same scene converges to a different noise
+// floor on each; every figure below was measured on Apple silicon, and D3D12 has read its own since
+// the file was written -- Vulkan reads D3D12's to the sixth digit. Asserted where it was measured,
+// reported where it was not -- a threshold tuned on one backend cannot fail another without saying
+// what a passing figure there would even be.
 //
 // This is not a licence to widen a bound instead. Anything a backend agrees on -- the opaque floors
 // these figures are read against, coverage, ordering -- stays a plain CHECK.
-#if defined(RENDERER_BACKEND_DX12)
-#	define CHECK_METAL_TUNED(expr)                                                  \
-		do                                                                           \
-		{                                                                            \
-			if (!(expr))                                                             \
-			{                                                                        \
-				WARN("Metal-tuned bound not met on D3D12, see the figures: " #expr); \
-			}                                                                        \
+#if !defined(RENDERER_BACKEND_METAL)
+#	define CHECK_METAL_TUNED(expr)                                                         \
+		do                                                                                  \
+		{                                                                                   \
+			if (!(expr))                                                                    \
+			{                                                                               \
+				WARN("Metal-tuned bound not met on this backend, see the figures: " #expr); \
+			}                                                                               \
 		} while (false)
 #else
 #	define CHECK_METAL_TUNED(expr) CHECK(expr)
