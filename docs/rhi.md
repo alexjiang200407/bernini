@@ -3,7 +3,8 @@
 The Render Hardware Interface (RHI) is `bgpu`'s API-agnostic graphics abstraction: a set of
 pure-virtual interfaces (`bgpu::I*`) plus plain-old-data descriptors and state structs, public under
 `libs/bgpu/include/bgpu/`. Two backends implement it — `libs/bgpu/src/d3d12` and `libs/bgpu/src/metal`
-— chosen at configure time by `RENDERER_BACKEND` ([libs/bgpu/CMakeLists.txt](libs/bgpu/CMakeLists.txt))
+— and a third, `libs/bgpu/src/vulkan`, implements its compute half ([bgpu.md](docs/bgpu.md#vulkan)),
+chosen at configure time by `RENDERER_BACKEND` ([libs/bgpu/CMakeLists.txt](libs/bgpu/CMakeLists.txt))
 and built into `bgpu` itself. Neither is ever visible to a caller, and no RHI header names a backend
 type: what a caller needs of the API underneath -- a swapchain presents on the native queue and adopts
 its backbuffers -- it asks for as nvrhi does, with `GetNativeObject(NativeObjectType)` on the device,
@@ -309,9 +310,10 @@ Everything else is self-explanatory from the header.
 * **`GetNativeBuffer` / `ImportNativeBuffer`** — how a buffer crosses from one owner to another on
   the same native device: the producer reads its buffer's native object and describes it with its
   layout in a `bgpu::NativeBufferDesc`, and the consumer adopts it as a read-only structured buffer
-  with a descriptor in its own heap. The object is a `kMtlBuffer` on Metal and a `kD3D12Resource` on
-  D3D12, and null from either for any other type. The import holds its own native
-  reference, so the memory outlives the producer's release; what nothing guards is *reuse*: the
+  with a descriptor in its own heap. The object is a `kMtlBuffer` on Metal, a `kD3D12Resource` on
+  D3D12 and a `kVkBuffer` on Vulkan, and null from each for any other type. The import holds its own
+  reference, so the memory outlives the producer's release — on Vulkan, which counts no references
+  to a buffer, one the manager counts, so only a buffer a manager made can be imported; what nothing guards is *reuse*: the
   consumer waits on the producer's queue before reading (`bgpu::QueuePoint`,
   `InsertWaitForQueueFence`), and the producer waits on the consumer's before writing again.
 

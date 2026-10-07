@@ -62,10 +62,10 @@ set_property(CACHE PLATFORM PROPERTY STRINGS WINDOWS MACOS WEB)
 # nothing that needs CreateGraphics is declared. It is spelled rather than left unset because the
 # default above means unset is no longer reachable.
 #
-# VULKAN is a backend bgpu creates a GPU context on and nothing draws with yet: it has no RHI and
-# no renderer, so everything above bgpu builds as it does for NONE (docs/bgpu.md, "Vulkan").
+# VULKAN is a backend bgpu runs compute on and nothing draws with yet: it has the RHI's compute half
+# and no renderer, so everything above bgpu builds as it does for NONE (docs/bgpu.md, "Vulkan").
 set(RENDERER_BACKEND "${_bernini_backend}" CACHE STRING
-    "Graphics backend: DX12, METAL, VULKAN for the GPU context alone, or NONE for bgl's objects alone")
+    "Graphics backend: DX12, METAL, VULKAN for bgpu's compute alone, or NONE for bgl's objects alone")
 set_property(CACHE RENDERER_BACKEND PROPERTY STRINGS DX12 METAL VULKAN NONE)
 if (NOT RENDERER_BACKEND MATCHES "^(DX12|METAL|VULKAN|NONE)$")
     message(FATAL_ERROR

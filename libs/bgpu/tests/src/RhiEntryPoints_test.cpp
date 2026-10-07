@@ -7,35 +7,42 @@
 #include <bgpu/cmd/CommandQueue.h>   // IWYU pragma: keep
 #include <bgpu/cmd/TimestampHeap.h>  // IWYU pragma: keep
 #include <bgpu/device/Device.h>
-#include <bgpu/pipeline/MeshletKernel.h>
-#include <bgpu/pipeline/MeshletPipeline.h>
+#include <bgpu/pipeline/ComputeKernel.h>
+#include <bgpu/pipeline/ComputePipeline.h>
 #include <bgpu/resource/Buffer.h>
-#include <bgpu/resource/Dsv.h>
 #include <bgpu/resource/NativeBufferDesc.h>
 #include <bgpu/resource/Readback.h>
 #include <bgpu/resource/ResourceManager.h>
-#include <bgpu/resource/Rtv.h>
-#include <bgpu/resource/Sampler.h>
-#include <bgpu/resource/Srv.h>
-#include <bgpu/resource/Texture.h>
 #include <bgpu/types/Barrier.h>
-#include <bgpu/types/Color.h>
-#include <bgpu/types/Format.h>
-#include <bgpu/types/MeshletState.h>
+#include <bgpu/types/ComputeState.h>
 #include <bgpu/types/NativeObject.h>
 #include <bgpu/types/QueueType.h>
-#include <bgpu/types/Viewport.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+
+#if !defined(RENDERER_BACKEND_VULKAN)
+#	include <bgpu/pipeline/MeshletKernel.h>
+#	include <bgpu/pipeline/MeshletPipeline.h>
+#	include <bgpu/resource/Dsv.h>
+#	include <bgpu/resource/Rtv.h>
+#	include <bgpu/resource/Sampler.h>
+#	include <bgpu/resource/Srv.h>
+#	include <bgpu/resource/Texture.h>
+#	include <bgpu/types/Color.h>
+#	include <bgpu/types/Format.h>
+#	include <bgpu/types/MeshletState.h>
+#	include <bgpu/types/Viewport.h>
+#endif
 
 // Every factory and destroy the RHI offers, once each, with no renderer in the process. What it
 // checks is that each works on a device nothing else owns; what it is for is coverage -- the
 // autorelease check (scripts/tests/test_autorelease_pools.py) runs this suite and names anything
 // left without a pool, and a path no case reaches is a path it cannot see. A new entry point gets a
-// line here.
-TEST_CASE("Every RHI entry point runs on a device no renderer owns", "[render][rhi]")
+// line in one of the two cases: the compute half, which every backend runs, or the graphics half,
+// which Vulkan does not have yet.
+TEST_CASE("Every compute RHI entry point runs on a device no renderer owns", "[render][rhi]")
 {
-	constexpr uint32_t c_Size = 8;
+	constexpr uint32_t c_Count = 16;
 
 	auto contextDesc             = bgpu::GpuContextDesc();
 	contextDesc.enableDebugLayer = true;
@@ -62,12 +69,15 @@ TEST_CASE("Every RHI entry point runs on a device no renderer owns", "[render][r
 
 	// Buffers, and a second view of one, read-only and writable.
 	const auto structBuffer = rm->CreateStructBuffer(
-		bgpu::StructBufferDesc().SetElement<uint32_t>().SetElementCount(16).SetIsUav().SetDebugName(
-			"entry points: struct"));
+		bgpu::StructBufferDesc()
+			.SetElement<uint32_t>()
+			.SetElementCount(c_Count)
+			.SetIsUav()
+			.SetDebugName("entry points: struct"));
 	const auto rawBuffer = rm->CreateRawBuffer(
 		bgpu::RawViewDesc().SetByteSize(256).SetIsUav().SetDebugName("entry points: raw"));
 	const auto computeBuffer = rm->CreateComputeBuffer(
-		bgpu::ComputeBufferDesc().SetElement<uint32_t>().SetInitialCount(16).SetDebugName(
+		bgpu::ComputeBufferDesc().SetElement<uint32_t>().SetInitialCount(c_Count).SetDebugName(
 			"entry points: compute"));
 	const auto bufferSrv = rm->CreateBufferSrv(
 		structBuffer,
@@ -80,7 +90,7 @@ TEST_CASE("Every RHI entry point runs on a device no renderer owns", "[render][r
 	const auto readOnlyBuffer = rm->CreateStructBuffer(
 		bgpu::StructBufferDesc()
 			.SetElement<uint32_t>()
-			.SetElementCount(16)
+			.SetElementCount(c_Count)
 			.SetAllowsUav()
 			.SetDebugName("entry points: read-only, writable view"));
 	const auto bufferUav = rm->CreateBufferUav(
@@ -105,8 +115,104 @@ TEST_CASE("Every RHI entry point runs on a device no renderer owns", "[render][r
 	const auto importedBuffer = rm->ImportNativeBuffer(
 		bgpu::NativeBufferDesc()
 			.SetObject(exportedType, exported)
-			.SetBuffer(bgpu::StructBufferDesc().SetElement<uint32_t>().SetElementCount(16)));
+			.SetBuffer(bgpu::StructBufferDesc().SetElement<uint32_t>().SetElementCount(c_Count)));
 	REQUIRE(rm->ValidBufferHandle(importedBuffer));
+
+	auto rbDesc      = bgpu::ReadbackBufferDesc();
+	rbDesc.byteSize  = c_Count * sizeof(uint32_t);
+	rbDesc.debugName = "entry points: readback";
+	const auto rb    = rm->CreateReadbackBuffer(rbDesc);
+
+	// A compute kernel, dispatched once through the writable view, timed, and read back.
+	auto kernel = device->CreateComputeKernel(
+		bgpu::ComputePipelineDesc()
+			.SetShader(device->CreateShader("bgpu.CSWriteEntryRange"))
+			.SetDebugName("entry points: compute kernel"));
+	REQUIRE(kernel.pipeline != nullptr);
+	kernel["gUniforms"]["values"] = bufferUav;
+	kernel["gUniforms"]["first"]  = 0U;
+	kernel["gUniforms"]["count"]  = c_Count;
+
+	auto state   = bgpu::ComputeState();
+	state.kernel = &kernel;
+
+	list->Open(queue.Get(), alloc.Get());
+	list->BeginEvent("entry points");
+	if (timing != nullptr)
+		list->BeginTiming(*timing, 0, 1);
+	list->SetComputeState(state);
+	list->Dispatch(c_Count / 8, 1, 1);
+	if (timing != nullptr)
+	{
+		list->EndTiming();
+		list->ResolveTimestamps(*timing, 0, 2);
+	}
+	list->EndEvent();
+	list->Barrier(
+		readOnlyBuffer,
+		bgpu::BufferBarrierDesc()
+			.AddSyncBefore(bgpu::BarrierSyncFlag::kComputeShader)
+			.AddAccessBefore(bgpu::BarrierAccessFlag::kUnorderedAccess)
+			.AddSyncAfter(bgpu::BarrierSyncFlag::kCopy)
+			.AddAccessAfter(bgpu::BarrierAccessFlag::kCopySource));
+	list->CopyBufferToReadback(rb, readOnlyBuffer);
+	list->Close();
+	queue->WaitForFenceCPUBlocking(queue->ExecuteCommandList(list.Get()));
+
+	const auto* values = static_cast<const uint32_t*>(rm->MapReadback(rb));
+	REQUIRE(values != nullptr);
+	CHECK(values[c_Count - 1] == 100 + c_Count - 1);
+	rm->UnmapReadback(rb);
+
+	if (timing != nullptr)
+	{
+		std::array<uint64_t, 2> ticks{};
+		timing->Read(0, ticks);
+	}
+
+	// Deferred destroys, reclaimed once the queue has passed them; then the immediate ones.
+	rm->DestroyBufferSrv(bufferSrv);
+	rm->DestroyBufferUav(bufferUav);
+	rm->DestroyBuffer(readOnlyBuffer);
+	rm->DestroyBuffer(importedBuffer);
+	rm->DestroyBuffer(structBuffer);
+	rm->DestroyBuffer(rawBuffer);
+	queue->Flush();
+	rm->CleanupExpiredResources();
+
+	rm->DestroyBuffer(computeBuffer, false);
+	rm->DestroyReadbackBuffer(rb, false);
+	rm->UnregisterQueue(queue.Get());
+}
+
+// Vulkan has the compute half of the RHI alone: textures, targets and the meshlet pipeline arrive with
+// its graphics half.
+#if !defined(RENDERER_BACKEND_VULKAN)
+TEST_CASE("Every graphics RHI entry point runs on a device no renderer owns", "[render][rhi]")
+{
+	constexpr uint32_t c_Size = 8;
+
+	auto contextDesc             = bgpu::GpuContextDesc();
+	contextDesc.enableDebugLayer = true;
+	// On D3D12 an object this case leaks, reported as the context dies, ends the process.
+	contextDesc.strictError = true;
+	auto context            = bgpu::CreateGpuContext(contextDesc);
+	REQUIRE(context != nullptr);
+
+	auto device = bgpu::CreateDevice(context);
+	REQUIRE(device != nullptr);
+
+	auto rm    = device->CreateResourceManager(bgpu::ResourceManagerDesc());
+	auto queue = device->CreateCommandQueue(bgpu::QueueType::kGraphics);
+	REQUIRE(rm != nullptr);
+	REQUIRE(queue != nullptr);
+	rm->RegisterQueue(queue.Get());
+
+	auto listDesc = bgpu::CommandListDesc();
+	listDesc.type = bgpu::QueueType::kGraphics;
+	auto alloc    = device->CreateCommandAllocator();
+	auto list     = device->CreateCommandList(listDesc, alloc, rm);
+	auto timing   = device->CreateTimestampHeap(2);
 
 	// A colour target with its three views, a depth target, a sampler.
 	auto colorDesc   = bgpu::TextureDesc();
@@ -205,13 +311,6 @@ TEST_CASE("Every RHI entry point runs on a device no renderer owns", "[render][r
 	}
 
 	// Deferred destroys, reclaimed once the queue has passed them; then the immediate ones.
-	rm->DestroyBufferSrv(bufferSrv);
-	rm->DestroyBufferUav(bufferUav);
-	rm->DestroyBuffer(readOnlyBuffer);
-	rm->DestroyBuffer(importedBuffer);
-	rm->DestroyBuffer(structBuffer);
-	rm->DestroyBuffer(rawBuffer);
-	rm->DestroyBuffer(computeBuffer);
 	rm->DestroySrv(srv);
 	rm->DestroyRtv(rtv);
 	rm->DestroyTexture(color);
@@ -224,3 +323,4 @@ TEST_CASE("Every RHI entry point runs on a device no renderer owns", "[render][r
 	rm->DestroyReadbackBuffer(rb, false);
 	rm->UnregisterQueue(queue.Get());
 }
+#endif
