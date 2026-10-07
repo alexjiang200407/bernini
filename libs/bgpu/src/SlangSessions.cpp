@@ -84,6 +84,16 @@ namespace bgpu
 		constexpr auto c_Macros = std::array<slang::PreprocessorMacroDesc, 0>();
 #endif
 
+		// SPIR-V packs buffers as FXC does, since the generated IDL mirrors are D3D12's layout on every
+		// backend but Metal, and the bindless arrays sit in the set the Vulkan backend binds its
+		// table to (BindlessTable::c_Set), past the constant buffers in set 0.
+		constexpr auto c_SpirvOptions = std::to_array<slang::CompilerOptionEntry>({
+			{ .name  = slang::CompilerOptionName::ForceDXLayout,
+		      .value = { .kind = slang::CompilerOptionValueKind::Int, .intValue0 = 1 } },
+			{ .name  = slang::CompilerOptionName::BindlessSpaceIndex,
+		      .value = { .kind = slang::CompilerOptionValueKind::Int, .intValue0 = 1 } },
+		});
+
 		// One session on `target`, with the desc's search paths and every source module loaded.
 		Slang::ComPtr<slang::ISession>
 		CreateSession(
@@ -96,6 +106,11 @@ namespace bgpu
 
 			targetDesc.format  = target;
 			targetDesc.profile = global->findProfile(c_Profile);
+			if (target == SLANG_SPIRV)
+			{
+				targetDesc.compilerOptionEntries    = c_SpirvOptions.data();
+				targetDesc.compilerOptionEntryCount = static_cast<uint32_t>(c_SpirvOptions.size());
+			}
 
 			std::vector<const char*> searchPaths;
 			searchPaths.reserve(desc.searchPaths.size());
