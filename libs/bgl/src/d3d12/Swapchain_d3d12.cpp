@@ -1,4 +1,4 @@
-#include "swapchain/Swapchain.h"
+#include "swapchain/ISwapchain.h"
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgpu/cmd/CommandQueue.h>
@@ -22,7 +22,7 @@ namespace bgl
 {
 	namespace
 	{
-		class DxgiSwapchain final : public Swapchain
+		class DxgiSwapchain final : public ISwapchain
 		{
 		public:
 			DxgiSwapchain(
@@ -164,7 +164,7 @@ namespace bgl
 		};
 	}
 
-	std::unique_ptr<Swapchain>
+	std::unique_ptr<ISwapchain>
 	CreateBackendSwapchain(
 		const RenderTargetDesc&      desc,
 		const bgpu::DeviceRef&       device,

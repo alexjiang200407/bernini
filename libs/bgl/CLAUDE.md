@@ -24,10 +24,10 @@ provides higher level abstractions of Mesh, Light and Material while hiding the 
 
 ## src/swapchain
 
-- What every backend that presents through a `Swapchain` shares: `Graphics` (the façade
+- What every backend that presents through an `ISwapchain` shares: `Graphics` (the façade
   `CreateGraphics` returns) and `RenderTarget` (the frame's attachments, and the backbuffers: a
   swapchain's images when windowed, an offscreen ring when headless). A backend implements only
-  `Swapchain` (`Swapchain.h`) and `CreateBackendSwapchain`.
+  `ISwapchain` (`ISwapchain.h`) and `CreateBackendSwapchain`.
 - Compiled by `bgl_d3d12` and `bgl_vulkan`, not by `bgl_objects`: Metal has a target of its own,
   under the same name.
 - A ring slot (allocator, fence) is mapped to the image the swapchain handed out for it, since a

@@ -17,18 +17,18 @@ namespace bgl
 	 *
 	 * Called from the thread that drives the target, never concurrently.
 	 */
-	class Swapchain
+	class ISwapchain
 	{
 	public:
-		Swapchain() noexcept          = default;
-		virtual ~Swapchain() noexcept = default;
+		ISwapchain() noexcept          = default;
+		virtual ~ISwapchain() noexcept = default;
 
-		Swapchain(const Swapchain&) = delete;
-		Swapchain(Swapchain&&)      = delete;
-		Swapchain&
-		operator=(const Swapchain&) = delete;
-		Swapchain&
-		operator=(Swapchain&&) = delete;
+		ISwapchain(const ISwapchain&) = delete;
+		ISwapchain(ISwapchain&&)      = delete;
+		ISwapchain&
+		operator=(const ISwapchain&) = delete;
+		ISwapchain&
+		operator=(ISwapchain&&) = delete;
 
 		/**
 		 * Every image, as `ImportNativeTexture` adopts it; element i is image i. The descs name
@@ -84,7 +84,7 @@ namespace bgl
 	 *
 	 * @throws GraphicsError when the window cannot be presented to.
 	 */
-	[[nodiscard]] std::unique_ptr<Swapchain>
+	[[nodiscard]] std::unique_ptr<ISwapchain>
 	CreateBackendSwapchain(
 		const RenderTargetDesc&      desc,
 		const bgpu::DeviceRef&       device,

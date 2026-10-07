@@ -1,6 +1,6 @@
 #include "swapchain/RenderTarget.h"
 #include "gfx/frame_constants.h"
-#include "swapchain/Swapchain.h"
+#include "swapchain/ISwapchain.h"
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/constants/constants.h>
 #include <bgpu/device/Device.h>
@@ -21,11 +21,11 @@ namespace bgl
 	}
 
 	RenderTarget::RenderTarget(
-		const RenderTargetDesc&    desc,
-		std::unique_ptr<Swapchain> swapchain,
-		bgpu::DeviceRef            device,
-		bgpu::CommandQueueRef      queue,
-		bgpu::ResourceManagerRef   resourceManager) :
+		const RenderTargetDesc&     desc,
+		std::unique_ptr<ISwapchain> swapchain,
+		bgpu::DeviceRef             device,
+		bgpu::CommandQueueRef       queue,
+		bgpu::ResourceManagerRef    resourceManager) :
 		m_Device(std::move(device)), m_CommandQueue(std::move(queue)),
 		m_ResourceManager(std::move(resourceManager)), m_Headless(desc.headless),
 		m_TaaEnabled(desc.taaEnabled), m_TaaAllocated(desc.taaEnabled),

@@ -1,5 +1,5 @@
 #include "gfx/frame_constants.h"
-#include "swapchain/Swapchain.h"
+#include "swapchain/ISwapchain.h"
 #include "volk_vulkan.h"
 #include <Windows.h>
 #include <algorithm>
@@ -48,7 +48,7 @@ namespace bgl
 			}
 		}
 
-		class VulkanSwapchain final : public Swapchain
+		class VulkanSwapchain final : public ISwapchain
 		{
 		public:
 			VulkanSwapchain(
@@ -451,7 +451,7 @@ namespace bgl
 		};
 	}
 
-	std::unique_ptr<Swapchain>
+	std::unique_ptr<ISwapchain>
 	CreateBackendSwapchain(
 		const RenderTargetDesc&      desc,
 		const bgpu::DeviceRef&       device,

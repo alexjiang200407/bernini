@@ -1,7 +1,7 @@
 #pragma once
 #include "gfx/RenderTargetBase.h"
 #include "gfx/frame_constants.h"
-#include "swapchain/Swapchain.h"
+#include "swapchain/ISwapchain.h"
 #include <array>
 #include <bgl/IGraphics.h>
 #include <bgpu/cmd/CommandAllocator.h>
@@ -44,7 +44,7 @@ namespace bgl
 	/**
 	 * A window's swapchain (windowed) or offscreen backbuffer ring (headless) plus the attachments a
 	 * frame renders into, owned independently of Graphics so one renderer can drive many outputs.
-	 * Every backend whose window is a `Swapchain` shares it; only the swapchain is the backend's.
+	 * Every backend whose window is a `ISwapchain` shares it; only the swapchain is the backend's.
 	 *
 	 * The frame ring's slots -- allocator, fence -- go round-robin, and each is mapped to the image
 	 * the swapchain handed out for it, since a swapchain may hold more images than the ring has
@@ -55,11 +55,11 @@ namespace bgl
 	public:
 		/** `swapchain` is null for a headless target, and required for a windowed one. */
 		RenderTarget(
-			const RenderTargetDesc&    desc,
-			std::unique_ptr<Swapchain> swapchain,
-			bgpu::DeviceRef            device,
-			bgpu::CommandQueueRef      queue,
-			bgpu::ResourceManagerRef   resourceManager);
+			const RenderTargetDesc&     desc,
+			std::unique_ptr<ISwapchain> swapchain,
+			bgpu::DeviceRef             device,
+			bgpu::CommandQueueRef       queue,
+			bgpu::ResourceManagerRef    resourceManager);
 
 		~RenderTarget() noexcept override;
 
@@ -367,7 +367,7 @@ namespace bgl
 		bool m_TaaAllocated   = false;
 
 		// Null when headless.
-		std::unique_ptr<Swapchain> m_Swapchain;
+		std::unique_ptr<ISwapchain> m_Swapchain;
 
 		uint32_t m_FrameIndex         = 0;
 		uint32_t m_LastPresentedIndex = 0;

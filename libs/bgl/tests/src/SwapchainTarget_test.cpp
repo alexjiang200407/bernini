@@ -7,7 +7,7 @@
 #if !defined(RENDERER_BACKEND_METAL)
 #	include "gfx/frame_constants.h"
 #	include "swapchain/RenderTarget.h"
-#	include "swapchain/Swapchain.h"
+#	include "swapchain/ISwapchain.h"
 #	include "gfx/GraphicsBase.h"
 #	include "util/TestGraphics.h"
 #	include <bgl/IGraphics.h>
@@ -57,7 +57,7 @@ namespace
 		uint32_t windowHeight = 0;
 	};
 
-	class FakeSwapchain final : public bgl::Swapchain
+	class FakeSwapchain final : public bgl::ISwapchain
 	{
 	public:
 		FakeSwapchain(

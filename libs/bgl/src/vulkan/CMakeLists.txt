@@ -1,5 +1,5 @@
 # The renderer's Vulkan half: the swapchain, with the Graphics and render target every backend that
-# presents through a Swapchain shares (src/swapchain), which bgl_objects leaves out. Vulkan is
+# presents through an ISwapchain shares (src/swapchain), which bgl_objects leaves out. Vulkan is
 # reached through volk, whose function pointers bgpu defines and loads.
 file(GLOB_RECURSE BGL_VULKAN_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp

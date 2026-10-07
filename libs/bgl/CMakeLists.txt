@@ -113,7 +113,7 @@ file(GLOB_RECURSE BGL_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
 )
-# src/swapchain is the target every backend that presents through a Swapchain shares; such a
+# src/swapchain is the target every backend that presents through an ISwapchain shares; such a
 # backend compiles it, and Metal, whose target is its own, does not.
 list(FILTER BGL_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal|vulkan|swapchain)/.*")
 list(REMOVE_ITEM BGL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/selfcheck.cpp)
