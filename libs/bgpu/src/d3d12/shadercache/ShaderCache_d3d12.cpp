@@ -10,7 +10,10 @@
 
 #include <bgpu/GpuContext.h>
 #include <bgpu/ProgramCache.h>
+#include <filesystem>
+#include <memory>
 #include <spdlog/spdlog.h>
+#include <system_error>
 
 namespace bgpu
 {
@@ -84,9 +87,6 @@ namespace bgpu
 
 			return program;
 		}
-
-		constexpr const char* c_PipelineLibraryFile     = "pipelines.psolib";
-		constexpr const char* c_PipelineLibraryLockFile = "pipelines.psolib.lock";
 	}
 
 	ShaderCache::ShaderCache(
@@ -98,19 +98,17 @@ namespace bgpu
 		if (!usePipelineLibrary)
 			return;
 
-		// The library is replaced whole by whoever writes it last, so two writers on one directory
-		// -- the suite's four shards, or two renderers in one process -- would each discard the
-		// other's. One claims it and the rest run without a driver library, which costs PSO
-		// creation and nothing else: the program cache beside it is content-keyed and shared safely.
-		if (!ClaimPipelineLibrary())
+		m_Claim = std::make_unique<shader_cache::PipelineLibraryClaim>(m_Programs.GetDirectory());
+		if (!m_Claim->Held())
 			return;
 
 		wrl::ComPtr<ID3D12Device1> device1;
 		if (FAILED(device->QueryInterface(IID_PPV_ARGS(&device1))))
 			return;
 
-		const std::filesystem::path libPath = m_Programs.GetDirectory() / c_PipelineLibraryFile;
-		std::error_code             ec;
+		const std::filesystem::path libPath =
+			m_Programs.GetDirectory() / shader_cache::c_PipelineLibraryFile;
+		std::error_code ec;
 		if (std::filesystem::exists(libPath, ec))
 		{
 			try
@@ -138,35 +136,6 @@ namespace bgpu
 		}
 	}
 
-	bool
-	ShaderCache::ClaimPipelineLibrary()
-	{
-		const std::filesystem::path lockPath =
-			m_Programs.GetDirectory() / c_PipelineLibraryLockFile;
-
-		// No sharing, so a second opener is refused rather than queued, and delete-on-close so the
-		// claim ends with the process however it ends.
-		const HANDLE lock = CreateFileW(
-			lockPath.wstring().c_str(),
-			GENERIC_WRITE,
-			0,
-			nullptr,
-			CREATE_ALWAYS,
-			FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE,
-			nullptr);
-
-		if (lock == INVALID_HANDLE_VALUE)
-		{
-			spdlog::debug(
-				"Another writer holds {}; this device builds its pipelines without the driver "
-				"library",
-				lockPath.string());
-			return false;
-		}
-
-		m_PsoLibraryLock = lock;
-		return true;
-	}
 	ShaderCache::~ShaderCache()
 	{
 		if (m_PsoLibrary && m_PsoLibraryDirty)
@@ -176,7 +145,7 @@ namespace bgpu
 			if (SUCCEEDED(m_PsoLibrary->Serialize(blob.data(), size)))
 			{
 				const std::filesystem::path libPath =
-					m_Programs.GetDirectory() / c_PipelineLibraryFile;
+					m_Programs.GetDirectory() / shader_cache::c_PipelineLibraryFile;
 				try
 				{
 					core::file::write_atomic(libPath, blob);
@@ -190,10 +159,6 @@ namespace bgpu
 				}
 			}
 		}
-
-		// After the write: the claim is what makes this process the file's one writer.
-		if (m_PsoLibraryLock != nullptr)
-			CloseHandle(m_PsoLibraryLock);
 	}
 
 	uint64_t

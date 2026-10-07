@@ -35,7 +35,8 @@ namespace bgpu
 	{
 		core::ensure(m_Context != nullptr, "A device needs a GPU context");
 		if (m_Context->GetProgramCache() != nullptr)
-			m_ShaderCache = std::make_unique<ShaderCache>(m_Context);
+			m_ShaderCache =
+				std::make_unique<ShaderCache>(m_Context, !m_Context->GpuValidationActive());
 	}
 
 	Device::~Device() noexcept { spdlog::trace("~Device"); }

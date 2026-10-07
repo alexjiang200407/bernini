@@ -1,14 +1,22 @@
 #include "shadercache/ShaderCache_vulkan.h"
-#include "shadercache/util.h"  // IWYU pragma: keep
+#include "native_device_vulkan.h"
+#include "shadercache/util.h"
+#include "volk_vulkan.h"
+#include "vulkan_util.h"
 #include <bgpu/GpuContext.h>
 #include <bgpu/ProgramCache.h>
+#include <core/file/file.h>
 #include <core/io/ByteReader.h>
 #include <core/io/ByteWriter.h>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <exception>
+#include <filesystem>
+#include <memory>
 #include <spdlog/spdlog.h>
 #include <string>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -78,11 +86,94 @@ namespace bgpu
 
 			return program;
 		}
+
+		// A driver must accept another device's or version's data and ignore it, but not every one
+		// does; one whose header names this device and driver is the only one handed to it.
+		[[nodiscard]] bool
+		MatchesDevice(const std::vector<std::byte>& data, const VkPhysicalDevice physical) noexcept
+		{
+			auto header = VkPipelineCacheHeaderVersionOne();
+			if (data.size() < sizeof(header))
+				return false;
+			std::memcpy(&header, data.data(), sizeof(header));
+
+			auto properties = VkPhysicalDeviceProperties();
+			vkGetPhysicalDeviceProperties(physical, &properties);
+			return header.headerVersion == VK_PIPELINE_CACHE_HEADER_VERSION_ONE &&
+			       header.vendorID == properties.vendorID &&
+			       header.deviceID == properties.deviceID &&
+			       std::memcmp(
+					   header.pipelineCacheUUID,
+					   properties.pipelineCacheUUID,
+					   VK_UUID_SIZE) == 0;
+		}
 	}
 
-	ShaderCache::ShaderCache(GpuContextRef context) :
+	ShaderCache::ShaderCache(GpuContextRef context, const bool usePipelineCache) :
 		m_Context(std::move(context)), m_Programs(*m_Context->GetProgramCache())
-	{}
+	{
+		if (!usePipelineCache)
+			return;
+
+		m_Claim = std::make_unique<shader_cache::PipelineLibraryClaim>(m_Programs.GetDirectory());
+		if (!m_Claim->Held())
+			return;
+
+		const VulkanHandles handles = GetVulkanHandles(*m_Context);
+		auto                saved   = std::vector<std::byte>();
+		const auto          path = m_Programs.GetDirectory() / shader_cache::c_PipelineLibraryFile;
+		std::error_code     ec;
+		if (std::filesystem::exists(path, ec))
+		{
+			try
+			{
+				saved = core::file::read_file_bytes(path.string());
+			}
+			catch (const std::exception& e)
+			{
+				spdlog::warn("Could not read the pipeline cache {}: {}", path.string(), e.what());
+			}
+		}
+		if (!MatchesDevice(saved, handles.physicalDevice))
+			saved.clear();
+
+		auto info            = VkPipelineCacheCreateInfo();
+		info.sType           = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+		info.initialDataSize = saved.size();
+		info.pInitialData    = saved.empty() ? nullptr : saved.data();
+		EnsureVk(
+			vkCreatePipelineCache(handles.device, &info, nullptr, &m_PipelineCache),
+			"vkCreatePipelineCache");
+	}
+
+	ShaderCache::~ShaderCache() noexcept
+	{
+		if (m_PipelineCache == VK_NULL_HANDLE)
+			return;
+
+		const VkDevice device = GetVulkanHandles(*m_Context).device;
+		size_t         size   = 0;
+		auto           blob   = std::vector<std::byte>();
+		if (vkGetPipelineCacheData(device, m_PipelineCache, &size, nullptr) == VK_SUCCESS)
+		{
+			blob.resize(size);
+			if (vkGetPipelineCacheData(device, m_PipelineCache, &size, blob.data()) != VK_SUCCESS)
+				blob.clear();
+		}
+		vkDestroyPipelineCache(device, m_PipelineCache, nullptr);
+
+		if (blob.empty())
+			return;
+		const auto path = m_Programs.GetDirectory() / shader_cache::c_PipelineLibraryFile;
+		try
+		{
+			core::file::write_atomic(path, blob);
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::warn("Could not write the pipeline cache {}: {}", path.string(), e.what());
+		}
+	}
 
 	uint64_t
 	ShaderCache::ComputeKey(std::vector<ProgramEntryPoint> moduleEntries) const

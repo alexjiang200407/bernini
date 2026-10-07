@@ -2,6 +2,7 @@
 #include "convert_vulkan.h"
 #include "native_device_vulkan.h"
 #include "pipeline/PipelineLayout_vulkan.h"
+#include "shadercache/ShaderCache_vulkan.h"
 #include "volk_vulkan.h"
 #include "vulkan_util.h"
 #include <array>
@@ -145,8 +146,13 @@ namespace bgpu
 		info.pDynamicState       = &dynamic;
 		info.layout              = m_Layout.layout;
 
-		const VkResult created =
-			vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &m_Pipeline);
+		const VkResult created = vkCreateGraphicsPipelines(
+			device,
+			PipelineCacheOf(cache),
+			1,
+			&info,
+			nullptr,
+			&m_Pipeline);
 		for (const VkShaderModule module : modules) vkDestroyShaderModule(device, module, nullptr);
 		EnsureVk(created, "vkCreateGraphicsPipelines");
 
