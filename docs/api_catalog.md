@@ -22,7 +22,7 @@ a helper that was there:
   lines before the other file's hit is reached.
 - **As well as the code, never instead of it.** A symbol with no doc comment is listed by its
   declaration alone — `core::str::split_once` carries no sentence for a search by behaviour to
-  match — so a miss here proves nothing. clangd and `scripts/bgrep` still answer what the catalog cannot.
+  match — so a miss here proves nothing. clangd and grep still answer what the catalog cannot.
 
 The catalog makes a search cheaper; it does not make one happen. An idiom written without
 thinking — `throw std::runtime_error(std::format(...))` where `core::throw_runtime_error` is the

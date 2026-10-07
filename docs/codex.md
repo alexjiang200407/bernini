@@ -13,8 +13,7 @@ in the bernini-workspace repo, beside the Claude versions they adapt; bernini ke
 [ai-coding.md](ai-coding.md).
 
 A Codex session in a plain clone therefore has the map and the profile and no flows: read the code
-with clangd where it is installed, and use `scripts/bgrep` — plain grep under a name that says the
-search was meant — for text, Slang identifiers and completeness sweeps.
+with clangd where it is installed, and grep for text, Slang identifiers and completeness sweeps.
 
 What an older `just init` generated under `.codex/` and `.agents/` is no longer read, and can be
 deleted.
