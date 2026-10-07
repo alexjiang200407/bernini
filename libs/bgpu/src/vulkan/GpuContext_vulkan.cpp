@@ -10,8 +10,11 @@
 #include <core/log/log.h>
 #include <core/platform/util.h>
 #include <core/ref/SharedRef.h>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
+#include <mutex>
 #include <slang.h>
 #include <span>
 #include <spdlog/spdlog.h>
@@ -388,8 +391,60 @@ namespace bgpu
 					ThrowFailed("vkCreateDevice", created);
 
 				volkLoadDevice(m_Device);
+
+				for (uint32_t family = 0; family < familyCount; ++family)
+				{
+					for (uint32_t index = 0; index < families[family].queueCount; ++index)
+					{
+						auto slot   = QueueSlot();
+						slot.family = family;
+						vkGetDeviceQueue(m_Device, family, index, &slot.queue);
+						m_Queues.push_back(std::move(slot));
+					}
+				}
 			}
 
+		public:
+			[[nodiscard]] VulkanQueue
+			AcquireQueue(const std::span<const uint32_t> families) const noexcept
+			{
+				core::ensure(!families.empty(), "A queue is taken from at least one family");
+
+				const std::lock_guard lock(m_QueueTableLock);
+				QueueSlot*            best         = nullptr;
+				size_t                bestPriority = 0;
+				for (QueueSlot& slot : m_Queues)
+				{
+					const auto preferred = std::ranges::find(families, slot.family);
+					if (preferred == families.end())
+						continue;
+
+					const auto priority = static_cast<size_t>(preferred - families.begin());
+					if (best == nullptr || slot.holders < best->holders ||
+					    (slot.holders == best->holders && priority < bestPriority))
+					{
+						best         = &slot;
+						bestPriority = priority;
+					}
+				}
+				core::ensure(best != nullptr, "No queue in the families asked for");
+
+				++best->holders;
+				return { best->queue, best->family, best->submitLock.get() };
+			}
+
+			void
+			ReleaseQueue(const VulkanQueue& queue) const noexcept
+			{
+				const std::lock_guard lock(m_QueueTableLock);
+				const auto slot = std::ranges::find(m_Queues, queue.queue, &QueueSlot::queue);
+				core::ensure(
+					slot != m_Queues.end() && slot->holders > 0,
+					"Releasing a queue nothing took");
+				--slot->holders;
+			}
+
+		private:
 			// The validation layer names every object that outlived the device as the device is
 			// destroyed, through the messenger, so the messenger goes after it.
 			void
@@ -446,6 +501,18 @@ namespace bgpu
 			bool                     m_GpuValidation  = false;
 
 			std::vector<VkQueueFamilyProperties> m_QueueFamilies;
+
+			// Every queue of every family, with how many owners hold it. Owners come and go after
+			// the device is made, so the table is mutable under its own lock.
+			struct QueueSlot
+			{
+				VkQueue                     queue      = VK_NULL_HANDLE;
+				uint32_t                    family     = 0;
+				uint32_t                    holders    = 0;
+				std::unique_ptr<std::mutex> submitLock = std::make_unique<std::mutex>();
+			};
+			mutable std::vector<QueueSlot> m_Queues;
+			mutable std::mutex             m_QueueTableLock;
 		};
 	}
 
@@ -463,6 +530,22 @@ namespace bgpu
 		const auto* vulkan = dynamic_cast<const Context*>(&context);
 		core::ensure(vulkan != nullptr, "The GPU context is not a Vulkan one");
 		return vulkan->GetQueueFamilies();
+	}
+
+	VulkanQueue
+	AcquireVulkanQueue(const GpuContext& context, const std::span<const uint32_t> families) noexcept
+	{
+		const auto* vulkan = dynamic_cast<const Context*>(&context);
+		core::ensure(vulkan != nullptr, "The GPU context is not a Vulkan one");
+		return vulkan->AcquireQueue(families);
+	}
+
+	void
+	ReleaseVulkanQueue(const GpuContext& context, const VulkanQueue& queue) noexcept
+	{
+		const auto* vulkan = dynamic_cast<const Context*>(&context);
+		core::ensure(vulkan != nullptr, "The GPU context is not a Vulkan one");
+		vulkan->ReleaseQueue(queue);
 	}
 
 	GpuContextRef
