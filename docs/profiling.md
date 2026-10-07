@@ -28,6 +28,18 @@ linked, and no call site changes. The one thing that does not degrade on its own
 **A variable read only to feed a `ZoneTextF` needs `[[maybe_unused]]`**, or `-Werror` calls it dead
 in that build; `bmesh_gltf.cpp`'s source size is the worked example.
 
+**On Apple, `core_process` links CoreFoundation, and the link is load-bearing.** "From process start"
+means from a static initialiser: Tracy forces `TRACY_DELAYED_INIT` on Apple yet still calls
+`GetProfiler()` at namespace scope, so its worker starts while dyld is still running initialisers. The
+worker's first `getaddrinfo` loads libnetwork, whose frameworks' initialisers call into CoreFoundation
+on that thread. dyld initialises a library's dependencies before the library, so the link is what has
+CoreFoundation ready first; without it, on macOS 26, CoreFoundation is still initialising on the main
+thread and the worker dies of a stack overflow before `main` -- every short-lived binary, `--help`
+included. A static `core_process` is covered the same way: the link propagates to the executable,
+whose own initialisers run after every library it loads. `TRACY_MANUAL_LIFETIME` would avoid the
+static start but needs `StartupProfiler()` in every `main`; `TRACY_NO_BROADCAST` would not, as the
+listen socket resolves its address with `getaddrinfo` too.
+
 This page is about **load and cook time**: what a bake cost, where a start-up went -- and, in
 § Memory below, what a run *held*. A slow *frame* is measured elsewhere: every frame graph pass can
 be timed on the GPU (`IRenderTarget::SetGpuTimingEnabled`, read through
