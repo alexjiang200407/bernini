@@ -35,6 +35,8 @@ namespace bgpu
 		kVulkanDescriptorIndexing,
 		kVulkanScalarBlockLayout,
 		kVulkanSynchronization,
+		kVulkanMutableDescriptors,
+		kVulkanGraphics,
 	};
 
 	struct UnmetRequirement
@@ -115,6 +117,16 @@ namespace bgpu
 		// Timeline semaphores and synchronization2: the RHI's fences and barriers, D3D12's fence
 		// values and enhanced barriers. A conformant 1.3 driver has both.
 		bool synchronization = false;
+
+		// VK_EXT_mutable_descriptor_type: one bindless array holding buffers and textures alike, at
+		// the one binding Slang lowers both handles to, as D3D12's one CBV/SRV/UAV heap holds them.
+		bool mutableDescriptors = false;
+
+		// What the graphics RHI draws with and its states can ask for: dynamic rendering, a count
+		// buffer for indirect dispatches, and the core features behind D3D12's blend, raster and
+		// sampler states (independent and dual-source blend, wireframe, depth clamp, several
+		// viewports, anisotropic, min/max and mirror-once sampling, BC textures).
+		bool graphics = false;
 	};
 
 	/** Every requirement `facts` fall short of, in the enumeration's order. Empty when they meet all. */

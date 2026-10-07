@@ -45,13 +45,31 @@ namespace bgpu
 				&VkPhysicalDeviceVulkan12Features::shaderStorageBufferArrayNonUniformIndexing,
 			});
 
+		// The core features of the graphics bar, read and enabled from the same lists.
+		constexpr auto c_GraphicsFeatures = std::to_array<VkBool32 VkPhysicalDeviceFeatures::*>({
+			&VkPhysicalDeviceFeatures::independentBlend,
+			&VkPhysicalDeviceFeatures::dualSrcBlend,
+			&VkPhysicalDeviceFeatures::fillModeNonSolid,
+			&VkPhysicalDeviceFeatures::depthClamp,
+			&VkPhysicalDeviceFeatures::multiViewport,
+			&VkPhysicalDeviceFeatures::samplerAnisotropy,
+			&VkPhysicalDeviceFeatures::textureCompressionBC,
+		});
+		constexpr auto c_GraphicsFeatures12 =
+			std::to_array<VkBool32 VkPhysicalDeviceVulkan12Features::*>({
+				&VkPhysicalDeviceVulkan12Features::drawIndirectCount,
+				&VkPhysicalDeviceVulkan12Features::samplerFilterMinmax,
+				&VkPhysicalDeviceVulkan12Features::samplerMirrorClampToEdge,
+			});
+
 		/** The feature structs the minimum requirements name, chained as Vulkan takes them. */
 		struct FeatureChain
 		{
-			VkPhysicalDeviceFeatures2             features2  = {};
-			VkPhysicalDeviceVulkan12Features      vulkan12   = {};
-			VkPhysicalDeviceVulkan13Features      vulkan13   = {};
-			VkPhysicalDeviceMeshShaderFeaturesEXT meshShader = {};
+			VkPhysicalDeviceFeatures2                        features2         = {};
+			VkPhysicalDeviceVulkan12Features                 vulkan12          = {};
+			VkPhysicalDeviceVulkan13Features                 vulkan13          = {};
+			VkPhysicalDeviceMeshShaderFeaturesEXT            meshShader        = {};
+			VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT mutableDescriptor = {};
 
 			FeatureChain() noexcept
 			{
@@ -62,6 +80,9 @@ namespace bgpu
 				vulkan13.sType   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
 				vulkan13.pNext   = &meshShader;
 				meshShader.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
+				meshShader.pNext = &mutableDescriptor;
+				mutableDescriptor.sType =
+					VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MUTABLE_DESCRIPTOR_TYPE_FEATURES_EXT;
 			}
 
 			FeatureChain(const FeatureChain&) = delete;
@@ -155,6 +176,21 @@ namespace bgpu
 			facts.scalarBlockLayout = supported.vulkan12.scalarBlockLayout == VK_TRUE;
 			facts.synchronization   = supported.vulkan12.timelineSemaphore == VK_TRUE &&
 			                          supported.vulkan13.synchronization2 == VK_TRUE;
+			facts.mutableDescriptors =
+				HasExtension(physicalDevice, VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME) &&
+				supported.mutableDescriptor.mutableDescriptorType == VK_TRUE;
+			facts.graphics =
+				supported.vulkan13.dynamicRendering == VK_TRUE &&
+				std::ranges::all_of(
+					c_GraphicsFeatures,
+					[&supported](const VkBool32 VkPhysicalDeviceFeatures::* feature) {
+						return supported.features2.features.*feature == VK_TRUE;
+					}) &&
+				std::ranges::all_of(
+					c_GraphicsFeatures12,
+					[&supported](const VkBool32 VkPhysicalDeviceVulkan12Features::* feature) {
+						return supported.vulkan12.*feature == VK_TRUE;
+					});
 			return facts;
 		}
 
@@ -364,18 +400,27 @@ namespace bgpu
 					queues.push_back(queue);
 				}
 
-				auto required                       = FeatureChain();
-				required.meshShader.meshShader      = VK_TRUE;
-				required.meshShader.taskShader      = VK_TRUE;
-				required.vulkan12.scalarBlockLayout = VK_TRUE;
-				required.vulkan12.timelineSemaphore = VK_TRUE;
-				required.vulkan13.synchronization2  = VK_TRUE;
+				auto required                                    = FeatureChain();
+				required.meshShader.meshShader                   = VK_TRUE;
+				required.meshShader.taskShader                   = VK_TRUE;
+				required.vulkan12.scalarBlockLayout              = VK_TRUE;
+				required.vulkan12.timelineSemaphore              = VK_TRUE;
+				required.vulkan13.synchronization2               = VK_TRUE;
+				required.vulkan13.dynamicRendering               = VK_TRUE;
+				required.mutableDescriptor.mutableDescriptorType = VK_TRUE;
 				for (VkBool32 VkPhysicalDeviceVulkan12Features::* const feature :
 				     c_DescriptorIndexingFeatures)
 					required.vulkan12.*feature = VK_TRUE;
+				for (VkBool32 VkPhysicalDeviceVulkan12Features::* const feature :
+				     c_GraphicsFeatures12)
+					required.vulkan12.*feature = VK_TRUE;
+				for (VkBool32 VkPhysicalDeviceFeatures::* const feature : c_GraphicsFeatures)
+					required.features2.features.*feature = VK_TRUE;
 
-				const auto extensions =
-					std::to_array<const char*>({ VK_EXT_MESH_SHADER_EXTENSION_NAME });
+				const auto extensions = std::to_array<const char*>({
+					VK_EXT_MESH_SHADER_EXTENSION_NAME,
+					VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME,
+				});
 
 				auto info                    = VkDeviceCreateInfo();
 				info.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

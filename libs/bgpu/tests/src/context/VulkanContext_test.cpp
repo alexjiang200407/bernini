@@ -9,6 +9,7 @@
 #	include "volk_vulkan.h"
 
 #	include <algorithm>
+#	include <array>
 #	include <bgpu/GpuContext.h>
 #	include <catch2/catch_message.hpp>
 #	include <catch2/catch_test_macros.hpp>
@@ -235,6 +236,62 @@ TEST_CASE(
 
 	REQUIRE(vkEndCommandBuffer(commands) == VK_SUCCESS);
 	vkDestroyCommandPool(handles.device, pool, nullptr);
+
+	CHECK(captured.CountAtOrAbove(spdlog::level::warn) == 0);
+}
+
+// The graphics RHI's bindless table is one mutable array of buffers and sampled images, and its
+// samplers filter anisotropically; the layer refuses both on a device created without the features.
+TEST_CASE(
+	"The Vulkan device is created with the mutable descriptors and graphics features the bar names",
+	"[device][vulkan]")
+{
+	auto                      context = bgpu::CreateGpuContext(DebugDesc(bgpu::LogLevel::kWarn));
+	const bgpu::VulkanHandles handles = bgpu::GetVulkanHandles(*context);
+
+	const auto captured = CapturedLog();
+
+	const auto types =
+		std::to_array({ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE });
+	auto typeList                = VkMutableDescriptorTypeListEXT();
+	typeList.descriptorTypeCount = static_cast<uint32_t>(types.size());
+	typeList.pDescriptorTypes    = types.data();
+	auto mutableInfo             = VkMutableDescriptorTypeCreateInfoEXT();
+	mutableInfo.sType            = VK_STRUCTURE_TYPE_MUTABLE_DESCRIPTOR_TYPE_CREATE_INFO_EXT;
+	mutableInfo.mutableDescriptorTypeListCount = 1;
+	mutableInfo.pMutableDescriptorTypeLists    = &typeList;
+
+	auto binding            = VkDescriptorSetLayoutBinding();
+	binding.binding         = 0;
+	binding.descriptorType  = VK_DESCRIPTOR_TYPE_MUTABLE_EXT;
+	binding.descriptorCount = 16;
+	binding.stageFlags      = VK_SHADER_STAGE_ALL;
+
+	auto layoutInfo         = VkDescriptorSetLayoutCreateInfo();
+	layoutInfo.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layoutInfo.pNext        = &mutableInfo;
+	layoutInfo.bindingCount = 1;
+	layoutInfo.pBindings    = &binding;
+
+	VkDescriptorSetLayout layout = VK_NULL_HANDLE;
+	REQUIRE(
+		vkCreateDescriptorSetLayout(handles.device, &layoutInfo, nullptr, &layout) == VK_SUCCESS);
+	vkDestroyDescriptorSetLayout(handles.device, layout, nullptr);
+
+	auto samplerInfo             = VkSamplerCreateInfo();
+	samplerInfo.sType            = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerInfo.magFilter        = VK_FILTER_LINEAR;
+	samplerInfo.minFilter        = VK_FILTER_LINEAR;
+	samplerInfo.addressModeU     = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+	samplerInfo.addressModeV     = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+	samplerInfo.addressModeW     = VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+	samplerInfo.anisotropyEnable = VK_TRUE;
+	samplerInfo.maxAnisotropy    = 16.0F;
+	samplerInfo.maxLod           = VK_LOD_CLAMP_NONE;
+
+	VkSampler sampler = VK_NULL_HANDLE;
+	REQUIRE(vkCreateSampler(handles.device, &samplerInfo, nullptr, &sampler) == VK_SUCCESS);
+	vkDestroySampler(handles.device, sampler, nullptr);
 
 	CHECK(captured.CountAtOrAbove(spdlog::level::warn) == 0);
 }

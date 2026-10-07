@@ -46,12 +46,14 @@ namespace bgpu
 			case Requirement::kVulkanDevice:
 			case Requirement::kVulkanMeshShaders:
 			case Requirement::kVulkanDescriptorIndexing:
+			case Requirement::kVulkanGraphics:
 				return c_NeedsAMeshShadingGpu;
 			case Requirement::kD3d12ShaderModel66:
 			case Requirement::kD3d12EnhancedBarriers:
 			case Requirement::kVulkan13:
 			case Requirement::kVulkanScalarBlockLayout:
 			case Requirement::kVulkanSynchronization:
+			case Requirement::kVulkanMutableDescriptors:
 				return c_NeedsACurrentDriver;
 			}
 			return "";
@@ -133,6 +135,10 @@ namespace bgpu
 			unmet.push_back({ Requirement::kVulkanScalarBlockLayout, facts.gpuName });
 		if (!facts.synchronization)
 			unmet.push_back({ Requirement::kVulkanSynchronization, facts.gpuName });
+		if (!facts.mutableDescriptors)
+			unmet.push_back({ Requirement::kVulkanMutableDescriptors, facts.gpuName });
+		if (!facts.graphics)
+			unmet.push_back({ Requirement::kVulkanGraphics, facts.gpuName });
 		return unmet;
 	}
 
