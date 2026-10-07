@@ -6,7 +6,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
-    branches: [master]
+    branches: [master, "release_*"]
 
 # A PR gets one review-worthy result, not one per intermediate push.
 # A draft's run skips every job, so it must not cancel the real one a ready PR has in progress.
@@ -33,8 +33,9 @@ jobs:
 
       # An entry is addressed by what it was compiled from, not by this key: the key only chooses
       # which store to start from, so any earlier one is as good a start as the last. Entries are
-      # scoped to the ref that saved them and a PR reads its base's or master's, which is why master
-      # builds on every push.
+      # scoped to the ref that saved them and a PR reads its own, then its base's, then master's,
+      # which is why master and every release train build on every push: a PR's base is its train,
+      # and master's store is a whole train older than that.
       - name: Restore the compiler cache
         id: ccache
         uses: actions/cache/restore@v4
@@ -42,6 +43,14 @@ jobs:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-msvc-${{ github.sha }}
           restore-keys: ccache-msvc-
+
+      # The restored store carries its statistics, so unzeroed they describe every run before this
+      # one too. The stamp is what the save's eviction measures an untouched object against.
+      - name: Start this run's compiler cache statistics
+        shell: bash
+        run: |
+          ccache --zero-stats
+          echo "COMPILES_STARTED=$(date +%s)" >> "$GITHUB_ENV"
 
       # Compile only: the ninja-msvc-debug preset has BUILD_TESTS=ON, so the suites are
       # built but never run -- they need a GPU and a machine this runner isn't. Qt is
@@ -87,6 +96,13 @@ jobs:
       - name: Consume the engine package
         run: python scripts/embed.py --package --preset windows-ninja-msvc-dx12-debug
 
+      # ccache keeps what it restored beside what it compiled. A hit refreshes an entry's timestamp,
+      # so one older than the stamp is one this run neither made nor used.
+      - name: Drop the objects this run did not use
+        if: ${{ success() && steps.ccache.outputs.cache-hit != 'true' }}
+        shell: bash
+        run: ccache --evict-older-than "$(( $(date +%s) - COMPILES_STARTED ))s"
+
       - name: Save the compiler cache
         if: ${{ success() && steps.ccache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
@@ -96,7 +112,8 @@ jobs:
 
   macos:
     name: compile (macos-clang, Debug + Metal)
-    if: ${{ !github.event.pull_request.draft }}
+    # A train's push builds for the compiler cache its pull requests read, and this job has none.
+    if: ${{ !github.event.pull_request.draft && (github.event_name != 'push' || github.ref == 'refs/heads/master') }}
     runs-on: macos-latest
     env:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache

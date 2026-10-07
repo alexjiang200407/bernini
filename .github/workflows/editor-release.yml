@@ -57,14 +57,16 @@ jobs:
       - name: Fetch the LFS assets
         run: python scripts/init.py --lfs-only
 
-      # Release objects never match the Debug compile's, so they keep a store of their own.
+      # Release objects never match the Debug compile's, so they keep a store of their own -- under
+      # a key ci.yml's `ccache-msvc-` restore prefix does not match, or a pull request whose newest
+      # candidate on master is this store restores it and compiles everything.
       - name: Restore the compiler cache
         id: ccache
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-msvc-release-${{ github.sha }}
-          restore-keys: ccache-msvc-release-
+          key: ccache-editor-msvc-${{ github.sha }}
+          restore-keys: ccache-editor-msvc-
 
       - name: Build and package the editor
         run: python scripts/package_editor.py
@@ -74,7 +76,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ccache-msvc-release-${{ github.sha }}
+          key: ccache-editor-msvc-${{ github.sha }}
 
       - uses: actions/upload-artifact@v4
         with:
