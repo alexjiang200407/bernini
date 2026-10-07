@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <slang.h>
+#include <span>
 #include <spdlog/spdlog.h>
 #include <string_view>
 #include <system_error>
@@ -205,6 +206,12 @@ namespace bgpu
 				return { m_Instance, m_PhysicalDevice, m_Device };
 			}
 
+			[[nodiscard]] std::span<const VkQueueFamilyProperties>
+			GetQueueFamilies() const noexcept
+			{
+				return m_QueueFamilies;
+			}
+
 		private:
 			void
 			CreateInstance()
@@ -326,11 +333,12 @@ namespace bgpu
 			{
 				uint32_t familyCount = 0;
 				vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &familyCount, nullptr);
-				auto families = std::vector<VkQueueFamilyProperties>(familyCount);
+				m_QueueFamilies.resize(familyCount);
 				vkGetPhysicalDeviceQueueFamilyProperties(
 					m_PhysicalDevice,
 					&familyCount,
-					families.data());
+					m_QueueFamilies.data());
+				const std::vector<VkQueueFamilyProperties>& families = m_QueueFamilies;
 
 				uint32_t mostQueues = 0;
 				for (const VkQueueFamilyProperties& family : families)
@@ -436,6 +444,8 @@ namespace bgpu
 			VkPhysicalDevice         m_PhysicalDevice = VK_NULL_HANDLE;
 			VkDevice                 m_Device         = VK_NULL_HANDLE;
 			bool                     m_GpuValidation  = false;
+
+			std::vector<VkQueueFamilyProperties> m_QueueFamilies;
 		};
 	}
 
@@ -445,6 +455,14 @@ namespace bgpu
 		const auto* vulkan = dynamic_cast<const Context*>(&context);
 		core::ensure(vulkan != nullptr, "The GPU context is not a Vulkan one");
 		return vulkan->GetHandles();
+	}
+
+	std::span<const VkQueueFamilyProperties>
+	GetVulkanQueueFamilies(const GpuContext& context) noexcept
+	{
+		const auto* vulkan = dynamic_cast<const Context*>(&context);
+		core::ensure(vulkan != nullptr, "The GPU context is not a Vulkan one");
+		return vulkan->GetQueueFamilies();
 	}
 
 	GpuContextRef

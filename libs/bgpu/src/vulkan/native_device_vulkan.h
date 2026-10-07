@@ -1,6 +1,7 @@
 #pragma once
 
 #include "volk_vulkan.h"
+#include <span>
 
 namespace bgpu
 {
@@ -22,4 +23,8 @@ namespace bgpu
 	 */
 	[[nodiscard]] VulkanHandles
 	GetVulkanHandles(const GpuContext& context) noexcept;
+
+	/** The device's queue families, indexed by family; every one was created with all its queues. */
+	[[nodiscard]] std::span<const VkQueueFamilyProperties>
+	GetVulkanQueueFamilies(const GpuContext& context) noexcept;
 }

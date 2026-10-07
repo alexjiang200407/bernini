@@ -1,0 +1,311 @@
+#pragma once
+#include "resource/BindlessTable_vulkan.h"
+#include "resource/BufferMemory_vulkan.h"
+#include "resource/Buffer_vulkan.h"
+#include "resource/ReadbackBuffer_vulkan.h"
+#include "volk_vulkan.h"
+#include <bgpu/GpuContext.h>
+#include <bgpu/cmd/CommandQueue.h>
+#include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/Dsv.h>
+#include <bgpu/resource/NativeBufferDesc.h>
+#include <bgpu/resource/Readback.h>
+#include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Rtv.h>
+#include <bgpu/resource/Sampler.h>
+#include <bgpu/resource/Srv.h>
+#include <bgpu/resource/Texture.h>
+#include <bgpu/types/NativeObject.h>
+#include <core/containers/slot_handle.h>
+#include <core/containers/slot_vector.h>
+#include <core/containers/static_vector.h>
+#include <core/ref/RefCounter.h>
+#include <core/ref/SharedRef.h>
+#include <cstdint>
+#include <mutex>
+#include <string_view>
+#include <vector>
+
+namespace bgpu
+{
+	// The most submission timelines that can gate one deferred free -- i.e. the most contexts
+	// expected over one device. Exceeding it asserts; it is not a hard device limit.
+	constexpr uint32_t c_MaxRegisteredQueues = 8;
+
+	// One registered queue and the fence value it was at when a resource was retired against it.
+	struct QueueGate
+	{
+		ICommandQueue* queue      = nullptr;
+		uint64_t       fenceValue = 0;
+
+		bool
+		operator==(const QueueGate&) const noexcept = default;
+	};
+
+	using DeletionGate = core::static_vector<QueueGate, c_MaxRegisteredQueues>;
+
+	enum class PendingType : uint8_t
+	{
+		kInvalid,
+		kBuffer,
+		kBufferSrv,
+		kBufferUav,
+		kReadback,
+	};
+
+	struct PendingDeletion
+	{
+		PendingType type      = PendingType::kInvalid;
+		uint32_t    slotIndex = 0xFFFFFFFF;
+
+		// Set for the kinds that hold a bindless descriptor, which must outlive in-flight work as the
+		// resource does, so it is handed back when the gate clears rather than at destroy time.
+		uint32_t descriptorIndex = 0xFFFFFFFF;
+	};
+
+	// Deferred destroys captured at the same gate share it, freed as a group once every queue in
+	// `gate` passes.
+	struct PendingDeletionBatch
+	{
+		DeletionGate                 gate;
+		std::vector<PendingDeletion> deletions;
+	};
+
+	/**
+	 * The Vulkan resource manager: buffers, their second views and readbacks, each buffer and view a
+	 * descriptor in the manager's bindless table. Textures, samplers and their views are the
+	 * graphics RHI's; a pool of them sized at zero refuses every create, as on every backend, and any
+	 * other use ends the process naming what is missing.
+	 */
+	class ResourceManager final : public core::RefCounter<IResourceManager>
+	{
+	public:
+		ResourceManager(GpuContextRef context, const ResourceManagerDesc& desc);
+		~ResourceManager() noexcept override;
+
+		ResourceManager(const ResourceManager&) = delete;
+		ResourceManager(ResourceManager&&)      = delete;
+		ResourceManager&
+		operator=(const ResourceManager&) = delete;
+		ResourceManager&
+		operator=(ResourceManager&&) = delete;
+
+		[[nodiscard]] BufferHandle
+		CreateStructBuffer(const StructBufferDesc& desc) noexcept override;
+
+		[[nodiscard]] BufferHandle
+		CreateComputeBuffer(const ComputeBufferDesc& desc) noexcept override;
+
+		[[nodiscard]] BufferHandle
+		CreateRawBuffer(const RawViewDesc& desc) noexcept override;
+
+		[[nodiscard]] BufferSrvHandle
+		CreateBufferSrv(BufferHandle buffer, const BufferSrvDesc& desc) noexcept override;
+
+		void
+		DestroyBufferSrv(BufferSrvHandle handle, bool deferred = true) noexcept override;
+
+		[[nodiscard]] bool
+		ValidBufferSrvHandle(const BufferSrvHandle& handle) const noexcept override;
+
+		[[nodiscard]] BufferUavHandle
+		CreateBufferUav(BufferHandle buffer, const BufferUavDesc& desc) noexcept override;
+
+		void
+		DestroyBufferUav(BufferUavHandle handle, bool deferred = true) noexcept override;
+
+		[[nodiscard]] bool
+		ValidBufferUavHandle(const BufferUavHandle& handle) const noexcept override;
+
+		[[nodiscard]] NativeObject
+		GetNativeBuffer(BufferHandle handle, NativeObjectType type) const noexcept override;
+
+		[[nodiscard]] BufferHandle
+		ImportNativeBuffer(const NativeBufferDesc& desc) noexcept override;
+
+		TextureHandle
+		CreateTexture(const TextureDesc& desc) noexcept override;
+
+		[[nodiscard]] SamplerHandle
+		CreateSampler(const SamplerDesc& desc) noexcept override;
+
+		ReadbackBufferHandle
+		CreateReadbackBuffer(const ReadbackBufferDesc& desc) noexcept override;
+
+		void
+		RegisterQueue(ICommandQueue* queue) noexcept override;
+
+		void
+		UnregisterQueue(ICommandQueue* queue) noexcept override;
+
+		void
+		DestroyBuffer(BufferHandle handle, bool deferred = true) noexcept override;
+
+		void
+		DestroyTexture(TextureHandle handle, bool deferred = true) noexcept override;
+
+		void
+		DestroySampler(SamplerHandle handle, bool deferred = true) noexcept override;
+
+		void
+		DestroyReadbackBuffer(ReadbackBufferHandle handle, bool deferred = true) noexcept override;
+
+		void
+		DestroySrv(SrvHandle handle, bool deferred = true) noexcept override;
+
+		void
+		DestroyRtv(RtvHandle handle, bool deferred = true) noexcept override;
+
+		void
+		DestroyDsv(DsvHandle handle, bool deferred = true) noexcept override;
+
+		void
+		CleanupExpiredResources() noexcept override;
+
+		[[nodiscard]] SrvHandle
+		CreateSrv(TextureHandle textureHandle, const SrvDesc& desc) noexcept override;
+
+		[[nodiscard]] RtvHandle
+		CreateRtv(TextureHandle textureHandle, const RtvDesc& desc) noexcept override;
+
+		[[nodiscard]] DsvHandle
+		CreateDsv(TextureHandle textureHandle, const DsvDesc& desc) noexcept override;
+
+		[[nodiscard]] const Rtv&
+		GetRtv(RtvHandle handle) const noexcept override;
+
+		[[nodiscard]] const Dsv&
+		GetDsv(DsvHandle handle) const noexcept override;
+
+		[[nodiscard]] TextureHandle
+		GetRtvTexture(RtvHandle handle) const noexcept override;
+
+		[[nodiscard]] TextureHandle
+		GetDsvTexture(DsvHandle handle) const noexcept override;
+
+		[[nodiscard]] const Buffer&
+		GetBuffer(BufferHandle handle) const noexcept override;
+
+		[[nodiscard]] BufferDesc
+		GetBufferDesc(BufferHandle handle) const noexcept override;
+
+		[[nodiscard]] const Texture&
+		GetTexture(TextureHandle handle) const noexcept override;
+
+		[[nodiscard]] TextureDesc
+		GetTextureDesc(TextureHandle handle) const noexcept override;
+
+		[[nodiscard]] const Sampler&
+		GetSampler(SamplerHandle handle) const noexcept override;
+
+		[[nodiscard]] const ReadbackBuffer&
+		GetReadbackBuffer(ReadbackBufferHandle handle) const noexcept override;
+
+		[[nodiscard]] TextureReadbackLayout
+		GetTextureReadbackLayout(TextureHandle handle) const noexcept override;
+
+		[[nodiscard]] const void*
+		MapReadback(ReadbackBufferHandle handle) noexcept override;
+
+		void
+		UnmapReadback(ReadbackBufferHandle handle) noexcept override;
+
+		[[nodiscard]] bool
+		ValidBufferHandle(const BufferHandle& handle) const noexcept override;
+
+		[[nodiscard]] bool
+		ValidTextureHandle(const TextureHandle& handle) const noexcept override;
+
+		[[nodiscard]] bool
+		IsTextureCube(const TextureHandle& handle) const noexcept override;
+
+		[[nodiscard]] bool
+		ValidSrvHandle(const SrvHandle& handle) const noexcept override;
+
+		[[nodiscard]] bool
+		ValidSamplerHandle(const SamplerHandle& handle) const noexcept override;
+
+		[[nodiscard]] bool
+		ValidReadbackBufferHandle(const ReadbackBufferHandle& handle) const noexcept override;
+
+		[[nodiscard]] bool
+		ValidRtvHandle(const RtvHandle& handle) const noexcept override;
+
+		[[nodiscard]] bool
+		ValidDsvHandle(const DsvHandle& handle) const noexcept override;
+
+		void
+		ClearRtv(ICommandList* cmdList, RtvHandle handle, float clearVal[4]) noexcept override;
+
+		void
+		ClearDsv(ICommandList* cmdList, DsvHandle handle, float depth, uint8_t stencil) noexcept
+			override;
+
+		/** The set a command list binds at BindlessTable::c_Set for every dispatch. */
+		[[nodiscard]] VkDescriptorSet
+		GetBindlessSet() const noexcept
+		{
+			return m_Table.GetSet();
+		}
+
+		[[nodiscard]] const GpuContextRef&
+		GetContext() const noexcept
+		{
+			return m_Context;
+		}
+
+	private:
+		/**
+		 * A pool slot and a descriptor pointed at `memory`, or a null handle with nothing taken when
+		 * either is exhausted; the error is already logged.
+		 *
+		 * @pre m_PoolMutex is held.
+		 */
+		[[nodiscard]] BufferHandle
+		AddBuffer(core::SharedRef<BufferMemory> memory, BufferDesc desc, bool tracked) noexcept;
+
+		/** A device buffer of `desc`, or a null handle; the error is already logged. */
+		[[nodiscard]] BufferHandle
+		CreateDeviceBuffer(BufferDesc desc) noexcept;
+
+		/**
+		 * A second descriptor onto `buffer` from `pool`, or a null slot; the error is already logged.
+		 *
+		 * @pre m_PoolMutex is held.
+		 */
+		[[nodiscard]] core::slot_handle
+		AddView(
+			core::slot_vector<uint32_t>& pool,
+			BufferHandle                 buffer,
+			std::string_view             debugName,
+			uint32_t&                    descriptorIndex) noexcept;
+
+		// Snapshots every registered queue's next fence value: the gate a deferred destroy recorded
+		// now must clear before its slot is reclaimed.
+		[[nodiscard]] DeletionGate
+		CaptureGate() const noexcept;
+
+		void
+		RetireDeferred(
+			PendingType type,
+			uint32_t    slotIndex,
+			uint32_t    descriptorIndex = 0xFFFFFFFF) noexcept;
+
+		// Declared first, destroyed last: every Vulkan object below belongs to its device.
+		GpuContextRef       m_Context;
+		ResourceManagerDesc m_Desc;
+		BindlessTable       m_Table;
+
+		core::slot_vector<Buffer>         m_Buffers;
+		core::slot_vector<uint32_t>       m_BufferSrvs;
+		core::slot_vector<uint32_t>       m_BufferUavs;
+		core::slot_vector<ReadbackBuffer> m_ReadbackBuffers;
+
+		std::vector<PendingDeletionBatch>                          m_PendingBatches;
+		core::static_vector<ICommandQueue*, c_MaxRegisteredQueues> m_RegisteredQueues;
+
+		// Serializes slot allocation, retirement and reclamation, the descriptor table, the deletion
+		// batches and the queue registry. Get*/Valid* reads stay lockless: the pools never move.
+		mutable std::mutex m_PoolMutex;
+	};
+}

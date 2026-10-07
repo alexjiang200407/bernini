@@ -359,20 +359,21 @@ if (BUILD_TESTS AND NOT RENDERER_BACKEND STREQUAL "NONE")
 		${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp
 	)
 
-	# A backend with a context and no RHI builds the context's cases alone: every other one reaches
-	# CreateDevice, which it does not define.
+	# A backend with a context and no RHI builds the context's cases and its own backend's alone:
+	# every other one reaches CreateDevice, which it does not define.
 	if(NOT BGPU_BACKEND_HAS_RHI)
-		list(FILTER BGPU_TESTS_SOURCES INCLUDE REGEX ".*/tests/src/context/.*")
+		list(FILTER BGPU_TESTS_SOURCES INCLUDE REGEX ".*/tests/src/(context|vulkan)/.*")
 	endif()
 
 	add_executable(bgpu_tests ${BGPU_TESTS_SOURCES})
 
-	# The backend's own root too: a backend-only case reaches one of its classes, which include each
-	# other unprefixed.
+	# The backend's own root and bgpu's too: a backend-only case reaches one of its classes, which
+	# include each other and the neutral sources unprefixed.
 	target_include_directories(bgpu_tests
 		PRIVATE
 			${CMAKE_CURRENT_SOURCE_DIR}/tests/src
 			${BGPU_BACKEND_DIR}
+			${CMAKE_CURRENT_SOURCE_DIR}/src
 	)
 
 	if(RENDERER_BACKEND STREQUAL "VULKAN")
