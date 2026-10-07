@@ -53,6 +53,7 @@ truth; when this doc disagrees, trust the header, then fix this doc.
 | Shader produced wrong/impossible data (bad index, overflow) but didn't crash | **GPU assertion** via `dbg_raise` |
 | A pass reads a buffer element nobody wrote this frame, and the stale value looks plausible | **Buffer poisoning** (§7) |
 | D3D12 API misuse, invalid barrier, resource-state mismatch, leaked resource | **D3D12 debug layer** + `bgpu.log` |
+| A Vulkan barrier missing or too narrow — a read racing a write | **Synchronization validation** (§9) |
 | Silent wrong output, want a timeline of what the engine did | **`bgpu.log`** (raise `logLevel` to `kTrace`) |
 | Broken internal invariant should stop the process now | **`core::ensure`/`core::fatal`** |
 | Need to *see* what a mesh, material or clip renders as, with no window | **`bgl_ai_viewer`** (§8) |
@@ -449,11 +450,31 @@ are in [AI Viewer](docs/ai_viewer.md).
 The same two `bgpu::GpuContextDesc` flags, applied when the Vulkan context creates its instance
 ([GpuContext_vulkan.cpp](libs/bgpu/src/vulkan/GpuContext_vulkan.cpp)): `enableDebugLayer` enables
 `VK_LAYER_KHRONOS_validation` and a debug-utils messenger that writes every message to `bgpu.log`
-as `[Vulkan] ...`, and `enableGPUValidationLayer` adds GPU-assisted validation on top. The layer
-is staged beside the executables by the build, so no Vulkan SDK is needed; where it comes from,
-what `strictError` covers and how a leaked object is reported are in
-[bgpu.md § Vulkan](docs/bgpu.md#vulkan). Vulkan has only the RHI's compute half so far, so
-`bgpu_tests` is all that runs under it.
+as `[Vulkan] ...`, and `enableGPUValidationLayer` adds the two checks D3D12's GPU-based
+validation makes between them: **GPU-assisted validation**, which checks on the GPU what shaders
+reach (a descriptor index or buffer offset out of range), and **synchronization validation**, which
+checks that every read and write is ordered against the last one by a barrier. The layer is staged
+beside the executables by the build, so no Vulkan SDK is needed; where it comes from, what
+`strictError` covers and how a leaked object is reported are in
+[bgpu.md § Vulkan](docs/bgpu.md#vulkan).
+
+**A barrier bug is a synchronization-validation report**: an `[error] [Vulkan]` line naming the
+hazard (`READ_AFTER_WRITE`, `WRITE_AFTER_WRITE`, `WRITE_AFTER_READ`), the command that made it, the
+earlier command it races, and the image or buffer. Core validation alone, with only
+`enableDebugLayer`, catches a wrong layout or an invalid barrier, but not a missing one — and every
+texture is in one layout on Vulkan, so most barrier bugs there are missing dependencies.
+
+| To check | Run |
+|---|---|
+| barriers, any suite whose cases set `enableGPUValidationLayer` (`bgl_tests` once the renderer is on Vulkan) | `just run bgl_tests -- --gpu-validation` |
+| barriers, `bgpu_tests`, whose cases make their own contexts | `VK_KHRONOS_VALIDATION_VALIDATE_SYNC=1 just test bgpu --no-build --build-dir build/ninja-clang-vulkan-debug` |
+| shader accesses, `bgpu_tests` | `VK_KHRONOS_VALIDATION_GPUAV_ENABLE=1 VK_KHRONOS_VALIDATION_VALIDATE_CORE=0`, same command |
+
+The environment overrides the layer's settings for every context in the process, the strict ones
+included. GPU-assisted validation from the environment ends a strict context: the layer warns of
+its own setup before the context can tell it is on. Through `enableGPUValidationLayer` it does not,
+since the context then exempts those notices (`VALIDATION-SETTINGS`, `WARNING-Setting-Limit-Adjusted`)
+from `strictError`. A strict error names the message ID it ended on.
 
 ---
 

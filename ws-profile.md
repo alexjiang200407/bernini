@@ -81,7 +81,10 @@ The lenses this repo makes worth asking, beyond the flow's own roots:
   beside the executable have been read — `bgpu.log`, and the newest `<exe>_crash_<stamp>.log`, since
   crash logs accumulate.
 - **Shaders, barriers or descriptors** also run `just run bgl_tests -- --gpu-validation`
-  before the PR: the only thing that catches a bad barrier.
+  before the PR: the only thing that catches a bad barrier. On Vulkan the same flag turns on
+  synchronization validation; a change under `libs/bgpu/src/vulkan` also runs
+  `VK_KHRONOS_VALIDATION_VALIDATE_SYNC=1 just test bgpu --no-build --build-dir
+  build/ninja-clang-vulkan-debug`, whose cases make their own contexts (`docs/gfx_debug.md` § 9).
 - **Docs change in the same commit** as the behaviour they describe (`CLAUDE.md` § Documentation
   Index). Look for the stated constraint the change made false.
 

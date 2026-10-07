@@ -190,9 +190,12 @@ its swapchain are the next step. D3D12 stays the Windows default; only the
   child still alive is a validation error naming the object, raised while the messenger is still
   attached, so it reaches the log — and ends the process under `strictError` — as D3D12's
   live-object report does.
-* **`enableGPUValidationLayer` is GPU-assisted validation**, switched on through the layer's
-  settings when the instance is created. Unlike D3D12's it is the instance's, so it ends with the
-  context.
+* **`enableGPUValidationLayer` is GPU-assisted and synchronization validation**, switched on
+  through the layer's settings when the instance is created: between them they check what D3D12's
+  GPU-based validation does, shader accesses and whether barriers order every access. Unlike
+  D3D12's it is the instance's, so it ends with the context. The layer warns of its own setup when
+  they are on, and a strict context does not end on those notices
+  ([gfx_debug.md § 9](docs/gfx_debug.md)).
 * **The sessions compile to SPIR-V**, at the same profile as every other backend, packing buffers
   as FXC does (`ForceDXLayout`): the C++ mirrors `bgpu_idlgen` generates are D3D12's layout on
   every backend but Metal, and std140 would move a constant-buffer member after an 8-byte handle to

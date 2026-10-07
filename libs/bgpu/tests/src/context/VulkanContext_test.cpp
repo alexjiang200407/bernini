@@ -7,6 +7,7 @@
 
 #	include "native_device_vulkan.h"
 #	include "volk_vulkan.h"
+#	include "vulkan_util.h"
 
 #	include <algorithm>
 #	include <array>
@@ -294,6 +295,104 @@ TEST_CASE(
 	vkDestroySampler(handles.device, sampler, nullptr);
 
 	CHECK(captured.CountAtOrAbove(spdlog::level::warn) == 0);
+}
+
+namespace
+{
+	// Fills one buffer twice, with a barrier between the two writes or without one, on a context
+	// made with GPU validation, and counts the write-after-write hazards the layer reports.
+	size_t
+	HazardsOfTwoFills(const bool barrier)
+	{
+		auto desc                         = DebugDesc(bgpu::LogLevel::kWarn);
+		desc.enableGPUValidationLayer     = true;
+		auto                      context = bgpu::CreateGpuContext(desc);
+		const bgpu::VulkanHandles handles = bgpu::GetVulkanHandles(*context);
+
+		const auto captured = CapturedLog();
+
+		auto bufferInfo        = VkBufferCreateInfo();
+		bufferInfo.sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		bufferInfo.size        = 256;
+		bufferInfo.usage       = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		VkBuffer buffer        = VK_NULL_HANDLE;
+		REQUIRE(vkCreateBuffer(handles.device, &bufferInfo, nullptr, &buffer) == VK_SUCCESS);
+
+		auto requirements = VkMemoryRequirements();
+		vkGetBufferMemoryRequirements(handles.device, buffer, &requirements);
+		auto allocation            = VkMemoryAllocateInfo();
+		allocation.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocation.allocationSize  = requirements.size;
+		allocation.memoryTypeIndex = bgpu::FindMemoryType(
+			handles.physicalDevice,
+			requirements.memoryTypeBits,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			0);
+		VkDeviceMemory memory = VK_NULL_HANDLE;
+		REQUIRE(vkAllocateMemory(handles.device, &allocation, nullptr, &memory) == VK_SUCCESS);
+		REQUIRE(vkBindBufferMemory(handles.device, buffer, memory, 0) == VK_SUCCESS);
+
+		auto poolInfo             = VkCommandPoolCreateInfo();
+		poolInfo.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		poolInfo.queueFamilyIndex = 0;
+		VkCommandPool pool        = VK_NULL_HANDLE;
+		REQUIRE(vkCreateCommandPool(handles.device, &poolInfo, nullptr, &pool) == VK_SUCCESS);
+
+		auto commandsInfo               = VkCommandBufferAllocateInfo();
+		commandsInfo.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		commandsInfo.commandPool        = pool;
+		commandsInfo.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		commandsInfo.commandBufferCount = 1;
+		VkCommandBuffer commands        = VK_NULL_HANDLE;
+		REQUIRE(vkAllocateCommandBuffers(handles.device, &commandsInfo, &commands) == VK_SUCCESS);
+
+		auto begin  = VkCommandBufferBeginInfo();
+		begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		REQUIRE(vkBeginCommandBuffer(commands, &begin) == VK_SUCCESS);
+		vkCmdFillBuffer(commands, buffer, 0, VK_WHOLE_SIZE, 1);
+		if (barrier)
+		{
+			auto memoryBarrier          = VkMemoryBarrier2();
+			memoryBarrier.sType         = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+			memoryBarrier.srcStageMask  = VK_PIPELINE_STAGE_2_CLEAR_BIT;
+			memoryBarrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+			memoryBarrier.dstStageMask  = VK_PIPELINE_STAGE_2_CLEAR_BIT;
+			memoryBarrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+
+			auto dependency               = VkDependencyInfo();
+			dependency.sType              = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+			dependency.memoryBarrierCount = 1;
+			dependency.pMemoryBarriers    = &memoryBarrier;
+			vkCmdPipelineBarrier2(commands, &dependency);
+		}
+		vkCmdFillBuffer(commands, buffer, 0, VK_WHOLE_SIZE, 2);
+		REQUIRE(vkEndCommandBuffer(commands) == VK_SUCCESS);
+
+		vkDestroyCommandPool(handles.device, pool, nullptr);
+		vkFreeMemory(handles.device, memory, nullptr);
+		vkDestroyBuffer(handles.device, buffer, nullptr);
+		return captured.CountContaining("WRITE_AFTER_WRITE");
+	}
+}
+
+// What GPU validation is for on Vulkan as on D3D12: a barrier left out is reported. D3D12's GPU-based
+// validation checks resource states; Vulkan's synchronization validation, which GPU validation turns
+// on, checks that every access is ordered against the last one.
+TEST_CASE("Vulkan GPU validation reports a missing barrier, and only that", "[device][vulkan]")
+{
+	CHECK(HazardsOfTwoFills(false) > 0);
+	CHECK(HazardsOfTwoFills(true) == 0);
+}
+
+// With GPU validation on, the layer warns of its own setup; a strict context does not end on it.
+TEST_CASE("A strict Vulkan context can be made with GPU validation", "[device][vulkan]")
+{
+	auto desc                     = DebugDesc(bgpu::LogLevel::kWarn);
+	desc.enableGPUValidationLayer = true;
+	desc.strictError              = true;
+	auto context                  = bgpu::CreateGpuContext(desc);
+	CHECK(context->GpuValidationActive());
 }
 
 // The messenger is the only route a validation message has out of the layer. A message the suite

@@ -91,6 +91,9 @@ The context and the whole RHI; nothing above `bgpu` is built on this backend yet
 
 - **A mesh dispatch draws inside dynamic rendering**, which the list opens at the first draw on a
   frame buffer and ends before any other command; nothing outside `CommandList_vulkan.cpp` sees it.
+- **Barriers are checked by synchronization validation**, which `enableGPUValidationLayer` turns
+  on; `bgpu_tests` takes it from the environment: `VK_KHRONOS_VALIDATION_VALIDATE_SYNC=1 just test
+  bgpu --no-build --build-dir build/ninja-clang-vulkan-debug` ([docs/gfx_debug.md § 9](../../docs/gfx_debug.md)).
 - **Every texture is in `VK_IMAGE_LAYOUT_GENERAL`** after its first submission; `ConvertImageLayout`
   maps every RHI layout but `kUndefined` to it, so nothing here tracks a texture's layout.
 - **Every Vulkan object holds the context** (`GpuContextRef`), directly or through what owns it:

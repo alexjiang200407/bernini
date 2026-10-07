@@ -125,6 +125,18 @@ namespace bgpu
 				spdlog::warn("could not add {} to {}", directory.string(), c_LayerPathVariable);
 		}
 
+		// What the validation layer warns of itself when GPU validation turns its heavier checks on:
+		// that they are slow beside the core checks, and that it raised a device limit it needs.
+		// Neither is about a call of this process.
+		[[nodiscard]] bool
+		IsLayerSetupNotice(const char* messageId) noexcept
+		{
+			if (messageId == nullptr)
+				return false;
+			const auto id = std::string_view(messageId);
+			return id == "VALIDATION-SETTINGS" || id == "WARNING-Setting-Limit-Adjusted";
+		}
+
 		[[nodiscard]] bool
 		HasExtension(const VkPhysicalDevice physicalDevice, const std::string_view name)
 		{
@@ -275,19 +287,26 @@ namespace bgpu
 				messenger.pfnUserCallback = &Context::LogMessage;
 				messenger.pUserData       = this;
 
-				const VkBool32 enabled     = VK_TRUE;
-				auto           gpuAssisted = VkLayerSettingEXT();
-				gpuAssisted.pLayerName     = c_ValidationLayer;
-				gpuAssisted.pSettingName   = "gpuav_enable";
-				gpuAssisted.type           = VK_LAYER_SETTING_TYPE_BOOL32_EXT;
-				gpuAssisted.valueCount     = 1;
-				gpuAssisted.pValues        = &enabled;
+				// GPU validation is D3D12's GPU-based validation's two halves: what shaders reach,
+				// checked on the GPU, and whether barriers order every access, checked by
+				// synchronization validation.
+				const VkBool32 enabled  = VK_TRUE;
+				auto           settings = std::array<VkLayerSettingEXT, 2>();
+				for (VkLayerSettingEXT& setting : settings)
+				{
+					setting.pLayerName = c_ValidationLayer;
+					setting.type       = VK_LAYER_SETTING_TYPE_BOOL32_EXT;
+					setting.valueCount = 1;
+					setting.pValues    = &enabled;
+				}
+				settings[0].pSettingName = "gpuav_enable";
+				settings[1].pSettingName = "validate_sync";
 
 				auto layerSettings         = VkLayerSettingsCreateInfoEXT();
 				layerSettings.sType        = VK_STRUCTURE_TYPE_LAYER_SETTINGS_CREATE_INFO_EXT;
 				layerSettings.pNext        = &messenger;
-				layerSettings.settingCount = 1;
-				layerSettings.pSettings    = &gpuAssisted;
+				layerSettings.settingCount = static_cast<uint32_t>(settings.size());
+				layerSettings.pSettings    = settings.data();
 
 				auto layers     = std::vector<const char*>();
 				auto extensions = std::vector<const char*>();
@@ -530,12 +549,17 @@ namespace bgpu
 					spdlog::debug("[Vulkan] {}", message);
 
 				// Only what the validation layer says of this process's own calls is strict: the
-				// loader warns, as the general type, of other software's broken layers and drivers.
-				const bool  severe = severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT &&
-				                     (types & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT) != 0;
-				const auto* self   = static_cast<const Context*>(context);
+				// loader warns, as the general type, of other software's broken layers and drivers,
+				// and the layer warns of its own setup when GPU validation is on.
+				const bool severe = severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT &&
+				                    (types & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT) != 0 &&
+				                    !IsLayerSetupNotice(data->pMessageIdName);
+				const auto* self  = static_cast<const Context*>(context);
 				if (severe && self->GetDesc().strictError)
-					core::fatal("[Vulkan] strict error: {}", message);
+					core::fatal(
+						"[Vulkan] strict error ({}): {}",
+						data->pMessageIdName != nullptr ? data->pMessageIdName : "no id",
+						message);
 
 				return VK_FALSE;
 			}
