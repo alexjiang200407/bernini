@@ -145,10 +145,9 @@ refused, even when a second GPU would pass, because the engine does not choose a
 ## Vulkan
 
 `RENDERER_BACKEND=VULKAN` is a third backend being brought up on Windows ahead of the Linux build
-that needs it: **the context and the whole RHI**, every case of `bgpu_tests` included. Nothing
-above `bgpu` is built — no renderer, no crowd libraries, no editor; the renderer's backend half and
-its swapchain are the next step. D3D12 stays the Windows default; only the
-`windows-clang-vulkan-debug` preset selects this.
+that needs it: **the context, the whole RHI and the renderer** (`bgl`'s `bgl_vulkan`). Nothing above
+the renderer is built — no crowd libraries, no editor, no app or example. D3D12 stays the Windows
+default; only the `windows-clang-vulkan-debug` preset selects this.
 
 * **The first physical device, as D3D12 takes DXGI's first adapter.** The loader sorts what it
   enumerates — by the adapter order Windows prefers, and on Linux discrete before integrated — so

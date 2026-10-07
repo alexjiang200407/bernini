@@ -1,6 +1,6 @@
 # bgl, the renderer. include/bgl is its public surface -- what a game compiles against, <bgl/...>,
-# bgl::, BGL_API -- and src/ its implementation, with a backend per binary under src/d3d12 and
-# src/metal. The RHI and the device beneath it are bgpu's (libs/bgpu).
+# bgl::, BGL_API -- and src/ its implementation, with a backend per binary under src/d3d12,
+# src/metal and src/vulkan. The RHI and the device beneath it are bgpu's (libs/bgpu).
 
 file(GLOB_RECURSE BGL_HEADERS CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/include/bgl/*.h
@@ -115,14 +115,14 @@ file(GLOB_RECURSE BGL_SOURCES CONFIGURE_DEPENDS
 )
 # src/swapchain is the target every backend that presents through a Swapchain shares; such a
 # backend compiles it, and Metal, whose target is its own, does not.
-list(FILTER BGL_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal|swapchain)/.*")
+list(FILTER BGL_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal|vulkan|swapchain)/.*")
 list(REMOVE_ITEM BGL_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/selfcheck.cpp)
 
 file(GLOB_RECURSE BGL_PRIVATE_HEADERS CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp
 )
-list(FILTER BGL_PRIVATE_HEADERS EXCLUDE REGEX ".*/src/(d3d12|metal|swapchain)/.*")
+list(FILTER BGL_PRIVATE_HEADERS EXCLUDE REGEX ".*/src/(d3d12|metal|vulkan|swapchain)/.*")
 
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${BGL_SOURCES} ${BGL_PRIVATE_HEADERS})
 
@@ -167,6 +167,8 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	add_subdirectory(src/d3d12)
 elseif(RENDERER_BACKEND STREQUAL "METAL")
 	add_subdirectory(src/metal)
+elseif(RENDERER_BACKEND STREQUAL "VULKAN")
+	add_subdirectory(src/vulkan)
 endif()
 
 add_dependencies(bgl_objects bgl_idl_generate)
@@ -174,6 +176,8 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	add_dependencies(bgl_d3d12 bgl_idl_generate)
 elseif(RENDERER_BACKEND STREQUAL "METAL")
 	add_dependencies(bgl_metal bgl_idl_generate)
+elseif(RENDERER_BACKEND STREQUAL "VULKAN")
+	add_dependencies(bgl_vulkan bgl_idl_generate)
 endif()
 
 enable_strict_compiler(bgl_objects)
@@ -201,8 +205,15 @@ elseif(RENDERER_BACKEND STREQUAL "METAL")
 		$<TARGET_OBJECTS:bgl_metal>
 		${BGL_HEADERS}
 	)
+elseif(RENDERER_BACKEND STREQUAL "VULKAN")
+	add_library(bgl ${BERNINI_RENDERER_LIBRARY_TYPE}
+		$<TARGET_OBJECTS:bgl_objects>
+		$<TARGET_OBJECTS:bgl_vulkan>
+		${BGL_HEADERS}
+	)
 else()
-	message(FATAL_ERROR "RENDERER_BACKEND must be DX12, METAL or NONE (got '${RENDERER_BACKEND}')")
+	message(FATAL_ERROR
+		"RENDERER_BACKEND must be DX12, METAL, VULKAN or NONE (got '${RENDERER_BACKEND}')")
 endif()
 
 target_include_directories(bgl
@@ -245,35 +256,41 @@ elseif(RENDERER_BACKEND STREQUAL "METAL")
 	target_link_libraries(bgl PRIVATE "-framework Metal" "-framework Foundation" "-framework QuartzCore")
 	enable_strict_compiler(bgl_metal)
 	enable_coverage(bgl_metal)
+elseif(RENDERER_BACKEND STREQUAL "VULKAN")
+	target_compile_definitions(bgl_vulkan PRIVATE BGL_EXPORTS)
+	target_compile_definitions(bgl PRIVATE RENDERER_BACKEND_VULKAN)
+	enable_strict_compiler(bgl_vulkan)
+	enable_coverage(bgl_vulkan)
+endif()
 
-	# The Metal backend compiles Slang at runtime, so the raw .slang sources must sit beside the
-	# executable -- Device_metal's session resolves modules from "./shaders/src", and a build that
-	# staged none aborts on the first program-cache miss with "cannot open file". Hung off bgl, the
-	# way the D3D12 build hangs bgl_copy_shader_src off it, so every consumer of a device gets them.
-	#
-	# A target of its own rather than a POST_BUILD step: POST_BUILD only runs when the library
-	# relinks, so editing a .slang alone would leave the staged copy stale.
-	file(GLOB_RECURSE BGL_METAL_SHADER_SOURCES CONFIGURE_DEPENDS
+# Metal and Vulkan compile Slang at runtime, so the raw .slang sources must sit beside the
+# executable -- the device's session resolves modules from "./shaders/src", and a build that
+# staged none aborts on the first program-cache miss with "cannot open file". Hung off bgl, the
+# way the D3D12 build hangs bgl_copy_shader_src off it, so every consumer of a device gets them.
+#
+# A target of its own rather than a POST_BUILD step: POST_BUILD only runs when the library
+# relinks, so editing a .slang alone would leave the staged copy stale.
+if(RENDERER_BACKEND MATCHES "^(METAL|VULKAN)$")
+	file(GLOB_RECURSE BGL_STAGED_SHADER_SOURCES CONFIGURE_DEPENDS
 		${CMAKE_CURRENT_SOURCE_DIR}/shaders/src/*.slang
 		${CMAKE_CURRENT_SOURCE_DIR}/shaders/src/*.bin
 	)
 
-	set(BGL_METAL_SHADER_STAMP "${CMAKE_CURRENT_BINARY_DIR}/metal_shaders.stamp")
+	set(BGL_SHADER_STAMP "${CMAKE_CURRENT_BINARY_DIR}/staged_shaders.stamp")
 	add_custom_command(
-		OUTPUT  "${BGL_METAL_SHADER_STAMP}"
+		OUTPUT  "${BGL_SHADER_STAMP}"
 		COMMAND ${CMAKE_COMMAND} -E copy_directory
 				"${CMAKE_CURRENT_SOURCE_DIR}/shaders/src"
 				"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/src"
-		COMMAND ${CMAKE_COMMAND} -E touch "${BGL_METAL_SHADER_STAMP}"
-		DEPENDS ${BGL_METAL_SHADER_SOURCES}
-		COMMENT "Staging Slang sources for runtime Metal compilation"
+		COMMAND ${CMAKE_COMMAND} -E touch "${BGL_SHADER_STAMP}"
+		DEPENDS ${BGL_STAGED_SHADER_SOURCES}
+		COMMENT "Staging Slang sources for runtime compilation"
 		VERBATIM
 	)
-	add_custom_target(bgl_metal_copy_shaders ALL DEPENDS "${BGL_METAL_SHADER_STAMP}")
-	add_dependencies(bgl_metal_copy_shaders bgl_copy_contract_shaders)
-	add_dependencies(bgl bgl_metal_copy_shaders)
+	add_custom_target(bgl_stage_shaders ALL DEPENDS "${BGL_SHADER_STAMP}")
+	add_dependencies(bgl_stage_shaders bgl_copy_contract_shaders)
+	add_dependencies(bgl bgl_stage_shaders)
 endif()
-
 
 # The suite's sources are backend-agnostic (RHI interfaces + CreateGraphics), so it builds on either
 # backend from one glob. What differs is the backend objects it embeds.
@@ -348,9 +365,18 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "DX12")
 	enable_coverage(bgl_tests)
 endif()
 
-if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "METAL")
+# Metal and Vulkan stage their test shaders as their sources are, for runtime compilation.
+if (BUILD_TESTS AND RENDERER_BACKEND MATCHES "^(METAL|VULKAN)$")
 	find_package(Catch2 CONFIG REQUIRED)
 	find_package(Stb REQUIRED)  # stb_image for golden-image comparison
+
+	if(RENDERER_BACKEND STREQUAL "METAL")
+		set(BGL_TESTS_BACKEND bgl_metal)
+		set(BGL_TESTS_BACKEND_DIR metal)
+	else()
+		set(BGL_TESTS_BACKEND bgl_vulkan)
+		set(BGL_TESTS_BACKEND_DIR vulkan)
+	endif()
 
 	file(GLOB_RECURSE BGL_TESTS_SOURCE CONFIGURE_DEPENDS
 		${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp
@@ -359,16 +385,16 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "METAL")
 	add_executable(bgl_tests
 		${BGL_TESTS_SOURCE}
 		$<TARGET_OBJECTS:bgl_objects>
-		$<TARGET_OBJECTS:bgl_metal>
+		$<TARGET_OBJECTS:${BGL_TESTS_BACKEND}>
 	)
 
 	target_include_directories(bgl_tests
 		PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/tests
 		PRIVATE
 			${CMAKE_CURRENT_SOURCE_DIR}/src
-			# The backend's own root: its headers include each other unprefixed, so a Metal-only
+			# The backend's own root: its headers include each other unprefixed, so a backend-only
 			# case cannot reach one without it.
-			${CMAKE_CURRENT_SOURCE_DIR}/src/metal
+			${CMAKE_CURRENT_SOURCE_DIR}/src/${BGL_TESTS_BACKEND_DIR}
 			${CMAKE_CURRENT_SOURCE_DIR}/tests/src
 			${Stb_INCLUDE_DIR}
 			# gamelib's header-only LOD math, which LodSelect_test holds the GPU's choice against.
@@ -379,46 +405,49 @@ if (BUILD_TESTS AND RENDERER_BACKEND STREQUAL "METAL")
 		PRIVATE "${BERNINI_ROOT}/PCH/pch.h" "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h"
 	)
 
-	# Embeds bgl_metal's objects, so it links the frameworks bgl_metal's PRIVATE deps do not carry.
 	target_link_libraries(bgl_tests
 		PRIVATE
 			bgl_objects
-			bgl_metal
+			${BGL_TESTS_BACKEND}
 			assetlib
 			core
 			Catch2::Catch2
 			Catch2::Catch2WithMain
-			"-framework Metal" "-framework Foundation" "-framework QuartzCore"
 	)
+	# Embeds bgl_metal's objects, so it links the frameworks bgl_metal's PRIVATE deps do not carry.
+	if(RENDERER_BACKEND STREQUAL "METAL")
+		target_link_libraries(bgl_tests
+			PRIVATE "-framework Metal" "-framework Foundation" "-framework QuartzCore")
+	endif()
 
 	add_dependencies(bgl_tests bgl_idl_generate copy_assets)
 
-	# Only the test shaders: the src tree beside them is staged by bgl_metal_copy_shaders, which the
+	# Only the test shaders: the src tree beside them is staged by bgl_stage_shaders, which the
 	# suite depends on as well because it links the backend's objects rather than bgl. One writer per
 	# directory -- two targets copying into the same one can run at once.
-	file(GLOB_RECURSE BGL_METAL_TEST_SHADER_SOURCES CONFIGURE_DEPENDS
+	file(GLOB_RECURSE BGL_STAGED_TEST_SHADER_SOURCES CONFIGURE_DEPENDS
 		${CMAKE_CURRENT_SOURCE_DIR}/shaders/tests/*.slang
 	)
 
-	set(BGL_METAL_TEST_SHADER_STAMP "${CMAKE_CURRENT_BINARY_DIR}/metal_test_shaders.stamp")
+	set(BGL_TEST_SHADER_STAMP "${CMAKE_CURRENT_BINARY_DIR}/staged_test_shaders.stamp")
 	add_custom_command(
-		OUTPUT  "${BGL_METAL_TEST_SHADER_STAMP}"
+		OUTPUT  "${BGL_TEST_SHADER_STAMP}"
 		COMMAND ${CMAKE_COMMAND} -E copy_directory
 				"${CMAKE_CURRENT_SOURCE_DIR}/shaders/tests"
 				"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/tests"
-		COMMAND ${CMAKE_COMMAND} -E touch "${BGL_METAL_TEST_SHADER_STAMP}"
-		DEPENDS ${BGL_METAL_TEST_SHADER_SOURCES}
-		COMMENT "Staging Slang test shaders for runtime Metal compilation"
+		COMMAND ${CMAKE_COMMAND} -E touch "${BGL_TEST_SHADER_STAMP}"
+		DEPENDS ${BGL_STAGED_TEST_SHADER_SOURCES}
+		COMMENT "Staging Slang test shaders for runtime compilation"
 		VERBATIM
 	)
-	add_custom_target(bgl_metal_copy_test_shaders DEPENDS "${BGL_METAL_TEST_SHADER_STAMP}")
-	add_dependencies(bgl_tests bgl_metal_copy_shaders bgl_metal_copy_test_shaders)
+	add_custom_target(bgl_stage_test_shaders DEPENDS "${BGL_TEST_SHADER_STAMP}")
+	add_dependencies(bgl_tests bgl_stage_shaders bgl_stage_test_shaders)
 
 	target_precompile_headers(bgl_tests
 		PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/src/pch.h
 	)
 
-	target_compile_definitions(bgl_tests PRIVATE RENDERER_BACKEND_METAL BGL_EXPORTS)
+	target_compile_definitions(bgl_tests PRIVATE RENDERER_BACKEND_${RENDERER_BACKEND} BGL_EXPORTS)
 
 	enable_strict_compiler(bgl_tests)
 	enable_coverage(bgl_tests)

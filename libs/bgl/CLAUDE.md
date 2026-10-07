@@ -12,7 +12,7 @@ provides higher level abstractions of Mesh, Light and Material while hiding the 
 - A public header never includes anything under `./src`; `bgl_selfcheck` compiles every one against
   `bgl_headers` alone. The shaders split the same way: `./shaders/include` is the contract a game's
   surface conforms to, checked alone by `bgl_check_shaders`, and `./shaders/src` the renderer's.
-- bgl is built on `bgpu`'s Render Hardware Interface (RHI), `<bgpu/...>` in namespace `bgpu` — its interfaces, its backends and their rules are [libs/bgpu/CLAUDE.md](../bgpu/CLAUDE.md). What is left per backend here is the renderer's own: `Graphics_*` and `RenderTarget_*`, in `bgl_d3d12` or `bgl_metal`, one per binary. Do not #include a backend's headers (d3d12 or metal-cpp) for any other source here; the backend's native objects are reached through the RHI's `GetNativeObject` / `GetNativeTexture` / `ImportNativeTexture`.
+- bgl is built on `bgpu`'s Render Hardware Interface (RHI), `<bgpu/...>` in namespace `bgpu` — its interfaces, its backends and their rules are [libs/bgpu/CLAUDE.md](../bgpu/CLAUDE.md). What is left per backend here is the renderer's own: its swapchain, in `bgl_d3d12`, `bgl_metal` or `bgl_vulkan`, one per binary. Do not #include a backend's headers (d3d12, metal-cpp or volk) for any other source here; the backend's native objects are reached through the RHI's `GetNativeObject` / `GetNativeTexture` / `ImportNativeTexture`.
 - Put all plain old data inside `./libs/bgl/src/types`
 - PCH is `./libs/bgl/src/pch.h`. Don't `#include` the headers in here.
 - Error Handling: For internal problems, use `core::ensure`. For caller (code that links to bgl) problems, throw an exception so the caller can handle them
@@ -22,10 +22,22 @@ provides higher level abstractions of Mesh, Light and Material while hiding the 
 
 # Subsystems
 
+## src/swapchain
+
+- What every backend that presents through a `Swapchain` shares: `Graphics` (the façade
+  `CreateGraphics` returns) and `RenderTarget` (the frame's attachments, and the backbuffers: a
+  swapchain's images when windowed, an offscreen ring when headless). A backend implements only
+  `Swapchain` (`Swapchain.h`) and `CreateBackendSwapchain`.
+- Compiled by `bgl_d3d12` and `bgl_vulkan`, not by `bgl_objects`: Metal has a target of its own,
+  under the same name.
+- A ring slot (allocator, fence) is mapped to the image the swapchain handed out for it, since a
+  swapchain may hold more images than the ring has slots; a frame imports the backbuffer in the layout
+  `GetBackbufferLayout` reports, `kUndefined` for an image no frame has drawn yet.
+
 ## bgl_d3d12
 
-- The renderer's D3D12 half: `Graphics_d3d12` (the façade `CreateGraphics` returns), `RenderTarget_d3d12`
-  (the swapchain and the frame's attachments). The RHI's D3D12 backend is `bgpu`'s.
+- The renderer's D3D12 half: `DxgiSwapchain` (`Swapchain_d3d12.cpp`). The RHI's D3D12 backend is
+  `bgpu`'s.
 - PCH is `./libs/bgl/src/d3d12/pch.h`. Don't `#include` the headers in here.
 - Implementation files (.h and .cpp) take a `_d3d12` suffix.
 - CMake: `./src/d3d12/CMakeLists.txt`
@@ -48,6 +60,16 @@ provides higher level abstractions of Mesh, Light and Material while hiding the 
   `RenderTarget::PresentToLayer`.
 - CMake: `./src/metal/CMakeLists.txt`
 - Verification: Check logs, bgl_tests
+
+## bgl_vulkan
+
+- The renderer's Vulkan half, brought up on Windows: the swapchain (`Swapchain_vulkan.cpp`). The RHI's
+  Vulkan backend is `bgpu`'s, and so is volk: its function pointers are bgpu's, loaded with the
+  context, and reached here through `"volk_vulkan.h"`.
+- Nothing above the renderer is built on Vulkan yet (the root `CMakeLists.txt`,
+  `BERNINI_HAS_RENDERER_CONSUMERS`).
+- PCH is `./libs/bgl/src/vulkan/pch.h`. Implementation files take a `_vulkan` suffix.
+- CMake: `./src/vulkan/CMakeLists.txt`
 
 ## bgl_tests
 
@@ -120,10 +142,10 @@ provides higher level abstractions of Mesh, Light and Material while hiding the 
   primitives under `idl/`, `lib/types/*Buffer`, `lib/debug/`) by `bgpu_copy_shaders`, first; the
   contract `libs/bgl/shaders/include` (`bgl/`) by `bgl_copy_contract_shaders`, and this renderer's own
   (`idl/`, `lib/`, `programs/`, `luts/`) by a target `bgl` itself depends on —
-  `bgl_copy_shader_src` on D3D12, `bgl_metal_copy_shaders` on Metal, each ordered after the
+  `bgl_copy_shader_src` on D3D12, `bgl_stage_shaders` on Metal and Vulkan, each ordered after the
   contract's — so anything that brings a device up has the sources,
   and a build that stages none aborts on the first program-cache miss with "cannot open file".
-  `shaders/tests` is the suite's own (`bgl_copy_shader_tests` / `bgl_metal_copy_test_shaders`). A new
+  `shaders/tests` is the suite's own (`bgl_copy_shader_tests` / `bgl_stage_test_shaders`). A new
   `.slang` placed under `libs/bgl/shaders/src` is therefore usable at runtime by its module name
   without any CMake change.
 - The `compile_shader(...)` entries in `libs/bgl/shaders/CMakeLists.txt` are now **build-time
