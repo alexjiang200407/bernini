@@ -25,6 +25,7 @@ namespace bgpu
 	class ICommandAllocator;
 	class ICommandQueue;
 	class ITimestampHeap;
+	class ResourceManager;
 
 	/**
 	 * A command list recording into a command buffer its allocator hands it at each Open, on the
@@ -162,6 +163,10 @@ namespace bgpu
 			return m_CommandBuffer;
 		}
 
+		/** The manager every handle this list records is one of. */
+		[[nodiscard]] ResourceManager&
+		GetResourceManager() const noexcept;
+
 		/** Called by the queue as it submits: this recording's uploads are in flight to `fenceValue`. */
 		void
 		Submitted(uint64_t fenceValue) noexcept;
@@ -177,6 +182,9 @@ namespace bgpu
 
 		[[nodiscard]] const Buffer&
 		GetBuffer(BufferHandle handle) const noexcept;
+
+		[[nodiscard]] const Texture&
+		GetTexture(TextureHandle handle) const noexcept;
 
 		CommandListDesc    m_Desc;
 		ResourceManagerRef m_ResourceManager;

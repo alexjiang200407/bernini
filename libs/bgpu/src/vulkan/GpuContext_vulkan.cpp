@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <memory>
 #include <mutex>
+#include <numeric>
 #include <slang.h>
 #include <span>
 #include <spdlog/spdlog.h>
@@ -575,6 +576,20 @@ namespace bgpu
 		const auto* vulkan = dynamic_cast<const Context*>(&context);
 		core::ensure(vulkan != nullptr, "The GPU context is not a Vulkan one");
 		return vulkan->GetQueueFamilies();
+	}
+
+	VulkanSharing
+	GetVulkanSharing(const GpuContext& context)
+	{
+		const size_t familyCount = GetVulkanQueueFamilies(context).size();
+		if (familyCount < 2)
+			return {};
+
+		auto sharing     = VulkanSharing();
+		sharing.mode     = VK_SHARING_MODE_CONCURRENT;
+		sharing.families = std::vector<uint32_t>(familyCount);
+		std::iota(sharing.families.begin(), sharing.families.end(), 0U);
+		return sharing;
 	}
 
 	VulkanQueue

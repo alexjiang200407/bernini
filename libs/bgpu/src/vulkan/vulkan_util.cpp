@@ -70,8 +70,8 @@ namespace bgpu
 	NotOnVulkanYet(const std::string_view entryPoint) noexcept
 	{
 		core::fatal(
-			"{} is not implemented on Vulkan yet: textures, render targets and the meshlet "
-			"pipeline arrive with the graphics RHI",
+			"{} is not implemented on Vulkan yet: render and depth targets and the meshlet "
+			"pipeline arrive with the rest of the graphics RHI",
 			entryPoint);
 	}
 }

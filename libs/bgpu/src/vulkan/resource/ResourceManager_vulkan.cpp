@@ -1,7 +1,14 @@
 #include "resource/ResourceManager_vulkan.h"
+#include "convert_vulkan.h"
 #include "native_device_vulkan.h"
+#include "resource/BindlessTable_vulkan.h"
 #include "resource/BoundedPool.h"
 #include "resource/BufferMemory_vulkan.h"
+#include "resource/ImageMemory_vulkan.h"
+#include "resource/ImageView_vulkan.h"
+#include "resource/Sampler_vulkan.h"
+#include "resource/Srv_vulkan.h"
+#include "resource/Texture_vulkan.h"
 #include "volk_vulkan.h"
 #include "vulkan_util.h"
 #include <algorithm>
@@ -16,7 +23,11 @@
 #include <bgpu/resource/Sampler.h>
 #include <bgpu/resource/Srv.h>
 #include <bgpu/resource/Texture.h>
+#include <bgpu/types/Barrier.h>
+#include <bgpu/types/Format.h>
 #include <bgpu/types/NativeObject.h>
+#include <bgpu/types/TextureDimension.h>
+#include <bgpu/uniforms/DescriptorHandle.h>
 #include <core/containers/slot_handle.h>
 #include <core/containers/slot_vector.h>
 #include <core/containers/static_vector.h>
@@ -28,16 +39,81 @@
 #include <spdlog/spdlog.h>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace bgpu
 {
+	namespace
+	{
+		[[nodiscard]] VkImageCreateInfo
+		ImageInfoOf(const TextureDesc& desc) noexcept
+		{
+			const bool line   = desc.dimension == TextureDimension::kTexture1D ||
+			                    desc.dimension == TextureDimension::kTexture1DArray;
+			const bool volume = desc.dimension == TextureDimension::kTexture3D;
+			const bool cube   = desc.dimension == TextureDimension::kTextureCube ||
+			                    desc.dimension == TextureDimension::kTextureCubeArray;
+			core::ensure(!volume || desc.arraySize == 1, "A 3D texture cannot be an array");
+			core::ensure(volume || desc.depth == 1, "Only a 3D texture has depth");
+
+			auto info      = VkImageCreateInfo();
+			info.sType     = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+			info.imageType = line ? VK_IMAGE_TYPE_1D : volume ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D;
+			info.format    = ConvertFormat(desc.format);
+			info.extent    = VkExtent3D{ desc.width, line ? 1U : desc.height, desc.depth };
+			info.mipLevels = desc.mipLevels;
+			info.arrayLayers   = desc.arraySize;
+			info.samples       = static_cast<VkSampleCountFlagBits>(desc.sampleCount);
+			info.tiling        = VK_IMAGE_TILING_OPTIMAL;
+			info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			if (cube)
+				info.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+			// An SRV may read a colour texture in another format of its class, as one of D3D12's
+			// typeless textures is read.
+			if (FormatAspects(desc.format) == VK_IMAGE_ASPECT_COLOR_BIT)
+				info.flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+
+			info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+			             VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+			if (desc.usage.any(TextureUsageFlag::kRenderTarget))
+				info.usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+			if (desc.usage.any(TextureUsageFlag::kDepthStencil))
+				info.usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+			return info;
+		}
+
+		// The layers a view of `dimension` covers, of a texture view desc's `arraySize`.
+		[[nodiscard]] uint32_t
+		ViewLayerCount(const TextureDimension dimension, const uint32_t arraySize) noexcept
+		{
+			switch (dimension)
+			{
+			case TextureDimension::kTexture1DArray:
+			case TextureDimension::kTexture2DArray:
+			case TextureDimension::kTexture2DMSArray:
+			case TextureDimension::kTextureCubeArray:
+				return arraySize;
+			case TextureDimension::kTextureCube:
+				return 6;
+			default:
+				return 1;
+			}
+		}
+	}
+
 	ResourceManager::ResourceManager(GpuContextRef context, const ResourceManagerDesc& desc) :
 		m_Context(std::move(context)), m_Desc(desc),
 		m_Table(GetVulkanHandles(*m_Context).device, desc.maxCbvSrvUavs),
 		m_Buffers(desc.maxBuffers), m_BufferSrvs(desc.maxBufferSrvs),
-		m_BufferUavs(desc.maxBufferUavs), m_ReadbackBuffers(desc.maxReadbackBuffers)
+		m_BufferUavs(desc.maxBufferUavs), m_ReadbackBuffers(desc.maxReadbackBuffers),
+		m_Textures(desc.maxTextures), m_Srvs(desc.maxSrvs), m_Samplers(desc.maxSamplers)
 	{
 		core::ensure(desc.maxBuffers > 0, "maxBuffers must be greater than zero");
+		core::ensure(
+			desc.maxSamplers <= BindlessTable::c_SamplerCapacity,
+			"maxSamplers is {}; the bindless table holds {}",
+			desc.maxSamplers,
+			BindlessTable::c_SamplerCapacity);
 		// The +1 is the unbound sentinel the table burns at index 0 and never hands out.
 		core::ensure(
 			desc.maxCbvSrvUavs >=
@@ -322,19 +398,75 @@ namespace bgpu
 			spdlog::error("CreateTexture '{}': texture pool exhausted", desc.debugName);
 			return TextureHandle{};
 		}
-		NotOnVulkanYet("IResourceManager::CreateTexture");
+		core::ensure(desc.format != Format::UNKNOWN, "A texture needs a format");
+		// Refused here, before an image exists: kPresent ends the process.
+		(void)ConvertImageLayout(desc.initialLayout);
+
+		auto                info    = ImageInfoOf(desc);
+		const VulkanSharing sharing = GetVulkanSharing(*m_Context);
+		info.sharingMode            = sharing.mode;
+		info.queueFamilyIndexCount  = static_cast<uint32_t>(sharing.families.size());
+		info.pQueueFamilyIndices    = sharing.families.data();
+
+		// Out of device memory throws out of ImageMemory, and this is noexcept.
+		auto memory = core::SharedRef<ImageMemory>();
+		try
+		{
+			memory = core::SharedRef<ImageMemory>::Make(m_Context, info, desc.debugName);
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("CreateTexture '{}': {}", desc.debugName, e.what());
+			return TextureHandle{};
+		}
+
+		const std::lock_guard lock(m_PoolMutex);
+		const auto            slot = TryAllocateBounded(m_Textures);
+		if (slot.is_null())
+		{
+			spdlog::error("CreateTexture '{}': texture pool exhausted", desc.debugName);
+			return TextureHandle{};
+		}
+
+		auto texture = Texture(std::move(memory), desc, true);
+		if (desc.initialLayout != BarrierLayout::kUndefined)
+			m_PendingLayouts.push_back({ texture.GetVkImage(), texture.GetAspects(), slot.index });
+		m_Textures[slot] = std::move(texture);
+		return TextureHandle{ slot };
 	}
 
 	SamplerHandle
 	ResourceManager::CreateSampler(const SamplerDesc& desc) noexcept
 	{
-		(void)desc;
 		if (m_Desc.maxSamplers == 0)
 		{
 			spdlog::error("CreateSampler: sampler pool exhausted");
 			return SamplerHandle{};
 		}
-		NotOnVulkanYet("IResourceManager::CreateSampler");
+
+		auto sampler = Sampler();
+		try
+		{
+			sampler = Sampler(GetVulkanHandles(*m_Context).device, desc);
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("CreateSampler: {}", e.what());
+			return SamplerHandle{};
+		}
+
+		const std::lock_guard lock(m_PoolMutex);
+		const auto            slot = TryAllocateBounded(m_Samplers);
+		if (slot.is_null())
+		{
+			spdlog::error("CreateSampler: sampler pool exhausted");
+			return SamplerHandle{};
+		}
+
+		// The sampler array is indexed by pool slot, as D3D12's sampler heap is.
+		m_Table.WriteSampler(slot.index, sampler.GetVkSampler());
+		m_Samplers[slot] = std::move(sampler);
+		return SamplerHandle{ slot.index, slot.generation, slot.index };
 	}
 
 	ReadbackBufferHandle
@@ -367,14 +499,66 @@ namespace bgpu
 	SrvHandle
 	ResourceManager::CreateSrv(TextureHandle textureHandle, const SrvDesc& desc) noexcept
 	{
-		(void)textureHandle;
-		(void)desc;
 		if (m_Desc.maxSrvs == 0)
 		{
 			spdlog::error("CreateSrv: SRV pool exhausted");
 			return SrvHandle{};
 		}
-		NotOnVulkanYet("IResourceManager::CreateSrv");
+
+		const std::lock_guard lock(m_PoolMutex);
+		core::ensure(ValidTextureHandle(textureHandle), "CreateSrv on an invalid texture");
+
+		const auto slot = TryAllocateBounded(m_Srvs);
+		if (slot.is_null())
+		{
+			spdlog::error("CreateSrv '{}': SRV pool exhausted", desc.debugName);
+			return SrvHandle{};
+		}
+
+		uint32_t descriptorIndex = 0xFFFFFFFF;
+		try
+		{
+			descriptorIndex = m_Table.Allocate();
+		}
+		catch (const std::exception& e)
+		{
+			spdlog::error("CreateSrv '{}': {}", desc.debugName, e.what());
+			m_Srvs.release_slot(slot.index);
+			return SrvHandle{};
+		}
+
+		const Texture& texture = TextureAt(textureHandle);
+
+		auto range         = VkImageSubresourceRange();
+		range.aspectMask   = ViewAspect(texture.GetAspects(), desc.format);
+		range.baseMipLevel = 0;
+		range.levelCount =
+			desc.mipLevels == uint32_t(-1) ? VK_REMAINING_MIP_LEVELS : desc.mipLevels;
+		range.baseArrayLayer = 0;
+		range.layerCount     = ViewLayerCount(desc.dimension, desc.arraySize);
+
+		// A depth view reads the image's own format through one aspect; a colour view may
+		// reinterpret its class, since every colour image is made format-mutable.
+		const VkFormat format =
+			range.aspectMask != VK_IMAGE_ASPECT_COLOR_BIT || desc.format == Format::UNKNOWN ?
+				texture.GetVkFormat() :
+				ConvertFormat(desc.format);
+
+		auto view = ImageView(
+			GetVulkanHandles(*m_Context).device,
+			texture.GetVkImage(),
+			ConvertImageViewType(desc.dimension),
+			format,
+			range,
+			desc.debugName);
+		m_Table.WriteImage(descriptorIndex, view.GetVkImageView());
+		m_Srvs[slot] = Srv(std::move(view), textureHandle, descriptorIndex, desc);
+
+		// As on D3D12, the table index is both what a cbuffer carries and what GPU memory carries.
+		return SrvHandle{ slot.index,
+			              slot.generation,
+			              descriptorIndex,
+			              DescriptorHandle(descriptorIndex) };
 	}
 
 	RtvHandle
@@ -441,27 +625,59 @@ namespace bgpu
 		}
 	}
 
-	// No texture, sampler or view is ever valid here, so destroying one is destroying an invalid
-	// handle, as on every backend.
 	void
 	ResourceManager::DestroyTexture(TextureHandle handle, bool deferred) noexcept
 	{
-		(void)deferred;
+		const std::lock_guard lock(m_PoolMutex);
 		core::ensure(ValidTextureHandle(handle), "Cannot destroy invalid texture handle");
+
+		// A deferred texture keeps its pending transition: work recorded before the destroy may
+		// still be submitted, and the image lives until its gate clears.
+		if (deferred)
+		{
+			m_Textures.retire_slot(handle.slot);
+			RetireDeferred(PendingType::kTexture, handle.slot.index);
+		}
+		else
+		{
+			ForgetInitialLayout(handle.slot.index);
+			m_Textures.release_slot(handle.slot);
+		}
 	}
 
 	void
 	ResourceManager::DestroySampler(SamplerHandle handle, bool deferred) noexcept
 	{
-		(void)deferred;
+		const std::lock_guard lock(m_PoolMutex);
 		core::ensure(ValidSamplerHandle(handle), "Cannot destroy invalid sampler handle");
+
+		if (deferred)
+		{
+			m_Samplers.retire_slot(handle.idx);
+			RetireDeferred(PendingType::kSampler, handle.idx);
+		}
+		else
+		{
+			m_Samplers.release_slot(handle.idx);
+		}
 	}
 
 	void
 	ResourceManager::DestroySrv(SrvHandle handle, bool deferred) noexcept
 	{
-		(void)deferred;
+		const std::lock_guard lock(m_PoolMutex);
 		core::ensure(ValidSrvHandle(handle), "Cannot destroy invalid SRV handle");
+
+		if (deferred)
+		{
+			m_Srvs.retire_slot(handle.idx);
+			RetireDeferred(PendingType::kSrv, handle.idx, handle.bindlessIndex);
+		}
+		else
+		{
+			m_Srvs.release_slot(handle.idx);
+			m_Table.Free(handle.bindlessIndex);
+		}
 	}
 
 	void
@@ -576,6 +792,17 @@ namespace bgpu
 			case PendingType::kReadback:
 				m_ReadbackBuffers.reclaim_slot(pending.slotIndex);
 				break;
+			case PendingType::kTexture:
+				ForgetInitialLayout(pending.slotIndex);
+				m_Textures.reclaim_slot(pending.slotIndex);
+				break;
+			case PendingType::kSrv:
+				m_Srvs.reclaim_slot(pending.slotIndex);
+				m_Table.Free(pending.descriptorIndex);
+				break;
+			case PendingType::kSampler:
+				m_Samplers.reclaim_slot(pending.slotIndex);
+				break;
 			case PendingType::kInvalid:
 				core::fatal("A pending deletion was recorded with no resource type");
 			}
@@ -631,24 +858,60 @@ namespace bgpu
 	}
 
 	const Texture&
+	ResourceManager::TextureAt(const TextureHandle handle) const noexcept
+	{
+		return m_Textures[handle.slot];
+	}
+
+	const Texture&
 	ResourceManager::GetTexture(TextureHandle handle) const noexcept
 	{
-		(void)handle;
-		NotOnVulkanYet("IResourceManager::GetTexture");
+		core::ensure(ValidTextureHandle(handle), "GetTexture of an invalid texture handle");
+		return TextureAt(handle);
 	}
 
 	TextureDesc
 	ResourceManager::GetTextureDesc(TextureHandle handle) const noexcept
 	{
-		(void)handle;
-		NotOnVulkanYet("IResourceManager::GetTextureDesc");
+		return GetTexture(handle).GetDesc();
 	}
 
 	const Sampler&
 	ResourceManager::GetSampler(SamplerHandle handle) const noexcept
 	{
-		(void)handle;
-		NotOnVulkanYet("IResourceManager::GetSampler");
+		core::ensure(ValidSamplerHandle(handle), "GetSampler of an invalid sampler handle");
+		return m_Samplers[handle.idx];
+	}
+
+	void
+	ResourceManager::TakeInitialLayouts(std::vector<VkImageMemoryBarrier2>& barriers) noexcept
+	{
+		const std::lock_guard lock(m_PoolMutex);
+		for (const PendingLayout& pending : m_PendingLayouts)
+		{
+			auto barrier          = VkImageMemoryBarrier2();
+			barrier.sType         = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+			barrier.dstStageMask  = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+			barrier.dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
+			barrier.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
+			barrier.newLayout     = VK_IMAGE_LAYOUT_GENERAL;
+			barrier.srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+			barrier.dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+			barrier.image                       = pending.image;
+			barrier.subresourceRange.aspectMask = pending.aspects;
+			barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+			barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+			barriers.push_back(barrier);
+		}
+		m_PendingLayouts.clear();
+	}
+
+	void
+	ResourceManager::ForgetInitialLayout(const uint32_t textureSlot) noexcept
+	{
+		std::erase_if(m_PendingLayouts, [textureSlot](const PendingLayout& pending) {
+			return pending.textureSlot == textureSlot;
+		});
 	}
 
 	const ReadbackBuffer&
@@ -663,8 +926,7 @@ namespace bgpu
 	TextureReadbackLayout
 	ResourceManager::GetTextureReadbackLayout(TextureHandle handle) const noexcept
 	{
-		(void)handle;
-		NotOnVulkanYet("IResourceManager::GetTextureReadbackLayout");
+		return GetTexture(handle).GetReadbackLayout();
 	}
 
 	const void*
@@ -698,29 +960,31 @@ namespace bgpu
 	bool
 	ResourceManager::ValidTextureHandle(const TextureHandle& handle) const noexcept
 	{
-		(void)handle;
-		return false;
+		return m_Textures.valid(handle.slot) && !m_Textures[handle.slot].IsNull();
 	}
 
 	bool
 	ResourceManager::IsTextureCube(const TextureHandle& handle) const noexcept
 	{
-		(void)handle;
-		return false;
+		if (!ValidTextureHandle(handle))
+			return false;
+		const TextureDimension dimension = TextureAt(handle).GetDesc().dimension;
+		return dimension == TextureDimension::kTextureCube ||
+		       dimension == TextureDimension::kTextureCubeArray;
 	}
 
 	bool
 	ResourceManager::ValidSrvHandle(const SrvHandle& handle) const noexcept
 	{
-		(void)handle;
-		return false;
+		return m_Srvs.valid(core::slot_handle{ handle.idx, handle.generation }) &&
+		       !m_Srvs[handle.idx].IsNull();
 	}
 
 	bool
 	ResourceManager::ValidSamplerHandle(const SamplerHandle& handle) const noexcept
 	{
-		(void)handle;
-		return false;
+		return m_Samplers.valid(core::slot_handle{ handle.idx, handle.generation }) &&
+		       !m_Samplers[handle.idx].IsNull();
 	}
 
 	bool

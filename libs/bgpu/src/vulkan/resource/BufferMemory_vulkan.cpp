@@ -7,12 +7,9 @@
 #include <core/ref/SharedRef.h>
 #include <cstdint>
 #include <mutex>
-#include <numeric>
-#include <span>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
-#include <vector>
 #include <vulkan/vk_enum_string_helper.h>
 
 namespace bgpu
@@ -85,26 +82,15 @@ namespace bgpu
 		m_Device                    = handles.device;
 		const KindTraits traits     = TraitsOf(kind);
 
-		// D3D12 has no queue-family ownership, so every family may use every buffer.
-		const std::span<const VkQueueFamilyProperties> families =
-			GetVulkanQueueFamilies(*m_Context);
-		auto familyIndices = std::vector<uint32_t>(families.size());
-		std::iota(familyIndices.begin(), familyIndices.end(), 0U);
+		const VulkanSharing sharing = GetVulkanSharing(*m_Context);
 
-		auto info  = VkBufferCreateInfo();
-		info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		info.size  = byteSize;
-		info.usage = traits.usage;
-		if (familyIndices.size() > 1)
-		{
-			info.sharingMode           = VK_SHARING_MODE_CONCURRENT;
-			info.queueFamilyIndexCount = static_cast<uint32_t>(familyIndices.size());
-			info.pQueueFamilyIndices   = familyIndices.data();
-		}
-		else
-		{
-			info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		}
+		auto info                  = VkBufferCreateInfo();
+		info.sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		info.size                  = byteSize;
+		info.usage                 = traits.usage;
+		info.sharingMode           = sharing.mode;
+		info.queueFamilyIndexCount = static_cast<uint32_t>(sharing.families.size());
+		info.pQueueFamilyIndices   = sharing.families.data();
 
 		if (const VkResult created = vkCreateBuffer(m_Device, &info, nullptr, &m_Buffer);
 		    created != VK_SUCCESS)

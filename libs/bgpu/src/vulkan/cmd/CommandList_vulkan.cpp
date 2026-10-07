@@ -10,6 +10,7 @@
 #include "resource/Buffer_vulkan.h"
 #include "resource/ReadbackBuffer_vulkan.h"
 #include "resource/ResourceManager_vulkan.h"
+#include "resource/Texture_vulkan.h"
 #include "volk_vulkan.h"
 #include "vulkan_util.h"
 #include <algorithm>
@@ -27,12 +28,15 @@
 #include <bgpu/resource/Texture.h>
 #include <bgpu/types/Barrier.h>
 #include <bgpu/types/ComputeState.h>
+#include <bgpu/types/FormatInfo.h>
 #include <bgpu/types/MeshletState.h>
 #include <bgpu/uniforms/DescriptorHandle.h>
 #include <core/err/util.h>
+#include <core/math.h>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <numeric>
 #include <span>
 #include <spdlog/spdlog.h>
 #include <string>
@@ -66,6 +70,18 @@ namespace bgpu
 	CommandList::GetBuffer(const BufferHandle handle) const noexcept
 	{
 		return m_ResourceManager->GetBuffer(handle);
+	}
+
+	ResourceManager&
+	CommandList::GetResourceManager() const noexcept
+	{
+		return *m_ResourceManager->As<ResourceManager>();
+	}
+
+	const Texture&
+	CommandList::GetTexture(const TextureHandle handle) const noexcept
+	{
+		return m_ResourceManager->GetTexture(handle);
 	}
 
 	void
@@ -265,16 +281,53 @@ namespace bgpu
 		core::ensure(
 			handles.size() == barriers.size(),
 			"Barrier handle/desc spans must match in size");
-		if (!handles.empty())
-			NotOnVulkanYet("ICommandList::Barrier on a texture");
+		if (handles.empty())
+			return;
+
+		auto vkBarriers = std::vector<VkImageMemoryBarrier2>();
+		vkBarriers.reserve(handles.size());
+		for (size_t i = 0; i < handles.size(); ++i)
+		{
+			const TextureBarrierDesc& desc    = barriers[i];
+			const Texture&            texture = GetTexture(handles[i]);
+
+			auto barrier                = VkImageMemoryBarrier2();
+			barrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+			barrier.srcStageMask        = ConvertBarrierSync(desc.syncBefore);
+			barrier.srcAccessMask       = ConvertBarrierAccess(desc.accessBefore);
+			barrier.dstStageMask        = ConvertBarrierSync(desc.syncAfter);
+			barrier.dstAccessMask       = ConvertBarrierAccess(desc.accessAfter);
+			barrier.oldLayout           = ConvertImageLayout(desc.layoutBefore);
+			barrier.newLayout           = ConvertImageLayout(desc.layoutAfter);
+			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.image               = texture.GetVkImage();
+
+			// Every aspect, whatever planes D3D12 names: without separate depth and stencil layouts,
+			// Vulkan transitions a depth-stencil image's two aspects together.
+			barrier.subresourceRange.aspectMask   = texture.GetAspects();
+			barrier.subresourceRange.baseMipLevel = desc.baseMipLevel;
+			barrier.subresourceRange.levelCount =
+				desc.mipCount == uint32_t(-1) ? VK_REMAINING_MIP_LEVELS : desc.mipCount;
+			barrier.subresourceRange.baseArrayLayer = desc.baseArrayLayer;
+			barrier.subresourceRange.layerCount =
+				desc.layerCount == uint32_t(-1) ? VK_REMAINING_ARRAY_LAYERS : desc.layerCount;
+			vkBarriers.push_back(barrier);
+		}
+
+		auto dependency                    = VkDependencyInfo();
+		dependency.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+		dependency.imageMemoryBarrierCount = static_cast<uint32_t>(vkBarriers.size());
+		dependency.pImageMemoryBarriers    = vkBarriers.data();
+		vkCmdPipelineBarrier2(m_CommandBuffer, &dependency);
 	}
 
 	void
 	CommandList::Barrier(const TextureHandle handle, const TextureBarrierDesc& barrier) noexcept
 	{
-		(void)handle;
-		(void)barrier;
-		NotOnVulkanYet("ICommandList::Barrier on a texture");
+		Barrier(
+			std::span<const TextureHandle>(&handle, 1),
+			std::span<const TextureBarrierDesc>(&barrier, 1));
 	}
 
 	void
@@ -298,9 +351,83 @@ namespace bgpu
 		const TextureHandle                           handle,
 		const std::span<const TextureSubresourceData> subresources) noexcept
 	{
-		(void)handle;
-		(void)subresources;
-		NotOnVulkanYet("ICommandList::WriteTexture");
+		core::ensure(m_Open, "WriteTexture on a closed command list");
+		if (subresources.empty())
+			return;
+
+		const Texture&     texture    = GetTexture(handle);
+		const TextureDesc& desc       = texture.GetDesc();
+		const uint32_t     blockEdge  = GetFormatInfo(desc.format).blockEdgeTexels;
+		const uint64_t     blockBytes = texture.GetCopyBlockBytes();
+		core::ensure(
+			subresources.size() <= static_cast<size_t>(desc.mipLevels) * desc.arraySize,
+			"WriteTexture names more subresources than the texture has");
+
+		// A copy's buffer offset is a whole number of texel blocks, and of four bytes.
+		const uint64_t placement = std::lcm(c_CopyAlignment, blockBytes);
+
+		struct Placed
+		{
+			uint64_t offset   = 0;
+			uint64_t rowBytes = 0;
+			uint32_t rows     = 0;
+			uint32_t slices   = 0;
+		};
+		auto     placed = std::vector<Placed>(subresources.size());
+		uint64_t total  = 0;
+		for (size_t i = 0; i < subresources.size(); ++i)
+		{
+			const auto       mip    = static_cast<uint32_t>(i % desc.mipLevels);
+			const VkExtent3D extent = texture.GetMipExtent(mip);
+			placed[i].rowBytes      = core::div_ceil(extent.width, blockEdge) * blockBytes;
+			placed[i].rows          = core::div_ceil(extent.height, blockEdge);
+			placed[i].slices        = extent.depth;
+			placed[i].offset        = core::round_up(total, placement);
+			total = placed[i].offset + placed[i].rowBytes * placed[i].rows * placed[i].slices;
+		}
+
+		UploadRing::Allocation staged =
+			m_UploadRing.Allocate(total + placement, c_CopyAlignment, m_LastCompletedFence);
+		const uint64_t base = core::round_up(staged.offset, placement);
+		auto*          cpu  = static_cast<std::byte*>(staged.cpu) + (base - staged.offset);
+
+		auto regions = std::vector<VkBufferImageCopy>(subresources.size());
+		for (size_t i = 0; i < subresources.size(); ++i)
+		{
+			const TextureSubresourceData& source = subresources[i];
+			const Placed&                 at     = placed[i];
+			for (uint32_t slice = 0; slice < at.slices; ++slice)
+			{
+				for (uint32_t row = 0; row < at.rows; ++row)
+				{
+					std::memcpy(
+						cpu + at.offset +
+							(static_cast<uint64_t>(slice) * at.rows + row) * at.rowBytes,
+						static_cast<const std::byte*>(source.data) + slice * source.slicePitch +
+							row * source.rowPitch,
+						at.rowBytes);
+				}
+			}
+
+			// D3D12 numbers subresources mip-fastest within each array slice.
+			const auto mip = static_cast<uint32_t>(i % desc.mipLevels);
+
+			VkBufferImageCopy& region              = regions[i];
+			region.bufferOffset                    = base + at.offset;
+			region.imageSubresource.aspectMask     = texture.GetCopyAspect();
+			region.imageSubresource.mipLevel       = mip;
+			region.imageSubresource.baseArrayLayer = static_cast<uint32_t>(i / desc.mipLevels);
+			region.imageSubresource.layerCount     = 1;
+			region.imageExtent                     = texture.GetMipExtent(mip);
+		}
+
+		vkCmdCopyBufferToImage(
+			m_CommandBuffer,
+			staged.buffer,
+			texture.GetVkImage(),
+			VK_IMAGE_LAYOUT_GENERAL,
+			static_cast<uint32_t>(regions.size()),
+			regions.data());
 	}
 
 	void
@@ -308,9 +435,29 @@ namespace bgpu
 		const ReadbackBufferHandle dst,
 		const TextureHandle        src) noexcept
 	{
-		(void)dst;
-		(void)src;
-		NotOnVulkanYet("ICommandList::CopyTextureToReadback");
+		const Texture&              texture  = GetTexture(src);
+		const ReadbackBuffer&       readback = m_ResourceManager->GetReadbackBuffer(dst);
+		const TextureReadbackLayout layout   = texture.GetReadbackLayout();
+		core::ensure(
+			readback.GetByteSize() >= layout.totalBytes,
+			"Readback buffer is too small for the texture");
+
+		const uint32_t blockEdge = GetFormatInfo(texture.GetDesc().format).blockEdgeTexels;
+
+		auto region         = VkBufferImageCopy();
+		region.bufferOffset = layout.offset;
+		region.bufferRowLength =
+			static_cast<uint32_t>(layout.rowPitch / texture.GetCopyBlockBytes() * blockEdge);
+		region.imageSubresource.aspectMask = texture.GetCopyAspect();
+		region.imageSubresource.layerCount = 1;
+		region.imageExtent                 = texture.GetMipExtent(0);
+		vkCmdCopyImageToBuffer(
+			m_CommandBuffer,
+			texture.GetVkImage(),
+			VK_IMAGE_LAYOUT_GENERAL,
+			readback.GetVkBuffer(),
+			1,
+			&region);
 	}
 
 	void
