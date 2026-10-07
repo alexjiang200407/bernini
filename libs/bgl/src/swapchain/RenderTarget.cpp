@@ -14,6 +14,12 @@
 
 namespace bgl
 {
+	namespace
+	{
+		// D3D12's common layout is its present layout; Vulkan's is GENERAL, every texture's.
+		constexpr auto c_OffscreenInitialLayout = bgpu::BarrierLayout::kCommon;
+	}
+
 	RenderTarget::RenderTarget(
 		const RenderTargetDesc&    desc,
 		std::unique_ptr<Swapchain> swapchain,
@@ -99,18 +105,20 @@ namespace bgl
 	{
 		{
 			m_BackBuffers.assign(c_SwapchainImageCount, {});
+			m_ImageDrawn.assign(c_SwapchainImageCount, false);
 			for (uint32_t i = 0; i < c_SwapchainImageCount; i++)
 			{
 				m_SlotImage[i] = i;
 
-				auto texDesc      = bgpu::TextureDesc();
-				texDesc.width     = GetWidth();
-				texDesc.height    = GetHeight();
-				texDesc.debugName = std::format("Offscreen Back Buffer: {}", i);
-				texDesc.dimension = bgpu::TextureDimension::kTexture2D;
-				texDesc.format    = bgpu::Format::SBGRA8_UNORM;
-				texDesc.usage     = bgpu::TextureUsage{ bgpu::TextureUsageFlag::kRenderTarget,
-					                                    bgpu::TextureUsageFlag::kSRV };
+				auto texDesc          = bgpu::TextureDesc();
+				texDesc.width         = GetWidth();
+				texDesc.height        = GetHeight();
+				texDesc.debugName     = std::format("Offscreen Back Buffer: {}", i);
+				texDesc.dimension     = bgpu::TextureDimension::kTexture2D;
+				texDesc.format        = bgpu::Format::SBGRA8_UNORM;
+				texDesc.usage         = bgpu::TextureUsage{ bgpu::TextureUsageFlag::kRenderTarget,
+					                                        bgpu::TextureUsageFlag::kSRV };
+				texDesc.initialLayout = c_OffscreenInitialLayout;
 				texDesc.clearValue.SetColor(bgpu::Color(0.0f, 0.0f, 0.0f, 1.0f));
 
 				m_BackBuffers[i].textureHandle = m_ResourceManager->CreateTexture(texDesc);
@@ -322,9 +330,9 @@ namespace bgl
 	{
 		const uint32_t slot = m_FrameIndex;
 
+		m_ImageDrawn[m_SlotImage[slot]] = true;
 		if (m_Swapchain)
 		{
-			m_ImageDrawn[m_SlotImage[slot]] = true;
 			if (m_Swapchain->Present(m_FenceValues[slot]))
 			{
 				ReimportBackbuffers();
@@ -356,11 +364,16 @@ namespace bgl
 	RenderTarget::GetBackbufferLayout(const uint32_t frameIndex) const noexcept
 	{
 		core::ensure(frameIndex < c_SwapchainImageCount, "Frame index out of range");
-		if (m_Swapchain && m_Swapchain->StartsUndefined() && !m_ImageDrawn[m_SlotImage[frameIndex]])
+		if (m_ImageDrawn[m_SlotImage[frameIndex]])
 		{
-			return bgpu::BarrierLayout::kUndefined;
+			return bgpu::BarrierLayout::kPresent;
 		}
-		return bgpu::BarrierLayout::kPresent;
+		if (!m_Swapchain)
+		{
+			return c_OffscreenInitialLayout;
+		}
+		return m_Swapchain->StartsUndefined() ? bgpu::BarrierLayout::kUndefined :
+		                                        bgpu::BarrierLayout::kPresent;
 	}
 
 	void

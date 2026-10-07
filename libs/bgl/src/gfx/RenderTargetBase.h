@@ -394,8 +394,9 @@ namespace bgl
 		}
 
 		/**
-		 * The layout `frameIndex`'s backbuffer is in when its frame starts: `kPresent`, or
-		 * `kUndefined` for a swapchain image no frame has drawn since its swapchain made it.
+		 * The layout `frameIndex`'s backbuffer is in when its frame starts: `kPresent` once a frame
+		 * has drawn it, and until then the layout it was made in -- `kUndefined` for a swapchain
+		 * image that starts so, `kCommon` for an offscreen one.
 		 */
 		[[nodiscard]] virtual bgpu::BarrierLayout
 		GetBackbufferLayout(uint32_t frameIndex) const noexcept

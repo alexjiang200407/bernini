@@ -290,9 +290,14 @@ TEST_CASE("A headless swapchain target has no swapchain and can be captured", "[
 		owner.rm);
 
 	CHECK(target->IsCapturable());
-	CHECK(target->GetBackbufferLayout(0) == bgpu::BarrierLayout::kPresent);
+
+	// The ring is made in kCommon, and a frame leaves it in kPresent.
+	CHECK(target->GetBackbufferLayout(0) == bgpu::BarrierLayout::kCommon);
 	target->PresentAndAdvance();
 	CHECK(target->GetFrameIndex() == 1);
+	CHECK(target->GetBackbufferLayout(1) == bgpu::BarrierLayout::kCommon);
+	target->PresentAndAdvance();
+	CHECK(target->GetBackbufferLayout(0) == bgpu::BarrierLayout::kPresent);
 }
 TEST_CASE(
 	"A swapchain target imports the images again when a present remakes them",
