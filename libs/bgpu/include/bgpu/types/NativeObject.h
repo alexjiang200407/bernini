@@ -18,6 +18,7 @@ namespace bgpu
 		kMtlCommandBuffer,
 		kMtlTexture,
 		kMtlBuffer,
+		kVkBuffer,
 	};
 
 	/**

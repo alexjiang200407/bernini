@@ -1,5 +1,7 @@
 // Held through SharedRef via `auto` and dereferenced: both need the complete type, which
 // include-cleaner cannot see through the template.
+#include <algorithm>
+#include <array>
 #include <bgpu/GpuContext.h>
 #include <bgpu/cmd/CommandAllocator.h>  // IWYU pragma: keep
 #include <bgpu/cmd/CommandList.h>
@@ -20,6 +22,11 @@
 
 namespace
 {
+	constexpr auto c_BufferKinds = std::to_array(
+		{ bgpu::NativeObjectType::kMtlBuffer,
+	      bgpu::NativeObjectType::kD3D12Resource,
+	      bgpu::NativeObjectType::kVkBuffer });
+
 	// The buffer kind this backend answers for; only one of them is non-null.
 	struct NativeBuffer
 	{
@@ -30,8 +37,7 @@ namespace
 	NativeBuffer
 	ExportBuffer(const bgpu::IResourceManager& rm, bgpu::BufferHandle buffer)
 	{
-		for (const auto type :
-		     { bgpu::NativeObjectType::kMtlBuffer, bgpu::NativeObjectType::kD3D12Resource })
+		for (const auto type : c_BufferKinds)
 		{
 			if (const auto object = rm.GetNativeBuffer(buffer, type))
 				return NativeBuffer{ type, object };
@@ -168,4 +174,23 @@ TEST_CASE("An import refuses an object of a kind this backend does not adopt", "
 				  .SetBuffer(bgpu::StructBufferDesc().SetElement<uint32_t>().SetElementCount(1)))
 			.IsNull());
 	CHECK_FALSE(rm->GetNativeBuffer(bgpu::BufferHandle{}, bgpu::NativeObjectType::kMtlBuffer));
+}
+
+// What another owner asks for is the one kind its backend has, so a buffer answers for exactly one.
+TEST_CASE("A buffer is exported as its backend's one native kind", "[import]")
+{
+	auto context = bgpu::CreateGpuContext(bgpu::GpuContextDesc());
+	auto device  = bgpu::CreateDevice(context);
+	auto rm      = device->CreateResourceManager(bgpu::ResourceManagerDesc::ComputeOnly());
+
+	const auto buffer = rm->CreateStructBuffer(
+		bgpu::StructBufferDesc().SetElement<uint32_t>().SetElementCount(4).SetDebugName(
+			"export kinds"));
+	REQUIRE(rm->ValidBufferHandle(buffer));
+
+	CHECK(std::ranges::count_if(c_BufferKinds, [&](const bgpu::NativeObjectType type) {
+			  return static_cast<bool>(rm->GetNativeBuffer(buffer, type));
+		  }) == 1);
+
+	rm->DestroyBuffer(buffer, false);
 }

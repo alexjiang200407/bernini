@@ -90,11 +90,16 @@ TEST_CASE("Every RHI entry point runs on a device no renderer owns", "[render][r
 
 	// A buffer exported and imported back, as a second owner would.
 	auto exportedType = bgpu::NativeObjectType::kMtlBuffer;
-	auto exported     = rm->GetNativeBuffer(structBuffer, exportedType);
-	if (!exported)
+	auto exported     = bgpu::NativeObject();
+	for (const auto type : { bgpu::NativeObjectType::kMtlBuffer,
+	                         bgpu::NativeObjectType::kD3D12Resource,
+	                         bgpu::NativeObjectType::kVkBuffer })
 	{
-		exportedType = bgpu::NativeObjectType::kD3D12Resource;
-		exported     = rm->GetNativeBuffer(structBuffer, exportedType);
+		if (!exported)
+		{
+			exportedType = type;
+			exported     = rm->GetNativeBuffer(structBuffer, type);
+		}
 	}
 	REQUIRE(exported);
 	const auto importedBuffer = rm->ImportNativeBuffer(
