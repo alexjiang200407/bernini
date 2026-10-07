@@ -51,6 +51,10 @@ namespace
 		bool     remakeAtNextPresent = false;
 		uint32_t remakeWidth         = 0;
 		uint32_t remakeHeight        = 0;
+		// A resize makes the images at this size whatever it is asked, as a window Vulkan presents
+		// to does; zero is no window, and the size asked for.
+		uint32_t windowWidth  = 0;
+		uint32_t windowHeight = 0;
 	};
 
 	class FakeSwapchain final : public bgl::Swapchain
@@ -138,7 +142,9 @@ namespace
 		{
 			++m_Log.resizes;
 			DestroyImages();
-			MakeImages(width, height);
+			MakeImages(
+				m_Log.windowWidth != 0 ? m_Log.windowWidth : width,
+				m_Log.windowHeight != 0 ? m_Log.windowHeight : height);
 			m_Current = 0;
 		}
 
@@ -371,5 +377,33 @@ TEST_CASE(
 	CHECK(owner.rm->GetTextureDesc(target->GetSceneColorTexture()).height == 6);
 	CHECK(target->GetFrameIndex() == 0);
 	CHECK(log.resizes == 0);
+}
+TEST_CASE(
+	"A swapchain target resized takes the size its images were made at",
+	"[render][swapchain]")
+{
+	auto owner = Owner();
+	auto log   = FakeLog();
+
+	auto desc   = bgl::RenderTargetDesc();
+	desc.width  = 8;
+	desc.height = 8;
+
+	auto target = core::SharedRef<bgl::RenderTarget>::Make(
+		desc,
+		std::make_unique<FakeSwapchain>(*owner.rm, log, 8, 8),
+		owner.device,
+		owner.queue,
+		owner.rm);
+
+	// The caller asks for one size and the window is another, as during a drag.
+	log.windowWidth  = 20;
+	log.windowHeight = 10;
+	target->ResizeBackbuffers(16, 4);
+
+	CHECK(target->GetWidth() == 20);
+	CHECK(target->GetHeight() == 10);
+	CHECK(owner.rm->GetTextureDesc(target->GetSceneColorTexture()).width == 20);
+	CHECK(owner.rm->GetTextureDesc(target->GetDepthTexture()).height == 10);
 }
 #endif

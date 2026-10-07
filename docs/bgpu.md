@@ -218,8 +218,8 @@ against D3D12 and Metal:
   which a texture is in, where Vulkan needs it at every copy, clear, attachment and descriptor; in
   the one layout valid for all of them, a descriptor written once is right for every read and a
   barrier keeps D3D12's meaning — its syncs and accesses, and a discard from `kUndefined`. On a
-  driver with `VK_KHR_unified_image_layouts` it costs nothing. `kPresent` is a swapchain's and ends
-  the process until there is one.
+  driver with `VK_KHR_unified_image_layouts` it costs nothing. `kPresent` is `PRESENT_SRC_KHR`, the
+  one other layout, and only a swapchain's image may be in it: `CreateTexture` refuses it.
 * **A clear is `vkCmdClearColorImage` or `vkCmdClearDepthStencilImage`** over the view's
   subresources: in `GENERAL` it needs no render pass. An integer target's clear converts D3D12's
   floats to its own type. A render target view of a 3D texture names a range of its depth slices,
@@ -282,7 +282,22 @@ against D3D12 and Metal:
   manager made is refused. **An exported texture is a `VkImage`** (`kVkImage`), held the same way
   (`ImageMemory`) when a manager made it; one no manager made — a swapchain's — is borrowed, since
   nothing can add a reference to it, and its maker keeps it alive while the handle lives.
-* **The program cache holds SPIR-V and reflection**; there is no driver pipeline cache yet.
+* **The program cache holds SPIR-V and reflection**, and a `VkPipelineCache` every pipeline is
+  created through is the driver layer beside it, written to `pipelines.psolib` by the one device
+  that claims the directory -- on Windows only: elsewhere nothing claims it and no driver cache is
+  kept ([shader_cache.md](shader_cache.md)).
+* **A renderer presents beside the RHI, not through it.** `IDevice::GetNativeObject` answers
+  `kVkInstance`, `kVkPhysicalDevice` and `kVkDevice`, and `ICommandQueue::GetNativeObject` answers
+  `kVkQueue` with a `NativeVkQueue`: the `VkQueue`, its family, its timeline semaphore -- the queue's
+  fence -- and the submit lock every owner of that `VkQueue` holds. `vkQueuePresentKHR` waits only on
+  a binary semaphore, so `bgl`'s swapchain submits an empty batch that waits on the timeline at the
+  frame's fence and signals one, under that lock. The instance enables `VK_KHR_surface` and
+  `VK_KHR_win32_surface`, the device `VK_KHR_swapchain`.
+* **A buffer two copies of one list write is ordered between them**: a pass that clears a buffer
+  whole and then rewrites part of it expects the writes to land in order, which two transfers do not
+  promise, so the list barriers a second copy into a buffer it copied into since its last barrier.
+  A target's clear is in `kRenderTarget`'s and `kDepthStencil`'s scope, as on D3D12, though here it
+  is a transfer.
 
 `bgpu_tests` `[vulkan]` pins the device and its queues, the bindless and synchronization features it
 was created with, a validation message in the log, a leaked object named in it and a kernel compiled

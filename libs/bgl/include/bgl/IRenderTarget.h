@@ -36,9 +36,8 @@ namespace bgl
 		PostProcess postProcess = FilmicPostProcess();
 
 		// The native surface a windowed target presents into: an HWND on D3D12 and Vulkan, a
-		// CAMetalLayer on Metal. Ignored when headless. On Vulkan the target follows its window: a
-		// present that finds the window resized remakes the swapchain at the window's size and the
-		// target takes it on, where DXGI would stretch the old size into it. The Metal layer and its window are the caller's: the
+		// CAMetalLayer on Metal. Ignored when headless. On Vulkan the target takes on its window's
+		// size when a present finds it resized (docs/bgl_api.md). The Metal layer and its window are the caller's: the
 		// backbuffer is sRGB-encoded, and the window's colour space must be set to sRGB explicitly
 		// or the layer is composited unmatched (docs/known_issues.md).
 		void* wnd = nullptr;

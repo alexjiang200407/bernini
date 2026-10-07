@@ -196,6 +196,11 @@ if (BERNINI_SHARED_RENDERER AND NOT BERNINI_HAS_RENDERER)
     message(FATAL_ERROR
         "BERNINI_SHARED_RENDERER needs a renderer, and RENDERER_BACKEND is ${RENDERER_BACKEND}")
 endif()
+# Vulkan's renderer reaches volk's function pointers, which bgpu defines; nothing has built it as a
+# DLL beside a shared bgpu, so it is static while it is brought up.
+if (BERNINI_SHARED_RENDERER AND RENDERER_BACKEND STREQUAL "VULKAN")
+    message(FATAL_ERROR "BERNINI_SHARED_RENDERER is not built on Vulkan yet")
+endif()
 set(_bernini_renderer_library_type STATIC)
 if (BERNINI_SHARED_RENDERER OR BERNINI_EDITOR_SDK)
     set(_bernini_renderer_library_type SHARED)

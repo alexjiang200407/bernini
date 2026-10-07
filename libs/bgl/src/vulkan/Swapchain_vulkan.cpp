@@ -79,35 +79,32 @@ namespace bgl
 					vkCreateWin32SurfaceKHR(m_Instance, &surfaceInfo, nullptr, &m_Surface),
 					"vkCreateWin32SurfaceKHR");
 
-				VkBool32 supported = VK_FALSE;
-				Check(
-					vkGetPhysicalDeviceSurfaceSupportKHR(
-						m_Physical,
-						m_Native.family,
-						m_Surface,
-						&supported),
-					"vkGetPhysicalDeviceSurfaceSupportKHR");
-				if (supported != VK_TRUE)
+				try
 				{
-					vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
-					throw GraphicsError(
-						"Vulkan backend: the renderer's queue cannot present to this window");
+					RequirePresentable();
+
+					auto fenceInfo  = VkFenceCreateInfo();
+					fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+					Check(
+						vkCreateFence(m_Device, &fenceInfo, nullptr, &m_Acquired),
+						"vkCreateFence");
+
+					Create(static_cast<uint32_t>(desc.width), static_cast<uint32_t>(desc.height));
+					core::ensure(
+						Acquire(),
+						"a swapchain made for the window is out of date at once");
 				}
-
-				auto fenceInfo  = VkFenceCreateInfo();
-				fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-				Check(vkCreateFence(m_Device, &fenceInfo, nullptr, &m_Acquired), "vkCreateFence");
-
-				Create(static_cast<uint32_t>(desc.width), static_cast<uint32_t>(desc.height));
-				core::ensure(Acquire(), "a swapchain made for the window is out of date at once");
+				catch (...)
+				{
+					Destroy();
+					throw;
+				}
 			}
 
 			~VulkanSwapchain() noexcept override
 			{
 				IdleQueue();
-				DestroySwapchain();
-				vkDestroyFence(m_Device, m_Acquired, nullptr);
-				vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
+				Destroy();
 			}
 
 			VulkanSwapchain(const VulkanSwapchain&) = delete;
@@ -264,6 +261,61 @@ namespace bgl
 				(void)vkQueueWaitIdle(Queue());
 			}
 
+			// Whatever exists of the swapchain, the fence and the surface: the constructor's failures
+			// come here as the destructor does.
+			void
+			Destroy() noexcept
+			{
+				DestroySwapchain();
+				vkDestroyFence(m_Device, m_Acquired, nullptr);
+				m_Acquired = VK_NULL_HANDLE;
+				vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
+				m_Surface = VK_NULL_HANDLE;
+			}
+
+			/** @throws GraphicsError when the queue cannot present here, or not in this format. */
+			void
+			RequirePresentable() const
+			{
+				VkBool32 supported = VK_FALSE;
+				Check(
+					vkGetPhysicalDeviceSurfaceSupportKHR(
+						m_Physical,
+						m_Native.family,
+						m_Surface,
+						&supported),
+					"vkGetPhysicalDeviceSurfaceSupportKHR");
+				if (supported != VK_TRUE)
+				{
+					throw GraphicsError(
+						"Vulkan backend: the renderer's queue cannot present to this window");
+				}
+
+				uint32_t count = 0;
+				Check(
+					vkGetPhysicalDeviceSurfaceFormatsKHR(m_Physical, m_Surface, &count, nullptr),
+					"vkGetPhysicalDeviceSurfaceFormatsKHR");
+				auto formats = std::vector<VkSurfaceFormatKHR>(count);
+				Check(
+					vkGetPhysicalDeviceSurfaceFormatsKHR(
+						m_Physical,
+						m_Surface,
+						&count,
+						formats.data()),
+					"vkGetPhysicalDeviceSurfaceFormatsKHR");
+				const bool offered =
+					std::ranges::any_of(formats, [](const VkSurfaceFormatKHR& format) {
+						return format.format == c_Format &&
+					           format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+					});
+				if (!offered)
+				{
+					throw GraphicsError(
+						"Vulkan backend: this window does not offer B8G8R8A8_SRGB in sRGB, the "
+						"format the renderer's backbuffers are");
+				}
+			}
+
 			void
 			Remake(const uint32_t width, const uint32_t height)
 			{
@@ -293,6 +345,12 @@ namespace bgl
 						m_Extent.height,
 						width,
 						height);
+				}
+
+				if ((caps.supportedUsageFlags & c_Usage) != c_Usage)
+				{
+					throw GraphicsError(
+						"Vulkan backend: this window's images cannot be drawn into and cleared");
 				}
 
 				auto imageCount = std::max(caps.minImageCount, c_SwapchainImageCount);

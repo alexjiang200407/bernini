@@ -62,14 +62,16 @@ namespace bgl
 		 * until one is free.
 		 *
 		 * @return true when the window no longer matched the images and the swapchain remade them,
-		 *         at the window's size, after idling the queue: every image must be imported again,
-		 *         and the target takes on their size if it changed.
+		 *         at the window's size, after idling the queue. The textures imported from the
+		 *         old images then name images that are gone: they are released, every image is
+		 *         imported again, and the target takes on their size if it changed.
 		 */
 		[[nodiscard]] virtual bool
 		Present(uint64_t frameFence) noexcept = 0;
 
 		/**
-		 * Remakes the images at the new size.
+		 * Remakes the images at the size asked for, or at the nearest the window allows: what was
+		 * made is what GetImages reports.
 		 *
 		 * @pre the queue is idle, and no image is imported as a texture.
 		 */

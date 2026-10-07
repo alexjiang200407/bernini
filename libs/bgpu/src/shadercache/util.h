@@ -27,7 +27,8 @@ namespace bgpu::shader_cache
 	 * their pipelines without a library, which costs pipeline creation and nothing else.
 	 *
 	 * The OS arbitrates it, through a lock file opened unshared and deleted on close, so a killed
-	 * process releases it with nothing to clean up. Windows only; elsewhere nothing is claimed.
+	 * process releases it with nothing to clean up. Windows only: elsewhere nothing is claimed, so
+	 * a backend keeps no driver library there -- Vulkan on Linux will need a claim of its own.
 	 */
 	class PipelineLibraryClaim
 	{

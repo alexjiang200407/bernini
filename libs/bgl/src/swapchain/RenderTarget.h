@@ -16,6 +16,7 @@
 #include <core/ref/RefCounter.h>
 #include <cstdint>
 #include <memory>
+#include <utility>
 #include <vector>
 
 namespace bgl
@@ -324,6 +325,10 @@ namespace bgl
 		// After the swapchain remade its images: the attachments stay unless their size changed.
 		void
 		ReimportBackbuffers();
+
+		// The size of the swapchain's images, which a target with one always has.
+		[[nodiscard]] std::pair<uint32_t, uint32_t>
+		ImageSize() const;
 
 		// Slot 0 next, on the image the swapchain holds, and no fence to wait on.
 		void

@@ -356,11 +356,11 @@ namespace bgl
 	RenderTarget::ReimportBackbuffers()
 	{
 		// A window resized under the target: it follows, as a Resize to that size would make it.
-		const bgpu::TextureDesc image = m_Swapchain->GetImages().front().texture;
-		if (image.width != GetWidth() || image.height != GetHeight())
+		const auto [width, height] = ImageSize();
+		if (width != GetWidth() || height != GetHeight())
 		{
 			DestroyRenderTargets();
-			SetSize(image.width, image.height, GetRenderScale());
+			SetSize(width, height, GetRenderScale());
 			RecreateRenderTargets();
 			return;
 		}
@@ -393,12 +393,24 @@ namespace bgl
 
 		SetSize(width, height, GetRenderScale());
 
+		// A swapchain's images may only be the window's size, which can differ from the one asked
+		// for while the window is still being dragged: the target takes what it was given.
 		if (m_Swapchain)
 		{
 			m_Swapchain->Resize(width, height);
+			const auto [madeWidth, madeHeight] = ImageSize();
+			SetSize(madeWidth, madeHeight, GetRenderScale());
 		}
 
 		RecreateRenderTargets();
+	}
+
+	std::pair<uint32_t, uint32_t>
+	RenderTarget::ImageSize() const
+	{
+		const std::vector<bgpu::NativeTextureDesc> images = m_Swapchain->GetImages();
+		core::ensure(!images.empty(), "A swapchain without images");
+		return { images.front().texture.width, images.front().texture.height };
 	}
 
 	void
