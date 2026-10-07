@@ -300,3 +300,33 @@ written: the thread decides and launches, and the payload is its own
 its centre box, which a missing patch row broke on most runs. **Check first** whether the pass
 gathers across threads into a payload; if it does, that is the cause, whatever the uploads look
 like.
+
+## `vkCreateShaderModule` rejects a program's SPIR-V on Vulkan: an argument's type, `PhysicalStorageBufferAddresses`
+
+**Symptom.** With the debug layer on, building a pipeline logs two errors per program, every time a
+renderer is made: spirv-val's `OpFunctionCall Argument <id> '…'s type does not match Function <id>
+'…'s parameter type`, naming one of the buffer family's accessors (`RawBuffer_LoadTag`,
+`EntryBuffer_Get`), and `SPIR-V Capability PhysicalStorageBufferAddresses was declared, but …
+bufferDeviceAddress`. Only a debug build (`BERNINI_GPU_DEBUG`) shows it, the program still draws on
+NVIDIA's driver, and `slangc` on the same file reproduces it only at `-O0`: at its default level it
+inlines everything and the call is gone, while the engine links each module separately and keeps
+the library's functions out of line.
+
+**Cause.** A Slang 2026.7.1 code-generation bug. A function of the program that takes a struct read
+from a buffer -- a `MeshInstance`, a `GrassDraw`, a `ToonShadingRig` -- and hands one of its
+entries to an accessor that asserts on it (`dbg_assert(!entry.Null(), …)`) has that accessor emitted
+taking the entry by a `PhysicalStorageBuffer` pointer, while every call passes a `Function`
+pointer. It is not the entry's `Null()`, not the assert channel's atomics and not the optimization
+level the engine asks for: each was ruled out with the program reduced to the one call chain.
+
+**Fixed by** `[ForceInline]` on the program's own functions that take such a struct and call the
+accessors: `SkinOf` and `HeadWorld` in
+[EvaluateToonShadingRigs.slang](../libs/bgl/shaders/src/programs/toon/EvaluateToonShadingRigs.slang),
+`SourceOf` in [Grass.slang](../libs/bgl/shaders/src/programs/forward/Grass.slang). Inlining the
+accessors themselves instead moves the bug to the next accessor down and crashes `slangc` on two
+other programs.
+
+**Gates.** `just run bgl_tests -- "[swapchain],[grass]"` on `windows-clang-vulkan-debug`, then
+`bgpu.log` holds no `spirv-val` error: every renderer builds the toon program, and the grass cases
+build the grass one. **Check first** whether the program named passes a struct it read from a buffer
+into a function of its own that calls an asserting accessor; if it does, inline that function.

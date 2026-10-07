@@ -91,6 +91,9 @@ struct ChunkSource
 };
 
 // The source `chunkRef` names; false for a terrain's tile off the field, which draws nothing.
+// Inlined: called out of line, Slang 2026.7.1 passes a struct read from a buffer to the asserting accessors
+// below it by a PhysicalStorageBuffer pointer, which SPIR-V rejects (docs/known_issues.md).
+[ForceInline]
 bool SourceOf(GrassChunkRef chunkRef, GrassDraw draw, out ChunkSource source)
 {
     source = {};
