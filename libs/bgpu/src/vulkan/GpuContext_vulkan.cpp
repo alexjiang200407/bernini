@@ -46,6 +46,7 @@ namespace bgpu
 		{
 			VkPhysicalDeviceFeatures2             features2  = {};
 			VkPhysicalDeviceVulkan12Features      vulkan12   = {};
+			VkPhysicalDeviceVulkan13Features      vulkan13   = {};
 			VkPhysicalDeviceMeshShaderFeaturesEXT meshShader = {};
 
 			FeatureChain() noexcept
@@ -53,7 +54,9 @@ namespace bgpu
 				features2.sType  = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 				features2.pNext  = &vulkan12;
 				vulkan12.sType   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-				vulkan12.pNext   = &meshShader;
+				vulkan12.pNext   = &vulkan13;
+				vulkan13.sType   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+				vulkan13.pNext   = &meshShader;
 				meshShader.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
 			}
 
@@ -146,6 +149,8 @@ namespace bgpu
 					return supported.vulkan12.*feature == VK_TRUE;
 				});
 			facts.scalarBlockLayout = supported.vulkan12.scalarBlockLayout == VK_TRUE;
+			facts.synchronization   = supported.vulkan12.timelineSemaphore == VK_TRUE &&
+			                          supported.vulkan13.synchronization2 == VK_TRUE;
 			return facts;
 		}
 
@@ -352,6 +357,8 @@ namespace bgpu
 				required.meshShader.meshShader      = VK_TRUE;
 				required.meshShader.taskShader      = VK_TRUE;
 				required.vulkan12.scalarBlockLayout = VK_TRUE;
+				required.vulkan12.timelineSemaphore = VK_TRUE;
+				required.vulkan13.synchronization2  = VK_TRUE;
 				for (VkBool32 VkPhysicalDeviceVulkan12Features::* const feature :
 				     c_DescriptorIndexingFeatures)
 					required.vulkan12.*feature = VK_TRUE;

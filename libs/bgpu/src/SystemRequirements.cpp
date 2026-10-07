@@ -51,6 +51,7 @@ namespace bgpu
 			case Requirement::kD3d12EnhancedBarriers:
 			case Requirement::kVulkan13:
 			case Requirement::kVulkanScalarBlockLayout:
+			case Requirement::kVulkanSynchronization:
 				return c_NeedsACurrentDriver;
 			}
 			return "";
@@ -130,6 +131,8 @@ namespace bgpu
 			unmet.push_back({ Requirement::kVulkanDescriptorIndexing, facts.gpuName });
 		if (!facts.scalarBlockLayout)
 			unmet.push_back({ Requirement::kVulkanScalarBlockLayout, facts.gpuName });
+		if (!facts.synchronization)
+			unmet.push_back({ Requirement::kVulkanSynchronization, facts.gpuName });
 		return unmet;
 	}
 

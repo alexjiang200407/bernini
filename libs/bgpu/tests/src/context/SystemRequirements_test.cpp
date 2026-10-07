@@ -57,6 +57,7 @@ namespace
 		facts.meshShaders        = true;
 		facts.descriptorIndexing = true;
 		facts.scalarBlockLayout  = true;
+		facts.synchronization    = true;
 		return facts;
 	}
 
@@ -215,11 +216,32 @@ TEST_CASE("A Vulkan GPU without mesh shaders or bindless is refused", "[sysreq]"
 	everything.meshShaders        = false;
 	everything.descriptorIndexing = false;
 	everything.scalarBlockLayout  = false;
+	everything.synchronization    = false;
 	CHECK(
 		Requirements(bgpu::CheckSystemRequirements(everything)) ==
 		std::vector{ bgpu::Requirement::kVulkanMeshShaders,
 	                 bgpu::Requirement::kVulkanDescriptorIndexing,
-	                 bgpu::Requirement::kVulkanScalarBlockLayout });
+	                 bgpu::Requirement::kVulkanScalarBlockLayout,
+	                 bgpu::Requirement::kVulkanSynchronization });
+}
+
+// A 1.3 driver that hides a feature 1.3 makes mandatory is out of date or broken: the player is told
+// to update the driver, not to replace the card.
+TEST_CASE(
+	"A Vulkan driver without timeline semaphores or synchronization2 is told to update",
+	"[sysreq]")
+{
+	auto broken            = Rtx2060OnVulkan();
+	broken.synchronization = false;
+
+	const std::vector<bgpu::UnmetRequirement> unmet = bgpu::CheckSystemRequirements(broken);
+	CHECK(Requirements(unmet) == std::vector{ bgpu::Requirement::kVulkanSynchronization });
+	CHECK_THAT(
+		bgpu::DescribeUnmetRequirements(unmet),
+		Catch::Matchers::ContainsSubstring("graphics driver"));
+	CHECK_THAT(
+		bgpu::DescribeUnmetRequirements(unmet),
+		!Catch::Matchers::ContainsSubstring("graphics card with mesh shaders"));
 }
 
 TEST_CASE("A Vulkan machine's message is the one a D3D12 machine's is", "[sysreq]")
