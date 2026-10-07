@@ -310,6 +310,21 @@ Every test runs once. After a fix, rerun the cases that failed, by name, never t
 
 Delete `build/gbv/` and the `bin/.gbv-shard*` link directories once the result is reported.
 
+**Vulkan**, when the change reaches it (`libs/bgpu/src/vulkan`, `libs/bgl/src/vulkan` or
+`src/swapchain`, or a shader): `just build --preset windows-clang-vulkan-debug` and
+`just build bgl_tests --preset windows-clang-vulkan-gbv` (release, with tests), then
+`just test --no-build --build-dir build/ninja-clang-vulkan-debug bgpu bgl`, and synchronization
+validation over the whole suite from the release build:
+
+```bash
+VK_KHRONOS_VALIDATION_GPUAV_ENABLE=0 bash scripts/gbv_shards.sh build/ninja-clang-vulkan-gbv/bin "build/gbv/vk-$(date +%Y%m%d-%H%M)"
+```
+
+About eleven minutes. GPU-assisted validation is not a whole-suite run yet: it instruments every
+pipeline each renderer builds, and reached a tenth of the suite in fifteen minutes. Give it the cases
+the change reaches, with `VK_KHRONOS_VALIDATION_VALIDATE_SYNC=0` and the spec as the script's third
+argument. `GBV_TAG` names a run's shard directories when two share one `bin/`.
+
 ## macOS
 
 The engine's half of the workspace's `platform-check` on the mac, run in the worktree: the build,

@@ -466,9 +466,15 @@ texture is in one layout on Vulkan, so most barrier bugs there are missing depen
 
 | To check | Run |
 |---|---|
-| barriers, any suite whose cases set `enableGPUValidationLayer` (`bgl_tests` once the renderer is on Vulkan) | `just run bgl_tests -- --gpu-validation` |
+| barriers, `bgl_tests`, whose cases set `enableGPUValidationLayer` | `VK_KHRONOS_VALIDATION_GPUAV_ENABLE=0 bash scripts/gbv_shards.sh build/ninja-clang-vulkan-gbv/bin build/gbv/vk`: the release build of the `windows-clang-vulkan-gbv` preset, sharded as § 5 runs D3D12; about eleven minutes |
+| shader accesses, `bgl_tests` | `VK_KHRONOS_VALIDATION_VALIDATE_SYNC=0`, the same script with a spec as its third argument: GPU-assisted validation instruments every pipeline of every renderer, so the whole suite is hours -- give it the cases a change reaches |
 | barriers, `bgpu_tests`, whose cases make their own contexts | `VK_KHRONOS_VALIDATION_VALIDATE_SYNC=1 just test bgpu --no-build --build-dir build/ninja-clang-vulkan-debug` |
 | shader accesses, `bgpu_tests` | `VK_KHRONOS_VALIDATION_GPUAV_ENABLE=1 VK_KHRONOS_VALIDATION_VALIDATE_CORE=0`, same command |
+
+Validate the release build, as D3D12 does: a debug build compiles the GPU asserts
+(`BERNINI_GPU_DEBUG`) into every accessor of the buffer family, and every one of them is checked and
+instrumented too -- a debug run of the whole suite under both validators did not reach a fifth of it
+in an hour. The two validators are one flag, `--gpu-validation`; the environment turns either off.
 
 The environment overrides the layer's settings for every context in the process, the strict ones
 included. GPU-assisted validation from the environment ends a strict context: the layer warns of

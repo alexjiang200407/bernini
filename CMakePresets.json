@@ -248,7 +248,7 @@
     },
     {
       "name": "windows-clang-vulkan-debug",
-      "displayName": "Windows Clang Debug ninja - Vulkan (bgpu's compute half: no renderer yet)",
+      "displayName": "Windows Clang Debug ninja - Vulkan (brought up: the renderer and bgl_sphere)",
       "binaryDir": "${sourceDir}/build/ninja-clang-vulkan-debug",
       "inherits": [
         "vcpkg",
@@ -259,6 +259,22 @@
       ],
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "windows-clang-vulkan-gbv",
+      "displayName": "Windows Clang Release ninja - Vulkan, tests, for validation",
+      "binaryDir": "${sourceDir}/build/ninja-clang-vulkan-gbv",
+      "inherits": [
+        "vcpkg",
+        "windows",
+        "clang",
+        "vulkan",
+        "release"
+      ],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTS": "ON"
       }
     },
     {
@@ -354,6 +370,10 @@
     {
       "name": "windows-clang-vulkan-debug",
       "configurePreset": "windows-clang-vulkan-debug"
+    },
+    {
+      "name": "windows-clang-vulkan-gbv",
+      "configurePreset": "windows-clang-vulkan-gbv"
     },
     {
       "name": "macos-clang-metal-debug",
