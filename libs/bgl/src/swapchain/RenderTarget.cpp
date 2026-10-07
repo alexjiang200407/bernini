@@ -355,6 +355,16 @@ namespace bgl
 	void
 	RenderTarget::ReimportBackbuffers()
 	{
+		// A window resized under the target: it follows, as a Resize to that size would make it.
+		const bgpu::TextureDesc image = m_Swapchain->GetImages().front().texture;
+		if (image.width != GetWidth() || image.height != GetHeight())
+		{
+			DestroyRenderTargets();
+			SetSize(image.width, image.height, GetRenderScale());
+			RecreateRenderTargets();
+			return;
+		}
+
 		DestroyBackbuffers();
 		CreateBackbuffers();
 		ResetFrameRing();

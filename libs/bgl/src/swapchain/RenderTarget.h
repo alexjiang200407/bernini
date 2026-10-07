@@ -321,7 +321,7 @@ namespace bgl
 		void
 		DestroyBackbuffers() noexcept;
 
-		// After the swapchain remade its images at the size it had: the attachments stay.
+		// After the swapchain remade its images: the attachments stay unless their size changed.
 		void
 		ReimportBackbuffers();
 

@@ -62,7 +62,8 @@ namespace bgl
 		 * until one is free.
 		 *
 		 * @return true when the window no longer matched the images and the swapchain remade them,
-		 *         at the size it had, after idling the queue: every image must be imported again.
+		 *         at the window's size, after idling the queue: every image must be imported again,
+		 *         and the target takes on their size if it changed.
 		 */
 		[[nodiscard]] virtual bool
 		Present(uint64_t frameFence) noexcept = 0;

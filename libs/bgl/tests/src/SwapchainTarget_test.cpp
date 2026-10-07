@@ -46,8 +46,11 @@ namespace
 	{
 		std::vector<uint64_t> presentedFences;
 		uint32_t              resizes = 0;
-		// The next present finds the window changed and remakes the images, as Vulkan's does.
-		bool remakeAtNextPresent = false;
+		// The next present finds the window changed and remakes the images, as Vulkan's does: at
+		// the size given, or at the one they had when it is zero.
+		bool     remakeAtNextPresent = false;
+		uint32_t remakeWidth         = 0;
+		uint32_t remakeHeight        = 0;
 	};
 
 	class FakeSwapchain final : public bgl::Swapchain
@@ -120,7 +123,9 @@ namespace
 				m_Log.remakeAtNextPresent    = false;
 				const bgpu::TextureDesc desc = m_Rm.GetTextureDesc(m_Images[0]);
 				DestroyImages();
-				MakeImages(desc.width, desc.height);
+				MakeImages(
+					m_Log.remakeWidth != 0 ? m_Log.remakeWidth : desc.width,
+					m_Log.remakeHeight != 0 ? m_Log.remakeHeight : desc.height);
 				m_Current = 0;
 				return true;
 			}
@@ -334,5 +339,37 @@ TEST_CASE(
 	CHECK(BackbufferImage(*target, *owner.rm, 0) == fake->NativeImage(0));
 	CHECK(target->GetBackbufferLayout(0) == bgpu::BarrierLayout::kUndefined);
 	CHECK(target->GetDepthTexture() == depth);
+}
+TEST_CASE(
+	"A swapchain target takes on the size its window remade its images at",
+	"[render][swapchain]")
+{
+	auto owner = Owner();
+	auto log   = FakeLog();
+
+	auto desc   = bgl::RenderTargetDesc();
+	desc.width  = 8;
+	desc.height = 8;
+
+	auto target = core::SharedRef<bgl::RenderTarget>::Make(
+		desc,
+		std::make_unique<FakeSwapchain>(*owner.rm, log, 8, 8),
+		owner.device,
+		owner.queue,
+		owner.rm);
+
+	log.remakeAtNextPresent = true;
+	log.remakeWidth         = 12;
+	log.remakeHeight        = 6;
+	target->PresentAndAdvance();
+
+	// Every attachment follows, not only the backbuffers: a frame draws them all at one size.
+	CHECK(target->GetWidth() == 12);
+	CHECK(target->GetHeight() == 6);
+	CHECK(owner.rm->GetTextureDesc(target->GetBackbufferTexture(0)).width == 12);
+	CHECK(owner.rm->GetTextureDesc(target->GetDepthTexture()).width == 12);
+	CHECK(owner.rm->GetTextureDesc(target->GetSceneColorTexture()).height == 6);
+	CHECK(target->GetFrameIndex() == 0);
+	CHECK(log.resizes == 0);
 }
 #endif
