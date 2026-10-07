@@ -13,7 +13,6 @@
 #include "resource/Srv_vulkan.h"
 #include "resource/Texture_vulkan.h"
 #include "volk_vulkan.h"
-#include "vulkan_util.h"
 #include <algorithm>
 #include <bgpu/GpuContext.h>
 #include <bgpu/cmd/CommandQueue.h>

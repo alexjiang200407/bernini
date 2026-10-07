@@ -2,8 +2,11 @@
 #include "volk_vulkan.h"
 #include <bgpu/resource/Sampler.h>
 #include <bgpu/types/Barrier.h>
+#include <bgpu/types/BlendState.h>
+#include <bgpu/types/DepthStencilState.h>
 #include <bgpu/types/Format.h>
 #include <bgpu/types/QueueType.h>
+#include <bgpu/types/RasterState.h>
 #include <bgpu/types/TextureDimension.h>
 #include <cstdint>
 #include <span>
@@ -47,6 +50,22 @@ namespace bgpu
 	ConvertSamplerDesc(
 		const SamplerDesc&                desc,
 		VkSamplerReductionModeCreateInfo& reduction) noexcept;
+
+	/**
+	 * A raster state as Vulkan takes it. D3D12's depth clip off is depth clamp on; the states core
+	 * Vulkan has no feature for -- conservative rasterization, a forced sample count -- end the
+	 * process when set.
+	 */
+	[[nodiscard]] VkPipelineRasterizationStateCreateInfo
+	ConvertRasterState(const RasterState& state) noexcept;
+
+	/** A depth-stencil state as Vulkan takes it, its stencil reference included. */
+	[[nodiscard]] VkPipelineDepthStencilStateCreateInfo
+	ConvertDepthStencilState(const DepthStencilState& state) noexcept;
+
+	/** One render target's blend: D3D12's blend is always independent, one per target. */
+	[[nodiscard]] VkPipelineColorBlendAttachmentState
+	ConvertBlendTarget(const BlendState::RenderTarget& target) noexcept;
 
 	/** The synchronization2 stages a D3D12 enhanced barrier's sync names. */
 	[[nodiscard]] VkPipelineStageFlags2

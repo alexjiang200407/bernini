@@ -145,11 +145,9 @@ refused, even when a second GPU would pass, because the engine does not choose a
 ## Vulkan
 
 `RENDERER_BACKEND=VULKAN` is a third backend being brought up on Windows ahead of the Linux build
-that needs it: **the context and the RHI but its draws.** `CreateDevice` gives an owner buffers,
-textures with their shader, render and depth views, samplers, queues, command lists and compute
-pipelines; the meshlet pipeline and its dispatches end the process naming what is missing. Nothing
-above `bgpu` is built — no renderer, no crowd libraries, no editor — and `bgpu_tests` runs
-everything but the cases that draw. D3D12 stays the Windows default; only the
+that needs it: **the context and the whole RHI**, every case of `bgpu_tests` included. Nothing
+above `bgpu` is built — no renderer, no crowd libraries, no editor; the renderer's backend half and
+its swapchain are the next step. D3D12 stays the Windows default; only the
 `windows-clang-vulkan-debug` preset selects this.
 
 * **The first physical device, as D3D12 takes DXGI's first adapter.** The loader sorts what it
@@ -223,6 +221,20 @@ against D3D12 and Metal:
   subresources: in `GENERAL` it needs no render pass. An integer target's clear converts D3D12's
   floats to its own type. A render target view of a 3D texture names a range of its depth slices,
   reached as the layers of a 2D-array view, so such a texture is made 2D-array compatible.
+* **A mesh dispatch draws inside dynamic rendering, opened lazily.** D3D12 binds targets and
+  draws; Vulkan draws between `vkCmdBeginRendering` and `vkCmdEndRendering`. The first mesh
+  dispatch begins rendering on its meshlet state's frame buffer, loading and storing every
+  attachment as D3D12 keeps them; draws on that same frame buffer stay inside it, and every other
+  command ends it first. A meshlet pipeline is made for dynamic rendering into its desc's formats,
+  with its viewports and scissors, any number of each, set per draw.
+* **D3D's clip space, through a negative-height viewport.** Every viewport is flipped — origin at
+  its bottom edge, height negative — which mirrors D3D's +y-up clip space into Vulkan's +y-down, so
+  the same SPIR-V draws the image D3D12 draws and D3D12's winding rule carries over unchanged.
+  Slang's `-fvk-invert-y` would flip only the positions a mesh stage writes, and change the program
+  cache's contents. Depth clip off is depth clamp on. An indirect dispatch reads D3D12's argument
+  layout, which is `VkDrawMeshTasksIndirectCommandEXT`; a count dispatch draws at most one, as
+  D3D12's `ExecuteIndirect` here does. The stencil reference is baked into the pipeline, so unlike
+  D3D12 it is honoured.
 * **A new texture reaches `GENERAL` at its first submission.** An image is born `UNDEFINED`, so the
   manager keeps the transitions of the textures it made, and the queue that next submits a list
   recorded against it submits them first, from a command buffer of its own: the list's allocator
@@ -272,7 +284,8 @@ import outliving its producer, a constant buffer at D3D12's offsets, a pipeline 
 program, a recording read back, a kernel dispatched, a wait between two queues, how owners spread
 over the queues, and a timed span. `TextureRoundTrip_test` runs on every backend: a texture written
 and read back, one a kernel samples through its view and a sampler, and a colour and a depth target
-read back as what they were cleared to.
+read back as what they were cleared to. `MeshDispatch_test` pins which way up a mesh dispatch draws
+and how many groups an indirect one runs, a count of zero included.
 
 ## Threading & Synchronization
 

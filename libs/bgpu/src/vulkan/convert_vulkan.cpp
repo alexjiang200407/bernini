@@ -2,9 +2,12 @@
 #include "volk_vulkan.h"
 #include <bgpu/resource/Sampler.h>
 #include <bgpu/types/Barrier.h>
+#include <bgpu/types/BlendState.h>
 #include <bgpu/types/Color.h>
+#include <bgpu/types/DepthStencilState.h>
 #include <bgpu/types/Format.h>
 #include <bgpu/types/QueueType.h>
+#include <bgpu/types/RasterState.h>
 #include <bgpu/types/TextureDimension.h>
 #include <core/err/util.h>
 #include <cstdint>
@@ -329,6 +332,209 @@ namespace bgpu
 			break;
 		}
 		return info;
+	}
+
+	namespace
+	{
+		[[nodiscard]] VkCompareOp
+		ConvertCompare(const ComparisonFunc func) noexcept
+		{
+			switch (func)
+			{
+			case ComparisonFunc::kNever:
+				return VK_COMPARE_OP_NEVER;
+			case ComparisonFunc::kLess:
+				return VK_COMPARE_OP_LESS;
+			case ComparisonFunc::kEqual:
+				return VK_COMPARE_OP_EQUAL;
+			case ComparisonFunc::kLessOrEqual:
+				return VK_COMPARE_OP_LESS_OR_EQUAL;
+			case ComparisonFunc::kGreater:
+				return VK_COMPARE_OP_GREATER;
+			case ComparisonFunc::kNotEqual:
+				return VK_COMPARE_OP_NOT_EQUAL;
+			case ComparisonFunc::kGreaterOrEqual:
+				return VK_COMPARE_OP_GREATER_OR_EQUAL;
+			case ComparisonFunc::kAlways:
+				return VK_COMPARE_OP_ALWAYS;
+			}
+			core::fatal("Unknown comparison {}", static_cast<uint32_t>(func));
+		}
+
+		[[nodiscard]] VkStencilOp
+		ConvertStencil(const StencilOp op) noexcept
+		{
+			switch (op)
+			{
+			case StencilOp::kKeep:
+				return VK_STENCIL_OP_KEEP;
+			case StencilOp::kZero:
+				return VK_STENCIL_OP_ZERO;
+			case StencilOp::kReplace:
+				return VK_STENCIL_OP_REPLACE;
+			case StencilOp::kIncrementAndClamp:
+				return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
+			case StencilOp::kDecrementAndClamp:
+				return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
+			case StencilOp::kInvert:
+				return VK_STENCIL_OP_INVERT;
+			case StencilOp::kIncrementAndWrap:
+				return VK_STENCIL_OP_INCREMENT_AND_WRAP;
+			case StencilOp::kDecrementAndWrap:
+				return VK_STENCIL_OP_DECREMENT_AND_WRAP;
+			}
+			core::fatal("Unknown stencil op {}", static_cast<uint32_t>(op));
+		}
+
+		[[nodiscard]] VkStencilOpState
+		ConvertStencilFace(
+			const DepthStencilState&                state,
+			const DepthStencilState::StencilOpDesc& face) noexcept
+		{
+			auto result        = VkStencilOpState();
+			result.failOp      = ConvertStencil(face.failOp);
+			result.passOp      = ConvertStencil(face.passOp);
+			result.depthFailOp = ConvertStencil(face.depthFailOp);
+			result.compareOp   = ConvertCompare(face.stencilFunc);
+			result.compareMask = state.stencilReadMask;
+			result.writeMask   = state.stencilWriteMask;
+			result.reference   = state.stencilRefValue;
+			return result;
+		}
+
+		[[nodiscard]] VkBlendFactor
+		ConvertBlendFactor(const BlendFactor factor) noexcept
+		{
+			switch (factor)
+			{
+			case BlendFactor::kZero:
+				return VK_BLEND_FACTOR_ZERO;
+			case BlendFactor::kOne:
+				return VK_BLEND_FACTOR_ONE;
+			case BlendFactor::kSrcColor:
+				return VK_BLEND_FACTOR_SRC_COLOR;
+			case BlendFactor::kInvSrcColor:
+				return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+			case BlendFactor::kSrcAlpha:
+				return VK_BLEND_FACTOR_SRC_ALPHA;
+			case BlendFactor::kInvSrcAlpha:
+				return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+			case BlendFactor::kDstAlpha:
+				return VK_BLEND_FACTOR_DST_ALPHA;
+			case BlendFactor::kInvDstAlpha:
+				return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+			case BlendFactor::kDstColor:
+				return VK_BLEND_FACTOR_DST_COLOR;
+			case BlendFactor::kInvDstColor:
+				return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+			case BlendFactor::kSrcAlphaSaturate:
+				return VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;
+			case BlendFactor::kConstantColor:
+				return VK_BLEND_FACTOR_CONSTANT_COLOR;
+			case BlendFactor::kInvConstantColor:
+				return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
+			case BlendFactor::kSrc1Color:
+				return VK_BLEND_FACTOR_SRC1_COLOR;
+			case BlendFactor::kInvSrc1Color:
+				return VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR;
+			case BlendFactor::kSrc1Alpha:
+				return VK_BLEND_FACTOR_SRC1_ALPHA;
+			case BlendFactor::kInvSrc1Alpha:
+				return VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA;
+			}
+			core::fatal("Unknown blend factor {}", static_cast<uint32_t>(factor));
+		}
+
+		[[nodiscard]] VkBlendOp
+		ConvertBlendOp(const BlendOp op) noexcept
+		{
+			switch (op)
+			{
+			case BlendOp::kAdd:
+				return VK_BLEND_OP_ADD;
+			case BlendOp::kSubtract:
+				return VK_BLEND_OP_SUBTRACT;
+			case BlendOp::kReverseSubtract:
+				return VK_BLEND_OP_REVERSE_SUBTRACT;
+			case BlendOp::kMin:
+				return VK_BLEND_OP_MIN;
+			case BlendOp::kMax:
+				return VK_BLEND_OP_MAX;
+			}
+			core::fatal("Unknown blend op {}", static_cast<uint32_t>(op));
+		}
+	}
+
+	VkPipelineRasterizationStateCreateInfo
+	ConvertRasterState(const RasterState& state) noexcept
+	{
+		core::ensure(
+			!state.conservativeRasterEnable,
+			"Conservative rasterization is not part of the Vulkan bar");
+		core::ensure(
+			state.forcedSampleCount == 0,
+			"A forced sample count is not part of the Vulkan bar");
+
+		auto info             = VkPipelineRasterizationStateCreateInfo();
+		info.sType            = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+		info.depthClampEnable = state.depthClipEnable ? VK_FALSE : VK_TRUE;
+		info.polygonMode = state.fillMode == RasterFillMode::kWireframe ? VK_POLYGON_MODE_LINE :
+		                                                                  VK_POLYGON_MODE_FILL;
+		switch (state.cullMode)
+		{
+		case RasterCullMode::kBack:
+			info.cullMode = VK_CULL_MODE_BACK_BIT;
+			break;
+		case RasterCullMode::kFront:
+			info.cullMode = VK_CULL_MODE_FRONT_BIT;
+			break;
+		case RasterCullMode::kNone:
+			info.cullMode = VK_CULL_MODE_NONE;
+			break;
+		}
+		// The viewport's negative height mirrors D3D's clip space into Vulkan's, winding included,
+		// so D3D12's rule carries over unchanged.
+		info.frontFace =
+			state.frontCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
+		info.depthBiasEnable =
+			state.depthBias != 0 || state.slopeScaledDepthBias != 0.f ? VK_TRUE : VK_FALSE;
+		info.depthBiasConstantFactor = static_cast<float>(state.depthBias);
+		info.depthBiasClamp          = state.depthBiasClamp;
+		info.depthBiasSlopeFactor    = state.slopeScaledDepthBias;
+		info.lineWidth               = 1.f;
+		return info;
+	}
+
+	VkPipelineDepthStencilStateCreateInfo
+	ConvertDepthStencilState(const DepthStencilState& state) noexcept
+	{
+		auto info              = VkPipelineDepthStencilStateCreateInfo();
+		info.sType             = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+		info.depthTestEnable   = state.depthTestEnable ? VK_TRUE : VK_FALSE;
+		info.depthWriteEnable  = state.depthWriteEnable ? VK_TRUE : VK_FALSE;
+		info.depthCompareOp    = ConvertCompare(state.depthFunc);
+		info.stencilTestEnable = state.stencilEnable ? VK_TRUE : VK_FALSE;
+		info.front             = ConvertStencilFace(state, state.frontFaceStencil);
+		info.back              = ConvertStencilFace(state, state.backFaceStencil);
+		info.minDepthBounds    = 0.f;
+		info.maxDepthBounds    = 1.f;
+		return info;
+	}
+
+	VkPipelineColorBlendAttachmentState
+	ConvertBlendTarget(const BlendState::RenderTarget& target) noexcept
+	{
+		auto result                = VkPipelineColorBlendAttachmentState();
+		result.blendEnable         = target.blendEnable ? VK_TRUE : VK_FALSE;
+		result.srcColorBlendFactor = ConvertBlendFactor(target.srcBlend);
+		result.dstColorBlendFactor = ConvertBlendFactor(target.destBlend);
+		result.colorBlendOp        = ConvertBlendOp(target.blendOp);
+		result.srcAlphaBlendFactor = ConvertBlendFactor(target.srcBlendAlpha);
+		result.dstAlphaBlendFactor = ConvertBlendFactor(target.destBlendAlpha);
+		result.alphaBlendOp        = ConvertBlendOp(target.blendOpAlpha);
+		// Both name red, green, blue and alpha as bits 0 to 3.
+		result.colorWriteMask = static_cast<VkColorComponentFlags>(target.colorWriteMask);
+		return result;
 	}
 
 	VkPipelineStageFlags2

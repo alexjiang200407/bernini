@@ -6,10 +6,13 @@
 #include "convert_vulkan.h"
 #include "native_device_vulkan.h"
 #include "pipeline/ComputePipeline_vulkan.h"
+#include "pipeline/MeshletPipeline_vulkan.h"
 #include "resource/BindlessTable_vulkan.h"
 #include "resource/Buffer_vulkan.h"
+#include "resource/Dsv_vulkan.h"
 #include "resource/ReadbackBuffer_vulkan.h"
 #include "resource/ResourceManager_vulkan.h"
+#include "resource/Rtv_vulkan.h"
 #include "resource/Texture_vulkan.h"
 #include "volk_vulkan.h"
 #include "vulkan_util.h"
@@ -19,7 +22,9 @@
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/cmd/TimestampHeap.h>
+#include <bgpu/constants/constants.h>
 #include <bgpu/pipeline/ComputeKernel.h>
+#include <bgpu/pipeline/MeshletKernel.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/Dsv.h>
 #include <bgpu/resource/Readback.h>
@@ -30,7 +35,11 @@
 #include <bgpu/types/ComputeState.h>
 #include <bgpu/types/FormatInfo.h>
 #include <bgpu/types/MeshletState.h>
+#include <bgpu/types/Rect.h>
+#include <bgpu/types/Viewport.h>
+#include <bgpu/types/ViewportState.h>
 #include <bgpu/uniforms/DescriptorHandle.h>
+#include <core/containers/static_vector.h>
 #include <core/err/util.h>
 #include <core/math.h>
 #include <cstddef>
@@ -50,6 +59,59 @@ namespace bgpu
 	{
 		// What a staged copy's source offset is aligned to; any multiple of 4 serves a buffer copy.
 		constexpr uint64_t c_CopyAlignment = 16;
+
+		[[nodiscard]] bool
+		SameFrameBuffer(const FrameBuffer& a, const FrameBuffer& b) noexcept
+		{
+			const auto sameRtv = [](const RtvHandle& x, const RtvHandle& y) {
+				return x.idx == y.idx && x.generation == y.generation;
+			};
+			return std::ranges::equal(a.colorAttachments, b.colorAttachments, sameRtv) &&
+			       a.depthAttachment.idx == b.depthAttachment.idx &&
+			       a.depthAttachment.generation == b.depthAttachment.generation;
+		}
+
+		// D3D12 clears a target as render-target work, ordered before the draws into it with no
+		// barrier; Vulkan clears as a transfer, so the clear makes itself visible to them.
+		void
+		ClearToAttachment(
+			const VkCommandBuffer          commandBuffer,
+			const VkImage                  image,
+			const VkImageSubresourceRange& range,
+			const VkPipelineStageFlags2    stages,
+			const VkAccessFlags2           access) noexcept
+		{
+			auto barrier                = VkImageMemoryBarrier2();
+			barrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+			barrier.srcStageMask        = VK_PIPELINE_STAGE_2_CLEAR_BIT;
+			barrier.srcAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+			barrier.dstStageMask        = stages;
+			barrier.dstAccessMask       = access;
+			barrier.oldLayout           = VK_IMAGE_LAYOUT_GENERAL;
+			barrier.newLayout           = VK_IMAGE_LAYOUT_GENERAL;
+			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.image               = image;
+			barrier.subresourceRange    = range;
+
+			auto dependency                    = VkDependencyInfo();
+			dependency.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+			dependency.imageMemoryBarrierCount = 1;
+			dependency.pImageMemoryBarriers    = &barrier;
+			vkCmdPipelineBarrier2(commandBuffer, &dependency);
+		}
+
+		[[nodiscard]] VkRenderingAttachmentInfo
+		LoadAndStore(const VkImageView view) noexcept
+		{
+			auto attachment        = VkRenderingAttachmentInfo();
+			attachment.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+			attachment.imageView   = view;
+			attachment.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+			attachment.loadOp      = VK_ATTACHMENT_LOAD_OP_LOAD;
+			attachment.storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
+			return attachment;
+		}
 	}
 
 	CommandList::CommandList(const CommandListDesc& desc, ResourceManagerRef resourceManager) :
@@ -135,8 +197,10 @@ namespace bgpu
 		core::ensure(m_Open, "Command list must be open before closing");
 		core::ensure(m_TimingPool == VK_NULL_HANDLE, "Command list closed with a timed span open");
 
+		EndRendering();
 		EnsureVk(vkEndCommandBuffer(m_CommandBuffer), "vkEndCommandBuffer");
 		m_ComputeState.reset();
+		m_MeshletState.reset();
 		m_Open = false;
 	}
 
@@ -153,6 +217,7 @@ namespace bgpu
 		const size_t       gpuBufferOffset,
 		const size_t       byteSize) noexcept
 	{
+		EndRendering();
 		core::ensure(m_Open, "WriteBuffer on a closed command list");
 		if (byteSize == 0)
 			return;
@@ -181,6 +246,7 @@ namespace bgpu
 		const uint64_t     srcOffset,
 		const uint64_t     byteSize) noexcept
 	{
+		EndRendering();
 		if (byteSize == 0)
 			return;
 
@@ -210,6 +276,7 @@ namespace bgpu
 		const ReadbackBufferHandle dst,
 		const BufferHandle         src) noexcept
 	{
+		EndRendering();
 		const Buffer&         srcBuffer = GetBuffer(src);
 		const ReadbackBuffer& readback  = m_ResourceManager->GetReadbackBuffer(dst);
 		const uint64_t        byteSize  = srcBuffer.GetDesc().byteSize;
@@ -240,6 +307,7 @@ namespace bgpu
 		const std::span<const BufferHandle>      handles,
 		const std::span<const BufferBarrierDesc> barriers) noexcept
 	{
+		EndRendering();
 		core::ensure(
 			handles.size() == barriers.size(),
 			"Barrier handle/desc spans must match in size");
@@ -278,6 +346,7 @@ namespace bgpu
 		const std::span<const TextureHandle>      handles,
 		const std::span<const TextureBarrierDesc> barriers) noexcept
 	{
+		EndRendering();
 		core::ensure(
 			handles.size() == barriers.size(),
 			"Barrier handle/desc spans must match in size");
@@ -348,8 +417,15 @@ namespace bgpu
 		const VkImageSubresourceRange& range,
 		const VkClearColorValue&       value) noexcept
 	{
+		EndRendering();
 		core::ensure(m_Open, "A clear on a closed command list");
 		vkCmdClearColorImage(m_CommandBuffer, image, VK_IMAGE_LAYOUT_GENERAL, &value, 1, &range);
+		ClearToAttachment(
+			m_CommandBuffer,
+			image,
+			range,
+			VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+			VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 	}
 
 	void
@@ -358,6 +434,7 @@ namespace bgpu
 		const VkImageSubresourceRange&  range,
 		const VkClearDepthStencilValue& value) noexcept
 	{
+		EndRendering();
 		core::ensure(m_Open, "A clear on a closed command list");
 		vkCmdClearDepthStencilImage(
 			m_CommandBuffer,
@@ -366,6 +443,14 @@ namespace bgpu
 			&value,
 			1,
 			&range);
+		ClearToAttachment(
+			m_CommandBuffer,
+			image,
+			range,
+			VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
+				VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+			VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+				VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
 	}
 
 	void
@@ -373,6 +458,7 @@ namespace bgpu
 		const TextureHandle                           handle,
 		const std::span<const TextureSubresourceData> subresources) noexcept
 	{
+		EndRendering();
 		core::ensure(m_Open, "WriteTexture on a closed command list");
 		if (subresources.empty())
 			return;
@@ -457,6 +543,7 @@ namespace bgpu
 		const ReadbackBufferHandle dst,
 		const TextureHandle        src) noexcept
 	{
+		EndRendering();
 		const Texture&              texture  = GetTexture(src);
 		const ReadbackBuffer&       readback = m_ResourceManager->GetReadbackBuffer(dst);
 		const TextureReadbackLayout layout   = texture.GetReadbackLayout();
@@ -508,6 +595,7 @@ namespace bgpu
 		const uint32_t  startSlot,
 		const uint32_t  endSlot) noexcept
 	{
+		EndRendering();
 		core::ensure(m_Open, "BeginTiming on a closed command list");
 		core::ensure(m_TimingPool == VK_NULL_HANDLE, "BeginTiming while a timed span is open");
 		core::ensure(
@@ -547,6 +635,7 @@ namespace bgpu
 		const uint32_t  first,
 		const uint32_t  count) noexcept
 	{
+		EndRendering();
 		core::ensure(m_Open, "ResolveTimestamps on a closed command list");
 		core::ensure(first + count <= heap.GetCapacity(), "ResolveTimestamps outside the heap");
 		if (count == 0)
@@ -581,8 +670,132 @@ namespace bgpu
 	void
 	CommandList::SetMeshletState(const MeshletState& gfxState) noexcept
 	{
-		(void)gfxState;
-		NotOnVulkanYet("ICommandList::SetMeshletState");
+		m_MeshletState = gfxState;
+	}
+
+	void
+	CommandList::EndRendering() noexcept
+	{
+		if (!m_Rendering)
+			return;
+		vkCmdEndRendering(m_CommandBuffer);
+		m_Rendering = false;
+	}
+
+	void
+	CommandList::BeginRendering(const FrameBuffer& frameBuffer) noexcept
+	{
+		auto       extent = VkExtent2D{ UINT32_MAX, UINT32_MAX };
+		const auto fit    = [&extent](const VkExtent3D& mip) {
+			extent.width  = std::min(extent.width, mip.width);
+			extent.height = std::min(extent.height, mip.height);
+		};
+
+		auto colors = core::static_vector<VkRenderingAttachmentInfo, c_MaxRenderTargets>();
+		for (const RtvHandle& handle : frameBuffer.colorAttachments)
+		{
+			const Rtv& rtv = m_ResourceManager->GetRtv(handle);
+			colors.push_back(LoadAndStore(rtv.GetVkImageView()));
+			fit(GetTexture(rtv.GetTextureHandle()).GetMipExtent(rtv.GetRange().baseMipLevel));
+		}
+
+		auto info                 = VkRenderingInfo();
+		info.sType                = VK_STRUCTURE_TYPE_RENDERING_INFO;
+		info.layerCount           = 1;
+		info.colorAttachmentCount = static_cast<uint32_t>(colors.size());
+		info.pColorAttachments    = colors.data();
+
+		auto depth = VkRenderingAttachmentInfo();
+		if (!frameBuffer.depthAttachment.IsNull())
+		{
+			const Dsv&     dsv     = m_ResourceManager->GetDsv(frameBuffer.depthAttachment);
+			const Texture& texture = GetTexture(dsv.GetTextureHandle());
+			depth                  = LoadAndStore(dsv.GetVkImageView());
+			if ((texture.GetAspects() & VK_IMAGE_ASPECT_DEPTH_BIT) != 0)
+				info.pDepthAttachment = &depth;
+			if ((texture.GetAspects() & VK_IMAGE_ASPECT_STENCIL_BIT) != 0)
+				info.pStencilAttachment = &depth;
+			fit(texture.GetMipExtent(dsv.GetRange().baseMipLevel));
+		}
+
+		// D3D12 rasterizes with no target at all; the viewports then bound the area drawn.
+		if (extent.width == UINT32_MAX)
+		{
+			extent = VkExtent2D{ 0, 0 };
+			for (const Viewport& viewport : m_MeshletState->viewportState.viewports)
+			{
+				extent.width  = std::max(extent.width, static_cast<uint32_t>(viewport.maxX));
+				extent.height = std::max(extent.height, static_cast<uint32_t>(viewport.maxY));
+			}
+		}
+		info.renderArea.extent = extent;
+
+		vkCmdBeginRendering(m_CommandBuffer, &info);
+		m_Rendering            = true;
+		m_RenderingFrameBuffer = frameBuffer;
+	}
+
+	void
+	CommandList::ApplyMeshletState() noexcept
+	{
+		core::ensure(m_MeshletState.has_value(), "Graphics state must be set before drawing");
+		core::ensure(
+			m_MeshletState->kernel != nullptr && m_MeshletState->kernel->pipeline.IsInitialized(),
+			"Meshlet kernel must be set in graphics state");
+
+		const FrameBuffer& frameBuffer = m_MeshletState->frameBuffer;
+		if (m_Rendering && !SameFrameBuffer(frameBuffer, m_RenderingFrameBuffer))
+			EndRendering();
+		if (!m_Rendering)
+			BeginRendering(frameBuffer);
+
+		const MeshletKernel& kernel   = *m_MeshletState->kernel;
+		const auto*          pipeline = kernel.pipeline->As<MeshletPipeline>();
+		vkCmdBindPipeline(
+			m_CommandBuffer,
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			pipeline->GetVkPipeline());
+		BindSets(
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			pipeline->GetVkPipelineLayout(),
+			pipeline->GetConstantsSetLayout(),
+			pipeline->GetConstantBufferBindings(),
+			kernel.uniforms);
+
+		// Each viewport is flipped, origin at its bottom edge and height negative, which mirrors
+		// D3D's clip space, +y up, into Vulkan's, +y down: the same SPIR-V draws the image D3D12 does.
+		const ViewportState& state = m_MeshletState->viewportState;
+		auto viewports = core::static_vector<VkViewport, ViewportState::c_MaxViewports>();
+		for (const Viewport& viewport : state.viewports)
+		{
+			viewports.push_back(
+				VkViewport{
+					.x        = viewport.minX,
+					.y        = viewport.maxY,
+					.width    = viewport.maxX - viewport.minX,
+					.height   = viewport.minY - viewport.maxY,
+					.minDepth = viewport.minZ,
+					.maxDepth = viewport.maxZ,
+				});
+		}
+		auto scissors = core::static_vector<VkRect2D, ViewportState::c_MaxViewports>();
+		for (const Rect& rect : state.scissorRects)
+		{
+			scissors.push_back(
+				VkRect2D{
+					.offset = { rect.minX, rect.minY },
+					.extent = { static_cast<uint32_t>(rect.maxX - rect.minX),
+			                    static_cast<uint32_t>(rect.maxY - rect.minY) },
+				});
+		}
+		vkCmdSetViewportWithCount(
+			m_CommandBuffer,
+			static_cast<uint32_t>(viewports.size()),
+			viewports.data());
+		vkCmdSetScissorWithCount(
+			m_CommandBuffer,
+			static_cast<uint32_t>(scissors.size()),
+			scissors.data());
 	}
 
 	void
@@ -591,25 +804,53 @@ namespace bgpu
 		const uint32_t threadGroupCountY,
 		const uint32_t threadGroupCountZ) noexcept
 	{
-		(void)threadGroupCountX;
-		(void)threadGroupCountY;
-		(void)threadGroupCountZ;
-		NotOnVulkanYet("ICommandList::DispatchMesh");
+		ApplyMeshletState();
+		vkCmdDrawMeshTasksEXT(
+			m_CommandBuffer,
+			threadGroupCountX,
+			threadGroupCountY,
+			threadGroupCountZ);
 	}
+
+	// D3D12's D3D12_DISPATCH_MESH_ARGUMENTS and Vulkan's command are the same three uint32s.
+	static_assert(sizeof(VkDrawMeshTasksIndirectCommandEXT) == 3 * sizeof(uint32_t));
 
 	void
 	CommandList::DispatchMeshIndirect(const uint32_t argIdx) noexcept
 	{
-		(void)argIdx;
-		NotOnVulkanYet("ICommandList::DispatchMeshIndirect");
+		ApplyMeshletState();
+		core::ensure(
+			!m_MeshletState->indirectArgs.IsNull(),
+			"MeshletState.indirectArgs must be set for DispatchMeshIndirect");
+
+		vkCmdDrawMeshTasksIndirectEXT(
+			m_CommandBuffer,
+			GetBuffer(m_MeshletState->indirectArgs).GetVkBuffer(),
+			static_cast<VkDeviceSize>(argIdx) * sizeof(VkDrawMeshTasksIndirectCommandEXT),
+			1,
+			sizeof(VkDrawMeshTasksIndirectCommandEXT));
 	}
 
 	void
 	CommandList::DispatchMeshIndirectCount(const uint32_t argIdx, const uint32_t countIdx) noexcept
 	{
-		(void)argIdx;
-		(void)countIdx;
-		NotOnVulkanYet("ICommandList::DispatchMeshIndirectCount");
+		ApplyMeshletState();
+		core::ensure(
+			!m_MeshletState->indirectArgs.IsNull(),
+			"MeshletState.indirectArgs must be set for DispatchMeshIndirectCount");
+		core::ensure(
+			!m_MeshletState->commandCounts.IsNull(),
+			"MeshletState.commandCounts must be set for DispatchMeshIndirectCount");
+
+		// At most one, as D3D12's ExecuteIndirect here is given.
+		vkCmdDrawMeshTasksIndirectCountEXT(
+			m_CommandBuffer,
+			GetBuffer(m_MeshletState->indirectArgs).GetVkBuffer(),
+			static_cast<VkDeviceSize>(argIdx) * sizeof(VkDrawMeshTasksIndirectCommandEXT),
+			GetBuffer(m_MeshletState->commandCounts).GetVkBuffer(),
+			static_cast<VkDeviceSize>(countIdx) * sizeof(uint32_t),
+			1,
+			sizeof(VkDrawMeshTasksIndirectCommandEXT));
 	}
 
 	void
@@ -664,6 +905,7 @@ namespace bgpu
 		const uint32_t threadGroupCountY,
 		const uint32_t threadGroupCountZ) noexcept
 	{
+		EndRendering();
 		core::ensure(m_ComputeState.has_value(), "Compute state must be set before dispatch");
 		core::ensure(
 			m_ComputeState->kernel != nullptr && m_ComputeState->kernel->pipeline.IsInitialized(),
@@ -671,13 +913,29 @@ namespace bgpu
 
 		const ComputeKernel& kernel   = *m_ComputeState->kernel;
 		const auto*          pipeline = kernel.pipeline->As<ComputePipeline>();
-		const auto           bindings = pipeline->GetConstantBufferBindings();
 
 		vkCmdBindPipeline(
 			m_CommandBuffer,
 			VK_PIPELINE_BIND_POINT_COMPUTE,
 			pipeline->GetVkPipeline());
+		BindSets(
+			VK_PIPELINE_BIND_POINT_COMPUTE,
+			pipeline->GetVkPipelineLayout(),
+			pipeline->GetConstantsSetLayout(),
+			pipeline->GetConstantBufferBindings(),
+			kernel.uniforms);
 
+		vkCmdDispatch(m_CommandBuffer, threadGroupCountX, threadGroupCountY, threadGroupCountZ);
+	}
+
+	void
+	CommandList::BindSets(
+		const VkPipelineBindPoint                     bindPoint,
+		const VkPipelineLayout                        layout,
+		const VkDescriptorSetLayout                   constantsLayout,
+		const std::span<const uint32_t>               bindings,
+		const core::str::unordered_str_map<Uniforms>& uniformsByName) noexcept
+	{
 		auto sets = std::array<VkDescriptorSet, 2>{
 			VK_NULL_HANDLE,
 			m_ResourceManager->As<ResourceManager>()->GetBindlessSet(),
@@ -686,10 +944,10 @@ namespace bgpu
 
 		if (!bindings.empty())
 		{
-			sets[0]  = m_Allocator->AllocateSet(pipeline->GetConstantsSetLayout());
+			sets[0]  = m_Allocator->AllocateSet(constantsLayout);
 			firstSet = 0;
 
-			for (const auto& [name, uniforms] : kernel.uniforms)
+			for (const auto& [name, uniforms] : uniformsByName)
 			{
 				const uint32_t binding = bindings[uniforms.GetRootParamIndex()];
 				const size_t   size    = uniforms.GetSize();
@@ -715,14 +973,12 @@ namespace bgpu
 
 		vkCmdBindDescriptorSets(
 			m_CommandBuffer,
-			VK_PIPELINE_BIND_POINT_COMPUTE,
-			pipeline->GetVkPipelineLayout(),
+			bindPoint,
+			layout,
 			firstSet,
 			static_cast<uint32_t>(sets.size()) - firstSet,
 			sets.data() + firstSet,
 			0,
 			nullptr);
-
-		vkCmdDispatch(m_CommandBuffer, threadGroupCountX, threadGroupCountY, threadGroupCountZ);
 	}
 }

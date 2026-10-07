@@ -3,7 +3,7 @@
 The Render Hardware Interface (RHI) is `bgpu`'s API-agnostic graphics abstraction: a set of
 pure-virtual interfaces (`bgpu::I*`) plus plain-old-data descriptors and state structs, public under
 `libs/bgpu/include/bgpu/`. Two backends implement it — `libs/bgpu/src/d3d12` and `libs/bgpu/src/metal`
-— and a third, `libs/bgpu/src/vulkan`, implements all of it but its draws ([bgpu.md](docs/bgpu.md#vulkan)),
+— and a third, `libs/bgpu/src/vulkan`, implements it too ([bgpu.md](docs/bgpu.md#vulkan)),
 chosen at configure time by `RENDERER_BACKEND` ([libs/bgpu/CMakeLists.txt](libs/bgpu/CMakeLists.txt))
 and built into `bgpu` itself. Neither is ever visible to a caller, and no RHI header names a backend
 type: what a caller needs of the API underneath -- a swapchain presents on the native queue and adopts
@@ -324,10 +324,10 @@ Everything else is self-explanatory from the header.
 
 ### ICommandList
 
-* **The stencil reference is honored only on Metal.** `DepthStencilState` carries
-  `stencilRefValue` / `dynamicStencilRef` and both backends build the stencil ops, but the D3D12
-  command list never calls `OMSetStencilRef`, so a stencil-ref design silently runs with ref 0
-  there. A stencil-based effect starts with closing that gap — which is why the outline effect
+* **The stencil reference is honored on Metal and Vulkan, not D3D12.** `DepthStencilState`
+  carries `stencilRefValue` / `dynamicStencilRef` and every backend builds the stencil ops, but the
+  D3D12 command list never calls `OMSetStencilRef`, so a stencil-ref design silently runs with ref 0
+  there; Vulkan bakes `stencilRefValue` into the pipeline. A stencil-based effect starts with closing that gap — which is why the outline effect
   masks into an R8 target instead.
 * **`Open` / `Close` ordering.** Record only between them (`IsOpen()` reports state). `Open`
   requires a non-null queue and allocator; the **allocator must already be reset** if reused.

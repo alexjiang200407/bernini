@@ -9,31 +9,28 @@
 #include <bgpu/device/Device.h>
 #include <bgpu/pipeline/ComputeKernel.h>
 #include <bgpu/pipeline/ComputePipeline.h>
+#include <bgpu/pipeline/MeshletKernel.h>
+#include <bgpu/pipeline/MeshletPipeline.h>
 #include <bgpu/resource/Buffer.h>
+#include <bgpu/resource/Dsv.h>
 #include <bgpu/resource/NativeBufferDesc.h>
+#include <bgpu/resource/NativeTextureDesc.h>
 #include <bgpu/resource/Readback.h>
 #include <bgpu/resource/ResourceManager.h>
+#include <bgpu/resource/Rtv.h>
+#include <bgpu/resource/Sampler.h>
+#include <bgpu/resource/Srv.h>
+#include <bgpu/resource/Texture.h>
 #include <bgpu/types/Barrier.h>
+#include <bgpu/types/Color.h>
 #include <bgpu/types/ComputeState.h>
+#include <bgpu/types/Format.h>
+#include <bgpu/types/MeshletState.h>
 #include <bgpu/types/NativeObject.h>
 #include <bgpu/types/QueueType.h>
+#include <bgpu/types/Viewport.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
-
-#if !defined(RENDERER_BACKEND_VULKAN)
-#	include <bgpu/pipeline/MeshletKernel.h>
-#	include <bgpu/pipeline/MeshletPipeline.h>
-#	include <bgpu/resource/Dsv.h>
-#	include <bgpu/resource/NativeTextureDesc.h>
-#	include <bgpu/resource/Rtv.h>
-#	include <bgpu/resource/Sampler.h>
-#	include <bgpu/resource/Srv.h>
-#	include <bgpu/resource/Texture.h>
-#	include <bgpu/types/Color.h>
-#	include <bgpu/types/Format.h>
-#	include <bgpu/types/MeshletState.h>
-#	include <bgpu/types/Viewport.h>
-#endif
 
 // Every factory and destroy the RHI offers, once each, with no renderer in the process. What it
 // checks is that each works on a device nothing else owns; what it is for is coverage -- the
@@ -186,9 +183,6 @@ TEST_CASE("Every compute RHI entry point runs on a device no renderer owns", "[r
 	rm->UnregisterQueue(queue.Get());
 }
 
-// Vulkan has the compute half of the RHI alone: textures, targets and the meshlet pipeline arrive with
-// its graphics half.
-#if !defined(RENDERER_BACKEND_VULKAN)
 TEST_CASE("Every graphics RHI entry point runs on a device no renderer owns", "[render][rhi]")
 {
 	constexpr uint32_t c_Size = 8;
@@ -351,4 +345,3 @@ TEST_CASE("Every graphics RHI entry point runs on a device no renderer owns", "[
 	rm->DestroyReadbackBuffer(rb, false);
 	rm->UnregisterQueue(queue.Get());
 }
-#endif

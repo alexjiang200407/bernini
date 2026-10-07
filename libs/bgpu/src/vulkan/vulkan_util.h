@@ -32,8 +32,4 @@ namespace bgpu
 		uint32_t              typeBits,
 		VkMemoryPropertyFlags required,
 		VkMemoryPropertyFlags preferred);
-
-	/** Ends the process for an RHI entry point the Vulkan backend has not reached yet. */
-	[[noreturn]] void
-	NotOnVulkanYet(std::string_view entryPoint) noexcept;
 }

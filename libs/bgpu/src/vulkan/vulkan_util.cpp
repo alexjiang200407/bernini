@@ -65,13 +65,4 @@ namespace bgpu
 			typeBits,
 			required);
 	}
-
-	void
-	NotOnVulkanYet(const std::string_view entryPoint) noexcept
-	{
-		core::fatal(
-			"{} is not implemented on Vulkan yet: the meshlet pipeline arrives with the rest of "
-			"the graphics RHI",
-			entryPoint);
-	}
 }

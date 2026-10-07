@@ -4,9 +4,9 @@
 #include "cmd/CommandQueue_vulkan.h"
 #include "cmd/TimestampHeap_vulkan.h"
 #include "pipeline/ComputePipeline_vulkan.h"
+#include "pipeline/MeshletPipeline_vulkan.h"
 #include "resource/ResourceManager_vulkan.h"
 #include "shadercache/ShaderCache_vulkan.h"
-#include "vulkan_util.h"
 #include <bgpu/GpuContext.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
@@ -65,8 +65,7 @@ namespace bgpu
 	MeshletPipelineRef
 	Device::CreateMeshletPipeline(const MeshletPipelineDesc& desc) const noexcept
 	{
-		(void)desc;
-		NotOnVulkanYet("IDevice::CreateMeshletPipeline");
+		return core::SharedRef<MeshletPipeline>::Make(m_Context, m_ShaderCache.get(), desc);
 	}
 
 	CommandListRef
@@ -113,9 +112,8 @@ namespace bgpu
 	Device::CreateUniforms(IMeshletPipeline const* pipeline, const std::string& cbufferName)
 		const noexcept
 	{
-		(void)pipeline;
-		(void)cbufferName;
-		NotOnVulkanYet("IDevice::CreateUniforms of a meshlet pipeline");
+		core::ensure(pipeline != nullptr, "Pipeline pointer cannot be null");
+		return Uniforms(pipeline, cbufferName);
 	}
 
 	Uniforms

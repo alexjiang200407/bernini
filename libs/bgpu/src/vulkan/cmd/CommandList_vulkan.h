@@ -4,6 +4,7 @@
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/resource/Buffer.h>
 #include <bgpu/resource/Dsv.h>
+#include <bgpu/resource/FrameBuffer.h>
 #include <bgpu/resource/Readback.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/resource/Rtv.h>
@@ -11,7 +12,9 @@
 #include <bgpu/types/ComputeState.h>
 #include <bgpu/types/MeshletState.h>
 #include <bgpu/types/QueueType.h>
+#include <bgpu/uniforms/Uniforms.h>
 #include <core/ref/RefCounter.h>
+#include <core/str/str.h>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -32,6 +35,10 @@ namespace bgpu
 	 * family of the queue it is opened with. Every recording begins with a full memory barrier: D3D12
 	 * decays every resource's state between ExecuteCommandLists calls, and Vulkan orders nothing
 	 * between two submissions on one queue.
+	 *
+	 * A mesh dispatch draws inside dynamic rendering, which D3D12 has no notion of: the first draw
+	 * begins it on its meshlet state's frame buffer, draws on that same frame buffer stay inside it,
+	 * and every other command ends it first.
 	 */
 	class CommandList final : public core::RefCounter<ICommandList>
 	{
@@ -186,6 +193,33 @@ namespace bgpu
 		Submitted(uint64_t fenceValue) noexcept;
 
 	private:
+		/** Ends the rendering a draw began, if one is open. */
+		void
+		EndRendering() noexcept;
+
+		/** Begins rendering into `frameBuffer`'s attachments, loaded and stored as D3D12 keeps them. */
+		void
+		BeginRendering(const FrameBuffer& frameBuffer) noexcept;
+
+		/**
+		 * Renders into the meshlet state's frame buffer and binds its pipeline, constants and
+		 * viewports: what every mesh dispatch records first.
+		 */
+		void
+		ApplyMeshletState() noexcept;
+
+		/**
+		 * Writes each of `uniforms` into a constants set of `constantsLayout` at the binding
+		 * `bindings` gives its root parameter, and binds that set and the bindless table.
+		 */
+		void
+		BindSets(
+			VkPipelineBindPoint                           bindPoint,
+			VkPipelineLayout                              layout,
+			VkDescriptorSetLayout                         constantsLayout,
+			std::span<const uint32_t>                     bindings,
+			const core::str::unordered_str_map<Uniforms>& uniforms) noexcept;
+
 		/** `bytes` of `data` written to the ring and bound to binding `binding` of `set`. */
 		void
 		WriteConstants(
@@ -207,10 +241,15 @@ namespace bgpu
 		VkCommandBuffer             m_CommandBuffer = VK_NULL_HANDLE;
 		CommandAllocator*           m_Allocator     = nullptr;
 		std::optional<ComputeState> m_ComputeState;
-		uint32_t                    m_TimestampValidBits = 0;
-		uint64_t                    m_UniformAlignment   = 256;
-		uint64_t                    m_LastCompletedFence = 0;
-		bool                        m_Open               = false;
+		std::optional<MeshletState> m_MeshletState;
+
+		// The frame buffer the open rendering draws into; meaningless while m_Rendering is false.
+		FrameBuffer m_RenderingFrameBuffer;
+		bool        m_Rendering          = false;
+		uint32_t    m_TimestampValidBits = 0;
+		uint64_t    m_UniformAlignment   = 256;
+		uint64_t    m_LastCompletedFence = 0;
+		bool        m_Open               = false;
 #if defined(BERNINI_GPU_DEBUG)
 		BufferHandle m_ActiveDebugBuffer;
 #endif
