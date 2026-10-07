@@ -156,6 +156,38 @@ TEST_CASE("A Vulkan list writes, copies and reads back a buffer", "[vulkan][subm
 	owner.rm->DestroyBuffer(staged, false);
 }
 
+// A buffer cleared whole and then partly rewritten in one pass, as the renderer's per-draw state is:
+// the second copy must land after the first, which two Vulkan transfers do not promise without a
+// barrier between them. Under synchronization validation a strict context ends on the hazard.
+TEST_CASE("Two Vulkan copies into one buffer land in the order recorded", "[vulkan][submit]")
+{
+	auto desc                     = bgpu::GpuContextDesc();
+	desc.enableDebugLayer         = true;
+	desc.enableGPUValidationLayer = true;
+	desc.strictError              = true;
+	auto context                  = bgpu::CreateGpuContext(desc);
+	auto owner                    = Owner(context, bgpu::QueueType::kCompute);
+
+	constexpr auto c_Zeros = std::to_array<uint32_t>({ 0, 0, 0, 0, 0, 0, 0, 0 });
+	constexpr auto c_Part  = std::to_array<uint32_t>({ 7, 8 });
+	const auto     buffer  = owner.rm->CreateStructBuffer(
+		bgpu::StructBufferDesc().SetElement<uint32_t>().SetElementCount(8).SetDebugName(
+			"cleared, then patched"));
+	const auto rb = MakeReadback(*owner.rm, sizeof(c_Zeros));
+
+	owner.Run([&](bgpu::ICommandList& list) {
+		list.WriteBuffer(buffer, c_Zeros.data(), sizeof(c_Zeros));
+		list.WriteBuffer(buffer, c_Part.data(), 2 * sizeof(uint32_t), sizeof(c_Part));
+		list.Barrier(buffer, CopyToCopy());
+		list.CopyBufferToReadback(rb, buffer);
+	});
+
+	CHECK(ReadBack(*owner.rm, rb, 8) == std::vector<uint32_t>{ 0, 0, 7, 8, 0, 0, 0, 0 });
+
+	owner.rm->DestroyReadbackBuffer(rb, false);
+	owner.rm->DestroyBuffer(buffer, false);
+}
+
 // The constant buffer is a uniform-buffer descriptor written per dispatch, and the buffer it names is
 // reached through the manager's bindless table: the kernel writes 100 + i from `first` on.
 TEST_CASE("A Vulkan kernel writes through the bindless table", "[vulkan][submit][compute]")

@@ -283,5 +283,14 @@ namespace bgpu
 		// Every slot a span of this list wrote: a resolve waits for its slots, so one no span wrote
 		// would never become available and hang the queue.
 		std::vector<std::pair<VkQueryPool, uint32_t>> m_TimedSlots;
+
+		// The buffers a copy of this list has written since their last barrier. The RHI's callers
+		// write one buffer more than once inside a pass -- a clear, then the parts that changed --
+		// and expect the writes to land in order, which two Vulkan transfers do not promise.
+		std::vector<VkBuffer> m_TransferWritten;
+
+		/** Orders a copy into `buffer` after this list's earlier copies into it. */
+		void
+		OrderTransferWrite(VkCommandBuffer commands, VkBuffer buffer) noexcept;
 	};
 }

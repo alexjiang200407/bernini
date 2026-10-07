@@ -167,6 +167,7 @@ namespace bgpu
 		m_Allocator     = allocator->As<CommandAllocator>();
 		m_CommandBuffer = m_Allocator->TakeCommandBuffer(family);
 		m_TimedSlots.clear();
+		m_TransferWritten.clear();
 
 		auto begin  = VkCommandBufferBeginInfo();
 		begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -237,7 +238,32 @@ namespace bgpu
 		region.srcOffset = staged.offset;
 		region.dstOffset = gpuBufferOffset;
 		region.size      = byteSize;
+		OrderTransferWrite(commands, buffer.GetVkBuffer());
 		vkCmdCopyBuffer(commands, staged.buffer, buffer.GetVkBuffer(), 1, &region);
+	}
+
+	void
+	CommandList::OrderTransferWrite(const VkCommandBuffer commands, const VkBuffer buffer) noexcept
+	{
+		if (std::ranges::contains(m_TransferWritten, buffer))
+		{
+			auto barrier          = VkMemoryBarrier2();
+			barrier.sType         = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+			barrier.srcStageMask  = VK_PIPELINE_STAGE_2_COPY_BIT;
+			barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+			barrier.dstStageMask  = VK_PIPELINE_STAGE_2_COPY_BIT;
+			barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+
+			auto dependency               = VkDependencyInfo();
+			dependency.sType              = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+			dependency.memoryBarrierCount = 1;
+			dependency.pMemoryBarriers    = &barrier;
+			vkCmdPipelineBarrier2(commands, &dependency);
+
+			// A memory barrier orders every earlier copy, so no buffer owes one any more.
+			m_TransferWritten.clear();
+		}
+		m_TransferWritten.push_back(buffer);
 	}
 
 	void
@@ -265,6 +291,7 @@ namespace bgpu
 		region.srcOffset = srcOffset;
 		region.dstOffset = dstOffset;
 		region.size      = byteSize;
+		OrderTransferWrite(commands, dstBuffer.GetVkBuffer());
 		vkCmdCopyBuffer(commands, srcBuffer.GetVkBuffer(), dstBuffer.GetVkBuffer(), 1, &region);
 	}
 
@@ -324,6 +351,7 @@ namespace bgpu
 			barrier.offset              = 0;
 			barrier.size                = VK_WHOLE_SIZE;
 			vkBarriers.push_back(barrier);
+			std::erase(m_TransferWritten, barrier.buffer);
 		}
 
 		auto dependency                     = VkDependencyInfo();
