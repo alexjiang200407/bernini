@@ -13,10 +13,8 @@ using bgl::SurfaceShading;
 // have its materials checked against the PBR surface contract, and refused by name at load.
 TEST_CASE("Each surface contract round-trips through its document model", "[surface][toon]")
 {
-	for (const SurfaceShading shading : { SurfaceShading::kPbrSurface,
-	                                      SurfaceShading::kLit,
-	                                      SurfaceShading::kToonCharacter,
-	                                      SurfaceShading::kToonEnvironment })
+	for (const SurfaceShading shading :
+	     { SurfaceShading::kPbrSurface, SurfaceShading::kLit, SurfaceShading::kToonCharacter })
 	{
 		const ShadingModel model = game::ToShadingModel(shading);
 		CAPTURE(static_cast<int>(shading));
@@ -27,7 +25,4 @@ TEST_CASE("Each surface contract round-trips through its document model", "[surf
 	CHECK(
 		game::ToShadingModel(SurfaceShading::kToonCharacter) ==
 		ShadingModel::kToonCharacterSurface);
-	CHECK(
-		game::ToShadingModel(SurfaceShading::kToonEnvironment) ==
-		ShadingModel::kToonEnvironmentSurface);
 }

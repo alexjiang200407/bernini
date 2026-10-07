@@ -8,7 +8,6 @@
 #include <editor_plugin_api/localize.h>
 #include <editor_sdk/environment.h>
 #include <editor_sdk/mime_files.h>
-#include <editor_sdk/toon_content.h>
 
 #include <QColor>
 #include <QColorDialog>
@@ -227,9 +226,6 @@ GrassEditorWindow::GrassEditorWindow(
 		const auto color = glm::vec3(1.0f, 0.96f, 0.88f);
 		view->SetPbrDirectionalLight(
 			{ .direction = direction, .color = color, .intensity = c_SunIntensity });
-		// A toon look is lit by the toon sun alone, at the unit intensity its colours are authored at.
-		view->SetToonDirectionalLight(
-			{ .direction = direction, .color = color, .intensity = 1.0f });
 
 		m_Ground = context.scene.CreatePbrMaterial(
 			{ .baseColorFactor = glm::vec4(0.22f, 0.19f, 0.15f, 1.0f),
@@ -746,7 +742,6 @@ GrassEditorWindow::OpenAsset(std::string_view key)
 	m_Orbit.FocusOn(glm::vec3(0.0f, 0.3f, 0.0f), c_StartRadius, 0.0f, c_StartPitch);
 	UpdateCamera();
 	BuildPreview();
-	ShowToonIfToon();
 }
 
 bool
@@ -812,7 +807,6 @@ GrassEditorWindow::Edited(bool resizesPatch)
 		BuildPreview();
 	else
 		PushLook();
-	ShowToonIfToon();
 }
 
 void
@@ -923,27 +917,6 @@ GrassEditorWindow::BuildPreview()
 								  m_Host.GetLanguageResolver(),
 								  "bernini.grass.not_drawn",
 								  "The look cannot be drawn; editor.log says why."));
-}
-
-void
-GrassEditorWindow::ShowToonIfToon()
-{
-	bool toon = false;
-	if (!m_Look.material.empty())
-	{
-		m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef&) {
-			try
-			{
-				const bgl::MaterialHandle material =
-					context.assets.AcquireMaterial(m_Look.material);
-				toon = editor::IsToonMaterial(context.graphics, material);
-				context.assets.ReleaseMaterial(material);
-			}
-			catch (const std::exception&)
-			{}
-		});
-	}
-	m_Viewport->SetShowsToonContent(toon);
 }
 
 void

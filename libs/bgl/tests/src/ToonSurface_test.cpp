@@ -92,36 +92,6 @@ struct CelCharacter : IToonCharacterSurfaceSource
 };
 )";
 
-	constexpr std::string_view c_ToonEnvironment = R"(import bgl.MaterialReader;
-import bgl.ToonEnvironmentSurface;
-
-struct FlatParams
-{
-    [Color]
-    [Default(1.0, 1.0, 1.0, 1.0)]
-    float4 baseColorFactor;
-
-    ColorSlot baseColor;
-};
-
-struct FlatEnvironment : IToonEnvironmentSurfaceSource
-{
-    typealias MaterialParams = FlatParams;
-
-    static float Coverage<R : IMaterialReader>(R reader, FlatParams params)
-    {
-        return params.baseColorFactor.a * reader.Sample(params.baseColor, reader.Uv()).a;
-    }
-
-    static ToonEnvironmentSurface Evaluate<R : IMaterialReader>(R reader, FlatParams params)
-    {
-        ToonEnvironmentSurface surface = ToonEnvironmentSurface();
-        surface.baseColor = params.baseColorFactor * reader.Sample(params.baseColor, reader.Uv());
-        return surface;
-    }
-};
-)";
-
 	void
 	Write(const std::filesystem::path& path, std::string_view text)
 	{
@@ -130,7 +100,7 @@ struct FlatEnvironment : IToonEnvironmentSurfaceSource
 		out << text;
 	}
 
-	// The two toon surfaces beside the suite's Unlit, the lit surface whose Shade is its colour
+	// The toon surface beside the suite's Unlit, the lit surface whose Shade is its colour
 	// and nothing else -- which is what flat toon has to draw.
 	std::filesystem::path
 	ToonSurfaceDir()
@@ -140,7 +110,6 @@ struct FlatEnvironment : IToonEnvironmentSurfaceSource
 		std::filesystem::remove_all(dir);
 		std::filesystem::create_directories(dir);
 		Write(dir / "ToonCharacter.slang", c_ToonCharacter);
-		Write(dir / "ToonEnvironment.slang", c_ToonEnvironment);
 		std::filesystem::copy_file("./shaders/tests/surfaces/Unlit.slang", dir / "Unlit.slang");
 		return dir;
 	}
@@ -234,7 +203,7 @@ struct FlatEnvironment : IToonEnvironmentSurfaceSource
 	}
 }
 
-// Registration of the toon contracts: each takes a slot in filename order beside a lit surface,
+// Registration of the toon contract: it takes a slot in filename order beside a lit surface,
 // under its own shading, with its parameters reflected exactly as any surface's are.
 TEST_CASE("A toon surface registers under its own model", "[surface][registry][toon]")
 {
@@ -242,15 +211,13 @@ TEST_CASE("A toon surface registers under its own model", "[surface][registry][t
 	REQUIRE(gfx != nullptr);
 
 	const std::span<const SurfaceType> types = gfx->GetSurfaceTypes();
-	REQUIRE(types.size() == 3u);
+	REQUIRE(types.size() == 2u);
 
 	CHECK(types[0].surfaceName == "ToonCharacter");
 	CHECK(types[0].kind == MaterialType::kGameStart);
 	CHECK(types[0].shading == SurfaceShading::kToonCharacter);
-	CHECK(types[1].surfaceName == "ToonEnvironment");
-	CHECK(types[1].shading == SurfaceShading::kToonEnvironment);
-	CHECK(types[2].surfaceName == "Unlit");
-	CHECK(types[2].shading == SurfaceShading::kLit);
+	CHECK(types[1].surfaceName == "Unlit");
+	CHECK(types[1].shading == SurfaceShading::kLit);
 
 	REQUIRE(types[0].params.values.size() == 4u);
 	CHECK(types[0].params.values[0].name == "baseColorFactor");
@@ -394,17 +361,6 @@ TEST_CASE(
 			alwaysPng);
 		CHECK(middle(behindPng, secondRef) < c_Same);
 		CHECK(middle(alwaysPng, litRef) < c_Same);
-	}
-
-	{
-		INFO("the environment model is still flat");
-		const auto* environmentPng = "assets/golden/toon_cel_environment.got.png";
-		shoot(
-			plane(scene->CreateSurfaceMaterial(Toon("ToonEnvironment", c_Flat))),
-			second,
-			SphereCamera(),
-			environmentPng);
-		CHECK(middle(environmentPng, litRef) < c_Same);
 	}
 
 	{
@@ -740,8 +696,8 @@ TEST_CASE("A grass look refuses a toon character surface", "[surface][grass][too
 		MessageMatches(ContainsSubstring("UpdateGrass: a toon character surface")));
 }
 
-// A document's model is its contract expectation, and the toon models are two contracts: a
-// material that expects one is refused a surface on the other, naming both.
+// A document's model is its contract expectation: a material that expects the toon model is
+// refused a surface on another, and a toon surface is refused a material expecting another model.
 TEST_CASE("A toon material is refused a surface on another model", "[surface][toon]")
 {
 	using Catch::Matchers::ContainsSubstring;
@@ -751,19 +707,19 @@ TEST_CASE("A toon material is refused a surface on another model", "[surface][to
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(ToonScene());
 
-	auto expectsEnvironment    = SurfaceMaterialDesc{ .surfaceName = "ToonCharacter" };
-	expectsEnvironment.shading = SurfaceShading::kToonEnvironment;
-	auto expectsCharacter      = SurfaceMaterialDesc{ .surfaceName = "Unlit" };
-	expectsCharacter.shading   = SurfaceShading::kToonCharacter;
-	auto expectsItsOwn         = SurfaceMaterialDesc{ .surfaceName = "ToonEnvironment" };
-	expectsItsOwn.shading      = SurfaceShading::kToonEnvironment;
+	auto expectsLit          = SurfaceMaterialDesc{ .surfaceName = "ToonCharacter" };
+	expectsLit.shading       = SurfaceShading::kLit;
+	auto expectsCharacter    = SurfaceMaterialDesc{ .surfaceName = "Unlit" };
+	expectsCharacter.shading = SurfaceShading::kToonCharacter;
+	auto expectsItsOwn       = SurfaceMaterialDesc{ .surfaceName = "ToonCharacter" };
+	expectsItsOwn.shading    = SurfaceShading::kToonCharacter;
 
 	CHECK_THROWS_MATCHES(
-		scene->CreateSurfaceMaterial(expectsEnvironment),
+		scene->CreateSurfaceMaterial(expectsLit),
 		SceneError,
 		MessageMatches(ContainsSubstring(
 			"surface 'ToonCharacter' is toon-lit as a character (IToonCharacterSurfaceSource), but "
-			"the material expects one that is toon-lit as an environment")));
+			"the material expects one that owns its lighting")));
 	CHECK_THROWS_MATCHES(
 		scene->CreateSurfaceMaterial(expectsCharacter),
 		SceneError,

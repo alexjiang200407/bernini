@@ -92,7 +92,6 @@ namespace bgl
 				return false;
 			case SurfaceShading::kLit:
 			case SurfaceShading::kToonCharacter:
-			case SurfaceShading::kToonEnvironment:
 				return true;
 			}
 			return false;
@@ -105,26 +104,7 @@ namespace bgl
 			const std::string& sourceType,
 			SurfaceShading     shading)
 		{
-			// Each adapter beside the light it reads: the character's takes the light its programs
-			// hand it, the environment's the toon sun from lib.forward.ToonData.
-			const char* adapter       = nullptr;
-			const char* adapterModule = nullptr;
-			switch (shading)
-			{
-			case SurfaceShading::kPbrSurface:
-			case SurfaceShading::kLit:
-				break;
-			case SurfaceShading::kToonCharacter:
-				adapter       = "ToonCharacterLit";
-				adapterModule = "lib.math.ToonShading";
-				break;
-			case SurfaceShading::kToonEnvironment:
-				adapter       = "ToonEnvironmentLit";
-				adapterModule = "lib.forward.ToonData";
-				break;
-			}
-
-			if (adapter == nullptr)
+			if (shading != SurfaceShading::kToonCharacter)
 			{
 				return std::format(
 					"import {};\npublic typealias Slot{}Surface = {};\n",
@@ -135,13 +115,11 @@ namespace bgl
 			// A character's programs at rest name the game's type itself, to shade it with the toon
 			// shading rig its placement carries; see ToonColorProgramSource.
 			return std::format(
-				"import {0};\nimport {4};\npublic typealias Slot{1}Surface = "
-				"{2}<{3}>;\npublic typealias Slot{1}Source = {3};\n",
+				"import {0};\nimport lib.math.ToonShading;\npublic typealias Slot{1}Surface = "
+				"ToonCharacterLit<{2}>;\npublic typealias Slot{1}Source = {2};\n",
 				module,
 				slot,
-				adapter,
-				sourceType,
-				adapterModule);
+				sourceType);
 		}
 
 		// A registered surface's programs, generated rather than shipped because a program has to

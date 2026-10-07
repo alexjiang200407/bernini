@@ -39,10 +39,7 @@ strength, `,` `.` its heading, `G` the gusts.
 In the editor a `.bgrass` opens in the **Grass Editor**: every value of the look beside a patch of it
 in a wind the panel sets and never saves. An edit is drawn at once and written on Save, or when the
 panel closes with it pending: `AssetManager::SetGrassLook` puts the unsaved document on the look in
-place, and a patch whose look could not be drawn as stored is grown from the document instead. A look whose material is toon is shown as toon content -- the toon post-process and
-backdrop, as every toon preview is -- and the panel's sun is its toon sun too, at the unit intensity
-toon colours are authored at; under the filmic curve a cel field's tones are lifted together and lose
-their contrast. Where
+place, and a patch whose look could not be drawn as stored is grown from the document instead. Where
 the clumps go is the mesh source's, and is not edited there.
 
 ## On a terrain
@@ -174,8 +171,7 @@ geometry, which the mesh stage builds into the vertex it hands the pixel stage
 A surface on the lit contract (`ILitSurfaceSource`) owns all of its lighting, so a blade drawn with
 one gets none of the above but the normal: the program calls its `Shade` and adds nothing. The rest
 reaches it through the interpolants any surface reads -- `Uv().y` runs root to tip and `Uv1().x` is
-the blade's own random -- so a game can write grass shading of its own. A toon environment surface
-draws through the same lit programs.
+the blade's own random -- so a game can write grass shading of its own.
 
 Grass is environment, and a look refuses a toon character surface (`CreateGrass`, `UpdateGrass`):
 the character model's programs read a placement's shading rig, which a blade has none of.

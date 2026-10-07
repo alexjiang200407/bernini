@@ -10,23 +10,19 @@ namespace
 {
 	constexpr auto c_Pbr       = bgl::MaterialType::kGameStart;
 	constexpr auto c_Character = static_cast<bgl::MaterialType>(5);
-	constexpr auto c_Scenery   = static_cast<bgl::MaterialType>(6);
-	constexpr auto c_Lit       = static_cast<bgl::MaterialType>(7);
+	constexpr auto c_Lit       = static_cast<bgl::MaterialType>(6);
 
 	std::vector<bgl::SurfaceType>
 	Surfaces()
 	{
-		std::vector<bgl::SurfaceType> surfaces(4);
+		std::vector<bgl::SurfaceType> surfaces(3);
 		surfaces[0] = { .surfaceName = "pbr",
 			            .kind        = c_Pbr,
 			            .shading     = bgl::SurfaceShading::kPbrSurface };
 		surfaces[1] = { .surfaceName = "character",
 			            .kind        = c_Character,
 			            .shading     = bgl::SurfaceShading::kToonCharacter };
-		surfaces[2] = { .surfaceName = "scenery",
-			            .kind        = c_Scenery,
-			            .shading     = bgl::SurfaceShading::kToonEnvironment };
-		surfaces[3] = { .surfaceName = "lit", .kind = c_Lit, .shading = bgl::SurfaceShading::kLit };
+		surfaces[2] = { .surfaceName = "lit", .kind = c_Lit, .shading = bgl::SurfaceShading::kLit };
 		return surfaces;
 	}
 
@@ -37,13 +33,12 @@ namespace
 	}
 }
 
-// A preview ends in the toon post-process when it shows a toon model's material, and only then.
-TEST_CASE("A material is toon when a toon model's surface draws it", "[toon][tonemap]")
+// A preview ends in the toon post-process when it shows the toon model's material, and only then.
+TEST_CASE("A material is toon when the toon model's surface draws it", "[toon][tonemap]")
 {
 	const auto surfaces = Surfaces();
 
 	CHECK(editor::IsToonMaterial(surfaces, Material(c_Character)));
-	CHECK(editor::IsToonMaterial(surfaces, Material(c_Scenery)));
 
 	CHECK_FALSE(editor::IsToonMaterial(surfaces, Material(c_Pbr)));
 	CHECK_FALSE(editor::IsToonMaterial(surfaces, Material(c_Lit)));
@@ -63,6 +58,6 @@ TEST_CASE("Any toon material among a mesh's makes it toon", "[toon][tonemap]")
 	CHECK_FALSE(editor::AnyToonMaterial(surfaces, {}));
 
 	std::vector<bgl::MaterialHandle> mixed = plain;
-	mixed.push_back(Material(c_Scenery));
+	mixed.push_back(Material(c_Character));
 	CHECK(editor::AnyToonMaterial(surfaces, mixed));
 }

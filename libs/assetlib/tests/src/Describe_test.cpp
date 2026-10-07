@@ -258,13 +258,10 @@ TEST_CASE("describe(BMaterial) names the lit model the parser accepts", "[descri
 }
 
 TEST_CASE(
-	"describe(BMaterial) names the toon models the parser accepts",
+	"describe(BMaterial) names the toon model the parser accepts",
 	"[describe][surface][toon]")
 {
-	auto model = ShadingModel::kToonCharacterSurface;
-
-	SECTION("character") { model = ShadingModel::kToonCharacterSurface; }
-	SECTION("environment") { model = ShadingModel::kToonEnvironmentSurface; }
+	const auto model = ShadingModel::kToonCharacterSurface;
 
 	BMaterial material;
 	material.name                = "flat";

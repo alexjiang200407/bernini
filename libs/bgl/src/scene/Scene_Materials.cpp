@@ -120,8 +120,6 @@ namespace bgl
 					return "owns its lighting (ILitSurfaceSource)";
 				case SurfaceShading::kToonCharacter:
 					return "is toon-lit as a character (IToonCharacterSurfaceSource)";
-				case SurfaceShading::kToonEnvironment:
-					return "is toon-lit as an environment (IToonEnvironmentSurfaceSource)";
 				}
 				return "is lit by the engine (ISurfaceSource)";
 			};

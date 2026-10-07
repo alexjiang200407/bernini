@@ -354,24 +354,12 @@ TEST_CASE("A surface board's save writes the board, not the disk", "[mesheditor]
 }
 
 // A toon document opened on its own board saves back as its own model: the model is the
-// registered surface's contract, read off the sink, so a character material is never rewritten as
-// an environment one, nor demoted to either engine-lit model.
+// registered surface's contract, read off the sink, so a character material is never demoted to
+// either engine-lit model.
 TEST_CASE("A toon surface board saves its own model", "[mesheditor][surface][toon]")
 {
-	auto shading  = bgl::SurfaceShading::kToonCharacter;
-	auto expected = assetlib::ShadingModel::kToonCharacterSurface;
-
-	SECTION("character")
-	{
-		shading  = bgl::SurfaceShading::kToonCharacter;
-		expected = assetlib::ShadingModel::kToonCharacterSurface;
-	}
-
-	SECTION("environment")
-	{
-		shading  = bgl::SurfaceShading::kToonEnvironment;
-		expected = assetlib::ShadingModel::kToonEnvironmentSurface;
-	}
+	const auto shading  = bgl::SurfaceShading::kToonCharacter;
+	const auto expected = assetlib::ShadingModel::kToonCharacterSurface;
 
 	QTemporaryDir temp;
 	REQUIRE(temp.isValid());

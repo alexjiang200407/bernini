@@ -7,10 +7,9 @@
 namespace editor
 {
 	/**
-	 * Whether `material` is drawn by one of the toon models -- a surface registered on
-	 * IToonCharacterSurfaceSource or IToonEnvironmentSurfaceSource, looked up among `surfaces`
-	 * (IGraphics::GetSurfaceTypes). What a preview asks to decide it shows a toon look, which is
-	 * authored for the toon post-process.
+	 * Whether `material` is drawn by the toon model -- a surface registered on
+	 * IToonCharacterSurfaceSource, looked up among `surfaces` (IGraphics::GetSurfaceTypes). What a
+	 * preview asks to decide it shows a toon look, which is authored for the toon post-process.
 	 */
 	[[nodiscard]] inline bool
 	IsToonMaterial(
@@ -24,8 +23,7 @@ namespace editor
 		{
 			if (type.kind == material.materialType)
 			{
-				return type.shading == bgl::SurfaceShading::kToonCharacter ||
-				       type.shading == bgl::SurfaceShading::kToonEnvironment;
+				return type.shading == bgl::SurfaceShading::kToonCharacter;
 			}
 		}
 		return false;
@@ -37,7 +35,7 @@ namespace editor
 		return IsToonMaterial(graphics.GetSurfaceTypes(), material);
 	}
 
-	/** Whether any of `materials` is drawn by a toon model; see IsToonMaterial. */
+	/** Whether any of `materials` is drawn by the toon model; see IsToonMaterial. */
 	[[nodiscard]] inline bool
 	AnyToonMaterial(
 		std::span<const bgl::SurfaceType>    surfaces,
