@@ -35,6 +35,7 @@ namespace assetlib
 		float fadeStart = 10.0f;
 		float fadeEnd   = 60.0f;
 		float widening  = 1.0f;
+		float thinStart = 0.0f;
 
 		bool
 		operator==(const GrassDensityParams&) const = default;

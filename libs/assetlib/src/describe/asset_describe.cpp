@@ -704,10 +704,11 @@ namespace assetlib
 			grass.clump.bladesPerClump,
 			grass.clump.radius);
 		out += std::format(
-			"  density      fade {}..{}  widening {}\n",
+			"  density      fade {}..{}  widening {}  thin from {}\n",
 			grass.density.fadeStart,
 			grass.density.fadeEnd,
-			grass.density.widening);
+			grass.density.widening,
+			grass.density.thinStart);
 		out += std::format(
 			"  response     stiffness {}  gusts {}\n",
 			grass.response.stiffness,

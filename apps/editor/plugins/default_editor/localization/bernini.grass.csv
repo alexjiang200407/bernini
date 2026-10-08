@@ -34,6 +34,7 @@ root_width,Root width
 save_button,Save
 save_failed,'{0}' could not be saved: {1}
 stiffness,Stiffness
+thin_start,Thin from
 tip_tint,Tip tint
 tip_width,Tip width
 title,Grass Editor

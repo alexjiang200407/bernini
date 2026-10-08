@@ -105,6 +105,7 @@ namespace assetlib
 			taker.Take("fadeStart", grass.density.fadeStart);
 			taker.Take("fadeEnd", grass.density.fadeEnd);
 			taker.Take("widening", grass.density.widening);
+			taker.Take("thinStart", grass.density.thinStart);
 		});
 
 		takeGroup(json, c_ResponseKey, [&grass](const doc::Taker& taker) {
@@ -157,6 +158,7 @@ namespace assetlib
 		density["fadeStart"]    = doc::plainFloat(grass.density.fadeStart);
 		density["fadeEnd"]      = doc::plainFloat(grass.density.fadeEnd);
 		density["widening"]     = doc::plainFloat(grass.density.widening);
+		density["thinStart"]    = doc::plainFloat(grass.density.thinStart);
 
 		nlohmann::json& response = groupOf(json, c_ResponseKey);
 		response["stiffness"]    = doc::plainFloat(grass.response.stiffness);

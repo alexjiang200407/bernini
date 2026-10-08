@@ -431,6 +431,14 @@ GrassEditorWindow::BuildColumn()
 		4.0,
 		0.1,
 		[](Look& l) -> float& { return l.density.widening; });
+	AddReal(
+		density,
+		"thin_start",
+		editor::Localize(m_Host.GetLanguageResolver(), "bernini.grass.thin_start", "Thin from"),
+		0.0,
+		500.0,
+		1.0,
+		[](Look& l) -> float& { return l.density.thinStart; });
 
 	QFormLayout* response = group(
 		editor::Localize(

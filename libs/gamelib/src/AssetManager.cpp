@@ -138,6 +138,7 @@ namespace game
 			desc.density.fadeStart = look.density.fadeStart;
 			desc.density.fadeEnd   = look.density.fadeEnd;
 			desc.density.widening  = look.density.widening;
+			desc.density.thinStart = look.density.thinStart;
 
 			desc.response.stiffness    = look.response.stiffness;
 			desc.response.gustResponse = look.response.gustResponse;

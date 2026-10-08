@@ -45,7 +45,10 @@ namespace
 			               .nearSegments = 6,
 			               .farSegments  = 2 };
 		grass.clump    = { .bladesPerClump = 11, .radius = 0.2f };
-		grass.density  = { .fadeStart = 12.5f, .fadeEnd = 75.0f, .widening = 1.5f };
+		grass.density  = { .fadeStart = 12.5f,
+			               .fadeEnd   = 75.0f,
+			               .widening  = 1.5f,
+			               .thinStart = 20.0f };
 		grass.response = { .stiffness = 0.35f, .gustResponse = 0.8f };
 		grass.lighting = { .rootOcclusion     = 0.7f,
 			               .normalRounding    = 0.6f,

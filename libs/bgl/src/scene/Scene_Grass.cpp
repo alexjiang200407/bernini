@@ -208,6 +208,10 @@ namespace bgl
 		{
 			refuse("density.widening must be finite and non-negative");
 		}
+		if (!core::is_finite_non_negative(density.thinStart))
+		{
+			refuse("density.thinStart must be finite and non-negative");
+		}
 
 		if (!core::is_unit_interval(desc.response.stiffness) ||
 		    !core::is_finite_non_negative(desc.response.gustResponse))
@@ -451,6 +455,7 @@ namespace bgl
 		look.widening    = desc.density.widening;
 		look.fadeStart   = desc.density.fadeStart;
 		look.fadeEnd     = desc.density.fadeEnd;
+		look.thinStart   = desc.density.thinStart;
 
 		look.stiffness    = desc.response.stiffness;
 		look.gustResponse = desc.response.gustResponse;

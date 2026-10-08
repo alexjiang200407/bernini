@@ -51,8 +51,8 @@ namespace bgl
 
 	/**
 	 * How the field fades with distance from the camera: every blade is whole up to `fadeStart`, and
-	 * every blade shrinks together, linearly, to nothing at `fadeEnd`. No blade is dropped while it
-	 * can be seen, so none appears or vanishes on its own as the camera moves.
+	 * every blade shrinks together, linearly, to nothing at `fadeEnd`. With `thinStart` zero no blade
+	 * is dropped while it can be seen, so none appears or vanishes on its own as the camera moves.
 	 */
 	struct GrassDensityDesc
 	{
@@ -62,6 +62,11 @@ namespace bgl
 		// A fading blade's width is multiplied by 1 + widening * (1 - its scale) on top of the scale,
 		// so it narrows more slowly than it shortens. Zero shrinks width and height alike.
 		float widening = 1.0f;
+
+		// Past this distance a clump keeps a share (thinStart / distance)^2 of its blades, never fewer
+		// than one, each dropped blade shrinking out and the survivors widened to cover. Zero never
+		// thins. docs/grass.md § Distance.
+		float thinStart = 0.0f;
 	};
 
 	/**
