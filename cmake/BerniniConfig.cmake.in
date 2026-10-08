@@ -80,8 +80,36 @@ function(bernini_stage_runtime target)
         endif()
 
         list(APPEND _commands
-            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-                "$<TARGET_RUNTIME_DLLS:${target}>"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_RUNTIME_DLLS:${target}>" "${_to}")
+
+        # A shared engine library's own ports are PRIVATE to it, so neither the runtime DLLs above
+        # nor vcpkg's applocal step on the consumer -- which runs at link, before this copy -- see
+        # them: RmlUi's freetype and everything freetype loads. vcpkg's walk run on each staged
+        # library deploys them as it does for an executable. It runs before the private DLLs below,
+        # because it copies whatever its tree holds over an older file of the same name: a Debug
+        # consumer's walk would otherwise put the Debug ktx.dll back over the Release one.
+        # z_vcpkg_set_powershell_path, Z_VCPKG_TOOLCHAIN_DIR and _VCPKG_INSTALLED_DIR are the
+        # toolchain's own, the names its own applocal step uses.
+        if (VCPKG_APPLOCAL_DEPS AND DEFINED Z_VCPKG_TOOLCHAIN_DIR)
+            z_vcpkg_set_powershell_path()
+            set(_vcpkg_bin "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}$<$<CONFIG:Debug>:/debug>/bin")
+            foreach (_lib IN ITEMS core_process bgpu bgl assetlib gamelib crowdlib)
+                if (TARGET Bernini::${_lib})
+                    get_target_property(_lib_type Bernini::${_lib} TYPE)
+                    if (_lib_type STREQUAL "SHARED_LIBRARY")
+                        list(APPEND _commands
+                            COMMAND "${Z_VCPKG_POWERSHELL_PATH}" -noprofile -executionpolicy Bypass
+                                -file "${Z_VCPKG_TOOLCHAIN_DIR}/msbuild/applocal.ps1"
+                                -targetBinary "${_to}/$<TARGET_FILE_NAME:Bernini::${_lib}>"
+                                -installedDir "${_vcpkg_bin}")
+                    endif()
+                endif()
+            endforeach()
+        endif()
+
+        # Last, so nothing above can replace them.
+        list(APPEND _commands
+            COMMAND "${CMAKE_COMMAND}" -E copy
                 ${_private_dlls}
                 "$<TARGET_FILE:Microsoft::DirectXShaderCompiler>"
                 "$<TARGET_FILE_DIR:Microsoft::DirectXShaderCompiler>/dxil.dll"

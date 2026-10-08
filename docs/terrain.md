@@ -99,6 +99,11 @@ the ground later -- a planted foot, a crowd's slope cost, the ground blood field
 functions, so the ground a unit walks is the ground it sees. Nothing of that reads them yet;
 `IScene::SetGround`'s plane is still what the pose pass plants on.
 
+On the CPU, `terrain::HeightAt` ([terrainlib/height.h](../libs/terrainlib/include/terrainlib/height.h))
+is the same read: bilinear between samples, clamped at the edge, the heightfield laid at the
+origin `TerrainDesc` gives it. It is how a game stands a camera or a unit on the ground it drew
+without a GPU readback.
+
 ## Looking at one
 
 `bgl_ai_viewer --terrain <flat|hilly|mountainous>` generates a field and draws it with a project
@@ -111,4 +116,4 @@ view of the scene seeing it.
 No offline container, import or cook: a terrain is generated or built at load and never stored.
 No material layers: a surface shades from where a pixel stands. No range past the view's far
 plane, and no occlusion of anything by the terrain beyond the depth it writes. No consumer of the
-heightfield but the stage and the grass. ROADMAP.md § Terrain and § Level Editor name each of these.
+heightfield on the GPU but the stage and the grass. ROADMAP.md § Terrain and § Level Editor name each of these.
