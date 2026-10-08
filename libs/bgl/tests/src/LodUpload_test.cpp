@@ -203,3 +203,63 @@ TEST_CASE("a mesh whose levels its file cannot back is refused", "[lod][geom]")
 		CHECK_THROWS_WITH(bgl::CookStaticMesh(mesh, 0), ContainsSubstring("no thresholds"));
 	}
 }
+
+TEST_CASE("one level of a mesh cooks as a geom of that level alone", "[lod][cook]")
+{
+	auto gfx = bgl::test::CreateGraphics(HeadlessOptions());
+	REQUIRE(gfx != nullptr);
+
+	auto  sceneHandle = gfx->CreateScene(LodSceneDesc());
+	auto* scene       = sceneHandle->As<bgl::Scene>();
+	REQUIRE(scene != nullptr);
+
+	const auto material = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
+	const auto lodMesh  = MakeLodMesh(c_TwoLevels, 2, { 120.0f, 0.0f });
+
+	SECTION("the level's submeshes, its own sphere, and a mesh never dropped")
+	{
+		const auto geom = scene->AddStaticMeshGeom(
+			bgl::CookStaticMesh(lodMesh, 0, bgl::LodLevel::kLod1),
+			std::array{ material });
+		REQUIRE(geom.IsValid());
+
+		const bgl::idl::LodSubmeshRange& onCpu = scene->GetGeomSubmeshes(geom.handle.index);
+		const bgl::idl::Geom&            onGpu =
+			scene->GetGeomBuffer()[scene->GetGeomEntry(geom.handle.index)];
+
+		CHECK(onCpu.submeshCount == 2u);
+		CHECK(onCpu.lodCount == 1u);
+		CHECK(onGpu.submeshes.lodCount == 1u);
+
+		// Level 1's entries alone: 2 and 1 triangles, where level 0's hold 4 and 3.
+		auto&          submeshes = scene->GetSubmeshBuffer();
+		const uint32_t root      = onCpu.range.offsetStart;
+		CHECK(submeshes.AtIndex(root + 0).meshlets.count == c_TwoLevels[2].triangles);
+		CHECK(submeshes.AtIndex(root + 1).meshlets.count == c_TwoLevels[3].triangles);
+
+		// Level 1's boxes span -50..50 on every axis: a sphere over level 0 would be far smaller.
+		CHECK(onGpu.boundingSphere.x == Catch::Approx(0.0f));
+		CHECK(onGpu.boundingSphere.y == Catch::Approx(0.0f));
+		CHECK(onGpu.boundingSphere.w == Catch::Approx(86.603f).margin(1e-2));
+
+		// One level with no threshold: drawn at every size on screen, however small.
+		for (uint32_t level = 0; level < bgl::cMaxMeshLods; ++level)
+			CHECK(onGpu.lodMinPixels[level] == 0.0f);
+
+		scene->DeleteGeom(geom);
+	}
+
+	SECTION("a level the mesh does not carry is refused, like a bad range")
+	{
+		using Catch::Matchers::ContainsSubstring;
+
+		CHECK_THROWS_WITH(
+			bgl::CookStaticMesh(lodMesh, 0, bgl::LodLevel::kLod2),
+			ContainsSubstring("no level 2"));
+
+		const auto oneLevel = MakeLodMesh(std::span(c_TwoLevels).first(2), 2, {});
+		CHECK_THROWS_WITH(
+			bgl::CookStaticMesh(oneLevel, 0, bgl::LodLevel::kLod1),
+			ContainsSubstring("no level 1"));
+	}
+}

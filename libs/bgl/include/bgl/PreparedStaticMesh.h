@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bgl/LodLevel.h>
 #include <bgl/api.h>
 #include <cstdint>
 #include <memory>
@@ -43,6 +44,9 @@ namespace bgl
 		friend BGL_API PreparedStaticMesh
 		CookStaticMesh(const assetlib::BMesh& mesh, uint32_t meshIndex);
 
+		friend BGL_API PreparedStaticMesh
+		CookStaticMesh(const assetlib::BMesh& mesh, uint32_t meshIndex, LodLevel level);
+
 		std::unique_ptr<Impl> m_Impl;
 	};
 
@@ -59,4 +63,14 @@ namespace bgl
 	 */
 	[[nodiscard]] BGL_API PreparedStaticMesh
 	CookStaticMesh(const assetlib::BMesh& mesh, uint32_t meshIndex);
+
+	/**
+	 * Flattens level `level` of mesh `meshIndex` alone, as a mesh of one level drawn at every size,
+	 * for a client that will only ever draw it at one size -- a thumbnail -- and wants neither the
+	 * cook nor the upload of the levels it will not draw. Its sphere is that level's.
+	 *
+	 * @throws SceneError as CookStaticMesh above, and if `level` is one the mesh does not carry.
+	 */
+	[[nodiscard]] BGL_API PreparedStaticMesh
+	CookStaticMesh(const assetlib::BMesh& mesh, uint32_t meshIndex, LodLevel level);
 }

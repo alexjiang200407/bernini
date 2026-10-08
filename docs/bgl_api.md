@@ -206,7 +206,9 @@ flowchart TD
 * **`CookStaticMesh` is the one call allowed off the driving thread.** It is a free function over
   the `BMesh` alone — no scene, no device — and exists so the CPU half of `AddStaticMeshGeom` (the
   dominant cost of a large mesh) can run on a worker, leaving only the commit overload's uploads on
-  the driving thread.
+  the driving thread. Its three-argument form cooks one level of the mesh alone, as a mesh of one
+  level, for a client that will only ever draw it at one size and wants neither the cook nor the
+  upload of the others -- the editor's thumbnails take a mesh's coarsest level that way.
 * **Only one frame may be active at a time.** `BeginFrame` throws `GraphicsError` if one already is.
   `Resize`, `SubmitCapture` and `ScreenshotToMemory` throw if called between `BeginFrame` and
   `EndFrame`; `TryResolveCapture` is the exception and may be called mid-frame.
