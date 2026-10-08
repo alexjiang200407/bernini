@@ -149,11 +149,7 @@ because its incremental build is mtimes and a dependency graph inside one build 
 
 The settings ride in a wrapper script generated into `build/<preset>/compiler-cache/` rather than in
 the environment, because this build is driven by `scripts/build.py`, by ninja directly and by an
-IDE, and a variable exported by only one of them would leave the others missing every time. Its name
-carries a digest of the basedir it sets, so a project that embeds the engine and calls
-`enable_compiler_cache()` for itself gets a second wrapper rather than overwriting this one — which
-would leave one of the two compiling uncached with nothing on screen to say so
-([docs/embedding.md](embedding.md)).
+IDE, and a variable exported by only one of them would leave the others missing every time.
 
 `sloppiness = pch_defines,time_macros` is **not optional** with a PCH on every target: ccache cannot
 tell whether a PCH used `__TIME__`, nor see the defines a PCH already resolved, so without it every
@@ -172,11 +168,15 @@ ccache --zero-stats     # before a measurement
 cmake -DBERNINI_COMPILER_CACHE=OFF ...   # opt out for one build dir
 ```
 
-**Sharing between worktrees is limited, deliberately.** `CCACHE_BASEDIR` rewrites absolute paths
-under the checkout so two worktrees of the same commit can match — but a debug build reaches its
-working directory through DWARF, and disabling directory hashing to force those hits would leave a
-cached object's debug info pointing at a different worktree. The within-checkout win needs none of
-that and is the one this is for.
+**An entry belongs to one build tree; nothing is shared between worktrees.** There is no
+`CCACHE_BASEDIR`, so every path is hashed absolute. With one, the paths under the checkout were
+rewritten relative — `build/<preset>/vcpkg_installed` included — and a clang PCH generated in another
+worktree came back as a hit. But a `.pch` records the absolute paths of the headers it read, so the
+TUs behind it compiled against the other worktree's headers, and a TU that included one of them
+again (through its own copy, a different file) failed on redefinitions. Sharing could not work for
+a TU behind a PCH anyway, and every TU here has one: it hashes the PCH's bytes, which carry those
+paths. A debug build hashes its working directory besides. The within-tree win — a checkout, a rebase, a wiped build directory — is the
+one this is for.
 
 Two configurations get no cache by default, and say so at configure time rather than pretending.
 Visual Studio and Xcode ignore compiler launchers entirely. **MSVC is refused on the compiler rather

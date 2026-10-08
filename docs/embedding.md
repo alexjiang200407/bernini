@@ -108,46 +108,27 @@ been made; until it is, a consuming project should prefix its own CMake function
 
 ## The compiler cache
 
-Every game's build tree compiles the engine into itself, and the cache carries less of that than you
-would hope — so read this before budgeting a game's first build.
-[`cmake/enable_compiler_cache.cmake`](../cmake/enable_compiler_cache.cmake)
-puts ccache in front of the compiler and sets `CCACHE_BASEDIR` to **the engine checkout** — not the
-build root — so every absolute path under the engine is rewritten relative before it is hashed.
+Every game's build tree compiles the engine into itself, and the cache carries none of that from
+anywhere else — so read this before budgeting a game's first build.
+[`cmake/enable_compiler_cache.cmake`](../cmake/enable_compiler_cache.cmake) puts ccache in front of
+the compiler with no `CCACHE_BASEDIR`, so every path is hashed absolute and an entry belongs to one
+build tree ([build_performance.md § ccache](build_performance.md#ccache) says why).
 
-**It does not carry between an engine build and a game's, and it cannot.** A consumer writes
-`add_subdirectory(${BERNINI_DIR} ${CMAKE_BINARY_DIR}/bernini)`, which puts the engine's binary
-directory one level deeper than the engine's own build puts it, so the generated precompiled header
-is `bernini/libs/core/…/cmake_pch.hxx` there and `libs/core/…/cmake_pch.hxx` here. That path is part
-of the hash and no basedir removes the difference. Measured: 0/147.
-
-**Nor does it carry between two different games**, for the same reason one directory deeper. The
-basedir is the engine checkout, so ccache rewrites paths *under the engine* and leaves everything
-else absolute — and a game's build tree is not under the engine. Its generated PCH enters the hash
-as `/…/games/demo/build/…/bernini/libs/core/…/cmake_pch.hxx`, which is a different string for every
-game. So the first build of the second game is a full compile too.
+**It does not carry between an engine build and a game's, nor between two games.** Each build tree
+generates its own precompiled headers, under its own absolute path, and a clang `.pch` records the
+absolute paths of the headers it read: one served to another tree would compile that tree's TUs
+against the first tree's headers.
 
 **What does carry is one build of a given tree to the next**: delete a game's build directory and
 rebuild it in place and the compiler runs for nothing — measured at 147/147. That is the whole of
-the reuse, and it is worth having, but it is not the "second game costs a coffee" this was expected
-to buy. `just embed` prints the rate for its own run.
-
-Making a game share with the engine or with another game means giving ccache a basedir that covers
-both trees, which is a decision about where every consumer's build directory lives rather than a
-line in this file — or not compiling the engine in the game's tree at all, which is what
-[the package](#consuming-a-built-engine) is for.
-
-Two things cost hits and are worth knowing before blaming the basedir. Flags are hashed, so a
-consumer building `Release`, or with `BERNINI_PROFILING` set the other way from the engine, shares
-nothing with it. And a `vcpkg_installed` tree *inside* the engine checkout is rewritten relative to
-each build's own working directory, so pointing two build trees at one is worse than giving each its
-own; a tree shared from outside the checkout keeps its absolute path in both and does not have the
-problem.
+the reuse. Flags are hashed too, so even that needs the same build type and options as last time.
+`just embed` prints the rate for its own run. Not compiling the engine in the game's tree at all is
+what [the package](#consuming-a-built-engine) is for.
 
 **A consumer must not need to think about the wrapper.** ccache's settings ride in a generated
-wrapper script rather than the environment, and it is written into the *consumer's* build tree, named
-after the basedir it carries. A consumer that calls `enable_compiler_cache()` itself therefore gets
-its own wrapper with its own basedir instead of overwriting ours, which would otherwise leave one of
-the two compiling uncached with nothing on screen to say so.
+wrapper script rather than the environment, written into the *consumer's* build tree. A consumer
+that calls `enable_compiler_cache()` itself writes the same wrapper again, byte for byte, so nothing
+is lost.
 
 ## Consuming a built engine
 

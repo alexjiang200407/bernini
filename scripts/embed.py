@@ -26,11 +26,9 @@ its package and the build type it was built with, since the package refuses any 
 
 The dependencies are the engine's, resolved from the engine's manifest, and by default the
 unpacked tree is the configured preset's rather than a second copy of it -- same manifest, same
-baseline, so vcpkg finds every package already installed and writes nothing. That tree lives
-inside the checkout, so ccache rewrites its include paths relative to each build's own working
-directory and they disagree between the two builds; it costs nothing here because an engine
-build and a consumer build cannot share an object anyway (docs/embedding.md says why), and the
-run-to-run hits this reports are between two consumer builds that both point at it. Do not run
+baseline, so vcpkg finds every package already installed and writes nothing. An engine build and
+a consumer build cannot share an object anyway (docs/embedding.md says why), so the run-to-run
+hits this reports are between two consumer builds that both point at it. Do not run
 this while a build is running: they would write into that tree at the same time.
 
 Nothing about the flags is guessed to match the engine's own build. The compiler is pinned to
