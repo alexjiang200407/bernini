@@ -13,7 +13,7 @@ cmake_minimum_required(VERSION 3.24)
 # the same against the engine build's package instead of a subdirectory.
 
 if (NOT DEFINED BERNINI_DIR OR BERNINI_DIR STREQUAL "")
-    set(BERNINI_DIR "$ENV{BERNINI_DIR}")
+    set(BERNINI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../..")
 endif()
 if (NOT EXISTS "${BERNINI_DIR}/CMakeLists.txt")
     message(FATAL_ERROR "BERNINI_DIR must name a bernini checkout (got '${BERNINI_DIR}')")

@@ -224,15 +224,17 @@ def _libclang_in(bin_dir):
 
 
 def find_libclang(compiler):
-    """The libclang to parse with: $BERNINI_LIBCLANG, the build compiler's, a known LLVM's, or None.
+    """The libclang to parse with: config.json's `libclang`, the build compiler's, a known LLVM's, or None.
 
     None means the pip wheel's bundled copy, which parses, but trips over a standard library newer
     than it is -- so the caller warns.
     """
-    override = os.environ.get("BERNINI_LIBCLANG")
+    import util.config as cfg
+
+    override = cfg.libclang()
     if override:
         if not os.path.isfile(override):
-            raise CatalogError(f"BERNINI_LIBCLANG is {override}, which does not exist.")
+            raise CatalogError(f"libclang in {cfg.rel(cfg.PATH)} is {override}, which does not exist.")
         return override
     if not _is_cl(compiler) or "clang" in os.path.basename(compiler).lower():
         found = _libclang_beside(compiler)
@@ -656,7 +658,8 @@ def resolve_libclang(entries, log=print):
     if library_file is None:
         log("warning: no libclang found beside the build's compiler or in a known LLVM install; "
             "using the pip wheel's, whose builtin headers may not match this standard library. "
-            "Set BERNINI_LIBCLANG to a toolchain's libclang to silence the parse errors that follow.")
+            "Set `libclang` in scripts/config.json to a toolchain's libclang to silence the parse "
+            "errors that follow.")
     return library_file
 
 

@@ -184,7 +184,7 @@ than the generator**, because the `windows-ninja-msvc-*` presets drive `cl.exe` 
 *does* honour a launcher — ccache's support for MSVC precompiled headers is an open issue with a
 reported false *hit*, a wrong object returned rather than a miss, and every target here carries a PCH.
 
-**`BERNINI_MSVC_COMPILER_CACHE=ON` (or that environment variable) is the way in, and it removes the
+**`BERNINI_MSVC_COMPILER_CACHE=ON` (`just build -D BERNINI_MSVC_COMPILER_CACHE=ON`) is the way in, and it removes the
 hazard instead of trusting ccache around it:** `target_precompile_headers` is replaced by a
 force-include (`/FI`) of the same headers in the same order, so the translation unit sees what it
 saw through the PCH but no compile ccache sees uses one — turning PCHs off outright does not build,

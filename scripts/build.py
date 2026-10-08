@@ -8,6 +8,7 @@ Usage:
     python scripts/build.py --preset windows-clang-dx12-debug   # clang + Ninja
     python scripts/build.py --config Release      # multi-config generators
     python scripts/build.py --configure           # force a configure, don't build
+    python scripts/build.py -D BERNINI_PROFILING=ON   # configure with a cache variable set
     python scripts/build.py --dry-run             # print the plan, don't run
     python scripts/build.py --no-api              # skip the API catalog refresh (scripts/api.py)
 
@@ -23,6 +24,9 @@ The compiler environment comes from config.json's `precommand` -- normally
 vcvarsall.bat. Without one, vcvars is located via vswhere for the generators that
 need it (Visual Studio, Ninja, NMake on Windows); Xcode and Unix Makefiles are
 left untouched.
+
+A cache variable no preset sets is given with -D NAME=VALUE, as to cmake itself, and
+reconfigures the build dir with it -- CI turns BERNINI_MSVC_COMPILER_CACHE on this way.
 
 VCPKG_ROOT is exported into that environment from the vcpkg recorded in config.json
 (else an auto-detected one), so the presets' toolchain file resolves without the
@@ -193,6 +197,17 @@ def refresh_api_catalog(binary_dir):
         print(f"note: API catalog not refreshed: {err}", file=sys.stderr)
 
 
+def define_args(defines):
+    """`-D NAME=VALUE` arguments as cmake takes them; SystemExit on one that names no value."""
+    out = []
+    for define in defines or ():
+        name, sep, _ = define.partition("=")
+        if not sep or not name:
+            raise SystemExit(f"error: -D takes NAME=VALUE, not '{define}'.")
+        out.append(f"-D{define}")
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("target", nargs="?", help="Target to build (default: all).")
@@ -206,6 +221,8 @@ def main():
                                  help="Force a configure and skip the build step.")
     configure_group.add_argument("--no-configure", action="store_true",
                                  help="Never configure, even if the build dir has not been.")
+    parser.add_argument("-D", "--define", action="append", metavar="NAME=VALUE",
+                        help="Set a cache variable at configure, as cmake -D does; implies a configure.")
     parser.add_argument("--dry-run", action="store_true", help="Print what would run without executing.")
     parser.add_argument("--time", action="store_true",
                         help="After the build, report where its time went (scripts/build_timing.py).")
@@ -216,6 +233,8 @@ def main():
     parser.add_argument("--jobs", type=int,
                         help=f"Size of that shared budget (default: one per core, {jobserver.default_tokens()} here).")
     args = parser.parse_args()
+    if args.define and args.no_configure:
+        parser.error("-D needs a configure, which --no-configure refuses")
 
     preset = cfg.preset(args.preset)
 
@@ -238,7 +257,7 @@ def main():
               "Run `just init`.", file=sys.stderr)
         return 1
 
-    configure_cmd = [cmake, "--preset", preset]
+    configure_cmd = [cmake, "--preset", preset, *define_args(args.define)]
     build_cmd = [cmake, "--build", "--preset", preset]
 
     # Resolve toolchain programs that may not be on PATH and pin them as absolute
@@ -274,7 +293,7 @@ def main():
 
     binary_dir = ct.binary_dir_of(preset)
     stale, reason = needs_configure(binary_dir)
-    configure = args.configure or (stale and not args.no_configure)
+    configure = args.configure or bool(args.define) or (stale and not args.no_configure)
 
     # Only the configure consumes the toolchain file; an already-configured dir has the
     # resolved path in its cache and builds fine without one.

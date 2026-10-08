@@ -44,7 +44,7 @@ what catches it.
 - **The libclang is the toolchain's own** — beside the compiler the database names, then a known
   LLVM install — because its builtin headers must match the standard library the flags name. The
   pinned `libclang` wheel supplies the Python bindings; its bundled library is the fallback, and
-  trips over a newer libc++. `BERNINI_LIBCLANG` overrides the choice.
+  trips over a newer libc++. `libclang` in `scripts/config.json` overrides the choice.
 - **It never fails a build.** No bindings, no compile database, a parse error: one line says so,
   and the last catalog stays.
 

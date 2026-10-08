@@ -69,7 +69,7 @@ jobs:
           restore-keys: ccache-editor-msvc-
 
       - name: Build and package the editor
-        run: python scripts/package_editor.py
+        run: python scripts/package_editor.py -D BERNINI_MSVC_COMPILER_CACHE=ON
 
       - name: Save the compiler cache
         if: ${{ success() && steps.ccache.outputs.cache-hit != 'true' }}

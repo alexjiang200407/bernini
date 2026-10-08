@@ -27,14 +27,8 @@
 
 option(BERNINI_COMPILER_CACHE "Compile through ccache when it is installed" ON)
 
-if (DEFINED ENV{BERNINI_MSVC_COMPILER_CACHE})
-    set(_bernini_msvc_cache_default "$ENV{BERNINI_MSVC_COMPILER_CACHE}")
-else()
-    set(_bernini_msvc_cache_default OFF)
-endif()
 option(BERNINI_MSVC_COMPILER_CACHE
-    "Compile through ccache under MSVC, with precompiled headers off and /Z7 debug info"
-    ${_bernini_msvc_cache_default})
+    "Compile through ccache under MSVC, with precompiled headers off and /Z7 debug info" OFF)
 
 # Defining a function named after a command replaces it for every later caller, which is the point:
 # the targets say target_precompile_headers and get a force-include instead.

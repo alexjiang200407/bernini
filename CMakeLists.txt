@@ -1,15 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
 
-# The workspace's one unpacked vcpkg tree, which its games already read, so an engine package and
-# the game consuming it resolve the same ports. Only where no project() has run yet -- embedded,
-# vcpkg has already settled on the consumer's -- and only for a fresh build dir, since vcpkg caches
-# the choice.
-if (NOT DEFINED CMAKE_PROJECT_NAME AND NOT DEFINED VCPKG_INSTALLED_DIR
-    AND DEFINED ENV{WS_VCPKG_INSTALLED_DIR})
-    set(VCPKG_INSTALLED_DIR "$ENV{WS_VCPKG_INSTALLED_DIR}")
-    message(STATUS "Bernini: vcpkg packages shared at ${VCPKG_INSTALLED_DIR}")
-endif()
-
 project(BerniniEngine)
 
 # This checkout, whether or not it is the top of the build. CMAKE_SOURCE_DIR is the top-level

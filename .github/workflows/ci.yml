@@ -58,7 +58,7 @@ jobs:
       # build.py locates vcvars via vswhere when config.json is absent, as it is here.
       - name: Build
         shell: bash
-        run: python scripts/build.py --preset windows-ninja-msvc-dx12-debug 2>&1 | tee build.log
+        run: python scripts/build.py --preset windows-ninja-msvc-dx12-debug -D BERNINI_MSVC_COMPILER_CACHE=ON 2>&1 | tee build.log
 
       # A port the feed lacks -- a new vcpkg.json entry, or an ABI hash the image moved -- is built
       # from source by this run and costs minutes, silently. Name it, so the slow run explains itself.

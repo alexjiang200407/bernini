@@ -28,6 +28,9 @@ Schema:
                  the executable itself or the directory holding it.
                  Recognised: cmake, ninja, clang, clang-format, clang-tidy.
                  clang++ is taken from clang's directory.
+    libclang     Path to the libclang library the API catalog parses with
+                 (scripts/api.py), instead of the one beside the build's compiler
+                 or in a known LLVM install.
     lfs          Credentials for *writing* to the Git LFS object store (see
                  docs/lfs.md): accessKeyId, and secretAccessKey encrypted to this
                  user account by util/secrets.py. Only a machine that adds assets
@@ -142,6 +145,12 @@ def arch(override=None):
 def precommand():
     """Shell command whose resulting environment every build runs in, or None."""
     return load().get("precommand") or None
+
+
+def libclang():
+    """The libclang config.json names for the API catalog, or None."""
+    value = load().get("libclang")
+    return os.path.expanduser(value) if value else None
 
 
 def find_vcpkg():
