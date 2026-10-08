@@ -153,9 +153,10 @@ A blob shadow darkens a blade as it darkens the ground the blade grows from, roo
 disc reads as one patch from bare ground into a field. Blob Shadows lands a disc only on what faces
 up, and a blade stands near vertical; nothing in the depth tells a blade from a wall, since the
 renderer keeps no G-buffer. So grass writes a third target besides colour and velocity,
-`grassRootHeight` (R16F): each blade pixel's height above its blade's root along up, floored at a
+`grassRootHeight` (R16F): each blade pixel's height above its blade's root in world Y, floored at a
 millimetre so the cleared zero means *no blade*. Blob Shadows reads it beside the depth, lowers a
-blade pixel by it to the root's height and skips the facing test there
+blade pixel by it in world Y to the root's height, whatever the ground normal, and skips the facing
+test there
 ([passes.md](passes.md#blob-shadows)). The fade and the cut above the caster are then measured from
 the ground: a grounded caster cast from just above the roots (`BlobShadowDesc::casterLift`, as the
 editor's floor slack sets it) shades the whole of a blade that rises past that point.
@@ -165,7 +166,9 @@ point, and fade the rest by up to a quarter against the default 2 m `fadeHeight`
 the disc list in the grass pixel shader would loop over every disc per blade fragment. A stencil bit
 would say "grass" but not how high, and writing a per-pixel stencil value is not guaranteed on
 D3D12 and Vulkan. The target is cleared every frame with the others, and written only by the grass
-phase, which draws after everything that receives a disc.
+phase, which draws after everything that receives a disc. Every render target carries it, grass or
+not: two bytes a render-grid pixel, 4 MB at 1920x1080 and 16.6 MB at 3840x2160, and a clear a
+frame.
 
 ## Lighting
 

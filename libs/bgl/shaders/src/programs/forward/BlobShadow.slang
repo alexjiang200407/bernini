@@ -348,10 +348,11 @@ float4 PSMain(VSOut input) : SV_Target
 
     let n = gBlobShadowData.groundNormal;
 
-    // A blade pixel receives as its ground: lowered to its root's height, and facing up.
+    // A blade pixel receives as its ground: lowered to its root's height, and facing up. The height
+    // is world Y, as the grass stage measured it, whatever the ground normal.
     let rootHeight = gBlobShadowData.grassRootHeight.Load(int3(pixel, 0)).r;
     let onGrass = rootHeight > 0.0;
-    let world = ReceiverWorld(input.position.xy, depth) - n * rootHeight;
+    let world = ReceiverWorld(input.position.xy, depth) - float3(0.0, rootHeight, 0.0);
 
     let blob = gBlobShadowData.blobBuffer[input.blob];
     let mesh = gBlobShadowData.meshBuffer[blob.mesh];
