@@ -12,6 +12,7 @@
 #include <bgl/types/SceneDesc.h>
 #include <bgpu/GpuContext.h>
 #include <catch2/catch_approx.hpp>
+#include <chrono>
 #include <cmath>
 #include <editor_plugin_api/IEditorViewport.h>
 #include <editor_plugin_api/IThumbnailProvider.h>
@@ -32,6 +33,7 @@
 #include <condition_variable>
 #include <core/file/file.h>
 #include <core/glm.h>
+#include <core/platform/util.h>
 #include <core/settings/Settings.h>
 #include <cstddef>
 #include <filesystem>
@@ -39,6 +41,7 @@
 #include <gamelib/AssetManager.h>
 
 #include "StoreAt.h"
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <editor_plugin_api/IEditorRegistry.h>
 #include <editor_plugin_api/Thumbnail.h>
@@ -46,9 +49,12 @@
 #include <mutex>
 #include <optional>
 #include <qcolor.h>
+#include <qlogging.h>
 #include <qnamespace.h>
 #include <qobject.h>
 #include <qrgb.h>
+#include <qtypes.h>
+#include <ratio>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -1055,4 +1061,147 @@ TEST_CASE("Without a graphics device the cache stays inert", "[thumbnails]")
 	cache.SetStore(nullptr);
 	cache.Request(c_MeshPath);
 	REQUIRE(cache.Lookup(c_MeshPath).isNull());
+}
+
+namespace
+{
+	// The frame-loop ticks the cache reported as slow while a fill ran: the time the viewports lost to
+	// it. Read off the qWarning Advance writes, since the frame loop deliberately has no zone.
+	struct SlowTicks
+	{
+		static inline std::mutex          g_Mutex;
+		static inline std::vector<double> g_Ms;
+		static inline QtMessageHandler    g_Previous = nullptr;
+
+		SlowTicks()
+		{
+			g_Ms.clear();
+			g_Previous = qInstallMessageHandler(&Handle);
+		}
+
+		~SlowTicks() { qInstallMessageHandler(g_Previous); }
+
+		SlowTicks(const SlowTicks&) = delete;
+		SlowTicks&
+		operator=(const SlowTicks&) = delete;
+
+		static void
+		Handle(QtMsgType type, const QMessageLogContext& context, const QString& message)
+		{
+			if (message.startsWith("AssetThumbnail: ") && message.contains(" ms tick on "))
+			{
+				const std::lock_guard<std::mutex> lock(g_Mutex);
+				g_Ms.push_back(message.section(' ', 1, 1).toDouble());
+			}
+			if (g_Previous != nullptr)
+				g_Previous(type, context, message);
+		}
+	};
+}
+
+// How long a project's thumbnails take to fill, as the Content Explorer fills a folder: every
+// `.bmesh` and `.bmaterial` under the data root `BERNINI_TEST_PROJECT` names, requested at once. Not
+// a test of behaviour and not runnable in CI -- run it by hand,
+// `BERNINI_TEST_PROJECT=<Data root> just run editor_tests -- "[.thumbnailfill]"`, and read the numbers
+// off the warnings it prints: the time to half the tiles and to all of them, and the frame-loop
+// ticks past the cache's slow-tick threshold, which is what the viewports froze for.
+// `BERNINI_THUMBNAIL_FOLDER=Derived/Meshes` narrows it to one folder, the unit the explorer fills.
+TEST_CASE("A project's thumbnails fill, timed", "[.thumbnailfill][render]")
+{
+	const std::optional<std::string> root = core::env_var("BERNINI_TEST_PROJECT");
+	if (!root.has_value())
+	{
+		SKIP("BERNINI_TEST_PROJECT is not set");
+	}
+	const auto dataRoot = std::filesystem::path(*root);
+
+	// One folder when BERNINI_THUMBNAIL_FOLDER names it, since a folder is what the explorer fills.
+	auto folders = std::vector<std::string>{ "Derived/Meshes", "Authored/Materials" };
+	if (const std::optional<std::string> folder = core::env_var("BERNINI_THUMBNAIL_FOLDER"))
+		folders = { *folder };
+
+	auto paths = std::vector<QString>();
+	for (const std::string& folder : folders)
+	{
+		for (const auto& entry : std::filesystem::recursive_directory_iterator(dataRoot / folder))
+		{
+			const QString path = QString::fromStdString(entry.path().generic_string());
+			if (entry.is_regular_file() && AssetThumbnailCache::CanThumbnail(path))
+				paths.push_back(path);
+		}
+	}
+	std::ranges::sort(paths);
+	REQUIRE_FALSE(paths.empty());
+
+	// The editor's own scene budget (MainWindow's defaults), since the reference character does not
+	// fit the suite's.
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 256;
+	sceneDesc.initialMeshlets             = 32768;
+	sceneDesc.initialSubmeshes            = 512;
+	sceneDesc.initialVertexBufferByteSize = 33554432;
+	sceneDesc.initialIndices              = 2000000;
+	sceneDesc.initialPbrMaterials         = 256;
+	sceneDesc.initialLoosePbrMaterials    = 256;
+	sceneDesc.initialSurfaceMaterials     = 64;
+
+	// The editor's own cache, so a second run measures the warm case a user sits in: the first run
+	// pays every draw bucket's pipeline build and is not the number.
+	auto ctxDesc             = bgpu::GpuContextDesc();
+	ctxDesc.enableDebugLayer = false;
+	ctxDesc.shaderCacheDir   = "shadercache";
+	Renderer renderer(ctxDesc, bgl::GraphicsOptions(), sceneDesc);
+
+	const assetlib::AssetStore store(dataRoot);
+
+	auto thumbSettings      = EditorConfig()["thumbnails"];
+	auto desc               = AssetThumbnailDesc();
+	desc.renderer           = &renderer;
+	desc.env.environmentMap = thumbSettings["environmentMap"].GetOrDefault(std::string());
+	desc.env.dataRoot       = thumbSettings["dataRoot"].GetOrDefault(std::string());
+
+	AssetThumbnailCache cache(desc);
+	REQUIRE(cache.IsReady());
+	cache.SetStore(&store);
+
+	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
+	QSignalSpy rejected(&cache, &StampedPixmapCache::Rejected);
+
+	using Clock        = std::chrono::steady_clock;
+	const auto msSince = [](Clock::time_point start) {
+		return std::chrono::duration<double, std::milli>(Clock::now() - start).count();
+	};
+
+	const SlowTicks ticks;
+	const auto      start = Clock::now();
+	for (const QString& path : paths) cache.Request(path);
+
+	const auto            half = static_cast<qsizetype>((paths.size() + 1) / 2);
+	std::optional<double> halfMs;
+	const bool            done = WaitFor(
+		[&] {
+			if (!halfMs.has_value() && ready.count() >= half)
+				halfMs = msSince(start);
+			return ready.count() + rejected.count() >= static_cast<qsizetype>(paths.size());
+		},
+		300000);
+	const double allMs = msSince(start);
+	REQUIRE(done);
+
+	double slowSum = 0.0;
+	double slowMax = 0.0;
+	for (const double ms : SlowTicks::g_Ms)
+	{
+		slowSum += ms;
+		slowMax = std::max(slowMax, ms);
+	}
+
+	WARN(
+		"thumbnail fill: " << paths.size() << " assets (" << rejected.count() << " rejected), half "
+						   << halfMs.value_or(allMs) << " ms, all " << allMs << " ms; "
+						   << SlowTicks::g_Ms.size() << " slow ticks totalling " << slowSum
+						   << " ms, the longest " << slowMax << " ms");
+
+	// Drains the cache's work before the store and the renderer go.
+	cache.SetStore(nullptr);
 }
