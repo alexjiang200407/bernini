@@ -85,7 +85,7 @@ There are **two producers of textures**, and they compress differently:
 * **Mesh import** (`AssetStore::WriteTextures` in
   [libs/assetlib/src/bmesh/bmesh_io.cpp](libs/assetlib/src/bmesh/bmesh_io.cpp)) writes one Basis-UASTC `.ktx2`
   per image, named after that image (`importedTextureFileNames`), which `loadKTX2` transcodes to BC7
-  on every load. Small on disk, uniform, and no per-map role
+  on every load -- a load capped by `maxDim` reads and transcodes only the levels it keeps. Small on disk, uniform, and no per-map role
   needed — only the sRGB / linear split, which it takes from the glTF's materials. These are the
   *source* textures a material routes at; they land under `Derived/SourceTextures/` in an editor project.
   Naming them after the image rather than by index is what lets a re-export of the source be
@@ -268,7 +268,10 @@ source texture.
   ([libs/assetlib/src/texture/image_io.cpp](libs/assetlib/src/texture/image_io.cpp)) **Basis-UASTC-compresses** LDR
   maps (multi-threaded, `LEVEL_FASTER`) and writes one `.ktx2` per image. HDR/float inputs (the IBL maps)
   skip compression. On load, `loadKTX2` transcodes any Basis-supercompressed KTX2 to **BC7** and hands
-  back an `ImageData` whose `vkFormat` is the BC7 block format (with block-aware subresource pitches).
+  back an `ImageData` whose `vkFormat` is the BC7 block format (with block-aware subresource pitches);
+  capped by `maxDim`, it cuts any container under no supercompression or Zstd to the kept levels
+  before libktx opens it, so the levels a thumbnail drops are neither read from a mount nor, for a
+  Basis payload, transcoded.
   A material bake instead writes the per-map targets above, which load without transcoding.
 * **Factors are linear** and live in the material, not the texture:
   `baseColorFactor` (linear, multiplies the *decoded* albedo), `metallicFactor`, `roughnessFactor`,

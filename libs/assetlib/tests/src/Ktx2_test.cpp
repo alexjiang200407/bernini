@@ -1,14 +1,21 @@
+#include <algorithm>
 #include <array>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/ImageData.h>
 #include <atomic>
+#include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <core/file/IFileSystem.h>
+#include <core/file/LooseFileSystem.h>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <exception>
 #include <filesystem>
 #include <optional>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -179,6 +186,196 @@ TEST_CASE("KTX2 bake targets write their block format directly", "[ktx2][io][bak
 
 		std::filesystem::remove(path);
 	}
+}
+
+namespace
+{
+	// A loose mount that remembers how it was read: how often whole, and the furthest byte any range
+	// reached.
+	class RecordingFileSystem final : public core::file::IFileSystem
+	{
+	public:
+		explicit RecordingFileSystem(const std::filesystem::path& root) : m_Loose(root) {}
+
+		// Declared deleted, as IFileSystem's are: MSVC errors on the implicit deletion otherwise.
+		RecordingFileSystem(const RecordingFileSystem&) = delete;
+		RecordingFileSystem(RecordingFileSystem&&)      = delete;
+		RecordingFileSystem&
+		operator=(const RecordingFileSystem&) = delete;
+		RecordingFileSystem&
+		operator=(RecordingFileSystem&&) = delete;
+
+		[[nodiscard]] bool
+		Exists(std::string_view path) const noexcept override
+		{
+			return m_Loose.Exists(path);
+		}
+
+		[[nodiscard]] std::optional<core::file::FileStamp>
+		Stat(std::string_view path) const noexcept override
+		{
+			return m_Loose.Stat(path);
+		}
+
+		[[nodiscard]] std::vector<std::byte>
+		Read(std::string_view path) const override
+		{
+			++wholeReads;
+			return m_Loose.Read(path);
+		}
+
+		[[nodiscard]] std::vector<std::byte>
+		ReadRange(std::string_view path, uint64_t offset, uint64_t size) const override
+		{
+			furthestByte = std::max(furthestByte, offset + size);
+			return m_Loose.ReadRange(path, offset, size);
+		}
+
+		[[nodiscard]] std::vector<std::string>
+		Enumerate(std::string_view prefix) const override
+		{
+			return m_Loose.Enumerate(prefix);
+		}
+
+		[[nodiscard]] bool
+		IsReadOnly() const noexcept override
+		{
+			return m_Loose.IsReadOnly();
+		}
+
+		mutable int      wholeReads   = 0;
+		mutable uint64_t furthestByte = 0;
+
+	private:
+		core::file::LooseFileSystem m_Loose;
+	};
+
+	// Every subresource `tail` holds is, byte for byte, the one `full` holds `skipped` levels in.
+	void
+	RequireSameTail(const ImageData& full, const ImageData& tail, uint32_t skipped)
+	{
+		REQUIRE(tail.vkFormat == full.vkFormat);
+		REQUIRE(tail.mipLevels + skipped == full.mipLevels);
+		REQUIRE(tail.subresources.size() == tail.mipLevels);
+		for (uint32_t i = 0; i < tail.mipLevels; ++i)
+		{
+			INFO("kept level " << i);
+			const auto& a = tail.subresources[i];
+			const auto& b = full.subresources[i + skipped];
+			REQUIRE(a.slicePitch == b.slicePitch);
+			REQUIRE(a.rowPitch == b.rowPitch);
+			CHECK(
+				std::memcmp(
+					tail.pixels.data() + a.offset,
+					full.pixels.data() + b.offset,
+					a.slicePitch) == 0);
+		}
+	}
+}
+
+// What the editor's thumbnails ask for: the tail of a chain from a mount. A Basis chain is one
+// payload libktx transcodes level by level, so a capped load cuts the container to the kept levels
+// before libktx opens it -- the dropped ones are neither read nor transcoded -- and what comes back
+// is exactly what the whole chain's tail would have been.
+TEST_CASE("A capped load from a mount reads and transcodes only the mip tail", "[ktx2][io]")
+{
+	constexpr uint32_t c_Width  = 256;
+	constexpr uint32_t c_Height = 256;
+
+	// A gradient rather than a flat colour, so every block of every level is its own transcode and
+	// a level stood in for another would show.
+	std::vector<std::byte> rgba(static_cast<size_t>(c_Width) * c_Height * 4);
+	for (uint32_t y = 0; y < c_Height; ++y)
+		for (uint32_t x = 0; x < c_Width; ++x)
+		{
+			const size_t at = (static_cast<size_t>(y) * c_Width + x) * 4;
+			rgba[at]        = static_cast<std::byte>(x);
+			rgba[at + 1]    = static_cast<std::byte>(y);
+			rgba[at + 2]    = static_cast<std::byte>((x * 7 + y * 13) & 0xFF);
+			rgba[at + 3]    = std::byte{ 255 };
+		}
+	const ImageData src = rgba8ToImage(rgba, c_Width, c_Height);
+
+	const auto dir = std::filesystem::temp_directory_path() / "bernini_ktx2_tail_mount";
+	std::filesystem::remove_all(dir);
+	std::filesystem::create_directories(dir);
+	writeKTX2(src, dir / "basis.ktx2", /*srgb*/ true);
+	const auto fileSize = std::filesystem::file_size(dir / "basis.ktx2");
+
+	RecordingFileSystem fs(dir);
+
+	SECTION("the tail is byte for byte the whole chain's tail")
+	{
+		const ImageData full = loadKTX2(fs, "basis.ktx2", Ktx2Decode::kGpu, 0);
+		const ImageData tail = loadKTX2(fs, "basis.ktx2", Ktx2Decode::kGpu, 32);
+
+		REQUIRE(full.mipLevels == 9);
+		REQUIRE(tail.width == 32);
+		REQUIRE(tail.height == 32);
+		RequireSameTail(full, tail, 3);
+	}
+
+	SECTION("the dropped levels are never read")
+	{
+		static_cast<void>(loadKTX2(fs, "basis.ktx2", Ktx2Decode::kGpu, 32));
+
+		CHECK(fs.wholeReads == 0);
+		// The 256, 128 and 64 px levels are 84/85 of the payload.
+		CHECK(fs.furthestByte < fileSize / 4);
+	}
+
+	SECTION("an RGBA8 decode of the tail matches the whole chain's too")
+	{
+		const ImageData full = loadKTX2(fs, "basis.ktx2", Ktx2Decode::kRgba8, 0);
+		const ImageData tail = loadKTX2(fs, "basis.ktx2", Ktx2Decode::kRgba8, 32);
+
+		REQUIRE(tail.width == 32);
+		RequireSameTail(full, tail, 3);
+	}
+
+	SECTION("a host file is cut the same way")
+	{
+		const ImageData full = loadKTX2(dir / "basis.ktx2", Ktx2Decode::kGpu, 0);
+		const ImageData tail = loadKTX2(dir / "basis.ktx2", Ktx2Decode::kGpu, 32);
+
+		REQUIRE(tail.width == 32);
+		RequireSameTail(full, tail, 3);
+	}
+
+	SECTION("a cap the whole chain fits under is one whole read")
+	{
+		const ImageData whole = loadKTX2(fs, "basis.ktx2", Ktx2Decode::kGpu, 4096);
+
+		CHECK(whole.mipLevels == 9);
+		CHECK(fs.wholeReads == 1);
+	}
+
+	SECTION("a baked block format is cut the same way, with nothing to transcode")
+	{
+		writeKTX2(src, dir / "bc7.ktx2", /*srgb*/ false, Ktx2Compression::kBC7_RGBA);
+		const ImageData full = loadKTX2(fs, "bc7.ktx2", Ktx2Decode::kGpu, 0);
+		fs.wholeReads        = 0;
+		const ImageData tail = loadKTX2(fs, "bc7.ktx2", Ktx2Decode::kGpu, 32);
+
+		REQUIRE(tail.width == 32);
+		REQUIRE(tail.vkFormat == VkFormat::BC7_UNORM_BLOCK);
+		RequireSameTail(full, tail, 3);
+		CHECK(fs.wholeReads == 0);
+	}
+
+	SECTION("an uncompressed chain is cut too")
+	{
+		writeKTX2(src, dir / "raw.ktx2", /*srgb*/ false, Ktx2Compression::kNone);
+		const ImageData full = loadKTX2(fs, "raw.ktx2", Ktx2Decode::kGpu, 0);
+		fs.wholeReads        = 0;
+		const ImageData tail = loadKTX2(fs, "raw.ktx2", Ktx2Decode::kGpu, 32);
+
+		REQUIRE(tail.width == 32);
+		RequireSameTail(full, tail, 3);
+		CHECK(fs.wholeReads == 0);
+	}
+
+	std::filesystem::remove_all(dir);
 }
 
 // A consumer that displays at a known small size asks for only the tail of the stored chain, so
