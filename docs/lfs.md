@@ -84,6 +84,23 @@ turn into a recurring bill, and a full clone costs nothing to serve.
   `config.json` *is* the credential and the environment is the better route. Environment variables
   win when set either way, which is how CI supplies them.
 
+  The same protected pair is also read from the clone's local git config, `lfsstore.accessKeyId`
+  and `lfsstore.secretAccessKey`, ahead of `config.json`. That is where a repository with no
+  `scripts/config.json` of its own — a game — keeps its key
+  (`lfs_store.store_credentials`), and since local config lives in the common git directory, one
+  entry covers the clone and every worktree of it.
+
+* **One agent serves every repository that points at it.** [scripts/util/lfs_store.py](../scripts/util/lfs_store.py)
+  resolves from the repository git-lfs runs the agent in, not from the checkout the script sits
+  in: `.lfsstore` and the key from `git rev-parse --show-toplevel`, the object cache from
+  `--git-common-dir`. So a game's local config can name this agent and get its own bucket, cache
+  and key, and a worktree's transfers land in the cache its clone shares. A repository with no
+  `.lfsstore` is refused, never served from the engine's, and `scripts/config.json` is read from
+  the repository's own root, never through this checkout's config — a game must not be handed the
+  engine's key and upload its assets to a public bucket. The `BERNINI_LFS_*` overrides are the
+  exception: they apply to whichever repository runs the agent, so set them only for a command in
+  the repository they name, never in a shell profile.
+
 * **Three files, because git-lfs forces the split.** The store's location cannot go in
   `.lfsconfig`: git-lfs warns about every key it does not recognise as safe there, on every command
   it runs, so those settings live in `.lfsstore`, which only
@@ -103,7 +120,9 @@ turn into a recurring bill, and a full clone costs nothing to serve.
 
 * **The agent's configured paths are absolute.** git-lfs runs it from whatever directory the
   triggering git command was in, so a relative path does not survive — which is the other reason
-  `just init` has to write them per machine.
+  `just init` has to write them per machine. They live in the clone's shared config, so they name
+  the main clone's agent: a path into a worktree breaks every other checkout of the clone when
+  that worktree is removed.
 
 * **The size ceiling is a client-side backstop, because no provider-side one exists.**
   Cloudflare has no spending cap: exceed the free tier and it bills, with nothing to stop it.

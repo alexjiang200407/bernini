@@ -1,4 +1,4 @@
-"""Fill the LFS object store from this clone's local cache.
+"""Fill the LFS object store from the local cache of the repository this runs in.
 
 The migration tool. Every object any ref still references is listed, matched against
 .git/lfs/objects, and uploaded to the configured bucket -- so moving off a previous LFS
@@ -19,7 +19,6 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import util.cmake_tools as ct  # noqa: E402
 import util.lfs_store as store  # noqa: E402
 
 
@@ -30,7 +29,7 @@ def referenced_objects(all_refs):
         cmd.append("--all")
 
     try:
-        done = subprocess.run(cmd, cwd=ct.REPO_ROOT, capture_output=True, text=True)
+        done = subprocess.run(cmd, cwd=store.repo_root(), capture_output=True, text=True)
     except OSError as exc:
         raise SystemExit(f"error: cannot run git lfs: {exc}")
     if done.returncode:
