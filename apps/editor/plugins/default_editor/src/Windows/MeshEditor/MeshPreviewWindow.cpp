@@ -39,6 +39,7 @@
 #include <assetlib_structs/BMesh.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/PreparedStaticMesh.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/StaticMeshGeomDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
@@ -149,35 +150,7 @@ MeshPreviewWindow::ClearGeometry()
 	m_Viewport->SetShowsToonContent(false);
 
 	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
-		for (const InstanceRef& instance : m_Instances)
-		{
-			if (!instance.handle.IsValid())
-				continue;
-
-			try
-			{
-				view->DeleteMeshInstance(instance.handle);
-			}
-			catch (const std::exception& e)
-			{
-				qWarning("MeshPreview: failed to delete an instance: %s", e.what());
-			}
-		}
-
-		for (const bgl::GeomHandle& geom : m_Geoms)
-		{
-			if (!geom.IsValid())
-				continue;
-
-			try
-			{
-				context.scene.DeleteGeom(geom);
-			}
-			catch (const std::exception& e)
-			{
-				qWarning("MeshPreview: failed to delete a geom: %s", e.what());
-			}
-		}
+		DeleteGeometry(context.scene, *view, m_Instances, m_Geoms);
 	});
 
 	if (m_ForcedLod.has_value())
@@ -193,6 +166,44 @@ MeshPreviewWindow::ClearGeometry()
 	m_SubmeshNames.clear();
 	m_SubmeshMaterialPaths.clear();
 	m_MeshPath.clear();  // LoadMesh sets it again once it has succeeded
+}
+
+void
+MeshPreviewWindow::DeleteGeometry(
+	bgl::IScene&                     scene,
+	bgl::ISceneView&                 view,
+	std::span<const InstanceRef>     instances,
+	std::span<const bgl::GeomHandle> geoms) noexcept
+{
+	for (const InstanceRef& instance : instances)
+	{
+		if (!instance.handle.IsValid())
+			continue;
+
+		try
+		{
+			view.DeleteMeshInstance(instance.handle);
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("MeshPreview: failed to delete an instance: %s", e.what());
+		}
+	}
+
+	for (const bgl::GeomHandle& geom : geoms)
+	{
+		if (!geom.IsValid())
+			continue;
+
+		try
+		{
+			scene.DeleteGeom(geom);
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("MeshPreview: failed to delete a geom: %s", e.what());
+		}
+	}
 }
 
 uint32_t
@@ -257,17 +268,130 @@ MeshPreviewWindow::Reset()
 	RestoreConfiguredEnvironment();
 }
 
+MeshPreviewWindow::Upload
+MeshPreviewWindow::UploadMesh(const assetlib::RegenMesh& loaded) const
+{
+	const assetlib::BMesh& mesh = loaded.mesh;
+
+	auto upload = Upload();
+
+	// A .bmesh spreads its submeshes across several meshes, and a node instances a mesh (the same
+	// mesh can be instanced by several nodes). Each mesh is cooked once, and every node that
+	// references one places an instance of it at the node's world transform.
+	struct Placement
+	{
+		uint32_t  geomIndex;
+		glm::mat4 world;
+	};
+
+	auto cooked       = std::vector<bgl::PreparedStaticMesh>();
+	auto cookedMeshes = std::vector<uint32_t>();  // upload geom index -> mesh index
+	auto placements   = std::vector<Placement>();
+	auto geomForMesh  = std::unordered_map<uint32_t, uint32_t>();
+	auto raycastGeoms = std::vector<uint32_t>();  // upload geom index -> raycaster geometry
+	auto aabbMin      = glm::vec3(std::numeric_limits<float>::max());
+	auto aabbMax      = glm::vec3(std::numeric_limits<float>::lowest());
+
+	for (uint32_t nodeIndex = 0; nodeIndex < mesh.nodes.size(); ++nodeIndex)
+	{
+		const assetlib::Node& node = mesh.nodes[nodeIndex];
+		if (!bmesh::ReferencesMesh(mesh, node))
+			continue;
+
+		auto [it, inserted] =
+			geomForMesh.try_emplace(node.mesh, static_cast<uint32_t>(cooked.size()));
+		if (inserted)
+		{
+			cooked.push_back(bgl::CookStaticMesh(mesh, node.mesh));
+			cookedMeshes.push_back(node.mesh);
+			upload.geomLods.push_back(editor::LodsOf(mesh, node.mesh));
+			raycastGeoms.push_back(upload.raycaster.AddMesh(mesh, node.mesh));
+
+			// Name each of this mesh's submeshes once, in the order the selector shows them.
+			const assetlib::Mesh& entry = mesh.meshes[node.mesh];
+			for (uint32_t i = 0; i < entry.submeshCount; ++i)
+			{
+				const assetlib::Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
+
+				const std::string_view pooled = mesh.stringPool.at(submesh.nameOffset);
+				auto name = QString::fromUtf8(pooled.data(), static_cast<qsizetype>(pooled.size()));
+				// Not localized, like the sphere's "Sphere": this too is read back as a filename
+				// stem for an unnamed submesh's auto-saved material.
+				if (name.isEmpty())
+					name = QString("Submesh %1").arg(upload.submeshNames.size());
+				upload.submeshNames << name;
+				upload.submeshMaterialPaths
+					<< ResolveMaterialPath(loaded.bindings, entry.firstSubmesh + i, m_DataRoot);
+				upload.submeshRefs.push_back(
+					{ it->second, i, entry.firstSubmesh + i, assetlib::hasTangent(submesh) });
+			}
+		}
+
+		const glm::mat4 world = bmesh::GetInstanceTransform(mesh, nodeIndex);
+		placements.push_back({ it->second, world });
+		upload.raycaster.AddInstance(raycastGeoms[it->second], world);
+
+		bmesh::GrowBoundsForMesh(mesh, node.mesh, world, aabbMin, aabbMax);
+	}
+
+	if (cooked.empty())
+		core::throw_runtime_error("no node references a mesh");
+
+	upload.center = (aabbMin + aabbMax) * 0.5f;
+	upload.radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
+
+	try
+	{
+		m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
+			for (size_t geom = 0; geom < cooked.size(); ++geom)
+			{
+				upload.geoms.push_back(
+					context.scene.AddStaticMeshGeom(std::move(cooked[geom]), {}));
+
+				const uint32_t submeshCount = mesh.meshes[cookedMeshes[geom]].submeshCount;
+				for (uint32_t i = 0; i < submeshCount; ++i)
+					context.scene.SetSubmeshMaterial(upload.geoms.back(), i, m_DefaultMaterial);
+			}
+
+			for (const Placement& placement : placements)
+				upload.instances.push_back(
+					{ view->CreateStaticMeshInstance(
+						  bgl::StaticMeshInstanceDesc()
+							  .SetGeom(upload.geoms[placement.geomIndex])
+							  .SetTransform(placement.world)),
+				      placement.geomIndex,
+				      placement.world });
+		});
+	}
+	catch (...)
+	{
+		// The upload's own failure is the one to report, so a cleanup that fails as well only logs.
+		try
+		{
+			m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
+				DeleteGeometry(context.scene, *view, upload.instances, upload.geoms);
+			});
+		}
+		catch (const std::exception& e)
+		{
+			qWarning("MeshPreview: could not delete a failed upload: %s", e.what());
+		}
+		throw;
+	}
+
+	return upload;
+}
+
 void
 MeshPreviewWindow::LoadMesh(const std::filesystem::path& path)
 {
 	auto          loaded = assetlib::RegenMesh();
-	auto&         mesh   = loaded.mesh;
+	auto          upload = Upload();
 	const QString name   = QString::fromStdString(path.filename().string());
 
-	const QString title = editor::Localize(
-		m_Host.GetLanguageResolver(),
-		"bernini.material.load_mesh_title",
-		"Load Mesh");
+	// Before the screen: the upload lands in the scene this view draws, beside nothing of the last
+	// mesh, and only the GUI thread may say the last mesh is going.
+	ClearGeometry();
 
 	const background::TaskResult result = background::RunWithLoadingScreen(
 		this,
@@ -285,8 +409,17 @@ MeshPreviewWindow::LoadMesh(const std::filesystem::path& path)
 					"bernini.material.reading_mesh_progress",
 					"Reading mesh..."));
 			loaded = editor::LoadMeshThroughSeam(m_Host.GetStore(), path);
-			if (mesh.meshes.empty())
+			if (loaded.mesh.meshes.empty())
 				core::throw_runtime_error("mesh contains no meshes");
+
+			progress.Report(
+				0,
+				0,
+				editor::Localize(
+					m_Host.GetLanguageResolver(),
+					"bernini.material.uploading_mesh_progress",
+					"Uploading geometry..."));
+			upload = UploadMesh(loaded);
 		});
 
 	if (!result.Completed())
@@ -298,7 +431,10 @@ MeshPreviewWindow::LoadMesh(const std::filesystem::path& path)
 
 		QMessageBox::warning(
 			window(),
-			title,
+			editor::Localize(
+				m_Host.GetLanguageResolver(),
+				"bernini.material.load_mesh_title",
+				"Load Mesh"),
 			editor::Localize(
 				m_Host.GetLanguageResolver(),
 				"bernini.material.load_mesh_failed",
@@ -309,113 +445,19 @@ MeshPreviewWindow::LoadMesh(const std::filesystem::path& path)
 		return;
 	}
 
-	try
-	{
-		struct Focus
-		{
-			glm::vec3 center;
-			float     radius;
-		};
+	m_Geoms                = std::move(upload.geoms);
+	m_GeomLods             = std::move(upload.geomLods);
+	m_Instances            = std::move(upload.instances);
+	m_SubmeshRefs          = std::move(upload.submeshRefs);
+	m_SubmeshNames         = std::move(upload.submeshNames);
+	m_SubmeshMaterialPaths = std::move(upload.submeshMaterialPaths);
+	m_Raycaster            = std::move(upload.raycaster);
+	m_MeshPath             = path;
 
-		Focus focus{};
-		ClearGeometry();
-		m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
-			bgl::IScene* scene = &context.scene;
+	FocusOn(upload.center, upload.radius);
 
-			// A .bmesh spreads its submeshes across several meshes, and a node instances a mesh (the
-			// same mesh can be instanced by several nodes). Upload each mesh once, then place an
-			// instance for every node that references one, at that node's world transform.
-			auto geomForMesh =
-				std::unordered_map<uint32_t, uint32_t>();  // mesh index -> m_Geoms index
-			auto raycastGeoms = std::vector<uint32_t>();   // m_Geoms index -> raycaster geometry
-			auto aabbMin      = glm::vec3(std::numeric_limits<float>::max());
-			auto aabbMax      = glm::vec3(std::numeric_limits<float>::lowest());
-
-			for (uint32_t nodeIndex = 0; nodeIndex < mesh.nodes.size(); ++nodeIndex)
-			{
-				const assetlib::Node& node = mesh.nodes[nodeIndex];
-				if (!bmesh::ReferencesMesh(mesh, node))
-					continue;
-
-				auto [it, inserted] =
-					geomForMesh.try_emplace(node.mesh, static_cast<uint32_t>(m_Geoms.size()));
-				if (inserted)
-				{
-					m_Geoms.push_back(scene->AddStaticMeshGeom(
-						bgl::StaticMeshGeomDesc().SetMesh(&mesh).SetMeshIndex(node.mesh)));
-					m_GeomLods.push_back(editor::LodsOf(mesh, node.mesh));
-					raycastGeoms.push_back(m_Raycaster.AddMesh(mesh, node.mesh));
-
-					// Name each of this mesh's submeshes once, in the order the selector shows them.
-					const assetlib::Mesh& entry = mesh.meshes[node.mesh];
-					for (uint32_t i = 0; i < entry.submeshCount; ++i)
-					{
-						const assetlib::Submesh& submesh = mesh.submeshes[entry.firstSubmesh + i];
-						scene->SetSubmeshMaterial(m_Geoms[it->second], i, m_DefaultMaterial);
-
-						const std::string_view pooled = mesh.stringPool.at(submesh.nameOffset);
-						auto                   name =
-							QString::fromUtf8(pooled.data(), static_cast<qsizetype>(pooled.size()));
-						// Not localized, like the sphere's "Sphere" above: this too is read back as a
-						// filename stem for an unnamed submesh's auto-saved material.
-						if (name.isEmpty())
-							name = QString("Submesh %1").arg(m_SubmeshNames.size());
-						m_SubmeshNames << name;
-						m_SubmeshMaterialPaths << ResolveMaterialPath(
-							loaded.bindings,
-							entry.firstSubmesh + i,
-							m_DataRoot);
-						m_SubmeshRefs.push_back(
-							{ it->second,
-						      i,
-						      entry.firstSubmesh + i,
-						      assetlib::hasTangent(submesh) });
-					}
-				}
-
-				const glm::mat4 world = bmesh::GetInstanceTransform(mesh, nodeIndex);
-				m_Instances.push_back(
-					{ view->CreateStaticMeshInstance(
-						  bgl::StaticMeshInstanceDesc()
-							  .SetGeom(m_Geoms[it->second])
-							  .SetTransform(world)),
-				      it->second,
-				      world });
-				m_Raycaster.AddInstance(raycastGeoms[it->second], world);
-
-				bmesh::GrowBoundsForMesh(mesh, node.mesh, world, aabbMin, aabbMax);
-			}
-
-			if (m_Geoms.empty())
-				core::throw_runtime_error("no node references a mesh");
-
-			const glm::vec3 center = (aabbMin + aabbMax) * 0.5f;
-			const float     radius = std::max(0.001f, glm::length(aabbMax - aabbMin) * 0.5f);
-			focus                  = Focus{ center, radius };
-		});
-
-		FocusOn(focus.center, focus.radius);
-
-		m_MeshPath = path;
-
-		Q_EMIT ShownLodsChanged();
-		Q_EMIT GeometryChanged();
-	}
-	catch (const std::exception& e)
-	{
-		qWarning("MeshPreview: failed to load mesh '%s': %s", path.string().c_str(), e.what());
-
-		QMessageBox::warning(
-			window(),
-			title,
-			editor::Localize(
-				m_Host.GetLanguageResolver(),
-				"bernini.material.show_mesh_failed",
-				{ name, e.what() },
-				"Could not show '{0}':\n\n{1}"));
-
-		ShowDefaultSphere();
-	}
+	Q_EMIT ShownLodsChanged();
+	Q_EMIT GeometryChanged();
 }
 
 void
