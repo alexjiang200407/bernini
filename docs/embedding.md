@@ -147,6 +147,7 @@ find_package(Bernini CONFIG REQUIRED)             # Bernini_DIR=<engine build>/b
 add_executable(subway main.cpp)
 target_link_libraries(subway PRIVATE Bernini::gamelib Bernini::bgl)  # bgpu comes with the renderer
 # Bernini::crowdlib too, for compute on the async queue beside the frame (docs/crowdlib.md).
+# Bernini::terrainlib too, to generate a battlefield or read its height on the CPU (docs/terrain.md).
 # D3D12 only: the Agility SDK's exports must live in the executable.
 if (TARGET Bernini::bgpu_d3d12_agility)
     target_link_libraries(subway PRIVATE Bernini::bgpu_d3d12_agility)
@@ -191,6 +192,10 @@ interface. It is a target of its own, `<target>_bernini_runtime`, in `ALL`
 and built after `<target>`, for two reasons: it must land after vcpkg's applocal step has copied
 the debug `ktx.dll` so the release one wins, and it must run even when an engine rebuild changed
 a shader without relinking the consumer. It needs CMake 3.26 for `copy_directory_if_different`.
+On Windows it then runs vcpkg's applocal walk over each staged shared engine library. A shared
+library's own ports are `PRIVATE` to it, so `$<TARGET_RUNTIME_DLLS>` cannot name them, and vcpkg's
+applocal step for the consumer runs at link, before the copy. RmlUi's `freetype` and what that
+loads is the case that needs it.
 
 **One vcpkg tree.** The consumer must resolve the ports the engine was built against, so it points
 `VCPKG_INSTALLED_DIR` at the engine build's. In a workspace the engine reads

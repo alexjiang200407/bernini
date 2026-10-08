@@ -88,6 +88,27 @@ function(bernini_stage_runtime target)
                 "$<TARGET_FILE:Microsoft::DirectX12-Core>"
                 "$<TARGET_FILE:Microsoft::DirectX12-Layers>"
                 "${_to}")
+
+        # A shared engine library's own ports are PRIVATE to it, so neither the list above nor
+        # vcpkg's applocal step on the consumer -- which runs at link, before this copy -- sees
+        # them: RmlUi's freetype and everything freetype loads. vcpkg's walk run on each staged
+        # library deploys them as it does for an executable.
+        if (VCPKG_APPLOCAL_DEPS AND DEFINED Z_VCPKG_TOOLCHAIN_DIR)
+            z_vcpkg_set_powershell_path()
+            set(_vcpkg_bin "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}$<$<CONFIG:Debug>:/debug>/bin")
+            foreach (_lib IN ITEMS core_process bgpu bgl assetlib gamelib crowdlib)
+                if (TARGET Bernini::${_lib})
+                    get_target_property(_lib_type Bernini::${_lib} TYPE)
+                    if (_lib_type STREQUAL "SHARED_LIBRARY")
+                        list(APPEND _commands
+                            COMMAND "${Z_VCPKG_POWERSHELL_PATH}" -noprofile -executionpolicy Bypass
+                                -file "${Z_VCPKG_TOOLCHAIN_DIR}/msbuild/applocal.ps1"
+                                -targetBinary "${_to}/$<TARGET_FILE_NAME:Bernini::${_lib}>"
+                                -installedDir "${_vcpkg_bin}")
+                    endif()
+                endif()
+            endforeach()
+        endif()
     endif()
 
     add_custom_target(${target}_bernini_runtime ALL
