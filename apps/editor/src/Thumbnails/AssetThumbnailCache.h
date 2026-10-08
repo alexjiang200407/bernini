@@ -156,8 +156,9 @@ private:
 		bool                     anything = false;
 	};
 
-	// The worker's CookStaticMesh output for every mesh the nodes reference, keyed by mesh index.
-	// The CPU half of AddStaticMeshGeom, taken off the render thread; the commit consumes the entries.
+	// The worker's CookStaticMesh output for every mesh the nodes reference -- its coarsest level,
+	// which is all a tile shows -- keyed by mesh index. The CPU half of AddStaticMeshGeom, taken off
+	// the render thread; the commit consumes the entries.
 	using CookedMeshes = std::unordered_map<uint32_t, bgl::PreparedStaticMesh>;
 
 	// What a worker produced, waiting its turn on the GPU. `mesh` and `cooked` are null for a
