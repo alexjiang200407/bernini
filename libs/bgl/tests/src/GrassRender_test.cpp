@@ -1,4 +1,5 @@
 #include "util/GoldenImage.h"
+#include "util/GrassField.h"
 #include "util/TestEnvironment.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
@@ -47,61 +48,6 @@ namespace
 	// The plane geoms are authored in XY; this lays one flat with its normal up.
 	const glm::mat4 c_Flat =
 		glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-
-	/**
-	 * One field of `side` x `side` clumps `spacing` apart over the plane's XY, centred, growing
-	 * along +Z (the plane's normal), chunked in rows the way a cook's Morton order would roughly.
-	 */
-	assetlib::BGrassFields
-	MakeField(const uint32_t side, const float spacing)
-	{
-		auto grass  = assetlib::BGrassFields();
-		grass.looks = { "unused.bgrass" };
-		grass.names = { "Ground" };
-
-		const float origin = -0.5f * spacing * static_cast<float>(side - 1);
-		for (uint32_t y = 0; y < side; ++y)
-		{
-			for (uint32_t x = 0; x < side; ++x)
-			{
-				grass.clumps.push_back(
-					assetlib::GrassClump{ .position = glm::vec3(
-											  origin + spacing * static_cast<float>(x),
-											  origin + spacing * static_cast<float>(y),
-											  0.0f),
-				                          .heightScale = 1.0f,
-				                          .normal      = glm::vec3(0.0f, 0.0f, 1.0f),
-				                          .color       = glm::u8vec4(255) });
-			}
-		}
-
-		auto field = assetlib::GrassField{ .mesh = 0, .look = 0, .firstChunk = 0, .chunkCount = 0 };
-		for (uint32_t first = 0; first < grass.clumps.size();
-		     first += assetlib::c_GrassClumpsPerChunk)
-		{
-			const auto count = std::min<uint32_t>(
-				assetlib::c_GrassClumpsPerChunk,
-				static_cast<uint32_t>(grass.clumps.size()) - first);
-
-			glm::vec3 lo(1e30f);
-			glm::vec3 hi(-1e30f);
-			for (uint32_t k = first; k < first + count; ++k)
-			{
-				lo = glm::min(lo, grass.clumps[k].position);
-				hi = glm::max(hi, grass.clumps[k].position);
-			}
-
-			grass.chunks.push_back(
-				assetlib::GrassChunk{ .boundingCenter = (lo + hi) * 0.5f,
-			                          .boundingRadius = glm::distance(lo, hi) * 0.5f,
-			                          .firstClump     = first,
-			                          .clumpCount     = count,
-			                          .maxHeightScale = 1.0f });
-			++field.chunkCount;
-		}
-		grass.fields = { field };
-		return grass;
-	}
 
 	struct GrassScene
 	{
@@ -226,7 +172,7 @@ TEST_CASE("Grass draws its blades over the ground it grows on", "[grass][render]
 
 	const bgl::test::Rgba bare = grass.Centre("bernini_grass_bare");
 
-	grass.Attach(MakeField(40, 0.12f));
+	grass.Attach(bgl::test::MakeGrassField(40, 0.12f));
 	const bgl::test::Rgba grown = grass.Centre("bernini_grass_grown");
 
 	grass.Detach();
@@ -262,7 +208,7 @@ TEST_CASE(
 	const float bareShadowed = grass.Settled("bernini_grass_blob_bare_shadowed").Luma();
 
 	grass.view->ClearBlobShadow(caster);
-	grass.Attach(MakeField(40, 0.12f));
+	grass.Attach(bgl::test::MakeGrassField(40, 0.12f));
 	const float grassLit = grass.Settled("bernini_grass_blob_grass_lit").Luma();
 	grass.view->SetBlobShadow(caster, disc);
 	const float grassShadowed = grass.Settled("bernini_grass_blob_grass_shadowed").Luma();
@@ -282,7 +228,7 @@ TEST_CASE(
 TEST_CASE("Still grass under a still camera writes no motion", "[grass][render][motionvectors]")
 {
 	const GrassScene grass;
-	grass.Attach(MakeField(40, 0.12f));
+	grass.Attach(bgl::test::MakeGrassField(40, 0.12f));
 
 	grass.gfx->DrawFrame(grass.target, grass.job);
 	grass.gfx->DrawFrame(grass.target, grass.job);
@@ -301,7 +247,7 @@ TEST_CASE(
 	"[grass][render][motionvectors]")
 {
 	const GrassScene grass;
-	grass.Attach(MakeField(40, 0.12f));
+	grass.Attach(bgl::test::MakeGrassField(40, 0.12f));
 	grass.gfx->DrawFrame(grass.target, grass.job);
 
 	grass.view->SetInstanceTransform(
@@ -339,7 +285,7 @@ namespace
 TEST_CASE("Wind moves blades, and says so in the velocity", "[grass][render][motionvectors]")
 {
 	GrassScene grass;
-	grass.Attach(MakeField(40, 0.12f));
+	grass.Attach(bgl::test::MakeGrassField(40, 0.12f));
 
 	grass.job.time = 0.0f;
 	grass.gfx->DrawFrame(grass.target, grass.job);
@@ -423,7 +369,7 @@ TEST_CASE(
 	"[grass][render][lighting]")
 {
 	GrassScene grass;
-	grass.Attach(MakeField(40, 0.12f));
+	grass.Attach(bgl::test::MakeGrassField(40, 0.12f));
 	BackLight(grass);
 
 	struct Case
@@ -490,7 +436,7 @@ TEST_CASE(
 	grass.Relook(look);
 	const bgl::test::Rgba bare = grass.Settled("bernini_grass_ground_bare");
 
-	grass.Attach(MakeField(40, 0.12f));
+	grass.Attach(bgl::test::MakeGrassField(40, 0.12f));
 	const bgl::test::Rgba grounded = grass.Settled("bernini_grass_ground_blend");
 
 	look.lighting.groundNormalNear = 0.0f;
@@ -508,7 +454,7 @@ TEST_CASE(
 TEST_CASE("A blade reads a material's geometry occlusion as absent", "[grass][render][lighting]")
 {
 	GrassScene grass;
-	grass.Attach(MakeField(40, 0.12f));
+	grass.Attach(bgl::test::MakeGrassField(40, 0.12f));
 	const bgl::TextureAssetHandle black =
 		grass.scene->AddTextureAsset(BlackMap(), "black_occlusion");
 

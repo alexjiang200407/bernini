@@ -94,6 +94,12 @@ static const float cTopSlack = 0.02;
 // it ramps out, so a surface tilted past ~70 degrees -- a wall -- receives nothing.
 static const float cFacingRamp = 0.35;
 
+// A foot's shadow on grass, against the same foot's on bare ground: wider, since a paw sinks among
+// the blades around it, and stronger, since blades break a contact shadow up. The disc is not
+// widened: it already spans the blades a placement stands in.
+static const float cGrassFootWiden = 3.0;
+static const float cGrassFootStrength = 1.5;
+
 struct VSOut
 {
     float4 position : SV_Position;
@@ -137,8 +143,10 @@ void FootVolumeCorners(BlobShadow blob, MeshInstance mesh, float3 heelPos, float
 {
     let n = gBlobShadowData.groundNormal;
 
+    // As wide as the shadow reaches on grass: a bare-ground pixel past the bare radius falls off to
+    // nothing in the pixel stage.
     let scale = length(float3(mesh.transform[0].x, mesh.transform[1].x, mesh.transform[2].x));
-    let radius = blob.radius * scale;
+    let radius = blob.radius * scale * cGrassFootWiden;
 
     let axis = abs(n.x) < 0.7 ? float3(1.0, 0.0, 0.0) : float3(0.0, 0.0, 1.0);
     let tangent = normalize(cross(n, axis));
@@ -407,11 +415,13 @@ float4 PSMain(VSOut input) : SV_Target
         }
     }
 
-    let radius = blob.radius * scale * lerp(cLiftShrink, 1.0, fade);
+    let grassFoot = onGrass && blob.leg != cBodyDisc;
+    let radius = blob.radius * scale * lerp(cLiftShrink, 1.0, fade) * (grassFoot ? cGrassFootWiden : 1.0);
+    let intensity = grassFoot ? saturate(blob.intensity * cGrassFootStrength) : blob.intensity;
     let lateral = delta - n * height;
     let falloff = saturate(1.0 - dot(lateral, lateral) / (radius * radius));
 
     // Premultiplied black: the One/InvSrcAlpha blend scales the scene by 1 - alpha, so the decal
     // only darkens. Squared for a soft shoulder at the rim.
-    return float4(0.0, 0.0, 0.0, blob.intensity * fade * falloff * falloff * facing);
+    return float4(0.0, 0.0, 0.0, intensity * fade * falloff * falloff * facing);
 }

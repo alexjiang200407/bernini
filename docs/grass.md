@@ -161,6 +161,13 @@ test there
 the ground: a grounded caster cast from just above the roots (`BlobShadowDesc::casterLift`, as the
 editor's floor slack sets it) shades the whole of a blade that rises past that point.
 
+A foot's shadow lands on grass three times as wide and half again as strong as on bare ground (capped
+at full), the disc unchanged. A foot's shadow is sized for a sole on bare ground, about as wide as
+the foot, and in grass the blades around a planted foot hide nearly all of that, so a walking unit
+lost its foot contact there. The disc already spans the blades its placement stands in. The factors
+are the shader's (`cGrassFootWiden`, `cGrassFootStrength`), not `FootShadowDesc` fields: a game sizes
+a foot once, and grass is where it lands.
+
 Measuring the height from each blade pixel instead would cut every part of a blade above the cast
 point, and fade the rest by up to a quarter against the default 2 m `fadeHeight`. Sampling
 the disc list in the grass pixel shader would loop over every disc per blade fragment. A stencil bit

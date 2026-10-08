@@ -866,7 +866,8 @@ than falling through to the ground plane. The cast point is the instance's origi
 foliage around its root instead of from under it. A grass pixel is received as its blade's ground:
 the pass reads `grassRootHeight` beside the depth, lowers the reconstructed point by it to the root,
 and skips the facing test below, so a disc darkens a blade as it darkens the ground it grows from
-([Grass § Blob shadows](grass.md#blob-shadows)). Any other receiver must also face up: the fragment
+([Grass § Blob shadows](grass.md#blob-shadows)). A foot's shadow lands there three times as wide and
+half again as strong, so a foot's volume is swept that wide whatever it lands on. Any other receiver must also face up: the fragment
 reconstructs the surface's normal one-sided, differencing toward whichever neighbouring depth texel
 is nearer in depth — a raster-quad derivative would difference across every silhouette and flicker
 under the jitter — and ramps the shadow out past ~70° of tilt, so a wall beside the caster keeps
