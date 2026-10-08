@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <assetlib/image_io.h>
 #include <assetlib_structs/ImageData.h>
 #include <atomic>
@@ -6,14 +7,18 @@
 #include <cmath>
 #include <core/err/util.h>
 #include <core/file/file.h>
+#include <core/io/ByteReader.h>
+#include <core/io/ByteWriter.h>
 #include <core/math.h>
 #include <core/platform/util.h>
 
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <exception>
 #include <filesystem>
 #include <format>
+#include <functional>
 #include <ktx.h>
 
 #include "io/mounted_io.h"
@@ -241,6 +246,194 @@ namespace assetlib
 			return mip;
 		}
 
+		// Where a load capped at `maxDim` starts: previewMipLevel's choice, backed off to the first
+		// level a `blockWidth` x `blockHeight` block divides -- D3D12 requires a block-compressed
+		// texture's most-detailed level to be block-aligned.
+		uint32_t
+		tailFirstMip(
+			uint32_t width,
+			uint32_t height,
+			uint32_t levels,
+			uint32_t maxDim,
+			uint32_t blockWidth,
+			uint32_t blockHeight)
+		{
+			uint32_t firstMip = previewMipLevel(width, height, levels, maxDim);
+			while (firstMip > 0 && (((std::max)(1u, width >> firstMip) % blockWidth) != 0 ||
+			                        ((std::max)(1u, height >> firstMip) % blockHeight) != 0))
+				--firstMip;
+			return firstMip;
+		}
+
+		// The KTX2 container's own layout; libktx keeps KTX_header2 and ktxLevelIndexEntry private.
+		constexpr size_t   c_Ktx2HeaderBytes       = 80;
+		constexpr size_t   c_Ktx2LevelEntryBytes   = 24;
+		constexpr uint32_t c_Ktx2SchemeNone        = 0;
+		constexpr uint32_t c_Ktx2SchemeZstd        = 2;
+		constexpr uint32_t c_Ktx2VkFormatUndefined = 0;  // a Basis payload: UASTC and ETC1S alike
+		constexpr uint32_t c_BasisBlockEdge        = 4;
+
+		constexpr std::array<std::byte, 12> c_Ktx2Identifier = { {
+			std::byte{ 0xAB },
+			std::byte{ 0x4B },
+			std::byte{ 0x54 },
+			std::byte{ 0x58 },
+			std::byte{ 0x20 },
+			std::byte{ 0x32 },
+			std::byte{ 0x30 },
+			std::byte{ 0xBB },
+			std::byte{ 0x0D },
+			std::byte{ 0x0A },
+			std::byte{ 0x1A },
+			std::byte{ 0x0A },
+		} };
+
+		// Where a `.ktx2`'s bytes come from: all of them, or a range. A mount serves a range without
+		// the rest; a host file is read whole once and sliced.
+		struct Ktx2Source
+		{
+			std::function<std::vector<std::byte>()>                   whole;
+			std::function<std::vector<std::byte>(uint64_t, uint64_t)> range;
+		};
+
+		/**
+		 * The KTX2 `source` holds, cut to the levels a load capped at `maxDim` keeps: a 2D file under
+		 * no supercompression or Zstd, whose levels lie smallest-first as the format requires. BasisLZ
+		 * comes back whole, since its global data indexes every image, and so does a file whose layout
+		 * is not what the format promises, for libktx to judge. imageFromKtx then finds the cut file's
+		 * top level already covering `maxDim`.
+		 */
+		std::vector<std::byte>
+		readKtx2Tail(const Ktx2Source& source, uint32_t maxDim)
+		{
+			if (maxDim == 0)
+				return source.whole();
+
+			std::vector<std::byte> header;
+			try
+			{
+				header = source.range(0, c_Ktx2HeaderBytes);
+			}
+			catch (const std::exception&)
+			{
+				return source.whole();  // shorter than a header: libktx says so
+			}
+
+			if (!std::equal(c_Ktx2Identifier.begin(), c_Ktx2Identifier.end(), header.begin()))
+				return source.whole();
+
+			core::io::ByteReader fields(header);
+			fields.Seek(c_Ktx2Identifier.size());
+			const auto vkFormat   = fields.ReadPod<uint32_t>();
+			const auto typeSize   = fields.ReadPod<uint32_t>();
+			const auto width      = fields.ReadPod<uint32_t>();
+			const auto height     = fields.ReadPod<uint32_t>();
+			const auto depth      = fields.ReadPod<uint32_t>();
+			const auto layerCount = fields.ReadPod<uint32_t>();
+			const auto faceCount  = fields.ReadPod<uint32_t>();
+			const auto levelCount = fields.ReadPod<uint32_t>();
+			const auto scheme     = fields.ReadPod<uint32_t>();
+			const auto dfdOffset  = fields.ReadPod<uint32_t>();
+			const auto dfdLength  = fields.ReadPod<uint32_t>();
+			const auto kvdOffset  = fields.ReadPod<uint32_t>();
+			const auto kvdLength  = fields.ReadPod<uint32_t>();
+			const auto sgdOffset  = fields.ReadPod<uint64_t>();
+			const auto sgdLength  = fields.ReadPod<uint64_t>();
+
+			if (height == 0 || depth != 0 || levelCount < 2 ||
+			    (scheme != c_Ktx2SchemeNone && scheme != c_Ktx2SchemeZstd))
+				return source.whole();
+
+			// The block the top level must be aligned to: imageFromKtx's rule over the format it
+			// ends in, which for a Basis payload is a 4x4 block whatever it transcodes to.
+			uint32_t blockWidth  = c_BasisBlockEdge;
+			uint32_t blockHeight = c_BasisBlockEdge;
+			if (vkFormat != c_Ktx2VkFormatUndefined)
+			{
+				try
+				{
+					const BlockInfo block = blockInfo(static_cast<VkFormat>(vkFormat));
+					blockWidth            = block.width;
+					blockHeight           = block.height;
+				}
+				catch (const std::exception&)
+				{
+					return source.whole();  // a format this library does not map: libktx says so
+				}
+			}
+
+			const uint32_t firstMip =
+				tailFirstMip(width, height, levelCount, maxDim, blockWidth, blockHeight);
+			if (firstMip == 0)
+				return source.whole();
+
+			struct Level
+			{
+				uint64_t offset;
+				uint64_t length;
+				uint64_t uncompressedLength;
+			};
+			const size_t                 indexBytes = levelCount * c_Ktx2LevelEntryBytes;
+			const std::vector<std::byte> index      = source.range(c_Ktx2HeaderBytes, indexBytes);
+			core::io::ByteReader         entries(index);
+			auto                         levels = std::vector<Level>(levelCount);
+			for (Level& level : levels)
+				level = { entries.ReadPod<uint64_t>(),
+					      entries.ReadPod<uint64_t>(),
+					      entries.ReadPod<uint64_t>() };
+
+			const uint64_t dataStart   = levels.back().offset;
+			const uint64_t tailEnd     = levels[firstMip].offset + levels[firstMip].length;
+			const uint64_t metadataEnd = (std::max)({ static_cast<uint64_t>(dfdOffset) + dfdLength,
+			                                          static_cast<uint64_t>(kvdOffset) + kvdLength,
+			                                          sgdOffset + sgdLength });
+			if (dfdOffset != c_Ktx2HeaderBytes + indexBytes || dataStart < metadataEnd ||
+			    tailEnd < dataStart)
+				return source.whole();
+			for (uint32_t i = firstMip; i < levelCount; ++i)
+				if (levels[i].offset < dataStart || levels[i].offset + levels[i].length > tailEnd)
+					return source.whole();
+
+			const uint32_t kept   = levelCount - firstMip;
+			const uint64_t shrink = firstMip * c_Ktx2LevelEntryBytes;
+			// Keeps every level where it was modulo 16: the alignment libktx asks of a 16-byte block,
+			// and a multiple of what it asks of any smaller one.
+			const uint64_t pad = shrink % 16;
+
+			const uint64_t               restStart = c_Ktx2HeaderBytes + indexBytes;
+			const std::vector<std::byte> rest      = source.range(restStart, tailEnd - restStart);
+			const auto                   metadataBytes = static_cast<size_t>(dataStart - restStart);
+
+			core::io::ByteWriter out;
+			out.WriteBytes(std::span(header).first(c_Ktx2Identifier.size()));
+			out.WritePod(vkFormat);
+			out.WritePod(typeSize);
+			out.WritePod((std::max)(1u, width >> firstMip));
+			out.WritePod((std::max)(1u, height >> firstMip));
+			out.WritePod(depth);
+			out.WritePod(layerCount);
+			out.WritePod(faceCount);
+			out.WritePod(kept);
+			out.WritePod(scheme);
+			out.WritePod(static_cast<uint32_t>(dfdOffset - shrink));
+			out.WritePod(dfdLength);
+			out.WritePod(kvdLength != 0 ? static_cast<uint32_t>(kvdOffset - shrink) : 0u);
+			out.WritePod(kvdLength);
+			out.WritePod(sgdLength != 0 ? sgdOffset - shrink : uint64_t{ 0 });
+			out.WritePod(sgdLength);
+			for (uint32_t i = 0; i < kept; ++i)
+			{
+				const Level& level = levels[firstMip + i];
+				out.WritePod(level.offset - shrink + pad);
+				out.WritePod(level.length);
+				out.WritePod(level.uncompressedLength);
+			}
+			out.WriteBytes(std::span(rest).first(metadataBytes));
+			out.WriteBytes(std::vector<std::byte>(static_cast<size_t>(pad)));
+			out.WriteBytes(std::span(rest).subspan(metadataBytes));
+			return out.Take();
+		}
+
 		// loadKTX2 destroys its texture by hand, which leaks whenever a later step throws. The
 		// preview path has several such steps, so it owns the handle instead.
 		struct Ktx2Owner
@@ -306,21 +499,14 @@ namespace assetlib
 
 		const BlockInfo block = blockInfo(static_cast<VkFormat>(texture->vkFormat));
 
-		// D3D12 requires a block-compressed texture's most-detailed level to be block-aligned, so
-		// the tail may not start on a mip a block does not divide.
-		uint32_t firstMip = 0;
-		if (maxDim > 0)
-		{
-			firstMip = previewMipLevel(
-				texture->baseWidth,
-				texture->baseHeight,
-				texture->numLevels,
-				maxDim);
-			while (firstMip > 0 &&
-			       (((std::max)(1u, texture->baseWidth >> firstMip) % block.width) != 0 ||
-			        ((std::max)(1u, texture->baseHeight >> firstMip) % block.height) != 0))
-				--firstMip;
-		}
+		const uint32_t firstMip = maxDim > 0 ? tailFirstMip(
+												   texture->baseWidth,
+												   texture->baseHeight,
+												   texture->numLevels,
+												   maxDim,
+												   block.width,
+												   block.height) :
+		                                       0u;
 
 		ImageData image;
 		image.width          = (std::max)(1u, texture->baseWidth >> firstMip);
@@ -399,16 +585,42 @@ namespace assetlib
 	ImageData
 	loadKTX2(const std::filesystem::path& path, Ktx2Decode decode, uint32_t maxDim)
 	{
-		ktxTexture2* texture = nullptr;
+		if (maxDim == 0)
+		{
+			ktxTexture2* texture = nullptr;
 
-		errno                     = 0;  // so check() reads this call's reason, not a stale one
-		const ktx_error_code_e rc = ktxTexture2_CreateFromNamedFile(
-			path.string().c_str(),
-			KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT,
-			&texture);
-		check(rc, "assetlib::loadKTX2: failed to load", path);
+			errno                     = 0;  // so check() reads this call's reason, not a stale one
+			const ktx_error_code_e rc = ktxTexture2_CreateFromNamedFile(
+				path.string().c_str(),
+				KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT,
+				&texture);
+			check(rc, "assetlib::loadKTX2: failed to load", path);
 
-		return imageFromKtx(texture, decode, maxDim, path);
+			return imageFromKtx(texture, decode, maxDim, path);
+		}
+
+		// Read once; `whole` hands the buffer on when the cut turns out not to apply.
+		std::vector<std::byte> bytes = core::file::read_file_bytes(path);
+		const Ktx2Source       source{
+			[&bytes] { return std::move(bytes); },
+			[&bytes, &path](uint64_t offset, uint64_t size) {
+				if (size > bytes.size() || offset > bytes.size() - size)
+					core::throw_runtime_error(
+						"assetlib::loadKTX2: '{}' ends before byte {}",
+						path.string(),
+						offset + size);
+				const auto first = bytes.begin() + static_cast<std::ptrdiff_t>(offset);
+				return std::vector<std::byte>(first, first + static_cast<std::ptrdiff_t>(size));
+			},
+		};
+		return imageFromKtx(
+			openKtxFromMemory(
+				readKtx2Tail(source, maxDim),
+				"assetlib::loadKTX2: failed to load",
+				path),
+			decode,
+			maxDim,
+			path);
 	}
 
 	ImageData
@@ -418,9 +630,17 @@ namespace assetlib
 		Ktx2Decode                     decode,
 		uint32_t                       maxDim)
 	{
-		const std::vector<std::byte> bytes = fileSystem.Read(path);
+		const Ktx2Source source{
+			[&] { return fileSystem.Read(path); },
+			[&](uint64_t offset, uint64_t size) {
+				return fileSystem.ReadRange(path, offset, size);
+			},
+		};
 		return imageFromKtx(
-			openKtxFromMemory(bytes, "assetlib::loadKTX2: failed to read", path),
+			openKtxFromMemory(
+				readKtx2Tail(source, maxDim),
+				"assetlib::loadKTX2: failed to read",
+				path),
 			decode,
 			maxDim,
 			path);
