@@ -71,8 +71,9 @@ provides higher level abstractions of Mesh, Light and Material while hiding the 
   backend is `bgpu`'s. volk is reached through `"volk_vulkan.h"`, in bgl's own copy of the pointers
   under namespace `volk` (`VolkImpl.cpp`), which `LoadVulkanFunctions` points at the device when a
   swapchain is made: bgpu's are not exported from a shared bgpu.
-- Above the renderer only `gamelib` and `bgl_sphere`, the example that proves it presents, are built
-  on Vulkan (the root `CMakeLists.txt`, `BERNINI_HAS_RENDERER_CONSUMERS`).
+- Above the renderer only `gamelib`, `bgl_sphere` (the example that proves it presents) and the
+  editor are built on Vulkan (the root `CMakeLists.txt`: the editor follows `BERNINI_HAS_RENDERER`,
+  everything else above `bgl` `BERNINI_HAS_RENDERER_CONSUMERS`).
 - PCH is `./libs/bgl/src/vulkan/pch.h`. Implementation files take a `_vulkan` suffix.
 - CMake: `./src/vulkan/CMakeLists.txt`
 

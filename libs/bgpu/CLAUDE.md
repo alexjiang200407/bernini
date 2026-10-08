@@ -11,7 +11,7 @@ each part is for and why it lives here is [docs/bgpu.md](../../docs/bgpu.md); ho
 - Public headers under `./include/bgpu`, namespace `bgpu`. The RHI's interfaces and plain-old-data
   descriptors are there (`cmd/`, `device/`, `pipeline/`, `resource/`, `uniforms/`, `types/`,
   `buffer/`); their backend implementations are under `./src/d3d12` and `./src/metal`, one per
-  binary. `./src/vulkan` is a third, with only the renderer built on it yet. Nothing outside
+  binary. `./src/vulkan` is a third, with only the renderer and the editor built on it yet. Nothing outside
   `src/<backend>` includes a backend header (d3d12, metal-cpp or volk) — what a
   caller needs of a backend it asks for with `GetNativeObject(NativeObjectType)` / `GetNativeTexture`,
   an untyped `NativeObject`, so no RHI header names a backend type.
@@ -105,7 +105,9 @@ The context and the whole RHI; only the renderer is built on this backend yet
 - Vulkan is reached through **volk**: include `"volk_vulkan.h"`, never `<vulkan/vulkan.h>`, whose
   prototypes name symbols nothing links. The function pointers are defined once per process by
   `./src/vulkan/VolkImpl.cpp`, loaded by the context and cleared when it is destroyed, so no Vulkan
-  call is valid without a live context.
+  call is valid without a live context. They are not exported: a library above that calls Vulkan
+  keeps its own copy (`bgl`'s, under `VOLK_NAMESPACE`), and a shared build's `bgpu_tests` links
+  bgpu's objects rather than the DLL.
 - Error handling: creating the context throws — `UnsupportedSystem` for a machine below the bar,
   `std::runtime_error` for a fault, with the `VkResult` named by `string_VkResult`.
 - The validation layer is staged in `vulkan_layers/` beside the executables by this library's build, and the context
