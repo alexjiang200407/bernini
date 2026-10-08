@@ -6,12 +6,16 @@ renderer runs on ([bgpu.md](bgpu.md)). It is the top-level CMake project, and
 it pulls the engine in the way any project pulls in a library it builds from source:
 
 ```cmake
-set(BERNINI_DIR "$ENV{BERNINI_DIR}")          # a checkout, not a copy
+set(BERNINI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../bernini")  # a checkout, not a copy
 set(VCPKG_MANIFEST_DIR "${BERNINI_DIR}")      # the engine's ports are the game's
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 project(subway CXX)
 add_subdirectory(${BERNINI_DIR} ${CMAKE_BINARY_DIR}/bernini)
 ```
+
+The engine is found where the layout puts it — beside the game here — or named with
+`-DBERNINI_DIR`; a build reads nothing from the environment but the `VCPKG_ROOT` the presets'
+toolchain file resolves through, so it configures the same from an IDE as from a script.
 
 Nothing is vendored and nothing is installed: the consumer has the checkout, compiles it into its own
 build tree, and links the targets by name. The other way in is an engine build's own package — the
@@ -72,7 +76,7 @@ Everything else has a host-derived default and is only worth naming to change it
 | `BERNINI_EDITOR_SDK` | Shared assetlib/gamelib and the build-tree editor plugin package. Defaults on only for a top-level editor build with Qt and a renderer; embedded, editor-free and renderer-free builds stay static. Implies `BERNINI_SHARED_RENDERER`. |
 | `BERNINI_SHARED_RENDERER` | `bgl`, and with it `bgpu` and `core_process`, as shared libraries. `OFF`: a game is one binary. See [core_process.md](core_process.md#linkage). |
 | `BERNINI_COMPILER_CACHE` | ccache in front of the compiler when one is installed. `ON`. |
-| `BERNINI_MSVC_COMPILER_CACHE` | ccache under MSVC, which force-includes the PCH headers instead of precompiling them and uses `/Z7`. `OFF`; defaults from the environment variable of the same name. See [build_performance.md](build_performance.md#ccache). |
+| `BERNINI_MSVC_COMPILER_CACHE` | ccache under MSVC, which force-includes the PCH headers instead of precompiling them and uses `/Z7`. `OFF`. See [build_performance.md](build_performance.md#ccache). |
 | `BUILD_TESTS`, `BERNINI_BUILD_EXAMPLES`, `BUILD_COVERAGE` | **Forced off when the engine is not the top-level project**, whatever the consumer set. See below. |
 
 The defaults apply whether or not the engine is the top of the build. A vcpkg port configures this
@@ -198,9 +202,10 @@ applocal step for the consumer runs at link, before the copy. RmlUi's `freetype`
 loads is the case that needs it.
 
 **One vcpkg tree.** The consumer must resolve the ports the engine was built against, so it points
-`VCPKG_INSTALLED_DIR` at the engine build's. In a workspace the engine reads
-`WS_VCPKG_INSTALLED_DIR` before its own `project()` exactly as a game does, so both land in the one
-shared tree; vcpkg caches the choice, so it applies to a build directory configured after it is set.
+`VCPKG_INSTALLED_DIR` at the engine build's, read from that build's cache before its own
+`project()` (`load_cache(<engine build> READ_WITH_PREFIX _engine_ VCPKG_INSTALLED_DIR)`) and so
+unpacking no copy of its own; `just embed --package` does the same. vcpkg caches the choice, so it
+applies to a build directory configured after it is set.
 
 **Not both packages in one consumer.** `Bernini` and `BerniniEditorSDK` declare the same
 `Bernini::` targets; a plugin takes the latter, a game the former.

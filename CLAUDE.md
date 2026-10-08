@@ -402,7 +402,7 @@ Everything is driven by `just` from the repo root, via the `justfile`. Each reci
 ```bash
 just                              # list the recipes
 just init                         # set this machine up and write scripts/config.json (see below)
-just build [target]               # build (default: all targets); configures first only if needed. --preset, --config, --dry-run, --time, --jobs, --no-jobserver, --no-api
+just build [target]               # build (default: all targets); configures first only if needed. --preset, --config, -D NAME=VALUE, --dry-run, --time, --jobs, --no-jobserver, --no-api
 just run <target> [-- args...]    # build a target, then run it with cwd set to its output dir; --no-build, --no-lock
 just test [names...]              # build and run every test suite (or only the matching ones); --list, --no-build, --no-lock
 just coverage [names...]          # macOS: build the coverage preset, run the suites instrumented, report; --diff [ref] names the added lines no test executed (--json for agents)

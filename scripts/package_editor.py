@@ -19,6 +19,7 @@ notarized, which needs a Developer ID.
 Usage:
     just package-editor                 # build windows-ninja-msvc-dx12-release, then package it
     just package-editor --no-build      # package what is built
+    just package-editor -D NAME=VALUE   # passed to the build's configure (scripts/build.py -D)
     just package-editor --out D:/share  # somewhere other than ./dist
 """
 
@@ -109,6 +110,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--out", default=str(DIST), help=f"Output directory (default: {DIST}).")
     parser.add_argument("--no-build", action="store_true", help="Package what is built; don't build first.")
+    parser.add_argument("-D", "--define", action="append", default=[], metavar="NAME=VALUE",
+                        help="A cache variable for the build's configure, as scripts/build.py -D takes it.")
     args = parser.parse_args()
 
     if sys.platform != "win32":
@@ -116,7 +119,8 @@ def main():
 
     if not args.no_build:
         rc = subprocess.run([sys.executable, str(ROOT / "scripts" / "build.py"), "editor",
-                             "--preset", PRESET, "--no-api"]).returncode
+                             "--preset", PRESET, "--no-api",
+                             *(f"-D{define}" for define in args.define)]).returncode
         if rc:
             return rc
 
