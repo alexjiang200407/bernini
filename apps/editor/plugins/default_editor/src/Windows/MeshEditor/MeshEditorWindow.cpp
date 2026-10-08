@@ -723,8 +723,10 @@ MeshEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 
 	m_SubmeshSelector->setEnabled(!submeshNames.isEmpty());
 
-	// After the selector is filled, so the looks are indexed by the same submeshes it lists.
-	ReloadRegisteredMaterials();
+	// After the selector is filled, so the looks are indexed by the same submeshes it lists. From
+	// what the preview read, since reading the mesh again costs as much as opening it did.
+	if (m_Preview != nullptr)
+		IndexRegisteredMaterials(m_Preview->MeshBindings(), m_Preview->MeshSourceKey());
 	RefreshBakeState();
 
 	if (!submeshNames.isEmpty())
@@ -1523,31 +1525,44 @@ MeshEditorWindow::ShowMaterialForSubmesh(int submeshIndex, const QString& materi
 void
 MeshEditorWindow::ReloadRegisteredMaterials()
 {
-	m_Registered.assign(static_cast<size_t>(m_SubmeshSelector->count()), {});
-	m_MeshSourceKey.clear();
-
 	if (m_Preview == nullptr || m_Preview->MeshPath().empty())
+	{
+		IndexRegisteredMaterials({}, {});
 		return;
+	}
 
 	try
 	{
-		const auto mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), m_Preview->MeshPath());
-		m_MeshSourceKey = mesh.sourceKey;
-
-		for (size_t submesh = 0; submesh < m_Registered.size(); ++submesh)
-		{
-			const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submesh));
-			if (source == assetlib::c_InvalidIndex)
-				continue;
-
-			m_Registered[submesh] = editor::RegisteredMaterialsFor(mesh.bindings, source);
-		}
+		auto mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), m_Preview->MeshPath());
+		IndexRegisteredMaterials(mesh.bindings, std::move(mesh.sourceKey));
 	}
 	catch (const std::exception& e)
 	{
 		// A UI refresh, so a mesh that will not read leaves the looks unlisted rather than
 		// throwing out of a slot; the panel still shows the default the preview loaded.
 		qWarning("MeshEditor: cannot read the registered materials: %s", e.what());
+		IndexRegisteredMaterials({}, {});
+	}
+}
+
+void
+MeshEditorWindow::IndexRegisteredMaterials(
+	const assetlib::MeshBindings& bindings,
+	std::string                   sourceKey)
+{
+	m_Registered.assign(static_cast<size_t>(m_SubmeshSelector->count()), {});
+	m_MeshSourceKey = std::move(sourceKey);
+
+	if (m_Preview == nullptr)
+		return;
+
+	for (size_t submesh = 0; submesh < m_Registered.size(); ++submesh)
+	{
+		const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submesh));
+		if (source == assetlib::c_InvalidIndex)
+			continue;
+
+		m_Registered[submesh] = editor::RegisteredMaterialsFor(bindings, source);
 	}
 }
 

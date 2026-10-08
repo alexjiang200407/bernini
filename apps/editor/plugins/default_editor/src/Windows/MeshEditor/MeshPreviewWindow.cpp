@@ -166,6 +166,8 @@ MeshPreviewWindow::ClearGeometry()
 	m_SubmeshNames.clear();
 	m_SubmeshMaterialPaths.clear();
 	m_MeshPath.clear();  // LoadMesh sets it again once it has succeeded
+	m_MeshBindings = {};
+	m_MeshSourceKey.clear();
 }
 
 void
@@ -453,6 +455,8 @@ MeshPreviewWindow::LoadMesh(const std::filesystem::path& path)
 	m_SubmeshMaterialPaths = std::move(upload.submeshMaterialPaths);
 	m_Raycaster            = std::move(upload.raycaster);
 	m_MeshPath             = path;
+	m_MeshBindings         = std::move(loaded.bindings);
+	m_MeshSourceKey        = std::move(loaded.sourceKey);
 
 	FocusOn(upload.center, upload.radius);
 

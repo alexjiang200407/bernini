@@ -1,5 +1,6 @@
 #pragma once
 
+#include <assetlib/MeshBindings.h>
 #include <gamelib/AssetManager.h>
 
 #include <QWidget>
@@ -234,6 +235,10 @@ private:
 	/** Re-reads the mesh's registered looks into `m_Registered`, one entry per panel submesh. */
 	void
 	ReloadRegisteredMaterials();
+
+	/** Indexes the looks `bindings` registers into `m_Registered`, one entry per panel submesh. */
+	void
+	IndexRegisteredMaterials(const assetlib::MeshBindings& bindings, std::string sourceKey);
 
 	/** The looks the mesh registers for `submeshIndex`, or none for a mesh that has no file. */
 	[[nodiscard]] std::vector<editor::RegisteredMaterial>
