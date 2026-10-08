@@ -465,9 +465,9 @@ def ensure_lfs_credentials(replace=False):
         access, secret = "", ""
 
     if access and secret and not replace:
-        stored = cfg.load().get("lfs") or {}
+        _, protected, source = lfs_store.stored_credentials()
         where = "environment" if os.environ.get("BERNINI_LFS_ACCESS_KEY_ID") else \
-            f"{cfg.rel(cfg.PATH)}, {secrets.describe(stored.get('secretAccessKey'))}"
+            f"{source}, {secrets.describe(protected)}"
         print(f"git lfs: credentials from the {where}")
         return True
 
@@ -514,6 +514,9 @@ def ensure_lfs_credentials(replace=False):
     data["lfs"] = {"accessKeyId": key_id, "secretAccessKey": protected}
     cfg.save(data)
     secrets.restrict(cfg.PATH)
+    # A key in the clone's git config is read first, so a rotation must replace it there too.
+    if lfs_store.stored_credentials()[0] != key_id:
+        lfs_store.store_credentials(key_id, protected)
 
     if secrets.scheme() == "plain":
         print(f"warning: this platform has no key store, so the secret is in "

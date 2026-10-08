@@ -1,14 +1,19 @@
-"""Where this clone's Git LFS objects actually live, and how to read and write them.
+"""Where a repository's Git LFS objects actually live, and how to read and write them.
 
 Shared by the transfer agent (scripts/lfs_agent.py), which git-lfs invokes per transfer,
 and by the seeding tool (scripts/lfs_seed.py), which fills a fresh bucket from the local
 object cache. Both address objects the same way, so a bucket seeded by one is readable by
 the other.
 
-Settings come from .lfsstore, which is committed and describes the project, and are
-overridable per machine by environment variable. A bucket name is not a secret and belongs
-in the repository; the key pair does not, and comes from the environment or from what
-`just init` stored.
+The repository is the one the current directory is in -- for the agent, the one git-lfs
+runs it in -- not the engine checkout this file sits in. So one agent serves the engine and
+every game whose git config points at it, each with its own .lfsstore, object cache and
+key. Outside any repository it falls back to this checkout.
+
+Settings come from that repository's .lfsstore, which is committed and describes the
+project, and are overridable per machine by environment variable. A bucket name is not a
+secret and belongs in the repository; the key pair does not, and comes from the environment
+or from what was stored for that repository.
 
 Reading and writing are separate privileges. With store.readUrl set the bucket serves
 downloads publicly, so a clone needs no key to fetch assets and one is only provisioned by
@@ -16,6 +21,7 @@ whoever adds them -- see docs/lfs.md.
 """
 
 import hashlib
+import json
 import os
 import shutil
 import subprocess
@@ -23,7 +29,6 @@ import sys
 import urllib.parse
 
 import util.cmake_tools as ct
-import util.config as cfg
 import util.s3 as s3
 import util.secrets as secrets
 
@@ -82,13 +87,44 @@ def object_key(oid, prefix=DEFAULT_PREFIX):
     return f"{prefix}/{oid[:2]}/{oid[2:4]}/{oid}"
 
 
+_repo = None
+
+
+def _paths():
+    """(work tree, git common dir) of the repository the current directory is in, found once a process."""
+    global _repo
+    if _repo is None:
+        try:
+            done = subprocess.run(["git", "rev-parse", "--path-format=absolute",
+                                   "--show-toplevel", "--git-common-dir"],
+                                  capture_output=True, text=True)
+            found = done.stdout.splitlines() if done.returncode == 0 else []
+        except OSError:
+            found = []
+        if len(found) == 2:
+            _repo = tuple(os.path.normpath(path) for path in found)
+        else:
+            _repo = (ct.REPO_ROOT, os.path.join(ct.REPO_ROOT, ".git"))
+    return _repo
+
+
+def repo_root():
+    """The work tree whose .lfsstore and key apply: the one git-lfs runs the agent in."""
+    return _paths()[0]
+
+
+def git_dir():
+    """The git directory the object cache is under, shared by every worktree of a clone."""
+    return _paths()[1]
+
+
 def cache_path(oid):
     """Where git-lfs keeps this object locally, whether or not it is there."""
-    return os.path.join(ct.REPO_ROOT, ".git", "lfs", "objects", oid[:2], oid[2:4], oid)
+    return os.path.join(git_dir(), "lfs", "objects", oid[:2], oid[2:4], oid)
 
 
 def tmp_dir():
-    path = os.path.join(ct.REPO_ROOT, ".git", "lfs", "tmp")
+    path = os.path.join(git_dir(), "lfs", "tmp")
     os.makedirs(path, exist_ok=True)
     return path
 
@@ -99,7 +135,7 @@ def _git_config(key, config_file=None):
         cmd += ["--file", config_file]
     cmd += ["--get", key]
     try:
-        done = subprocess.run(cmd, cwd=ct.REPO_ROOT, capture_output=True, text=True)
+        done = subprocess.run(cmd, cwd=repo_root(), capture_output=True, text=True)
     except OSError:
         return ""
     return done.stdout.strip() if done.returncode == 0 else ""
@@ -115,7 +151,7 @@ def setting(name):
     if env:
         return env
 
-    store_file = os.path.join(ct.REPO_ROOT, ".lfsstore")
+    store_file = os.path.join(repo_root(), ".lfsstore")
     if os.path.exists(store_file):
         return _git_config(f"store.{name}", store_file)
     return ""
@@ -128,13 +164,51 @@ def source_of(name):
     return f"store.{name} in .lfsstore"
 
 
-def credentials():
-    """The access key pair: environment first, then what `just init` stored.
+KEY_ID_CONFIG = "lfsstore.accessKeyId"
+SECRET_CONFIG = "lfsstore.secretAccessKey"
 
-    config.json is consulted because git-lfs runs the agent from inside `git checkout`,
+
+def _config_json():
+    """The `lfs` entry of the repository's own scripts/config.json, where the engine's init
+    stores it. Read by path rather than through util.config, which is always this checkout's:
+    a game run through this agent must never be handed the engine's key."""
+    try:
+        with open(os.path.join(repo_root(), "scripts", "config.json"), encoding="utf-8") as fh:
+            return json.load(fh).get("lfs") or {}
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
+def stored_credentials():
+    """(access key id, protected secret, where) as stored for this repository, or empties.
+
+    The local git config first: it lives in the common git directory, so one entry covers a
+    clone and every worktree of it. Then the repository's scripts/config.json.
+    """
+    access, protected = _git_config(KEY_ID_CONFIG), _git_config(SECRET_CONFIG)
+    if access or protected:
+        return access, protected, f"{KEY_ID_CONFIG} in the clone's git config"
+    stored = _config_json()
+    return ((stored.get("accessKeyId") or "").strip(), stored.get("secretAccessKey") or "",
+            "scripts/config.json")
+
+
+def store_credentials(access, protected):
+    """Record a key pair in the repository's local git config; `protected` is secrets.protect's."""
+    for key, value in ((KEY_ID_CONFIG, access), (SECRET_CONFIG, protected)):
+        done = subprocess.run(["git", "config", "--local", key, value], cwd=repo_root(),
+                              capture_output=True, text=True)
+        if done.returncode:
+            raise StoreError(f"git config {key}: {done.stderr.strip()}")
+
+
+def credentials():
+    """The access key pair: environment first, then what was stored for this repository.
+
+    A stored key is consulted because git-lfs runs the agent from inside `git checkout`,
     including from GUI clients and shell integrations that never load a shell profile --
     where an environment variable simply is not there. The stored secret is encrypted to
-    the current user account (see util/secrets.py), so the file is not itself the key.
+    the current user account (see util/secrets.py), so where it is kept is not the key.
     """
     access = (os.environ.get("BERNINI_LFS_ACCESS_KEY_ID") or "").strip()
     secret = (os.environ.get("BERNINI_LFS_SECRET_ACCESS_KEY") or "").strip()
@@ -144,10 +218,9 @@ def credentials():
     if access or secret:
         return access, secret
 
-    stored = cfg.load().get("lfs") or {}
+    access, protected, _ = stored_credentials()
     try:
-        return (stored.get("accessKeyId") or "").strip(), \
-            secrets.unprotect(stored.get("secretAccessKey") or "")
+        return access, secrets.unprotect(protected)
     except secrets.SecretError as exc:
         raise StoreError(f"cannot read the stored LFS credential: {exc}") from exc
 
@@ -226,8 +299,9 @@ class FileStore:
 
 
 NO_CREDENTIALS = (
-    "that needs a key for the LFS object store, and this clone has none. Run "
-    "`just init --lfs-key`, or set BERNINI_LFS_ACCESS_KEY_ID and "
+    "that needs a key for the LFS object store, and this clone has none. Store one "
+    "with the repository's LFS setup (the engine's `just init --lfs-key`), or set "
+    "BERNINI_LFS_ACCESS_KEY_ID and "
     "BERNINI_LFS_SECRET_ACCESS_KEY. See docs/lfs.md."
 )
 
@@ -366,9 +440,10 @@ def open_store():
         if read_url:
             return S3Store(None, prefix, ceiling, read_url)
         raise StoreError(
-            "no credentials for the LFS object store, and no public read endpoint "
-            f"({source_of('readUrl')}) to fall back on: set BERNINI_LFS_ACCESS_KEY_ID and "
-            "BERNINI_LFS_SECRET_ACCESS_KEY in the environment, or run `just init`. "
+            f"no credentials for {repo_root()}'s LFS object store, and no public read "
+            f"endpoint ({source_of('readUrl')}) to fall back on: store a key with the "
+            "repository's LFS setup (the engine's `just init --lfs-key`), or set "
+            "BERNINI_LFS_ACCESS_KEY_ID and BERNINI_LFS_SECRET_ACCESS_KEY. "
             "See docs/lfs.md."
         )
 
