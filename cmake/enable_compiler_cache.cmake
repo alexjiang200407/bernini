@@ -53,23 +53,10 @@ macro(_bernini_emulate_precompiled_headers)
     endfunction()
 endmacro()
 
-function(_bernini_write_cache_wrapper ccache sloppiness basedir depend out_var)
+function(_bernini_write_cache_wrapper ccache sloppiness depend out_var)
     set(cache_dir "${CMAKE_BINARY_DIR}/compiler-cache")
     file(MAKE_DIRECTORY "${cache_dir}")
 
-    # The build directory is the consumer's when the engine is embedded, and a consumer that calls
-    # this function too would write its own wrapper over ours -- one file, one basedir, last write
-    # wins, and the loser compiles uncached with nothing on screen to say so. Naming the wrapper
-    # after the basedir it carries is what makes two callers two files.
-    string(MD5 basedir_key "${BERNINI_ROOT}")
-    string(SUBSTRING "${basedir_key}" 0 8 basedir_key)
-
-    # base_dir lets ccache rewrite absolute paths under the checkout into relative ones, which is
-    # what gives two worktrees of the same commit a chance of sharing an entry -- and what makes a
-    # game compiling the engine into its own build tree a hit rather than a full build. It is not
-    # enough on its own for a debug build -- the working directory reaches the object through DWARF,
-    # and hashing it is what keeps a cached object's debug info pointing at the tree it was built
-    # from.
     # A boolean ccache setting is on when its variable is set at all, whatever the value, so depend
     # mode is a line written or not rather than a 0.
     set(depend_bat "")
@@ -80,21 +67,19 @@ function(_bernini_write_cache_wrapper ccache sloppiness basedir depend out_var)
     endif()
 
     if (WIN32)
-        set(wrapper "${cache_dir}/ccache-wrapper-${basedir_key}.bat")
+        set(wrapper "${cache_dir}/ccache-wrapper.bat")
         file(WRITE "${wrapper}"
             "@echo off\r\n"
             "set CCACHE_SLOPPINESS=${sloppiness}\r\n"
             "set CCACHE_COMPILERCHECK=content\r\n"
-            "set CCACHE_BASEDIR=${basedir}\r\n"
             "${depend_bat}"
             "\"${ccache}\" %*\r\n")
     else()
-        set(wrapper "${cache_dir}/ccache-wrapper-${basedir_key}.sh")
+        set(wrapper "${cache_dir}/ccache-wrapper.sh")
         file(WRITE "${wrapper}"
             "#!/bin/sh\n"
             "CCACHE_SLOPPINESS=${sloppiness}\n"
-            "CCACHE_BASEDIR='${basedir}'\n"
-            "export CCACHE_SLOPPINESS CCACHE_BASEDIR\n"
+            "export CCACHE_SLOPPINESS\n"
             "${depend_sh}"
             "exec '${ccache}' \"$@\"\n")
         file(CHMOD "${wrapper}" PERMISSIONS
@@ -127,8 +112,8 @@ function(enable_compiler_cache)
     # MSVC is decided on the compiler, not on the generator: the Ninja presets drive cl.exe and do
     # honour a launcher. Refused unless the build opted in, because every target here carries a PCH
     # and ccache can return a wrong object for one; opting in removes the PCHs rather than the risk.
+    # No CCACHE_BASEDIR: a clang .pch records absolute paths, so a hit from another tree is wrong.
     set(sloppiness "pch_defines,time_macros")
-    set(basedir "${BERNINI_ROOT}")
     set(depend OFF)
     if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         if (NOT BERNINI_MSVC_COMPILER_CACHE)
@@ -137,12 +122,7 @@ function(enable_compiler_cache)
             return()
         endif()
 
-        # No base_dir either: it rewrites the absolute /FI paths to relative ones, which cl.exe
-        # resolves from the source file's directory and which /Wall /WX then fails on (C4464) in
-        # the preprocessing run ccache makes, so every compile came back uncacheable. Absolute paths
-        # key the entry on where the checkout is, which for CI is the same every run.
         set(sloppiness "")
-        set(basedir "")
         _bernini_emulate_precompiled_headers()
 
         # Depend mode: an object is keyed on the source and the bytes of every header /showIncludes
@@ -165,7 +145,7 @@ function(enable_compiler_cache)
         set(CMAKE_CXX_FLAGS "${flags}" PARENT_SCOPE)
     endif()
 
-    _bernini_write_cache_wrapper("${BERNINI_CCACHE_PROGRAM}" "${sloppiness}" "${basedir}" "${depend}" wrapper)
+    _bernini_write_cache_wrapper("${BERNINI_CCACHE_PROGRAM}" "${sloppiness}" "${depend}" wrapper)
 
     set(CMAKE_C_COMPILER_LAUNCHER   "${wrapper}" PARENT_SCOPE)
     set(CMAKE_CXX_COMPILER_LAUNCHER "${wrapper}" PARENT_SCOPE)
