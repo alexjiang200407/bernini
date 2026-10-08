@@ -43,21 +43,46 @@ public static const float cGrassMinBladeHeightPixels = 1.0;
 // Pixels a blade's height spans per segment before another segment is worth drawing.
 public static const float cGrassPixelsPerSegment = 6.0;
 
-// How a blade is sized at `distance`: `scale` multiplies its height and width, and `widen` its width
-// again, so a fading blade narrows more slowly than it shortens (the look's `widening`).
+// The share of a clump's blades kept at `distance`: every one up to the look's thinStart, then
+// (thinStart / distance)^2, so blades per pixel of ground hold, never fewer than one a clump. A
+// thinStart of zero keeps every blade.
+public float ThinShare(GrassLook look, float distance)
+{
+    if (look.thinStart <= 0.0 || distance <= look.thinStart)
+    {
+        return 1.0;
+    }
+    let ratio = look.thinStart / distance;
+    return max(ratio * ratio, 1.0 / float(look.bladesPerClump));
+}
+
+// Blades of each clump a chunk launches when its nearest point is `distance` away: the share there
+// rounded up, so the blade shrinking out is still drawn. The share only falls with distance, so no
+// blade further away keeps more.
+public uint KeptBladesPerClump(GrassLook look, float distance)
+{
+    return min(look.bladesPerClump, uint(ceil(float(look.bladesPerClump) * ThinShare(look, distance))));
+}
+
+// How blade `bladeInClump` of a clump is sized at `distance`: `scale` multiplies its height and
+// width, and `widen` its width again. Every blade shrinks with the fade, and a fading blade narrows
+// more slowly than it shortens (the look's `widening`). Past thinStart a blade the share no longer
+// keeps shrinks out over the distance the share falls by one blade, and the survivors widen by the
+// inverse of the share, so the field covers as much of the ground with fewer blades.
 public struct Thinning
 {
     public float scale;
     public float widen;
 };
 
-public Thinning ThinningAt(GrassLook look, float distance)
+public Thinning ThinningAt(GrassLook look, float distance, uint bladeInClump)
 {
-    let scale = FadeScale(look, distance);
+    let fade = FadeScale(look, distance);
+    let share = ThinShare(look, distance);
 
     Thinning thinning;
-    thinning.scale = scale;
-    thinning.widen = 1.0 + look.widening * (1.0 - scale);
+    thinning.scale = fade * saturate(float(look.bladesPerClump) * share - float(bladeInClump));
+    thinning.widen = (1.0 + look.widening * (1.0 - fade)) / share;
     return thinning;
 }
 
@@ -84,8 +109,10 @@ public uint SegmentsAt(GrassLook look, float distance, float bladeHeight, float 
 // and half the widest blade.
 public float BladeReach(GrassLook look, float heightScale)
 {
-    // A fading blade's scale is at most 1, so its widening never takes it past this.
-    let widest = look.rootWidth * (1.0 + look.widening);
+    // A blade's scale is at most 1, so neither its fade's widening nor its thinning's takes it past
+    // this.
+    let thinned = look.thinStart > 0.0 ? float(look.bladesPerClump) : 1.0;
+    let widest = look.rootWidth * (1.0 + look.widening) * thinned;
     return look.maxHeight * heightScale * 1.25 + 0.5 * widest;
 }
 

@@ -174,10 +174,11 @@ void ASMain(uint3 gid: SV_GroupID)
         if (visible)
         {
             // A chunk whose largest blade is too small to see where it is nearest launches nothing,
-            // and otherwise every blade.
-            let total = source.clumpCount * look.bladesPerClump;
+            // and otherwise the blades the look keeps there: blades are numbered across the
+            // clumps (BladeAddress), so the first k of every clump are the first k * clumps.
             let tallest = look.maxHeight * maxHeightScale;
-            let kept = BladeVisible(tallest * ThinningAt(look, nearest).scale, nearest, grassData.pixelsPerUnit) ? total : 0u;
+            let seen = BladeVisible(tallest * ThinningAt(look, nearest, 0u).scale, nearest, grassData.pixelsPerUnit);
+            let kept = seen ? source.clumpCount * KeptBladesPerClump(look, nearest) : 0u;
             let segments = SegmentsAt(look, nearest, tallest, grassData.pixelsPerUnit);
             let perGroup = BladesPerGroup(segments, cGrassVerticesPerGroup, cGrassPrimsPerGroup);
 
@@ -237,8 +238,8 @@ void MSMain(
     }
     GroupMemoryBarrierWithGroupSync();
 
-    // A blade too small to see where it stands is dropped; every other one is drawn, sized by its own
-    // distance. The order survivors land in does not matter.
+    // A blade too small to see where it stands, or thinned out there, is dropped; every other one is
+    // drawn, sized by its own distance. The order survivors land in does not matter.
     let b = first + gtid;
     if (b < last)
     {
@@ -248,7 +249,7 @@ void MSMain(
         let clump = source.Clump(clumpLocal);
         let rootWorld = source.WorldPoint(clump.position);
         let away = distance(grassData.cameraPos, rootWorld);
-        let tallest = look.maxHeight * clump.heightScale * ThinningAt(look, away).scale;
+        let tallest = look.maxHeight * clump.heightScale * ThinningAt(look, away, bladeInClump).scale;
         if (BladeVisible(tallest, away, grassData.pixelsPerUnit))
         {
             uint slot;
@@ -283,7 +284,7 @@ void MSMain(
         let wind = ViewWind();
         let rootWorld = source.WorldPoint(shape.root);
         let distanceToCamera = distance(grassData.cameraPos, rootWorld);
-        let thinning = ThinningAt(look, distanceToCamera);
+        let thinning = ThinningAt(look, distanceToCamera, bladeInClump);
         // A survivor's scale is above zero; the floor keeps its placed height a length to divide by.
         let scale = max(thinning.scale, 1e-3);
         shape.height *= scale;

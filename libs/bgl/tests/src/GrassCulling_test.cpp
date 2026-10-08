@@ -48,8 +48,9 @@
 #include <optional>
 
 // What the grass stage's amplification groups decided, read off cull.stats: every chunk of a field
-// in view is tested and none culled, a field behind the camera is culled whole, and one past the fade
-// emits nothing although it is in view. The counters are written only under BERNINI_GPU_DEBUG.
+// in view is tested and none culled, a field behind the camera is culled whole, one past the fade
+// emits nothing although it is in view, and a look that thins by count emits only the blades it
+// keeps. The counters are written only under BERNINI_GPU_DEBUG.
 
 #if defined(BERNINI_GPU_DEBUG)
 
@@ -125,7 +126,7 @@ namespace
 		std::optional<bgl::ForwardPhases>        forwardPhases;
 		std::optional<bgl::BrdfLutGenPass>       brdfLut;
 
-		Harness()
+		explicit Harness(const float thinStart = 0.0f)
 		{
 			auto opts                                = bgl::test::GraphicsSetup();
 			opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -168,6 +169,7 @@ namespace
 			look.clump.bladesPerClump                   = c_BladesPer;
 			look.density.fadeStart                      = c_FadeStart;
 			look.density.fadeEnd                        = c_FadeEnd;
+			look.density.thinStart                      = thinStart;
 			const std::array<bgl::GrassHandle, 1> looks = { sceneRef->CreateGrass(look) };
 			sceneRef->AttachGrass(ground, MakeField(), 0, looks);
 
@@ -327,6 +329,25 @@ TEST_CASE(
 	const bgl::idl::CullStats far = harness.Frame(glm::vec3(0.0f, 10.0f, 60.0f), glm::vec3(0.0f));
 	CHECK(far.grassChunksCulled == 0u);
 	CHECK(far.grassBladesEmitted == 0u);
+}
+
+TEST_CASE("A look that thins by count launches only the blades it keeps", "[grass][cull][thinning]")
+{
+	// Every clump stands 14 m or more from this eye, where a look thinning from 3 m keeps one blade
+	// in four: its floor, one a clump.
+	const auto eye = glm::vec3(0.0f, 4.0f, 18.0f);
+
+	Harness                   whole;
+	const bgl::idl::CullStats all = whole.Frame(eye, glm::vec3(0.0f));
+
+	Harness                   thinning(3.0f);
+	const bgl::idl::CullStats kept = thinning.Frame(eye, glm::vec3(0.0f));
+
+	INFO("whole " << all.grassBladesEmitted << ", thinned " << kept.grassBladesEmitted);
+	CHECK(kept.grassChunksCulled == all.grassChunksCulled);
+	CHECK(kept.grassBladesEmitted > 0u);
+	CHECK(kept.grassBladesEmitted <= c_Side * c_Side);
+	CHECK(kept.grassBladesEmitted * 3u < all.grassBladesEmitted);
 }
 
 #endif

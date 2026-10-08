@@ -11,7 +11,7 @@ or in memory: a field costs its clumps.
 
 | | where | what |
 |---|---|---|
-| a look | `bgl::GrassDesc` ([GrassDesc.h](../libs/bgl/include/bgl/types/GrassDesc.h)), authored as a `.bgrass` | the material, the blade's shape, blades per clump, the fade, the response to wind, the lighting terms |
+| a look | `bgl::GrassDesc` ([GrassDesc.h](../libs/bgl/include/bgl/types/GrassDesc.h)), authored as a `.bgrass` | the material, the blade's shape, blades per clump, the fade and the thinning, the response to wind, the lighting terms |
 | the fields | `assetlib::GrassGeometry` ([GrassGeometry.h](../libs/assetlib_structs/include/assetlib_structs/GrassGeometry.h)), embedded in `BMesh::grassFields` | named fields with a mesh index and look slot; chunks of at most `c_GrassClumpsPerChunk` (64) clumps with a bound each; the clumps |
 | a terrain's layers | `bgl::TerrainGrassDesc` ([TerrainGrassDesc.h](../libs/bgl/include/bgl/types/TerrainGrassDesc.h)), through `IScene::AttachTerrainGrass` | the look, the clumps' spacing, and the slope, height and patch rules that scale them -- nothing per clump ([On a terrain](#on-a-terrain)) |
 
@@ -112,21 +112,35 @@ differs from the last, and the velocity says so.
 
 ## Distance
 
-Two things fall off with distance: how large every blade is, and how finely it is built.
+Three things fall off with distance: how large every blade is, how many a look keeps, and how
+finely each is built.
 
 - **How large.** Every blade is whole up to `fadeStart` and shrinks, height and width together, to
   nothing at `fadeEnd`, linearly between (`FadeScale`, `ThinningAt`); the look's `widening` makes a
-  fading blade narrow more slowly than it shortens. The whole field shrinks as one: **no blade is
-  dropped while it can be seen**. The only blades not drawn are those whose height spans less than
+  fading blade narrow more slowly than it shortens. The whole field shrinks as one: unless the look
+  thins by count (below), **no blade is dropped while it can be seen**. The only other blades not
+  drawn are those whose height spans less than
   `cGrassMinBladeHeightPixels` (1) on the render grid (`BladeVisible`), which show nothing; a chunk
   whose largest blade, at its *nearest* point, is under that launches no mesh groups at all.
 
-  Thinning by count was tried first and replaced. A share of the blades kept by index -- down with the
-  fade, and further to keep survivors 8 px wide -- is cheaper, but every blade crosses its threshold
-  as the camera moves, and at a runner's speed that read as patches of grass swapping in and out.
-  Shrinking a blade across a band of the share instead of dropping it softened the switch and did not
-  end it. What is left of a fading field is short grass settling into the ground, which the look's
+  What is left of a fading field is short grass settling into the ground, which the look's
   ground-normal blend (below) makes read as the ground itself.
+- **How many.** A look with a `thinStart` keeps every blade of a clump up to that distance and a share
+  `(thinStart / d)^2` of them past it, never fewer than one a clump (`ThinShare`), so the blades a
+  pixel of ground holds stay about constant. Blade `k` of a clump keeps `bladesPerClump * share - k`
+  of its size, clamped to [0, 1], so a dropped blade shrinks out over the distance the share falls by
+  one blade, and the survivors widen by `1 / share` to cover the ground the clump did. Blades are
+  numbered across a chunk's clumps (`BladeAddress`), so the blades kept at the chunk's nearest point
+  are a prefix of its numbering, and the amplification stage launches only that prefix
+  (`KeptBladesPerClump`): a thinned field costs the blades it keeps. A look whose `thinStart` is 0,
+  the default, never thins by count.
+
+  Thinning was off for every look before it was a look's choice. At a runner's speed every blade of
+  a verge crosses its threshold as the camera moves, and with blades whose colour is not the
+  ground's, that reads as patches of grass swapping in and out, shrinking or not. A look whose blades
+  sit on a ground of nearly their colour, seen from where far grass is a few pixels tall, hides it,
+  and saves most of the field: gpu-battle-sim's meadow, thinning from 25 m, takes its grass from 2.56 ms to
+  0.95 ms from 1.8 m up in it (RTX 4060, release, 1080 lines shaded).
 - **How finely.** Segments along a blade go from `nearSegments` at the camera to `farSegments` at
   `fadeEnd`, and no more than one per `cGrassPixelsPerSegment` (6) pixels of the blade's height on
   screen, chosen once per chunk at its nearest point.
