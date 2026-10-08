@@ -1,15 +1,9 @@
 ---
-name: bernini
 build: just build
 test: just test
 format: just format
 tidy: just tidy --changed
 docs_index: CLAUDE.md
-review: bypass
-merge-method: squash
-flows:
-  one-shot: { pr: true }
-  fast: { contract: true, landing: pr }
 ---
 
 # Bernini — the agent profile
@@ -90,8 +84,8 @@ The lenses this repo makes worth asking, beyond the flow's own roots:
 
 ## Feature
 
-- **The contract (`fast: contract: true`)** is every declaration more than one task, or another
-  repo, codes against. Here that is three kinds:
+- **The contract** is every declaration more than one task, or another repo, codes against. Here
+  that is three kinds:
   - **public interfaces**, the ones between subsystems, backends and plugins, and the ones out-of-tree
     consumers use: a game links `gamelib`, `assetlib` and `bgl`;
   - **every shader IDL change** in `libs/bgl/shaders/src/idl/`, which is the CPU↔GPU
