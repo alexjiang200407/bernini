@@ -108,7 +108,7 @@ The context and the whole RHI; only the renderer is built on this backend yet
   call is valid without a live context.
 - Error handling: creating the context throws — `UnsupportedSystem` for a machine below the bar,
   `std::runtime_error` for a fault, with the `VkResult` named by `string_VkResult`.
-- The validation layer is staged beside the executables by this library's build, and the context
+- The validation layer is staged in `vulkan_layers/` beside the executables by this library's build, and the context
   points the loader at it. A new instance or device extension, feature or layer setting is enabled
   in `GpuContext_vulkan.cpp`, the one place either object is created, and a feature joins the
   minimum requirements with it.

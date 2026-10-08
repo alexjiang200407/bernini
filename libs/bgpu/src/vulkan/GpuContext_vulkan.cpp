@@ -32,6 +32,8 @@ namespace bgpu
 		constexpr const char* c_ValidationLayer         = "VK_LAYER_KHRONOS_validation";
 		constexpr const char* c_ValidationLayerManifest = "VkLayer_khronos_validation.json";
 		constexpr const char* c_LayerPathVariable       = "VK_ADD_LAYER_PATH";
+		// bgpu's CMakeLists.txt stages the layer here, beside the executable.
+		constexpr const char* c_StagedLayerDirectory = "vulkan_layers";
 
 		// One list for the read and the enable, so a device is created with what was checked.
 		constexpr auto c_DescriptorIndexingFeatures =
@@ -110,16 +112,19 @@ namespace bgpu
 			throw error;
 		}
 
-		// The build stages the validation layer beside the executable, where the loader does not
-		// look. A path the environment already names is left alone: whoever set it chose a layer.
+		// The build stages the validation layer in a directory beside the executable, where the loader
+		// does not look. A directory of its own, because the loader reads every .json in a layer path
+		// as a manifest. A path the environment already names is left alone: whoever set it chose a
+		// layer.
 		void
 		AddStagedLayerPath()
 		{
 			if (core::env_var(c_LayerPathVariable).has_value())
 				return;
 
-			const std::filesystem::path directory = core::file::get_executable_path().parent_path();
-			std::error_code             ec;
+			const std::filesystem::path directory =
+				core::file::get_executable_path().parent_path() / c_StagedLayerDirectory;
+			std::error_code ec;
 			if (!std::filesystem::exists(directory / c_ValidationLayerManifest, ec))
 				return;
 

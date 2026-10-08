@@ -168,11 +168,12 @@ default; only the `windows-clang-vulkan-debug` preset selects this.
   ([native_device_vulkan.h](../libs/bgpu/src/vulkan/native_device_vulkan.h)), private to the
   backend as the D3D12 device is.
 * **The validation layer comes with the build.** `enableDebugLayer` enables
-  `VK_LAYER_KHRONOS_validation`, which vcpkg builds and `bgpu`'s build stages beside the
-  executables, as the Agility SDK's debug layer is — so it needs no Vulkan SDK on the machine and
-  is the same version everywhere. The loader does not search an executable's directory, so the
-  context adds it through `VK_ADD_LAYER_PATH` in its own environment before creating the instance;
-  a value already set there is left alone. Asked for and not found, the context throws rather than
+  `VK_LAYER_KHRONOS_validation`, which vcpkg builds and `bgpu`'s build stages in `vulkan_layers/`
+  beside the executables, as the Agility SDK's debug layer is staged — so it needs no Vulkan SDK on
+  the machine and is the same version everywhere. The loader does not search there, so the context
+  adds it through `VK_ADD_LAYER_PATH` in its own environment before creating the instance; a value
+  already set there is left alone. A directory of its own, because the loader reads every `.json`
+  in a layer path as a manifest, and the editor deploys a `config.json` beside it. Asked for and not found, the context throws rather than
   running unvalidated. The loader ignores that variable in an elevated process.
 
   The layer is built from an overlay port (`cmake/ports/vulkan-validationlayers`) for one reason:

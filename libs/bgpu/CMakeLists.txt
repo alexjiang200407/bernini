@@ -172,8 +172,9 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	enable_strict_compiler(bgpu_d3d12_agility)
 elseif(RENDERER_BACKEND STREQUAL "VULKAN")
 	# The validation layer is found by the loader through a manifest, so nothing imports it either.
-	# Staged beside the executables, where the context adds its directory to the loader's search
-	# (GpuContext_vulkan.cpp), so the debug layer needs no Vulkan SDK on the machine. The port
+	# Staged in vulkan_layers/ beside the executables, which the context adds to the loader's search
+	# (GpuContext_vulkan.cpp), so the debug layer needs no Vulkan SDK on the machine: a directory of
+	# its own, since the loader reads every .json there as a layer manifest. The port
 	# exports no target, and the optimized build is taken in every configuration: the debug one
 	# validates several times slower and shares no state with the binary that loads it.
 	set(BGPU_VULKAN_LAYER_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin")
@@ -186,10 +187,10 @@ elseif(RENDERER_BACKEND STREQUAL "VULKAN")
 		set(BGPU_VULKAN_LAYER_STAMP "${CMAKE_CURRENT_BINARY_DIR}/vulkan_layer.stamp")
 		add_custom_command(
 			OUTPUT  "${BGPU_VULKAN_LAYER_STAMP}"
-			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/vulkan_layers"
 			COMMAND ${CMAKE_COMMAND} -E copy_if_different
 					${BGPU_VULKAN_LAYER_FILES}
-					"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+					"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/vulkan_layers"
 			COMMAND ${CMAKE_COMMAND} -E touch "${BGPU_VULKAN_LAYER_STAMP}"
 			DEPENDS ${BGPU_VULKAN_LAYER_FILES}
 			COMMENT "Staging the Vulkan validation layer"
