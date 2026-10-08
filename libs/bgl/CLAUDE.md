@@ -68,8 +68,9 @@ provides higher level abstractions of Mesh, Light and Material while hiding the 
   acquires with a fence and waits for it, as DXGI's present blocks for a buffer, and presents behind
   the frame's fence value through the queue's `NativeVkQueue`. A present that finds the window
   resized remakes the images at the window's size, and the target takes it on. The RHI's Vulkan
-  backend is `bgpu`'s, and so is volk: its function pointers are bgpu's, loaded with the context,
-  and reached here through `"volk_vulkan.h"`.
+  backend is `bgpu`'s. volk is reached through `"volk_vulkan.h"`, in bgl's own copy of the pointers
+  under namespace `volk` (`VolkImpl.cpp`), which `LoadVulkanFunctions` points at the device when a
+  swapchain is made: bgpu's are not exported from a shared bgpu.
 - Above the renderer only `gamelib` and `bgl_sphere`, the example that proves it presents, are built
   on Vulkan (the root `CMakeLists.txt`, `BERNINI_HAS_RENDERER_CONSUMERS`).
 - PCH is `./libs/bgl/src/vulkan/pch.h`. Implementation files take a `_vulkan` suffix.
