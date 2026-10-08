@@ -47,9 +47,9 @@ and portability.
   - [x] DirectX 12
   - [~] Vulkan — `bgpu` is whole on Windows (`RENDERER_BACKEND=VULKAN`: the context checked
     against the hardware bar, the validation layer in `bgpu.log`, sessions that compile to SPIR-V,
-    and every RHI entry point; all of `bgpu_tests` passes). Left, in order: the renderer's backend
-    half (`bgl`'s `Graphics_*` and `RenderTarget_*`, a swapchain, `bgl_tests`), the libraries above
-    it, then Linux itself.
+    and every RHI entry point; all of `bgpu_tests` passes), and so are the renderer (`bgl_tests`, a
+    swapchain) and the editor with its SDK. Left, in order: the other libraries above the renderer,
+    then Linux itself.
   - [x] Metal
   - [x] GPU Ring Buffer
   - [ ] Readback ring — N buffers, persistently mapped, fenced; never map a buffer written this frame.

@@ -78,9 +78,9 @@ if (RENDERER_BACKEND MATCHES "^(DX12|METAL|VULKAN)$")
     set(BERNINI_HAS_RENDERER ON)
 endif()
 
-# Whether what is built on the renderer is: the crowd, the editor, the apps, every example and every
-# suite above bgl. Not on Vulkan, whose renderer is being brought up with gamelib and bgl_sphere
-# alone above it -- the example that proves it presents (examples/CMakeLists.txt).
+# Whether what is built on the renderer is: the crowd, the apps, every example and every suite above
+# bgl. Not on Vulkan, whose renderer is being brought up with gamelib, bgl_sphere -- the example that
+# proves it presents (examples/CMakeLists.txt) -- and the editor alone above it.
 set(BERNINI_HAS_RENDERER_CONSUMERS OFF)
 if (RENDERER_BACKEND MATCHES "^(DX12|METAL)$")
     set(BERNINI_HAS_RENDERER_CONSUMERS ON)
@@ -168,7 +168,7 @@ add_custom_target(copy_assets DEPENDS "${ASSET_STAMP}")
 # code is linked in, and a texture bake runs an order of magnitude slower.
 set(CMAKE_FIND_PACKAGE_TARGETS_GLOBAL ON)
 
-if (PROJECT_IS_TOP_LEVEL AND BERNINI_HAS_RENDERER_CONSUMERS)
+if (PROJECT_IS_TOP_LEVEL AND BERNINI_HAS_RENDERER)
     find_package(Qt6 QUIET COMPONENTS Core Gui Widgets)
 endif()
 
@@ -176,7 +176,7 @@ endif()
 # embedded with add_subdirectory, renderer-free tools and builds without the editor stay static.
 set(_bernini_editor_sdk_default OFF)
 set(_bernini_editor_sdk_eligible OFF)
-if (PROJECT_IS_TOP_LEVEL AND BERNINI_HAS_RENDERER_CONSUMERS AND Qt6_FOUND)
+if (PROJECT_IS_TOP_LEVEL AND BERNINI_HAS_RENDERER AND Qt6_FOUND)
     set(_bernini_editor_sdk_default ON)
     set(_bernini_editor_sdk_eligible ON)
 endif()
@@ -195,11 +195,6 @@ option(BERNINI_SHARED_RENDERER "Build bgl as a shared library (BERNINI_EDITOR_SD
 if (BERNINI_SHARED_RENDERER AND NOT BERNINI_HAS_RENDERER)
     message(FATAL_ERROR
         "BERNINI_SHARED_RENDERER needs a renderer, and RENDERER_BACKEND is ${RENDERER_BACKEND}")
-endif()
-# Vulkan's renderer reaches volk's function pointers, which bgpu defines; nothing has built it as a
-# DLL beside a shared bgpu, so it is static while it is brought up.
-if (BERNINI_SHARED_RENDERER AND RENDERER_BACKEND STREQUAL "VULKAN")
-    message(FATAL_ERROR "BERNINI_SHARED_RENDERER is not built on Vulkan yet")
 endif()
 set(_bernini_renderer_library_type STATIC)
 if (BERNINI_SHARED_RENDERER OR BERNINI_EDITOR_SDK)
@@ -265,7 +260,7 @@ endif()
 # Qt is not a vcpkg dependency, so an embedded build would look for one the consumer never asked
 # for and occasionally find it.
 if (PROJECT_IS_TOP_LEVEL)
-    if (Qt6_FOUND AND BERNINI_HAS_RENDERER_CONSUMERS)
+    if (Qt6_FOUND AND BERNINI_HAS_RENDERER)
         add_subdirectory(apps/editor)
     elseif (NOT Qt6_FOUND)
         message(STATUS "Qt6 not found - skipping editor (set CMAKE_PREFIX_PATH to your Qt install to enable it)")

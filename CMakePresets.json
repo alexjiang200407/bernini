@@ -248,7 +248,7 @@
     },
     {
       "name": "windows-clang-vulkan-debug",
-      "displayName": "Windows Clang Debug ninja - Vulkan (brought up: the renderer and bgl_sphere)",
+      "displayName": "Windows Clang Debug ninja - Vulkan (brought up: the renderer, bgl_sphere and the editor)",
       "binaryDir": "${sourceDir}/build/ninja-clang-vulkan-debug",
       "inherits": [
         "vcpkg",

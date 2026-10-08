@@ -454,7 +454,7 @@ as `[Vulkan] ...`, and `enableGPUValidationLayer` adds the two checks D3D12's GP
 validation makes between them: **GPU-assisted validation**, which checks on the GPU what shaders
 reach (a descriptor index or buffer offset out of range), and **synchronization validation**, which
 checks that every read and write is ordered against the last one by a barrier. The layer is staged
-beside the executables by the build, so no Vulkan SDK is needed; where it comes from, what
+in `vulkan_layers/` beside the executables by the build, so no Vulkan SDK is needed; where it comes from, what
 `strictError` covers and how a leaked object is reported are in
 [bgpu.md § Vulkan](docs/bgpu.md#vulkan).
 

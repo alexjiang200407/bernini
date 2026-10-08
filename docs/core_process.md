@@ -39,14 +39,14 @@ it says:
 | `BERNINI_SHARED_RENDERER=ON` | `SHARED` | `SHARED` | `SHARED` | `SHARED` |
 | `BERNINI_EDITOR_SDK` on — a top-level build with Qt, by default | `SHARED` | `SHARED` | `SHARED` | `SHARED` |
 | `RENDERER_BACKEND=NONE` | not built | the compiler and the RHI's interfaces, no backend, `STATIC` | not built | `STATIC` |
-| `RENDERER_BACKEND=VULKAN` | not built | the same and the Vulkan context and compute RHI ([bgpu.md § Vulkan](bgpu.md#vulkan)), `STATIC` | not built | `STATIC` |
 
 The default is the game that ships as one binary. The editor SDK implies the shared renderer:
 its plugins are DLLs that reach the renderer through shared `gamelib`, and the editor links the
 renderer as well, so a static one would be linked into two binaries. A static `core_process` beside
 anything shared would be two copies again, so it is derived and is never an option of its own.
-`BERNINI_SHARED_RENDERER` with a backend that has no renderer, `NONE`, is a configure error, and so
-is it on `VULKAN`, whose renderer is static while it is brought up.
+`BERNINI_SHARED_RENDERER` with a backend that has no renderer, `NONE`, is a configure error.
+`VULKAN` follows the same rows as D3D12 and Metal, with no `crowdlib` while its other consumers are
+brought up ([bgpu.md § Vulkan](bgpu.md#vulkan)).
 
 The rule is not the renderer's alone: any engine library that holds process-wide GPU state is built
 as the renderer is and lands in the same binary it does. `bgpu` is the one that holds the

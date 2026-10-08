@@ -127,7 +127,8 @@ elseif(RENDERER_BACKEND STREQUAL "VULKAN")
 	# volk loads the system's Vulkan loader at runtime and calls through function pointers of its
 	# own, so nothing links vulkan-1 and a machine with no Vulkan starts and is refused in words
 	# (SystemRequirements.h). Its header-only target: the pointers are defined once per process, by
-	# src/vulkan/VolkImpl.cpp, which a PCH that includes the header first would guard out.
+	# src/vulkan/VolkImpl.cpp, which a PCH that includes the header first would guard out. They are
+	# bgpu's alone, never exported: a library above keeps a copy of its own (libs/bgl/src/vulkan).
 	find_package(volk CONFIG REQUIRED)
 	find_package(VulkanUtilityLibraries CONFIG REQUIRED)
 	target_link_libraries(bgpu PRIVATE volk::volk_headers Vulkan::UtilityHeaders)
@@ -172,8 +173,9 @@ if(RENDERER_BACKEND STREQUAL "DX12")
 	enable_strict_compiler(bgpu_d3d12_agility)
 elseif(RENDERER_BACKEND STREQUAL "VULKAN")
 	# The validation layer is found by the loader through a manifest, so nothing imports it either.
-	# Staged beside the executables, where the context adds its directory to the loader's search
-	# (GpuContext_vulkan.cpp), so the debug layer needs no Vulkan SDK on the machine. The port
+	# Staged in vulkan_layers/ beside the executables, which the context adds to the loader's search
+	# (GpuContext_vulkan.cpp), so the debug layer needs no Vulkan SDK on the machine: a directory of
+	# its own, since the loader reads every .json there as a layer manifest. The port
 	# exports no target, and the optimized build is taken in every configuration: the debug one
 	# validates several times slower and shares no state with the binary that loads it.
 	set(BGPU_VULKAN_LAYER_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin")
@@ -186,10 +188,10 @@ elseif(RENDERER_BACKEND STREQUAL "VULKAN")
 		set(BGPU_VULKAN_LAYER_STAMP "${CMAKE_CURRENT_BINARY_DIR}/vulkan_layer.stamp")
 		add_custom_command(
 			OUTPUT  "${BGPU_VULKAN_LAYER_STAMP}"
-			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/vulkan_layers"
 			COMMAND ${CMAKE_COMMAND} -E copy_if_different
 					${BGPU_VULKAN_LAYER_FILES}
-					"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+					"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/vulkan_layers"
 			COMMAND ${CMAKE_COMMAND} -E touch "${BGPU_VULKAN_LAYER_STAMP}"
 			DEPENDS ${BGPU_VULKAN_LAYER_FILES}
 			COMMENT "Staging the Vulkan validation layer"
@@ -380,6 +382,13 @@ if (BUILD_TESTS AND NOT RENDERER_BACKEND STREQUAL "NONE")
 	if(RENDERER_BACKEND STREQUAL "VULKAN")
 		# A Vulkan-only case calls through the pointers bgpu's VolkImpl.cpp defines.
 		target_link_libraries(bgpu_tests PRIVATE volk::volk_headers)
+		# ...and reaches the backend's classes, which a shared bgpu does not export, so the suite
+		# links bgpu's objects into itself. BGPU_EXPORTS keeps every reference to them local, so the
+		# import library bgpu still brings is never reached and the DLL is never loaded.
+		if(BERNINI_RENDERER_LIBRARY_TYPE STREQUAL "SHARED")
+			target_sources(bgpu_tests PRIVATE $<TARGET_OBJECTS:bgpu>)
+			target_compile_definitions(bgpu_tests PRIVATE BGPU_EXPORTS)
+		endif()
 	endif()
 
 	if(RENDERER_BACKEND STREQUAL "DX12")

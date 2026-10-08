@@ -146,8 +146,8 @@ refused, even when a second GPU would pass, because the engine does not choose a
 
 `RENDERER_BACKEND=VULKAN` is a third backend being brought up on Windows ahead of the Linux build
 that needs it: **the context, the whole RHI and the renderer** (`bgl`'s `bgl_vulkan`), which presents
-to a window. Above the renderer only `gamelib` and the `bgl_sphere` example are built — no crowd
-libraries, no editor, no other app or example. D3D12 stays the Windows
+to a window. Above the renderer only `gamelib`, the `bgl_sphere` example and the editor, with its
+SDK, are built — no crowd libraries, no other app or example. D3D12 stays the Windows
 default; only the `windows-clang-vulkan-debug` preset selects this.
 
 * **The first physical device, as D3D12 takes DXGI's first adapter.** The loader sorts what it
@@ -164,15 +164,21 @@ default; only the `windows-clang-vulkan-debug` preset selects this.
 * **volk, not the loader's import library.** The function pointers are filled when the context is
   created and cleared when it is destroyed, so nothing links `vulkan-1` and a machine with no
   Vulkan driver starts and is refused with `UnsupportedSystem`. It also means no Vulkan call is
-  valid without a live context. The handles are `GetVulkanHandles`
+  valid without a live context. The pointers are `bgpu`'s own and are not exported, so a library
+  above it that calls Vulkan — `bgl`'s swapchain — keeps a copy of its own in namespace `volk`
+  (`VOLK_NAMESPACE`), loaded from the device's native handles; that works whether `bgpu` is a DLL
+  or linked into the same binary. The handles are `GetVulkanHandles`
   ([native_device_vulkan.h](../libs/bgpu/src/vulkan/native_device_vulkan.h)), private to the
   backend as the D3D12 device is.
+* **`bgpu_tests` tests the backend's classes**, which a shared `bgpu` does not export, so in a
+  shared build the suite compiles `bgpu`'s objects into itself and never loads the DLL.
 * **The validation layer comes with the build.** `enableDebugLayer` enables
-  `VK_LAYER_KHRONOS_validation`, which vcpkg builds and `bgpu`'s build stages beside the
-  executables, as the Agility SDK's debug layer is — so it needs no Vulkan SDK on the machine and
-  is the same version everywhere. The loader does not search an executable's directory, so the
-  context adds it through `VK_ADD_LAYER_PATH` in its own environment before creating the instance;
-  a value already set there is left alone. Asked for and not found, the context throws rather than
+  `VK_LAYER_KHRONOS_validation`, which vcpkg builds and `bgpu`'s build stages in `vulkan_layers/`
+  beside the executables, as the Agility SDK's debug layer is staged — so it needs no Vulkan SDK on
+  the machine and is the same version everywhere. The loader does not search there, so the context
+  adds it through `VK_ADD_LAYER_PATH` in its own environment before creating the instance; a value
+  already set there is left alone. A directory of its own, because the loader reads every `.json`
+  in a layer path as a manifest, and the editor deploys a `config.json` beside it. Asked for and not found, the context throws rather than
   running unvalidated. The loader ignores that variable in an elevated process.
 
   The layer is built from an overlay port (`cmake/ports/vulkan-validationlayers`) for one reason:

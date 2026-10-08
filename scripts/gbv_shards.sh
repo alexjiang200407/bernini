@@ -3,7 +3,7 @@
 # or on Vulkan synchronization and GPU-assisted validation (docs/gfx_debug.md § 9).
 #
 # Each shard runs from a directory of its own holding hard links to bgl_tests.exe and the DLLs beside
-# it, and the Vulkan validation layer's manifest, which the context points the loader at beside them.
+# it, and to vulkan_layers/, where the Vulkan context points the loader at the validation layer.
 # bgpu.log, the Agility SDK (D3D12SDKPath ".\") and crash logs resolve beside the executable, so
 # every shard writes its own log and its own crash logs, and none truncates another's. The working
 # directory stays <bin-dir>, where assets/, shaders/ and shadercache/ resolve.
@@ -45,6 +45,10 @@ for ((n = 0; n < shards; n++)); do
 	rm -rf "$dir"
 	mkdir "$dir"
 	for f in bgl_tests.exe *.dll *.json; do [ ! -f "$f" ] || ln "$f" "$dir/$f"; done
+	if [ -d vulkan_layers ]; then
+		mkdir "$dir/vulkan_layers"
+		for f in vulkan_layers/*; do ln "$f" "$dir/$f"; done
+	fi
 
 	tmp="$out/tmp$n"
 	rm -rf "$tmp"

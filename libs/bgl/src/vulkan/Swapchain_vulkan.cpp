@@ -64,6 +64,8 @@ namespace bgl
 				m_Device(
 					device->GetNativeObject(bgpu::NativeObjectType::kVkDevice).As<VkDevice_T>())
 			{
+				LoadVulkanFunctions(m_Instance, m_Device);
+
 				if (desc.wnd == nullptr)
 				{
 					throw GraphicsError(
