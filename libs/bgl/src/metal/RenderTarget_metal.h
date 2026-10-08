@@ -184,6 +184,24 @@ namespace bgl
 			return m_OutlineMaskSrv;
 		}
 
+		[[nodiscard]] bgpu::TextureHandle
+		GetGrassRootHeightTexture() const noexcept override
+		{
+			return m_GrassRootHeightTexture;
+		}
+
+		[[nodiscard]] bgpu::RtvHandle
+		GetGrassRootHeightRtv() const noexcept override
+		{
+			return m_GrassRootHeightRtv;
+		}
+
+		[[nodiscard]] bgpu::SrvHandle
+		GetGrassRootHeightSrv() const noexcept override
+		{
+			return m_GrassRootHeightSrv;
+		}
+
 		[[nodiscard]] bool
 		IsTaaEnabled() const noexcept override
 		{
@@ -344,6 +362,9 @@ namespace bgl
 		bgpu::TextureHandle m_OutlineMaskTexture;
 		bgpu::RtvHandle     m_OutlineMaskRtv;
 		bgpu::SrvHandle     m_OutlineMaskSrv;
+		bgpu::TextureHandle m_GrassRootHeightTexture;
+		bgpu::RtvHandle     m_GrassRootHeightRtv;
+		bgpu::SrvHandle     m_GrassRootHeightSrv;
 
 		// Allocated only when m_TaaAllocated; a target that never resolves pays neither the memory nor
 		// the two RTV slots.

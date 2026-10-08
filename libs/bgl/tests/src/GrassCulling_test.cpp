@@ -228,6 +228,7 @@ namespace
 			fg.RegisterQueue("main", cmdQueue, cmdList);
 			fg.ImportTexture(bgl::c_BackbufferName, targetBase->GetSceneColorTexture());
 			fg.ImportTexture(bgl::c_MotionVectorsName, targetBase->GetMotionVectorTexture());
+			fg.ImportTexture(bgl::c_GrassRootHeightName, targetBase->GetGrassRootHeightTexture());
 			fg.ImportTexture(bgl::c_DepthName, targetBase->GetDepthTexture());
 
 			fg.SetResourceNamespace(view->GetResourceNamespace());
@@ -245,10 +246,11 @@ namespace
 			draw.viewState.cameraPos    = eye;
 			draw.viewState.pixelsPerUnit =
 				bgl::PixelsPerUnit(draw.viewState.viewport, draw.viewState.unjitteredViewProj);
-			draw.targets.sceneColor   = targetBase->GetSceneColorRtv();
-			draw.targets.motionVector = targetBase->GetMotionVectorRtv();
-			draw.targets.depth        = targetBase->GetDepthDsv();
-			draw.materialArena        = scene->GetMaterialBinding();
+			draw.targets.sceneColor      = targetBase->GetSceneColorRtv();
+			draw.targets.motionVector    = targetBase->GetMotionVectorRtv();
+			draw.targets.grassRootHeight = targetBase->GetGrassRootHeightRtv();
+			draw.targets.depth           = targetBase->GetDepthDsv();
+			draw.materialArena           = scene->GetMaterialBinding();
 			draw.samplers.anisoLinearWrap =
 				scene->GetSampler(bgl::Scene::StandardSampler::kAnisoLinearWrap);
 			draw.samplers.linearClamp =

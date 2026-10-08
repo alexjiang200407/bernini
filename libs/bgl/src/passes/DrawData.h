@@ -72,9 +72,13 @@ namespace bgl
 		bgpu::RtvHandle motionVector;
 		bgpu::DsvHandle depth;
 		bgpu::RtvHandle outlineMask;
+		bgpu::RtvHandle grassRootHeight;
 
 		// The same depth as a shader resource: what the blob-shadow decal reads the world from.
 		bgpu::SrvHandle depthSrv;
+
+		// What the blob-shadow decal reads to tell a blade from the ground it grows on.
+		bgpu::SrvHandle grassRootHeightSrv;
 	};
 
 	/** What a draw shades against: the image-based environment, the sun, and the sky behind it. */

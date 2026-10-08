@@ -328,7 +328,7 @@ void MSMain(
         surface.uv1 = float2(posed.random, float(draw.look.GetOffset()));
         surface.tangent = float4(posed.side, posed.facing);
         surface.materialOffset = look.materialOffset;
-        verts[v] = GrassVSOut(surface, float4(BladeTint(look, posed.color, t), BladeOcclusion(look, t)));
+        verts[v] = GrassVSOut(surface, float4(BladeTint(look, posed.color, t), BladeOcclusion(look, t)), position.y - posed.now.p0.y);
     }
 
     for (uint p = gtid; p < survivors * trisPerBlade; p += cMeshGroupSize)

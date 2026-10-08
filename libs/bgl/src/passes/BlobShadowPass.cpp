@@ -44,11 +44,12 @@ namespace bgl
 
 		// Every member Draw writes, kept beside the code that writes them so BindingNameCheck catches
 		// a shader rename at startup.
-		constexpr std::array<std::string_view, 16> c_Fields = {
-			"instanceLod"sv, "instancePose"sv,   "dominantFrames"sv, "boneAnimTables"sv,
-			"clipBuffer"sv,  "time"sv,           "blobBuffer"sv,     "meshBuffer"sv,
-			"palettes"sv,    "playbackBuffer"sv, "rigs"sv,           "worldDepth"sv,
-			"viewProj"sv,    "invViewProj"sv,    "groundNormal"sv,   "viewportRect"sv,
+		constexpr std::array<std::string_view, 17> c_Fields = {
+			"instanceLod"sv,     "instancePose"sv,   "dominantFrames"sv, "boneAnimTables"sv,
+			"clipBuffer"sv,      "time"sv,           "blobBuffer"sv,     "meshBuffer"sv,
+			"palettes"sv,        "playbackBuffer"sv, "rigs"sv,           "worldDepth"sv,
+			"grassRootHeight"sv, "viewProj"sv,       "invViewProj"sv,    "groundNormal"sv,
+			"viewportRect"sv,
 		};
 	}
 
@@ -118,6 +119,7 @@ namespace bgl
 		desc.SetName("Blob Shadows {}", draw.drawIdx)
 			.AddRenderTarget(c_BackbufferName)
 			.AddTextureRead(c_DepthName, bgpu::BarrierSyncFlag::kPixelShader)
+			.AddTextureRead(c_GrassRootHeightName, bgpu::BarrierSyncFlag::kPixelShader)
 			.AddBufferRead(c_BlobShadowsName, bgpu::BarrierSyncFlag::kVertexShader)
 			.AddBufferRead(c_MeshInstanceBufferName, bgpu::BarrierSyncFlag::kVertexShader)
 			.AddBufferRead(c_BonePaletteName, bgpu::BarrierSyncFlag::kVertexShader)
@@ -159,6 +161,7 @@ namespace bgl
 			uniforms["instanceLod"]    = resources.GetBuffer(c_InstanceLodName);
 			uniforms["instancePose"]   = resources.GetBuffer(c_InstancePoseName);
 			uniforms["worldDepth"].SetIfValid(draw.targets.depthSrv);
+			uniforms["grassRootHeight"].SetIfValid(draw.targets.grassRootHeightSrv);
 			uniforms["viewProj"]    = draw.viewState.viewProj;
 			uniforms["invViewProj"] = glm::inverse(draw.viewState.viewProj);
 

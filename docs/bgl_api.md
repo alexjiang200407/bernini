@@ -503,7 +503,7 @@ flowchart TD
   [Skinned Meshes](skinning.md) § Foot planting.
 * **`SetBlobShadow(instance, desc)` / `ClearBlobShadow(instance)` / `GetBlobShadow(instance)`** —
   the placement's blob shadow: a soft radial-falloff decal draped over whatever static surface
-  lies directly beneath it — a crate top, a bush, the ground — drawn by the forward pass between
+  lies directly beneath it — a crate top, a bush, the ground, a field of grass — drawn by the forward pass between
   the opaque draw buckets and the transparents, shrinking and fading per pixel with the placement's
   height above the surface it lands on (gone at `BlobShadowDesc::fadeHeight`). Receivers are
   static geometry only — a shadow never lands on another unit — and a placement with no static

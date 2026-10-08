@@ -344,6 +344,20 @@ namespace bgl
 		GetOutlineMaskSrv() const noexcept = 0;
 
 		/**
+		 * The grass phase's c_GrassRootHeightFormat target: each blade pixel's height above its
+		 * root, which Blob Shadows reads to shade a blade as its ground. Cleared to zero each frame,
+		 * which reads as no blade; sized with the render grid.
+		 */
+		[[nodiscard]] virtual bgpu::TextureHandle
+		GetGrassRootHeightTexture() const noexcept = 0;
+
+		[[nodiscard]] virtual bgpu::RtvHandle
+		GetGrassRootHeightRtv() const noexcept = 0;
+
+		[[nodiscard]] virtual bgpu::SrvHandle
+		GetGrassRootHeightSrv() const noexcept = 0;
+
+		/**
 		 * The two accumulation buffers TAA ping-pongs between: index `GetCurrentHistoryIndex()` is the one
 		 * this frame's resolve writes, the other is the one it reads. Sized with the *output* grid,
 		 * which is what the resolve reconstructs onto. Null on a target without TAA, which allocates

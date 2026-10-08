@@ -12,10 +12,12 @@
 #include <bgl/IGraphics.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/DirectionalLightDesc.h>
 #include <bgl/types/GrassDesc.h>
 #include <bgl/types/GrassHandle.h>
+#include <bgl/types/GroundPlaneDesc.h>
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
@@ -233,6 +235,48 @@ TEST_CASE("Grass draws its blades over the ground it grows on", "[grass][render]
 	// The white ground reads grey-white; the green blades pull the box toward green.
 	CHECK(grown.g - grown.r > bare.g - bare.r + 0.1f);
 	CHECK(again.g - again.r < grown.g - grown.r);
+}
+
+TEST_CASE(
+	"A blob shadow darkens the blades under it as it darkens their ground",
+	"[grass][blobshadow][render]")
+{
+	const GrassScene grass;
+	grass.scene->SetGround(bgl::GroundPlaneDesc());
+
+	// A caster standing on the ground at the field's centre, too small to see, cast from just above
+	// the ground as a grounded caster is (the editor's floor slack): the blades, 0.3-0.5 m tall,
+	// rise above that point, so measured from their own height most of each would take nothing.
+	const auto speck  = grass.scene->AddPlaneGeom(1, 1, 0.01f, 0.01f, grass.green);
+	const auto caster = grass.view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(speck).SetTransform(c_Flat));
+
+	auto disc       = bgl::BlobShadowDesc();
+	disc.radius     = 4.0f;
+	disc.intensity  = 0.9f;
+	disc.fadeHeight = 2.0f;
+	disc.casterLift = 0.2f;
+
+	const float bareLit = grass.Settled("bernini_grass_blob_bare_lit").Luma();
+	grass.view->SetBlobShadow(caster, disc);
+	const float bareShadowed = grass.Settled("bernini_grass_blob_bare_shadowed").Luma();
+
+	grass.view->ClearBlobShadow(caster);
+	grass.Attach(MakeField(40, 0.12f));
+	const float grassLit = grass.Settled("bernini_grass_blob_grass_lit").Luma();
+	grass.view->SetBlobShadow(caster, disc);
+	const float grassShadowed = grass.Settled("bernini_grass_blob_grass_shadowed").Luma();
+
+	INFO(
+		"bare " << bareLit << " -> " << bareShadowed << ", grass " << grassLit << " -> "
+				<< grassShadowed);
+	REQUIRE(bareShadowed < bareLit * 0.9f);
+
+	// The disc multiplies whatever it lands on by the same factor, so the field darkens by nearly
+	// the bare ground's share; blades lit as walls would leave it about 2% darker.
+	const float bareShare  = 1.0f - bareShadowed / bareLit;
+	const float grassShare = 1.0f - grassShadowed / grassLit;
+	CHECK(grassShare > bareShare * 0.75f);
 }
 
 TEST_CASE("Still grass under a still camera writes no motion", "[grass][render][motionvectors]")

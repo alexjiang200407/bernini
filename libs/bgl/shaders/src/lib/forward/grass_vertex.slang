@@ -23,7 +23,11 @@ public struct GrassVSOut
     // -- and the root-to-tip occlusion in a.
     public float4 tint : GRASSTINT;
 
-    public __init(ForwardVSOut surface, float4 tint)
+    // How far above its blade's root this point stands, along up: what Blob Shadows lowers a blade
+    // pixel by to shade it as its ground.
+    public float rootHeight : GRASSROOTHEIGHT;
+
+    public __init(ForwardVSOut surface, float4 tint, float rootHeight)
     {
         position = surface.position;
         worldPos = surface.worldPos;
@@ -36,6 +40,7 @@ public struct GrassVSOut
         prevClip = surface.prevClip;
         cameraPrevClip = surface.cameraPrevClip;
         this.tint = tint;
+        this.rootHeight = rootHeight;
     }
 
     public ForwardVSOut Surface()
@@ -52,5 +57,24 @@ public struct GrassVSOut
         surface.prevClip = prevClip;
         surface.cameraPrevClip = cameraPrevClip;
         return surface;
+    }
+};
+
+// The least height a blade pixel reports: one millimetre, well inside R16F's resolution near zero.
+static const float cMinGrassRootHeight = 1e-3;
+
+// A blade's targets: Forward's colour and velocity, and its height above its root, floored above
+// zero so that the cleared zero is the one value that reads as no blade.
+public struct GrassPSOut
+{
+    public float4 color : SV_Target0;
+    public float4 motion : SV_Target1;
+    public float rootHeight : SV_Target2;
+
+    public __init(GrassVSOut input, float4 color)
+    {
+        this.color = color;
+        motion = ComputeMotionVector(input.Surface());
+        rootHeight = max(input.rootHeight, cMinGrassRootHeight);
     }
 };

@@ -40,7 +40,7 @@ in it:
 
 ```mermaid
 flowchart TD
-    BF["BeginFrame"] --> CLR["Clear (scene colour + motion vectors + outline mask + depth)"]
+    BF["BeginFrame"] --> CLR["Clear (scene colour + motion vectors + outline mask + grass root height + depth)"]
     CLR --> D["per Draw(view)"]
     subgraph D["per Draw(view) — resources imported under the view's namespace"]
         IMP["Scene / SceneView import their buffers"] --> SKY["Skybox or Backdrop (the backdrop when the view has one, else its sky if any)"]
@@ -820,7 +820,11 @@ terrain's layers, by the terrain, whose height texture the dispatch binds.
 A grass bucket is an ordinary bucket to `ForwardPhases`: its kernel pairs `programs.forward.Grass`
 with the material kind's grass program (`programs.forward.Grass_<kind>`, which lights the blade the
 way [Grass § Lighting](grass.md#lighting) describes), culls nothing in hardware (a blade is seen
-from both sides) and writes depth, built by the first `Draw` whose view has grass in it.
+from both sides) and writes depth, built by the first `Draw` whose view has grass in it. Its
+programs write a third target after velocity, `grassRootHeight`: each blade pixel's height above its
+root, which [Blob Shadows](#blob-shadows) reads to shade a blade as its ground ([Grass § Blob
+shadows](grass.md#blob-shadows)). Only a grass bucket's pipeline declares it, and only this phase
+attaches it.
 `GrassForwardPhase` dispatches each bucket and terrain once, directly, with one amplification group
 per chunk reference in rows at most 65535 (`c_MaxDispatchMeshGroups`) wide, binding its own `grassData`
 constant buffer, which the grass program reads a blade's look from as well.
@@ -859,7 +863,10 @@ radial falloff around the caster's axis and fading with the caster's per-pixel h
 surface (`programs.forward.BlobShadow`) — so the shadow drapes over a crate or a bush top rather
 than falling through to the ground plane. The cast point is the instance's origin raised by
 `BlobShadowDesc::casterLift`, which is how a ground-standing caster — a tree — casts from above the
-foliage around its root instead of from under it. A receiver must also face up: the fragment
+foliage around its root instead of from under it. A grass pixel is received as its blade's ground:
+the pass reads `grassRootHeight` beside the depth, lowers the reconstructed point by it to the root,
+and skips the facing test below, so a disc darkens a blade as it darkens the ground it grows from
+([Grass § Blob shadows](grass.md#blob-shadows)). Any other receiver must also face up: the fragment
 reconstructs the surface's normal one-sided, differencing toward whichever neighbouring depth texel
 is nearer in depth — a raster-quad derivative would difference across every silhouette and flicker
 under the jitter — and ramps the shadow out past ~70° of tilt, so a wall beside the caster keeps
@@ -890,8 +897,8 @@ planted sole is at street level and a lifted cast point would pre-fade exactly t
 be darkest.
 
 * **In:** `scene.blobShadows`, the mesh-instance buffer, the palette arena and the table arena
-  (the soles), the playback records, rigs and clips (where a foot's sole is), and `depth` as a
-  shader resource.
+  (the soles), the playback records, rigs and clips (where a foot's sole is), and `depth` and
+  `grassRootHeight` as shader resources.
 * **Out:** scene colour (blended).
 * **Skipped** when the view has no disc.
 
