@@ -10,7 +10,8 @@ namespace terrain
 	 * twin of the shaders' `TerrainHeightAt`, so whatever the CPU stands on the ground stands where
 	 * the terrain is drawn.
 	 *
-	 * @pre `field` holds `samplesX * samplesZ` samples, at least one along each axis.
+	 * @pre `field` holds `samplesX * samplesZ` samples, at least one along each axis, its cellSize
+	 *      is finite and positive, and `origin` and `xz` are finite.
 	 */
 	[[nodiscard]] float
 	HeightAt(const assetlib::Heightfield& field, const glm::vec3& origin, glm::vec2 xz) noexcept;
