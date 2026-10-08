@@ -139,8 +139,8 @@ finely each is built.
   a verge crosses its threshold as the camera moves, and with blades whose colour is not the
   ground's, that reads as patches of grass swapping in and out, shrinking or not. A look whose blades
   sit on a ground of nearly their colour, seen from where far grass is a few pixels tall, hides it,
-  and saves most of the field: gpu-battle-sim's meadow, thinning from 25 m, takes its grass from 2.56 ms to
-  0.95 ms from 1.8 m up in it (RTX 4060, release, 1080 lines shaded).
+  and saves most of the field: gpu-battle-sim's meadow, thinning from 25 m, takes its grass from
+  2.56 ms to 0.95 ms from 1.8 m up in it (RTX 4060, release, 1080 lines shaded).
 - **How finely.** Segments along a blade go from `nearSegments` at the camera to `farSegments` at
   `fadeEnd`, and no more than one per `cGrassPixelsPerSegment` (6) pixels of the blade's height on
   screen, chosen once per chunk at its nearest point.
