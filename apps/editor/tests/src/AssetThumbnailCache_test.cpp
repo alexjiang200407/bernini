@@ -3,10 +3,14 @@
 #include "Thumbnails/AssetThumbnailCache.h"
 #include "util/held_open_assets.h"
 #include <assetlib/AssetStore.h>
+#include <assetlib/bmesh.h>
+#include <assetlib/bmesh_gltf.h>
 #include <assetlib/codecs.h>
+#include <assetlib/vertex_layout.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/Node.h>
+#include <assetlib_structs/VertexLayout.h>
 #include <bgl/ISceneView.h>
 #include <bgl/types/BackdropGradient.h>
 #include <bgl/types/SceneDesc.h>
@@ -14,6 +18,7 @@
 #include <catch2/catch_approx.hpp>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <editor_plugin_api/IEditorViewport.h>
 #include <editor_plugin_api/IThumbnailProvider.h>
 #include <editor_sdk/StampedPixmapCache.h>
@@ -36,6 +41,7 @@
 #include <core/platform/util.h>
 #include <core/settings/Settings.h>
 #include <cstddef>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <gamelib/AssetManager.h>
@@ -46,6 +52,7 @@
 #include <editor_plugin_api/IEditorRegistry.h>
 #include <editor_plugin_api/Thumbnail.h>
 #include <ios>
+#include <limits>
 #include <mutex>
 #include <optional>
 #include <qcolor.h>
@@ -565,6 +572,127 @@ TEST_CASE("A .bmesh renders to a thumbnail wearing its own materials", "[thumbna
 
 	// The mesh actually drew. A blank or cleared target would be a single colour.
 	REQUIRE(DistinctColours(image) > 1);
+}
+
+namespace
+{
+	// `mesh` grown a second level: its submeshes again with every position pulled towards the mesh's
+	// centre by `scale`, under thresholds a 512 px render never reaches. Drawn at level 0 it is the
+	// mesh as before; drawn at its coarsest it is the same shape, smaller.
+	assetlib::BMesh
+	WithShrunkenLevel(assetlib::BMesh mesh, float scale)
+	{
+		REQUIRE(mesh.meshes.size() == 1);
+		assetlib::Mesh& entry = mesh.meshes[0];
+		REQUIRE(entry.lodCount == 1);
+
+		const auto levelZero = std::vector<assetlib::Submesh>(
+			mesh.submeshes.begin() + entry.firstSubmesh,
+			mesh.submeshes.begin() + entry.firstSubmesh + entry.submeshCount);
+
+		auto lo = glm::vec3(std::numeric_limits<float>::max());
+		auto hi = glm::vec3(std::numeric_limits<float>::lowest());
+		for (const assetlib::Submesh& submesh : levelZero)
+		{
+			lo = glm::min(lo, submesh.aabbMin);
+			hi = glm::max(hi, submesh.aabbMax);
+		}
+		const glm::vec3 centre  = (lo + hi) * 0.5f;
+		const auto      towards = [&](const glm::vec3& p) { return centre + (p - centre) * scale; };
+
+		for (assetlib::Submesh submesh : levelZero)
+		{
+			const std::optional<uint16_t> at =
+				assetlib::attributeOffset(submesh.layout, assetlib::VertexSemantic::kPosition);
+			REQUIRE(at.has_value());
+
+			const size_t begin = mesh.vertexData.size();
+			const size_t bytes = static_cast<size_t>(submesh.vertexCount) * submesh.layout.stride;
+			mesh.vertexData.insert(
+				mesh.vertexData.end(),
+				mesh.vertexData.begin() + submesh.vertexByteOffset,
+				mesh.vertexData.begin() + submesh.vertexByteOffset + bytes);
+			for (uint32_t v = 0; v < submesh.vertexCount; ++v)
+			{
+				std::byte* position = mesh.vertexData.data() + begin +
+				                      static_cast<size_t>(v) * submesh.layout.stride + *at;
+				glm::vec3  p;
+				std::memcpy(&p, position, sizeof p);
+				p = towards(p);
+				std::memcpy(position, &p, sizeof p);
+			}
+
+			submesh.vertexByteOffset = begin;
+			submesh.aabbMin          = towards(submesh.aabbMin);
+			submesh.aabbMax          = towards(submesh.aabbMax);
+			mesh.submeshes.push_back(submesh);
+		}
+
+		entry.lodCount = 2;
+		entry.firstLod = 0;
+		mesh.lods      = { { 100.0f }, { 0.0f } };
+		return mesh;
+	}
+
+	// How many pixels of `a` and `b` differ visibly, as a fraction of the image.
+	double
+	DifferingFraction(const QImage& a, const QImage& b)
+	{
+		REQUIRE(a.size() == b.size());
+		size_t differing = 0;
+		for (int y = 0; y < a.height(); ++y)
+			for (int x = 0; x < a.width(); ++x)
+			{
+				const QColor p = a.pixelColor(x, y);
+				const QColor q = b.pixelColor(x, y);
+				if (std::abs(p.red() - q.red()) > 8 || std::abs(p.green() - q.green()) > 8 ||
+				    std::abs(p.blue() - q.blue()) > 8)
+					++differing;
+			}
+		return static_cast<double>(differing) / (static_cast<double>(a.width()) * a.height());
+	}
+}
+
+TEST_CASE("A mesh with levels thumbnails its coarsest level", "[thumbnails][render][lod]")
+{
+	// Outside any data root, so both load through the codec with the default material and nothing
+	// but the geometry differs between them.
+	const QTemporaryDir directory;
+	REQUIRE(directory.isValid());
+	const auto root = std::filesystem::path(directory.path().toStdString());
+
+	const assetlib::BMesh oneLevel =
+		assetlib::toBMesh(assetlib::loadFromGltf("assets/suzanne.glb"));
+	const assetlib::BMesh twoLevels = WithShrunkenLevel(oneLevel, 0.25f);
+	core::file::write_atomic(
+		root / "one.bmesh",
+		assetlib::AssetCodec<assetlib::BMesh>::Serialize(oneLevel));
+	core::file::write_atomic(
+		root / "two.bmesh",
+		assetlib::AssetCodec<assetlib::BMesh>::Serialize(twoLevels));
+
+	Fixture fixture;
+
+	AssetThumbnailCache cache(fixture.Desc());
+	REQUIRE(cache.IsReady());
+	cache.SetStore(&fixture.store);
+
+	QSignalSpy ready(&cache, &StampedPixmapCache::Ready);
+	const auto one = QString::fromStdString((root / "one.bmesh").generic_string());
+	const auto two = QString::fromStdString((root / "two.bmesh").generic_string());
+	cache.Request(one);
+	cache.Request(two);
+	REQUIRE(WaitFor([&] { return ready.count() == 2; }));
+
+	const QImage full   = cache.Lookup(one).toImage();
+	const QImage coarse = cache.Lookup(two).toImage();
+	REQUIRE(DistinctColours(full) > 1);
+	REQUIRE(DistinctColours(coarse) > 1);
+
+	// Framed by the level-0 bounds either way, the coarsest level draws a quarter the size, so most
+	// of the pixels the full-size mesh covered are backdrop now. Drawn at level 0 -- what the
+	// thresholds select at this size -- the two would be the same image.
+	CHECK(DifferingFraction(full, coarse) > 0.1);
 }
 
 TEST_CASE(

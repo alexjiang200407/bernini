@@ -41,6 +41,7 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
+#include <bgl/LodLevel.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/Viewport.h>
@@ -230,7 +231,13 @@ namespace
 						    node.mesh >= mesh->mesh.meshes.size() || cooked->contains(node.mesh))
 							continue;
 
-						cooked->emplace(node.mesh, bgl::CookStaticMesh(mesh->mesh, node.mesh));
+						// A tile shows nothing a mesh's coarsest level does not, and the levels above
+						// it are most of a character's cook and upload.
+						const auto coarsest =
+							static_cast<bgl::LodLevel>(mesh->mesh.meshes[node.mesh].lodCount - 1);
+						cooked->emplace(
+							node.mesh,
+							bgl::CookStaticMesh(mesh->mesh, node.mesh, coarsest));
 					}
 
 					// Without a data root the mesh's materials cannot be resolved at all, and every
