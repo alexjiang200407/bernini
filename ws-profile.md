@@ -38,8 +38,8 @@ naming domains, comments. This file does not restate them; it says how a flow ap
 | assets, cooking, textures | `docs/asset_standards.md`, `docs/asset_containers.md` |
 | a GPU problem | `docs/gfx_debug.md`, then `docs/known_issues.md` |
 
-- **C++ is read with clangd** (`CLAUDE.md` § Read the code with clangd); `scripts/bgrep` is grep
-  when the search was meant — a completeness sweep, a Slang identifier, a string.
+- **C++ is read with clangd** (`CLAUDE.md` § Read the code with clangd); grep for a completeness
+  sweep, a Slang identifier, a string.
 
 ## Grill
 

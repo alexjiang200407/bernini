@@ -217,7 +217,7 @@ and culled counts, so an all-zero mask fails both rather than quietly drawing le
 
 **If it comes back.** Check the gates first: if they are green, the mesh is missing for another
 reason. If they fail with everything culled, look for an atomic or a loop bound that reads payload
-memory — `bgrep -n "Interlocked" libs/bgl/shaders/src/lib/forward/mesh_stage.slang` should
+memory — `grep -n "Interlocked" libs/bgl/shaders/src/lib/forward/mesh_stage.slang` should
 find none addressing `gCulledPayload`. A shader-only change needs no C++ rebuild, so iterate on it
 directly.
 
