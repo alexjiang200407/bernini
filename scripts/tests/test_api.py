@@ -372,3 +372,27 @@ class TestMain:
                          '--out', os.path.join(name, 'out'), '--quiet']) == 0
         with open(os.path.join(root, 'out', 'demo.md'), encoding='utf-8') as fh:
             assert '`demo::round_up`' in fh.read()
+
+
+class TestFindLibclang:
+    """The override is config.json's `libclang`; the environment is never read."""
+
+    def use_config(self, monkeypatch, doc):
+        import util.config as cfg
+        monkeypatch.setattr(cfg, '_cache', doc)
+
+    def test_the_configured_library_wins(self, tmp_path, monkeypatch):
+        library = tmp_path / 'libclang.dll'
+        library.write_bytes(b'')
+        self.use_config(monkeypatch, {'libclang': str(library)})
+        assert api.find_libclang('cl.exe') == str(library)
+
+    def test_a_configured_library_that_is_not_there_is_an_error_naming_the_file(self, tmp_path, monkeypatch):
+        self.use_config(monkeypatch, {'libclang': str(tmp_path / 'missing.dll')})
+        with pytest.raises(api.CatalogError, match='config.json'):
+            api.find_libclang('cl.exe')
+
+    def test_the_old_environment_variable_is_ignored(self, tmp_path, monkeypatch):
+        self.use_config(monkeypatch, {})
+        monkeypatch.setenv('BERNINI_LIBCLANG', str(tmp_path / 'missing.dll'))
+        assert api.find_libclang('cl.exe') != str(tmp_path / 'missing.dll')
