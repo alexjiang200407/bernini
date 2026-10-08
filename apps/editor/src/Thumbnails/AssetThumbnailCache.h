@@ -25,6 +25,7 @@
 #include <bgl/types/RenderJob.h>
 #include <core/str/str.h>
 #include <cstdint>
+#include <deque>
 #include <editor_plugin_api/IEditorRegistry.h>
 #include <filesystem>
 #include <functional>
@@ -74,7 +75,10 @@ struct AssetThumbnailDesc
  * inside the renderer's frame loop -- one supersampled frame per asset, downscaled on resolve --
  * so a shot is a bounded slice of a tick and the GUI thread never waits on the render thread. The
  * readback is split-phase -- submitted on one tick, resolved on a later one -- and the finished
- * image comes back to the GUI thread as a queued call.
+ * image comes back to the GUI thread as a queued call. Shots run IGraphics::c_MaxPendingCaptures
+ * deep: the next one's materials and frame go up while the last one's readback is in flight, and
+ * a tick acquires a bounded set of materials, so what one tick costs the viewports stays small
+ * whatever an asset wears.
  *
  * Geometry is added to the shared scene and torn down again after each shot, so a thumbnail leaves
  * nothing behind for the preview viewports to draw.
@@ -156,8 +160,9 @@ private:
 		bool                     anything = false;
 	};
 
-	// The worker's CookStaticMesh output for every mesh the nodes reference, keyed by mesh index.
-	// The CPU half of AddStaticMeshGeom, taken off the render thread; the commit consumes the entries.
+	// The worker's CookStaticMesh output for every mesh the nodes reference -- its coarsest level,
+	// which is all a tile shows -- keyed by mesh index. The CPU half of AddStaticMeshGeom, taken off
+	// the render thread; the commit consumes the entries.
 	using CookedMeshes = std::unordered_map<uint32_t, bgl::PreparedStaticMesh>;
 
 	// What a worker produced, waiting its turn on the GPU. `mesh` and `cooked` are null for a
@@ -181,9 +186,9 @@ private:
 		DrawnFrom                              drawnFrom;
 	};
 
-	// One asset's trip through the GPU: built, drawn and submitted on its first tick, resolved on a
-	// later one. Render thread only -- installed by PumpQueue's Post, cleared by the tick that
-	// finishes it or by CancelShot's closure.
+	// One asset's trip through the GPU: its materials acquired over one or more ticks, then built,
+	// drawn and submitted on one, resolved on a later one. Render thread only -- installed by
+	// PumpQueue's Post, dropped by the tick that finishes it or by CancelShot's closure.
 	struct Shot
 	{
 		PendingRender      item;
@@ -191,6 +196,12 @@ private:
 		bool               built = false;
 		bgl::RenderJob     job;
 		bgl::CaptureTicket ticket;
+
+		// The materials the shot wears, in the order BuildShot takes them: one per submesh binding,
+		// or the one override or `.bmaterial`. Filled up to `materials.size()` so far.
+		std::vector<std::string>         materialKeys;
+		std::vector<bgl::MaterialHandle> materials;
+		bool                             keysListed = false;
 	};
 
 	// Hands a finished read back. Called by a worker via a queued invocation, so it always runs on the
@@ -198,8 +209,8 @@ private:
 	void
 	Enqueue(const QString& path, ThumbnailType type, PendingRender pending);
 
-	// Starts the next queued asset if none is mid-render; at the end of a batch, returns the shared
-	// materials and leaves the frame loop.
+	// Hands queued assets to the render thread while fewer than IGraphics::c_MaxPendingCaptures are
+	// there; at the end of a batch, returns the shared materials and leaves the frame loop.
 	void
 	PumpQueue();
 
@@ -231,11 +242,21 @@ private:
 	void
 	OnShotDone(const QString& path, qint64 stamp, uint64_t epoch, const QImage& image);
 
-	// One frame-loop tick of the in-flight shot: build, draw and submit it, or resolve its readback
-	// -- whichever it is up to. Catches everything: a throw here would make the frame loop drop the
-	// hook, stranding the claim.
+	// One frame-loop tick: resolves the readbacks the GPU has finished, then takes the next shot one
+	// step -- a slice of its materials, or its build, draw and submit. Catches everything: a throw
+	// here would make the frame loop drop the hook, stranding the claims.
 	void
 	Advance();
+
+	// Hands finished captures to their downscale, oldest first. A shot whose resolve throws is
+	// abandoned.
+	void
+	ResolveFinishedShots();
+
+	// Acquires up to c_MaterialsPerTick of the shot's materials it does not have yet. True once it
+	// has them all.
+	bool
+	AcquireShotMaterials(Shot& shot);
 
 	// Puts the shot's asset in the scene and frames the camera on it. Throws if there is nothing to
 	// draw; Advance abandons the shot.
@@ -269,8 +290,8 @@ private:
 	void
 	AbortShot(const Shot& shot);
 
-	// Abandons the in-flight shot, if any, and invalidates any completion already posted. For
-	// teardown and project switches, where its image would land under a stale key.
+	// Abandons every shot in flight and invalidates any completion already posted. For teardown and
+	// project switches, where their images would land under a stale key.
 	void
 	CancelShot();
 
@@ -313,16 +334,16 @@ private:
 	QQueue<PendingRender> m_Queue;
 	QThreadPool           m_Pool;
 
-	// The downscale's own worker: both of m_Pool's threads can be deep in KTX2 decodes, and a
+	// The downscale's own worker: every thread of m_Pool can be deep in KTX2 decodes, and a
 	// finished capture waiting on them would stall the whole GPU pipeline behind the reads it was
 	// split from. A member, not the global pool, so teardown drains it before the object dies.
 	QThreadPool m_ScalePool;
 
-	// Render thread only; see Shot.
-	std::optional<Shot> m_Shot;
+	// Render thread only, oldest first; see Shot. Built shots precede unbuilt ones.
+	std::deque<Shot> m_Shots;
 
-	// A shot has been handed to the render thread and its completion has not come back yet.
-	bool m_ShotInFlight = false;
+	// Shots handed to the render thread whose completion has not come back yet.
+	uint32_t m_ShotsInFlight = 0;
 
 	// Stale-completion guard: bumped by CancelShot, so a completion posted before the cancel ran is
 	// recognized and dropped rather than stored under a dead claim.
@@ -337,8 +358,8 @@ private:
 	// What each stored preview was drawn from, so a write finds the previews it outdated.
 	QHash<QString, DrawnFrom> m_DrawnFrom;
 
-	// What the in-flight shot is drawn from. One shot at a time.
-	DrawnFrom m_ShotDrawnFrom;
+	// What each in-flight shot is drawn from, by path.
+	QHash<QString, DrawnFrom> m_InFlightDrawnFrom;
 
 	// What the batch's shots were drawn from. A write to one of them leaves m_ThumbAssets sharing
 	// the old upload by path, so the batch's materials are released before the next shot.

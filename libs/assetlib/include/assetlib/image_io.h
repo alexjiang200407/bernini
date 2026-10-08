@@ -40,8 +40,10 @@ namespace assetlib
 	 *        it is already smaller), and for a block-compressed format it backs off further to the
 	 *        first block-aligned level, since D3D12 rejects an unaligned top level. Selects among
 	 *        stored mips, never resamples -- an image with no smaller mips comes back whole. For a
-	 *        consumer that displays at a known small size, this cuts the decoded bytes and the
-	 *        upload that follows by the skipped levels.
+	 *        consumer that displays at a known small size, this cuts the upload to the kept levels,
+	 *        and -- for a file under no supercompression or Zstd -- the read and the transcode too:
+	 *        the container is cut to the kept levels before libktx opens it, so from a mount only
+	 *        they are read, and of a Basis payload only they are transcoded.
 	 * @throws std::runtime_error if the file cannot be read, decoded, or carries an unmapped format.
 	 */
 	[[nodiscard]] ImageData

@@ -656,231 +656,307 @@ namespace bgl
 	PreparedStaticMesh&
 	PreparedStaticMesh::operator=(PreparedStaticMesh&&) noexcept = default;
 
-	PreparedStaticMesh
-	CookStaticMesh(const assetlib::BMesh& mesh, uint32_t meshIndex)
+	namespace
 	{
-		if (meshIndex >= mesh.meshes.size())
+		// The entry `meshIndex` names, its claims about its levels and its submesh range checked
+		// against the file -- like the byte ranges the cook checks per submesh.
+		const assetlib::Mesh&
+		CheckedMeshEntry(const assetlib::BMesh& mesh, uint32_t meshIndex)
 		{
-			throw SceneError("CookStaticMesh: meshIndex out of range");
-		}
+			if (meshIndex >= mesh.meshes.size())
+			{
+				throw SceneError("CookStaticMesh: meshIndex out of range");
+			}
 
-		const assetlib::Mesh& meshEntry = mesh.meshes[meshIndex];
+			const assetlib::Mesh& meshEntry = mesh.meshes[meshIndex];
 
-		// The file's claim about its own levels, checked like its byte ranges below.
-		if (meshEntry.lodCount == 0 || meshEntry.lodCount > cMaxMeshLods)
-		{
-			throw SceneError(
-				std::format(
-					"CookStaticMesh: mesh {} claims {} levels of detail; a mesh carries 1 to {}",
-					meshIndex,
-					meshEntry.lodCount,
-					cMaxMeshLods));
-		}
-		const auto entries = meshEntry.submeshCount * meshEntry.lodCount;
-		if (static_cast<uint64_t>(meshEntry.firstSubmesh) + entries > mesh.submeshes.size())
-		{
-			throw SceneError(
-				std::format(
-					"CookStaticMesh: mesh {} claims {} submeshes at {}, past the end of the mesh's "
-					"{}",
-					meshIndex,
-					entries,
-					meshEntry.firstSubmesh,
-					mesh.submeshes.size()));
-		}
-
-		auto impl          = std::make_unique<PreparedStaticMesh::Impl>();
-		impl->submeshCount = meshEntry.submeshCount;
-		impl->lodCount     = meshEntry.lodCount;
-		impl->submeshes.reserve(entries);
-
-		if (!mesh.lods.empty())
-		{
-			if (static_cast<uint64_t>(meshEntry.firstLod) + meshEntry.lodCount > mesh.lods.size())
+			if (meshEntry.lodCount == 0 || meshEntry.lodCount > cMaxMeshLods)
 			{
 				throw SceneError(
 					std::format(
-						"CookStaticMesh: mesh {} claims {} levels at {}, past the end of the "
-						"mesh's {} thresholds",
+						"CookStaticMesh: mesh {} claims {} levels of detail; a mesh carries 1 to "
+						"{}",
 						meshIndex,
 						meshEntry.lodCount,
-						meshEntry.firstLod,
-						mesh.lods.size()));
+						cMaxMeshLods));
 			}
-			for (uint32_t level = 0; level < meshEntry.lodCount; ++level)
-				impl->lodMinPixels[level] = mesh.lods[meshEntry.firstLod + level].minPixels;
-		}
-		else if (meshEntry.lodCount > 1)
-		{
-			throw SceneError(
-				std::format(
-					"CookStaticMesh: mesh {} has {} levels of detail and no thresholds to choose "
-					"them by",
-					meshIndex,
-					meshEntry.lodCount));
-		}
-
-		if (meshEntry.submeshCount > 0)
-		{
-			auto levelZeroMin = glm::vec3(std::numeric_limits<float>::max());
-			auto levelZeroMax = glm::vec3(std::numeric_limits<float>::lowest());
-			for (uint32_t s = 0; s < meshEntry.submeshCount; ++s)
-			{
-				const assetlib::Submesh& src = mesh.submeshes[meshEntry.firstSubmesh + s];
-				levelZeroMin                 = glm::min(levelZeroMin, src.aabbMin);
-				levelZeroMax                 = glm::max(levelZeroMax, src.aabbMax);
-			}
-			impl->boundingSphere = core::bounding_sphere_of(levelZeroMin, levelZeroMax);
-		}
-
-		for (uint32_t s = 0; s < entries; ++s)
-		{
-			const assetlib::Submesh& src = mesh.submeshes[meshEntry.firstSubmesh + s];
-
-			if (src.meshletCount == 0 || src.vertexCount == 0)
-			{
-				throw SceneError(std::format("CookStaticMesh: submesh {} has no geometry", s));
-			}
-
-			if (src.meshletCount > c_MaxSubmeshMeshlets)
+			const auto entries = meshEntry.submeshCount * meshEntry.lodCount;
+			if (static_cast<uint64_t>(meshEntry.firstSubmesh) + entries > mesh.submeshes.size())
 			{
 				throw SceneError(
 					std::format(
-						"CookStaticMesh: submesh {} has {} meshlets, more than the {} thread "
-						"groups a mesh dispatch can launch",
-						s,
-						src.meshletCount,
-						c_MaxSubmeshMeshlets));
+						"CookStaticMesh: mesh {} claims {} submeshes at {}, past the end of the "
+						"mesh's {}",
+						meshIndex,
+						entries,
+						meshEntry.firstSubmesh,
+						mesh.submeshes.size()));
 			}
 
-			const uint64_t vertexByteCount =
-				static_cast<uint64_t>(src.vertexCount) * src.layout.stride;
-
-			// The offsets and counts come from the file, so they are the caller's claim about the
-			// buffers, not a fact about them. Trusting them would read off the end of a truncated
-			// or malformed .bmesh.
-			if (src.vertexByteOffset + vertexByteCount > mesh.vertexData.size())
+			if (!mesh.lods.empty())
 			{
-				throw SceneError(
-					std::format(
-						"CookStaticMesh: submesh {} claims {} bytes of vertex data at offset {}, "
-						"past the end of the mesh's {}-byte vertex buffer",
-						s,
-						vertexByteCount,
-						src.vertexByteOffset,
-						mesh.vertexData.size()));
-			}
-
-			PreparedStaticMesh::Impl::Submesh& out = impl->submeshes.emplace_back();
-			out.layout                             = src.layout;
-			out.vertexCount                        = src.vertexCount;
-			out.material                           = src.material;
-			out.boundingSphere = core::bounding_sphere_of(src.aabbMin, src.aabbMax);
-
-			out.vertexBytes.resize(vertexByteCount);
-			std::memcpy(
-				out.vertexBytes.data(),
-				mesh.vertexData.data() + src.vertexByteOffset,
-				vertexByteCount);
-
-			uint32_t mapCount   = 0;
-			uint32_t indexCount = 0;
-			for (uint32_t m = 0; m < src.meshletCount; ++m)
-			{
-				const assetlib::Meshlet& ml = mesh.meshlets[src.firstMeshlet + m];
-
-				// A loose bound, not a truncation guard -- both sides' counts are uint32.
-				// What the mesh stage can actually emit is cMaxVerticesPerMeshlet /
-				// cMaxPrimsPerMeshlet, and only PrepareMeshlet checks that.
-				if (ml.vertexCount > std::numeric_limits<uint16_t>::max() ||
-				    ml.triangleCount > std::numeric_limits<uint16_t>::max() ||
-				    static_cast<uint64_t>(ml.vertexOffset) + ml.vertexCount >
-				        mesh.meshletVertices.size() ||
-				    static_cast<uint64_t>(ml.triangleOffset) + ml.triangleCount * 3ull >
-				        mesh.meshletTriangles.size())
+				if (static_cast<uint64_t>(meshEntry.firstLod) + meshEntry.lodCount >
+				    mesh.lods.size())
 				{
 					throw SceneError(
 						std::format(
-							"CookStaticMesh: submesh {} meshlet {} overflows its streams or the "
-							"meshlet count bound",
-							s,
-							m));
+							"CookStaticMesh: mesh {} claims {} levels at {}, past the end of the "
+							"mesh's {} thresholds",
+							meshIndex,
+							meshEntry.lodCount,
+							meshEntry.firstLod,
+							mesh.lods.size()));
 				}
-
-				mapCount += ml.vertexCount;
-				indexCount += ml.triangleCount * 3u;
 			}
-
-			const uint32_t groupCount =
-				(src.meshletCount + idl::cMeshletsPerGroup - 1u) / idl::cMeshletsPerGroup;
-
-			// A mesh assembled in memory rather than baked carries none, and gets the fold below.
-			const bool cooked = !mesh.meshletGroups.empty();
-
-			// The offset and the count come from the file, like the vertex ranges above.
-			if (cooked && static_cast<uint64_t>(src.firstMeshletGroup) + groupCount >
-			                  mesh.meshletGroups.size())
+			else if (meshEntry.lodCount > 1)
 			{
 				throw SceneError(
 					std::format(
-						"CookStaticMesh: submesh {} claims {} meshlet group bounds at offset {}, "
-						"past the end of the mesh's {} of them",
-						s,
-						groupCount,
-						src.firstMeshletGroup,
-						mesh.meshletGroups.size()));
+						"CookStaticMesh: mesh {} has {} levels of detail and no thresholds to "
+						"choose them by",
+						meshIndex,
+						meshEntry.lodCount));
 			}
 
-			out.vertexMap.reserve(mapCount);
-			out.localIndices.reserve(indexCount);
-			out.meshlets.reserve(src.meshletCount);
-			out.meshletGroups.reserve(groupCount);
+			return meshEntry;
+		}
 
-			for (uint32_t m = 0; m < src.meshletCount; ++m)
+		// Each level's threshold, zero past the levels; all zero for a mesh with no table.
+		std::array<float, cMaxMeshLods>
+		ThresholdsOf(const assetlib::BMesh& mesh, const assetlib::Mesh& meshEntry) noexcept
+		{
+			auto lodMinPixels = std::array<float, cMaxMeshLods>{};
+			if (!mesh.lods.empty())
 			{
-				const assetlib::Meshlet& ml = mesh.meshlets[src.firstMeshlet + m];
+				for (uint32_t level = 0; level < meshEntry.lodCount; ++level)
+					lodMinPixels[level] = mesh.lods[meshEntry.firstLod + level].minPixels;
+			}
+			return lodMinPixels;
+		}
 
-				auto meshlet                 = idl::Meshlet();
-				meshlet.relativeVertexOffset = static_cast<uint32_t>(out.vertexMap.size());
-				meshlet.relativeIndexOffset  = static_cast<uint32_t>(out.localIndices.size());
-				meshlet.vertexCount          = static_cast<uint16_t>(ml.vertexCount);
-				meshlet.triangleCount        = static_cast<uint16_t>(ml.triangleCount);
-				meshlet.boundingSphere       = glm::vec4(ml.boundingCenter, ml.boundingRadius);
-				out.meshlets.push_back(meshlet);
+		// The `submeshCount * lodCount` entries of `mesh.submeshes` from `first`, level-major, as a
+		// prepared mesh of `lodCount` levels whose sphere is over its first level.
+		std::unique_ptr<PreparedStaticMesh::Impl>
+		CookEntries(
+			const assetlib::BMesh&                 mesh,
+			uint32_t                               first,
+			uint32_t                               submeshCount,
+			uint32_t                               lodCount,
+			const std::array<float, cMaxMeshLods>& lodMinPixels)
+		{
+			const uint32_t entries = submeshCount * lodCount;
 
-				out.vertexMap.insert(
-					out.vertexMap.end(),
-					mesh.meshletVertices.begin() + ml.vertexOffset,
-					mesh.meshletVertices.begin() + ml.vertexOffset + ml.vertexCount);
+			auto impl          = std::make_unique<PreparedStaticMesh::Impl>();
+			impl->submeshCount = submeshCount;
+			impl->lodCount     = lodCount;
+			impl->lodMinPixels = lodMinPixels;
+			impl->submeshes.reserve(entries);
 
-				// Widened one element at a time: the triangle stream is byte-sized.
-				const uint32_t triangleIndices = ml.triangleCount * 3u;
-				for (uint32_t i = 0; i < triangleIndices; ++i)
+			if (submeshCount > 0)
+			{
+				auto levelMin = glm::vec3(std::numeric_limits<float>::max());
+				auto levelMax = glm::vec3(std::numeric_limits<float>::lowest());
+				for (uint32_t s = 0; s < submeshCount; ++s)
 				{
-					out.localIndices.push_back(mesh.meshletTriangles[ml.triangleOffset + i]);
+					const assetlib::Submesh& src = mesh.submeshes[first + s];
+					levelMin                     = glm::min(levelMin, src.aabbMin);
+					levelMax                     = glm::max(levelMax, src.aabbMax);
+				}
+				impl->boundingSphere = core::bounding_sphere_of(levelMin, levelMax);
+			}
+
+			for (uint32_t s = 0; s < entries; ++s)
+			{
+				const assetlib::Submesh& src = mesh.submeshes[first + s];
+
+				if (src.meshletCount == 0 || src.vertexCount == 0)
+				{
+					throw SceneError(
+						std::format("CookStaticMesh: submesh {} has no geometry", first + s));
+				}
+
+				if (src.meshletCount > c_MaxSubmeshMeshlets)
+				{
+					throw SceneError(
+						std::format(
+							"CookStaticMesh: submesh {} has {} meshlets, more than the {} thread "
+							"groups a mesh dispatch can launch",
+							first + s,
+							src.meshletCount,
+							c_MaxSubmeshMeshlets));
+				}
+
+				const uint64_t vertexByteCount =
+					static_cast<uint64_t>(src.vertexCount) * src.layout.stride;
+
+				// The offsets and counts come from the file, so they are the caller's claim about the
+				// buffers, not a fact about them. Trusting them would read off the end of a truncated
+				// or malformed .bmesh.
+				if (src.vertexByteOffset + vertexByteCount > mesh.vertexData.size())
+				{
+					throw SceneError(
+						std::format(
+							"CookStaticMesh: submesh {} claims {} bytes of vertex data at offset "
+							"{}, "
+							"past the end of the mesh's {}-byte vertex buffer",
+							first + s,
+							vertexByteCount,
+							src.vertexByteOffset,
+							mesh.vertexData.size()));
+				}
+
+				PreparedStaticMesh::Impl::Submesh& out = impl->submeshes.emplace_back();
+				out.layout                             = src.layout;
+				out.vertexCount                        = src.vertexCount;
+				out.material                           = src.material;
+				out.boundingSphere = core::bounding_sphere_of(src.aabbMin, src.aabbMax);
+
+				out.vertexBytes.resize(vertexByteCount);
+				std::memcpy(
+					out.vertexBytes.data(),
+					mesh.vertexData.data() + src.vertexByteOffset,
+					vertexByteCount);
+
+				uint32_t mapCount   = 0;
+				uint32_t indexCount = 0;
+				for (uint32_t m = 0; m < src.meshletCount; ++m)
+				{
+					const assetlib::Meshlet& ml = mesh.meshlets[src.firstMeshlet + m];
+
+					// A loose bound, not a truncation guard -- both sides' counts are uint32.
+					// What the mesh stage can actually emit is cMaxVerticesPerMeshlet /
+					// cMaxPrimsPerMeshlet, and only PrepareMeshlet checks that.
+					if (ml.vertexCount > std::numeric_limits<uint16_t>::max() ||
+					    ml.triangleCount > std::numeric_limits<uint16_t>::max() ||
+					    static_cast<uint64_t>(ml.vertexOffset) + ml.vertexCount >
+					        mesh.meshletVertices.size() ||
+					    static_cast<uint64_t>(ml.triangleOffset) + ml.triangleCount * 3ull >
+					        mesh.meshletTriangles.size())
+					{
+						throw SceneError(
+							std::format(
+								"CookStaticMesh: submesh {} meshlet {} overflows its streams or "
+								"the "
+								"meshlet count bound",
+								first + s,
+								m));
+					}
+
+					mapCount += ml.vertexCount;
+					indexCount += ml.triangleCount * 3u;
+				}
+
+				const uint32_t groupCount =
+					(src.meshletCount + idl::cMeshletsPerGroup - 1u) / idl::cMeshletsPerGroup;
+
+				// A mesh assembled in memory rather than baked carries none, and gets the fold below.
+				const bool cooked = !mesh.meshletGroups.empty();
+
+				// The offset and the count come from the file, like the vertex ranges above.
+				if (cooked && static_cast<uint64_t>(src.firstMeshletGroup) + groupCount >
+				                  mesh.meshletGroups.size())
+				{
+					throw SceneError(
+						std::format(
+							"CookStaticMesh: submesh {} claims {} meshlet group bounds at offset "
+							"{}, "
+							"past the end of the mesh's {} of them",
+							first + s,
+							groupCount,
+							src.firstMeshletGroup,
+							mesh.meshletGroups.size()));
+				}
+
+				out.vertexMap.reserve(mapCount);
+				out.localIndices.reserve(indexCount);
+				out.meshlets.reserve(src.meshletCount);
+				out.meshletGroups.reserve(groupCount);
+
+				for (uint32_t m = 0; m < src.meshletCount; ++m)
+				{
+					const assetlib::Meshlet& ml = mesh.meshlets[src.firstMeshlet + m];
+
+					auto meshlet                 = idl::Meshlet();
+					meshlet.relativeVertexOffset = static_cast<uint32_t>(out.vertexMap.size());
+					meshlet.relativeIndexOffset  = static_cast<uint32_t>(out.localIndices.size());
+					meshlet.vertexCount          = static_cast<uint16_t>(ml.vertexCount);
+					meshlet.triangleCount        = static_cast<uint16_t>(ml.triangleCount);
+					meshlet.boundingSphere       = glm::vec4(ml.boundingCenter, ml.boundingRadius);
+					out.meshlets.push_back(meshlet);
+
+					out.vertexMap.insert(
+						out.vertexMap.end(),
+						mesh.meshletVertices.begin() + ml.vertexOffset,
+						mesh.meshletVertices.begin() + ml.vertexOffset + ml.vertexCount);
+
+					// Widened one element at a time: the triangle stream is byte-sized.
+					const uint32_t triangleIndices = ml.triangleCount * 3u;
+					for (uint32_t i = 0; i < triangleIndices; ++i)
+					{
+						out.localIndices.push_back(mesh.meshletTriangles[ml.triangleOffset + i]);
+					}
+				}
+
+				if (cooked)
+				{
+					for (uint32_t g = 0; g < groupCount; ++g)
+					{
+						const assetlib::MeshletGroup& bound =
+							mesh.meshletGroups[src.firstMeshletGroup + g];
+
+						auto group = idl::MeshletGroup();
+						group.boundingSphere =
+							glm::vec4(bound.boundingCenter, bound.boundingRadius);
+						out.meshletGroups.emplace_back(group);
+					}
+				}
+				else
+				{
+					out.meshletGroups = FoldMeshletGroups(out.meshlets);
 				}
 			}
 
-			if (cooked)
-			{
-				for (uint32_t g = 0; g < groupCount; ++g)
-				{
-					const assetlib::MeshletGroup& bound =
-						mesh.meshletGroups[src.firstMeshletGroup + g];
+			return impl;
+		}
+	}
 
-					auto group           = idl::MeshletGroup();
-					group.boundingSphere = glm::vec4(bound.boundingCenter, bound.boundingRadius);
-					out.meshletGroups.emplace_back(group);
-				}
-			}
-			else
-			{
-				out.meshletGroups = FoldMeshletGroups(out.meshlets);
-			}
+	PreparedStaticMesh
+	CookStaticMesh(const assetlib::BMesh& mesh, uint32_t meshIndex)
+	{
+		const assetlib::Mesh& meshEntry = CheckedMeshEntry(mesh, meshIndex);
+
+		auto prepared   = PreparedStaticMesh();
+		prepared.m_Impl = CookEntries(
+			mesh,
+			meshEntry.firstSubmesh,
+			meshEntry.submeshCount,
+			meshEntry.lodCount,
+			ThresholdsOf(mesh, meshEntry));
+		return prepared;
+	}
+
+	PreparedStaticMesh
+	CookStaticMesh(const assetlib::BMesh& mesh, uint32_t meshIndex, LodLevel level)
+	{
+		const assetlib::Mesh& meshEntry  = CheckedMeshEntry(mesh, meshIndex);
+		const auto            levelIndex = std::to_underlying(level);
+		if (levelIndex >= meshEntry.lodCount)
+		{
+			throw SceneError(
+				std::format(
+					"CookStaticMesh: mesh {} has {} levels of detail and no level {}",
+					meshIndex,
+					meshEntry.lodCount,
+					levelIndex));
 		}
 
 		auto prepared   = PreparedStaticMesh();
-		prepared.m_Impl = std::move(impl);
+		prepared.m_Impl = CookEntries(
+			mesh,
+			meshEntry.firstSubmesh + levelIndex * meshEntry.submeshCount,
+			meshEntry.submeshCount,
+			1u,
+			{});
 		return prepared;
 	}
 

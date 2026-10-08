@@ -589,8 +589,10 @@ and portability.
   - [ ] Per-entry compression — the format reserves the flag; picking a codec wants a measurement.
   - [ ] `mmap`-backed reads — the alignment is there for it; the seam does not hand out a borrowed
     span yet.
-  - [ ] Partial residency: load a mip range or a meshlet range rather than a whole entry. `ReadRange`
-    is the hook, and this is the line the rest of this milestone actually means.
+  - [~] Partial residency: load a mip range or a meshlet range rather than a whole entry. `ReadRange`
+    is the hook, and this is the line the rest of this milestone actually means. A capped `loadKTX2`
+    reads a mip tail through it (the editor's thumbnails); any other mip range, and a meshlet range,
+    are open.
   - [ ] Patch archives over a base — mount order gives override and `SetMask` gives removal, but
     authoring, versioning and validation do not exist.
 - [ ] CPU Spatial Partitioning

@@ -2,6 +2,7 @@
 #include "util/editor_language.h"
 #include "util/toon_backdrop.h"
 #include "util/toon_light.h"
+#include <QThread>
 #include <algorithm>
 #include <assetlib/Project.h>
 #include <assetlib/bmesh.h>
@@ -41,6 +42,8 @@
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
 #include <assetlib_structs/ImageData.h>
+#include <bgl/IGraphics.h>
+#include <bgl/LodLevel.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/Viewport.h>
@@ -85,6 +88,10 @@ namespace
 	// A tick that overruns this gets logged with what it did: a slow build points at an asset's
 	// upload, slow draws at the GPU.
 	constexpr double c_SlowTickMs = 8.0;
+
+	// Materials one tick acquires for a shot at most. A material's maps upload in about a
+	// millisecond at the capped size, so a slice of eight keeps the tick under c_SlowTickMs.
+	constexpr uint32_t c_MaterialsPerTick = 8;
 
 	// Textures decode to the stored mip tail covering twice the output edge: the sphere and the
 	// three-quarter mesh view carry no more detail than that at 256px, and the supersampled render
@@ -230,7 +237,13 @@ namespace
 						    node.mesh >= mesh->mesh.meshes.size() || cooked->contains(node.mesh))
 							continue;
 
-						cooked->emplace(node.mesh, bgl::CookStaticMesh(mesh->mesh, node.mesh));
+						// A tile shows nothing a mesh's coarsest level does not, and the levels above
+						// it are most of a character's cook and upload.
+						const auto coarsest =
+							static_cast<bgl::LodLevel>(mesh->mesh.meshes[node.mesh].lodCount - 1);
+						cooked->emplace(
+							node.mesh,
+							bgl::CookStaticMesh(mesh->mesh, node.mesh, coarsest));
 					}
 
 					// Without a data root the mesh's materials cannot be resolved at all, and every
@@ -276,10 +289,12 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 	StampedPixmapCache(c_BudgetKb, parent), m_Desc(std::move(desc))
 {
 	m_Desc.toonBackdrop = editor::ClampToonBackdrop(m_Desc.toonBackdrop, "AssetThumbnail");
-	// The reads are the bound, not the GPU: a shot retires milliseconds after its read lands.
-	m_Pool.setMaxThreadCount(4);
+	// Four decoders is where more stopped paying, and two cores stay free for the render and GUI
+	// threads: a fill is not allowed to freeze what the user is looking at.
+	m_Pool.setMaxThreadCount(std::clamp(QThread::idealThreadCount() - 2, 1, 4));
 
-	// At most one capture is ever awaiting its downscale; see PumpQueue.
+	// One worker: the captures awaiting a downscale queue behind each other, at most as many as
+	// shots in flight.
 	m_ScalePool.setMaxThreadCount(1);
 
 	// No device (the editor runs without one in tests): stay inert. Lookup then always misses and
@@ -798,40 +813,49 @@ AssetThumbnailCache::Enqueue(const QString& path, ThumbnailType type, PendingRen
 void
 AssetThumbnailCache::PumpQueue()
 {
-	if (m_ShotInFlight)
-		return;
+	while (m_ShotsInFlight < bgl::IGraphics::c_MaxPendingCaptures)
+	{
+		// Read before a write to something it is drawn from: rendering it would only store the old
+		// look.
+		while (!m_Queue.isEmpty() &&
+		       ChangedSinceClaim(m_Queue.head().path, m_Queue.head().drawnFrom))
+			Redo(m_Queue.dequeue().path);
 
-	// Read before a write to something it is drawn from: rendering it would only store the old look.
-	while (!m_Queue.isEmpty() && ChangedSinceClaim(m_Queue.head().path, m_Queue.head().drawnFrom))
-		Redo(m_Queue.dequeue().path);
+		if (m_Queue.isEmpty())
+			break;
 
-	if (m_Queue.isEmpty())
+		// The claim ends when the shot's completion lands in OnShotDone, many frame-loop ticks from
+		// now -- not here. A repaint in between misses on Lookup, and would otherwise restart the
+		// read and render.
+		if (m_BatchStale)
+		{
+			// The shots in flight hold the batch's materials, so the release waits for them to land.
+			if (m_ShotsInFlight > 0)
+				break;
+			ReleaseMaterials();
+		}
+
+		++m_ShotsInFlight;
+		AttachToFrameLoop();
+
+		PendingRender  pending = m_Queue.dequeue();
+		const uint64_t epoch   = pending.epoch;
+		m_InFlightDrawnFrom.insert(pending.path, pending.drawnFrom);
+		m_BatchDrawnFrom.insert(pending.drawnFrom.keys.begin(), pending.drawnFrom.keys.end());
+		m_Desc.renderer->Post([this, pending = std::move(pending), epoch]() mutable {
+			Shot& shot = m_Shots.emplace_back();
+			shot.item  = std::move(pending);
+			shot.epoch = epoch;
+		});
+	}
+
+	if (m_Queue.isEmpty() && m_ShotsInFlight == 0)
 	{
 		// The batch is over, so the materials it shared can go back, and the frame loop no longer
 		// needs to tick for us.
 		ReleaseMaterials();
 		DetachFromFrameLoop();
-		return;
 	}
-
-	// The claim ends when the shot's completion lands in OnShotDone, many frame-loop ticks from
-	// now -- not here. A repaint in between misses on Lookup, and would otherwise restart the read
-	// and render.
-	if (m_BatchStale)
-		ReleaseMaterials();
-
-	m_ShotInFlight = true;
-	AttachToFrameLoop();
-
-	PendingRender  pending = m_Queue.dequeue();
-	const uint64_t epoch   = pending.epoch;
-	m_ShotDrawnFrom        = pending.drawnFrom;
-	m_BatchDrawnFrom.insert(pending.drawnFrom.keys.begin(), pending.drawnFrom.keys.end());
-	m_Desc.renderer->Post([this, pending = std::move(pending), epoch]() mutable {
-		m_Shot.emplace();
-		m_Shot->item  = std::move(pending);
-		m_Shot->epoch = epoch;
-	});
 }
 
 void
@@ -846,28 +870,30 @@ AssetThumbnailCache::OnShotDone(
 	if (epoch != m_Epoch)
 		return;
 
+	DrawnFrom drawnFrom = m_InFlightDrawnFrom.take(path);
 	if (image.isNull())
 	{
 		Abandon(path);
 	}
-	else if (ChangedSinceClaim(path, m_ShotDrawnFrom))
+	else if (ChangedSinceClaim(path, drawnFrom))
 	{
 		Redo(path);
 	}
 	else
 	{
 		Store(path, QPixmap::fromImage(image), stamp);
-		m_DrawnFrom.insert(path, std::move(m_ShotDrawnFrom));
+		m_DrawnFrom.insert(path, std::move(drawnFrom));
 	}
 
-	m_ShotInFlight = false;
+	if (m_ShotsInFlight > 0)
+		--m_ShotsInFlight;
 	PumpQueue();
 }
 
 void
 AssetThumbnailCache::Advance()
 {
-	if (!m_Shot.has_value())
+	if (m_Shots.empty())
 		return;
 
 	using Clock = std::chrono::steady_clock;
@@ -893,60 +919,119 @@ AssetThumbnailCache::Advance()
 				submitted);
 	};
 
-	Shot& shot = *m_Shot;
+	ResolveFinishedShots();
+
+	// Built shots precede unbuilt ones, so the first unbuilt is the next to draw, and the built ones
+	// ahead of it are the captures in flight.
+	const auto next = std::ranges::find_if(m_Shots, [](const Shot& shot) { return !shot.built; });
+	if (next == m_Shots.end() ||
+	    static_cast<uint32_t>(next - m_Shots.begin()) >= bgl::IGraphics::c_MaxPendingCaptures)
+		return;
+
+	Shot& shot = *next;
 	try
 	{
-		if (!shot.built)
+		if (!AcquireShotMaterials(shot))
 		{
-			const auto buildStart = Clock::now();
-			BuildShot(shot);
-			buildMs = msSince(buildStart);
-
-			// One frame: the capture reads the backbuffer the last DrawFrame presented, and that
-			// frame's Scene::Update uploads this asset on its own list. Zero would capture a blank
-			// backbuffer; the thumbnail goldens catch it.
-			const auto drawStart = Clock::now();
-			m_Desc.renderer->GetGraphics()->DrawFrame(m_RenderTarget, shot.job);
-			drawMs = msSince(drawStart);
-
-			shot.ticket = m_Desc.renderer->GetGraphics()->SubmitCapture(m_RenderTarget);
-			shot.built  = true;
-			submitted   = true;
-
-			// Safe with the capture in flight: it copies the presented backbuffer, and the scene's
-			// deletes are fence-deferred behind it.
-			ReleaseGeometry();
 			logIfSlow(shot.item.path);
 			return;
 		}
 
-		auto image = m_Desc.renderer->GetGraphics()->TryResolveCapture(shot.ticket);
-		if (!image.has_value())
-			return;  // The GPU copy is still in flight; try again next tick.
+		const auto buildStart = Clock::now();
+		BuildShot(shot);
+		buildMs = msSince(buildStart);
 
-		const QString path = shot.item.path;
-		FinishShotOnPool(shot, std::move(*image));
-		logIfSlow(path);
+		// One frame: the capture reads the backbuffer the last DrawFrame presented, and that frame's
+		// Scene::Update uploads this asset on its own list. Zero would capture a blank backbuffer;
+		// the thumbnail goldens catch it.
+		const auto drawStart = Clock::now();
+		m_Desc.renderer->GetGraphics()->DrawFrame(m_RenderTarget, shot.job);
+		drawMs = msSince(drawStart);
+
+		shot.ticket = m_Desc.renderer->GetGraphics()->SubmitCapture(m_RenderTarget);
+		shot.built  = true;
+		submitted   = true;
+
+		// Safe with the capture in flight: it copies the presented backbuffer, and the scene's
+		// deletes are fence-deferred behind it.
+		ReleaseGeometry();
+		logIfSlow(shot.item.path);
 	}
 	catch (const std::exception& e)
 	{
 		qWarning("AssetThumbnail: cannot render '%s': %s", qPrintable(shot.item.path), e.what());
 		AbortShot(shot);
+		m_Shots.erase(next);
 	}
 	catch (...)
 	{
 		qWarning("AssetThumbnail: cannot render '%s'", qPrintable(shot.item.path));
 		AbortShot(shot);
+		m_Shots.erase(next);
+	}
+}
+
+void
+AssetThumbnailCache::ResolveFinishedShots()
+{
+	// Captures complete in the order they were submitted, so a pending front means nothing behind
+	// it is done either.
+	while (!m_Shots.empty() && m_Shots.front().built)
+	{
+		Shot& shot = m_Shots.front();
+		try
+		{
+			auto image = m_Desc.renderer->GetGraphics()->TryResolveCapture(shot.ticket);
+			if (!image.has_value())
+				return;
+			FinishShotOnPool(shot, std::move(*image));
+		}
+		catch (const std::exception& e)
+		{
+			qWarning(
+				"AssetThumbnail: cannot resolve '%s': %s",
+				qPrintable(shot.item.path),
+				e.what());
+			AbortShot(shot);
+		}
+		catch (...)
+		{
+			qWarning("AssetThumbnail: cannot resolve '%s'", qPrintable(shot.item.path));
+			AbortShot(shot);
+		}
+		m_Shots.pop_front();
+	}
+}
+
+bool
+AssetThumbnailCache::AcquireShotMaterials(Shot& shot)
+{
+	if (!shot.keysListed)
+	{
+		if (shot.item.type == ThumbnailType::kMaterial)
+			shot.materialKeys = { shot.item.material.empty() ? ToRelative(shot.item.path) :
+				                                               shot.item.material };
+		else if (!shot.item.material.empty())
+			shot.materialKeys = { shot.item.material };
+		else
+			shot.materialKeys = shot.item.mesh->bindings.submeshMaterials;
+		shot.materials.reserve(shot.materialKeys.size());
+		shot.keysListed = true;
 	}
 
-	m_Shot.reset();
+	const size_t until =
+		std::min(shot.materialKeys.size(), shot.materials.size() + c_MaterialsPerTick);
+	for (size_t i = shot.materials.size(); i < until; ++i)
+		shot.materials.push_back(AcquireMaterial(shot.materialKeys[i], shot.item.prefetch.get()));
+	return shot.materials.size() == shot.materialKeys.size();
 }
 
 void
 AssetThumbnailCache::AbortShot(const Shot& shot)
 {
 	// A no-op unless the failure left the readback in flight: resolve frees the slot on its own
-	// throw path, and a shot that never submitted has no ticket.
+	// throw path, and a shot that never submitted has no ticket. Geometry is live only for the shot
+	// being built this tick, so releasing it strands nothing of the others.
 	m_Desc.renderer->GetGraphics()->DiscardCapture(shot.ticket);
 	ReleaseGeometry();
 	FinishShot(shot, QImage());
@@ -998,20 +1083,19 @@ AssetThumbnailCache::CancelShot()
 	if (!IsReady())
 		return;
 
-	if (m_ShotInFlight)
+	if (m_ShotsInFlight > 0)
 	{
 		// Queued behind any pending install, so it cannot race one in.
 		m_Desc.renderer->Invoke([&] {
-			if (!m_Shot.has_value())
-				return;
-
-			m_Desc.renderer->GetGraphics()->DiscardCapture(m_Shot->ticket);
-			m_Shot.reset();
+			for (const Shot& shot : m_Shots)
+				m_Desc.renderer->GetGraphics()->DiscardCapture(shot.ticket);
+			m_Shots.clear();
 		});
 
 		ReleaseGeometry();
-		m_ShotInFlight = false;
+		m_ShotsInFlight = 0;
 	}
+	m_InFlightDrawnFrom.clear();
 
 	DetachFromFrameLoop();
 }
@@ -1078,25 +1162,17 @@ AssetThumbnailCache::BuildShot(Shot& shot)
 bool
 AssetThumbnailCache::BuildMesh(Shot& shot)
 {
-	const assetlib::BMesh& mesh     = shot.item.mesh->mesh;
-	const auto&            bindings = shot.item.mesh->bindings;
+	const assetlib::BMesh& mesh = shot.item.mesh->mesh;
 
 	bgl::IScene*     scene = m_Desc.renderer->GetScene().Get();
 	bgl::ISceneView* view  = m_SceneView.Get();
 
+	// Acquired over the ticks before this one; an override dresses every submesh in its one material.
 	auto materials = std::vector<bgl::MaterialHandle>();
 	if (!shot.item.material.empty())
-	{
-		materials.assign(
-			mesh.submeshes.size(),
-			AcquireMaterial(shot.item.material, shot.item.prefetch.get()));
-	}
+		materials.assign(mesh.submeshes.size(), shot.materials.front());
 	else
-	{
-		materials.reserve(bindings.submeshMaterials.size());
-		for (const std::string& relPath : bindings.submeshMaterials)
-			materials.push_back(AcquireMaterial(relPath, shot.item.prefetch.get()));
-	}
+		materials = shot.materials;
 
 	// A node instances a mesh and the same mesh can be instanced by several nodes, so upload each
 	// mesh once and place an instance per referencing node, at that node's world transform.
@@ -1148,14 +1224,12 @@ AssetThumbnailCache::BuildMesh(Shot& shot)
 bool
 AssetThumbnailCache::BuildMaterial(Shot& shot)
 {
-	const std::string relPath =
-		shot.item.material.empty() ? ToRelative(shot.item.path) : shot.item.material;
-	if (relPath.empty())
+	if (shot.materialKeys.front().empty())
 		core::throw_runtime_error("material does not lie under the project's data root");
 
 	// The Mesh Editor previews on a sphere, so a material's thumbnail is the shape the user
 	// authored it against.
-	const bgl::MaterialHandle material = AcquireMaterial(relPath, shot.item.prefetch.get());
+	const bgl::MaterialHandle material = shot.materials.front();
 
 	m_Geoms.push_back(m_Desc.renderer->GetScene()->AddSphereGeom(32, 32, 1.0f, material));
 	m_Instances.push_back(m_SceneView->CreateStaticMeshInstance(
