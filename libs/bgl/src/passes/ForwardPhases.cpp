@@ -96,6 +96,9 @@ namespace bgl
 			// placement's dissolve code, beside the at-rest lane's MSMain and PSMain.
 			std::string_view meshEntry  = "MSMain"sv;
 			std::string_view pixelEntry = "PSMain"sv;
+			// A blade's programs write a third target, its height above its root, after the
+			// velocity: GrassForwardPhase attaches it.
+			bool grassRootHeight = false;
 		};
 
 		// Every bucket kernel is opaque-shaped; only the shared blend kernel differs.
@@ -119,6 +122,7 @@ namespace bgl
 			{
 				config.meshEntry = "MSToon"sv;
 			}
+			config.grassRootHeight = desc.geom == GeometryStage::kGrass;
 			return config;
 		}
 
@@ -141,6 +145,10 @@ namespace bgl
 			if (!cfg.blend)
 			{
 				pipelineDesc.AddRtvFormat(c_MotionVectorFormat);
+			}
+			if (cfg.grassRootHeight)
+			{
+				pipelineDesc.AddRtvFormat(c_GrassRootHeightFormat);
 			}
 			pipelineDesc.SetDsvFormat(bgpu::Format::D24S8);
 

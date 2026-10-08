@@ -177,7 +177,7 @@ namespace bgl
 				"import {};\nimport lib.forward.GrassShading;\nimport lib.forward.MaterialData;\n"
 				"import lib.forward.common;\nimport lib.forward.grass_vertex;\n\n"
 				"[shader(\"pixel\")]\n"
-				"ForwardPSOut PSMain(GrassVSOut input)\n{{\n"
+				"GrassPSOut PSMain(GrassVSOut input)\n{{\n"
 				"    return materialData.{}<Slot{}Surface>(input);\n}}\n",
 				BindingModuleName(slot),
 				program,

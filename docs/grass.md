@@ -147,6 +147,36 @@ geometry, not a card, and a mask or hashed material's alpha is never read.
 Grass writes depth and velocity like the world. Still grass under a still camera writes no motion;
 a placement that moves carries its blades' motion with it.
 
+## Blob shadows
+
+A blob shadow darkens a blade as it darkens the ground the blade grows from, root to tip alike, so a
+disc reads as one patch from bare ground into a field. Blob Shadows lands a disc only on what faces
+up, and a blade stands near vertical; nothing in the depth tells a blade from a wall, since the
+renderer keeps no G-buffer. So grass writes a third target besides colour and velocity,
+`grassRootHeight` (R16F): each blade pixel's height above its blade's root in world Y, floored at a
+millimetre so the cleared zero means *no blade*. Blob Shadows reads it beside the depth, lowers a
+blade pixel by it in world Y to the root's height, whatever the ground normal, and skips the facing
+test there
+([passes.md](passes.md#blob-shadows)). The fade and the cut above the caster are then measured from
+the ground: a grounded caster cast from just above the roots (`BlobShadowDesc::casterLift`, as the
+editor's floor slack sets it) shades the whole of a blade that rises past that point.
+
+A foot's shadow lands on grass three times as wide and half again as strong as on bare ground (capped
+at full), the disc unchanged. A foot's shadow is sized for a sole on bare ground, about as wide as
+the foot, and in grass the blades around a planted foot hide nearly all of that, so a walking unit
+lost its foot contact there. The disc already spans the blades its placement stands in. The factors
+are the shader's (`cGrassFootWiden`, `cGrassFootStrength`), not `FootShadowDesc` fields: a game sizes
+a foot once, and grass is where it lands.
+
+Measuring the height from each blade pixel instead would cut every part of a blade above the cast
+point, and fade the rest by up to a quarter against the default 2 m `fadeHeight`. Sampling
+the disc list in the grass pixel shader would loop over every disc per blade fragment. A stencil bit
+would say "grass" but not how high, and writing a per-pixel stencil value is not guaranteed on
+D3D12 and Vulkan. The target is cleared every frame with the others, and written only by the grass
+phase, which draws after everything that receives a disc. Every render target carries it, grass or
+not: two bytes a render-grid pixel, 4 MB at 1920x1080 and 16.6 MB at 3840x2160, and a clear a
+frame.
+
 ## Lighting
 
 Grass has no lighting model of its own. A grass program evaluates the material's surface and lights it
@@ -235,11 +265,6 @@ A terrain's grass is paid for in the look's fade and the layer's spacing.
 
 ## What it does not do
 
-- **A blob shadow barely reaches grass.** Blob Shadows darkens a surface only where it faces up, and a
-  blade stands near vertical, so under a caster on a verge the ground between blades darkens and the
-  blades stay lit. Measured over the render test's dense field: about 2% darker where bare ground
-  shows a clear disc. Nothing in the frame tells grass from a wall, since the renderer keeps no
-  G-buffer.
 - Grass does not follow deforming ground: clumps are in their mesh's space, and only a static geom
   or a terrain takes grass.
 - Blades are not in a shadow map, and do not collide.

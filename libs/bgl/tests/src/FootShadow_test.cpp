@@ -2,6 +2,7 @@
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "util/GoldenImage.h"
+#include "util/GrassField.h"
 #include "util/PaletteReadback.h"
 #include "util/TestEnvironment.h"
 #include "util/TestGraphics.h"
@@ -22,6 +23,8 @@
 #include <bgl/types/Camera.h>
 #include <bgl/types/FootPlantDesc.h>
 #include <bgl/types/GeomHandle.h>
+#include <bgl/types/GrassDesc.h>
+#include <bgl/types/GrassHandle.h>
 #include <bgl/types/GroundPlaneDesc.h>
 #include <bgl/types/InstanceDesc.h>
 #include <bgl/types/MaterialHandle.h>
@@ -214,6 +217,7 @@ namespace
 		bgl::SceneViewRef       view;
 		bgl::GeomHandle         geom;
 		bgl::RigHandle          rig;
+		bgl::GeomHandle         groundGeom;
 		bgl::MeshInstanceHandle ground;
 	};
 
@@ -250,10 +254,10 @@ namespace
 		const auto white          = result.scene->CreatePbrMaterial(whiteDesc);
 
 		// The plane geoms are authored in XY; this lays one flat with its normal up.
-		const auto groundGeom = result.scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, white);
-		result.ground         = result.view->CreateStaticMeshInstance(
+		result.groundGeom = result.scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, white);
+		result.ground     = result.view->CreateStaticMeshInstance(
 			bgl::StaticMeshInstanceDesc()
-				.SetGeom(groundGeom)
+				.SetGeom(result.groundGeom)
 				.SetTransform(
 					glm::rotate(
 						glm::mat4(1.0f),
@@ -611,4 +615,91 @@ TEST_CASE(
 
 		CHECK(feet.view->GetBlobShadow(hero)->feet->radius == desc.feet->radius);
 	}
+}
+
+TEST_CASE(
+	"on grass a foot's shadow reaches past where it ends on bare ground",
+	"[blobshadow][skinned][grass][render]")
+{
+	constexpr uint32_t c_Width  = 800;
+	constexpr uint32_t c_Height = 600;
+
+	const FootScene feet     = MakeFootScene(0.1f, false);
+	const auto      instance = feet.view->CreateSkinnedMeshInstance(
+		bgl::SkinnedMeshInstanceDesc().SetGeom(feet.geom).SetPlayback(
+			bgl::SkinnedPlaybackDesc::FromClip(0, 0.0f, 0.0f)));
+
+	// Blades a few centimetres tall: a blade seen at a pixel grows from a root a blade's lean away,
+	// and a short one keeps that root beside the ground point the box is placed over.
+	auto look            = bgl::GrassDesc();
+	look.material        = feet.scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
+	look.blade.minHeight = 0.04f;
+	look.blade.maxHeight = 0.06f;
+	look.blade.rootWidth = 0.02f;
+	const auto                            grassLook = feet.scene->CreateGrass(look);
+	const std::array<bgl::GrassHandle, 1> looks     = { grassLook };
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = feet.gfx->CreateRenderTarget(targetDesc);
+
+	auto camera = bgl::Camera();
+	camera.LookAt(glm::vec3(0.0f, 3.0f, 3.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(
+			glm::radians(30.0f),
+			static_cast<float>(c_Width) / static_cast<float>(c_Height),
+			0.5f,
+			100.0f);
+
+	auto job     = bgl::RenderJob();
+	job.view     = feet.view;
+	job.camera   = camera;
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+	// Beside the planted foot, outward, past the bare-ground radius and inside the one on grass.
+	constexpr float c_Radius = 0.12f;
+	constexpr int   c_Box    = 8;
+	const glm::vec4 clip =
+		camera.GetViewProjection() * glm::vec4(-c_Stance - c_Radius * 1.6f, 0.0f, 0.0f, 1.0f);
+	const glm::vec2 ndc  = glm::vec2(clip) / clip.w;
+	const int       boxX = static_cast<int>((ndc.x * 0.5f + 0.5f) * c_Width) - c_Box / 2;
+	const int       boxY = static_cast<int>((0.5f - ndc.y * 0.5f) * c_Height) - c_Box / 2;
+
+	const auto sample = [&](const char* name) {
+		const auto path =
+			(std::filesystem::temp_directory_path() / (std::string(name) + ".png")).string();
+		for (int i = 0; i < 8; ++i) feet.gfx->DrawFrame(target, job);
+		feet.gfx->ScreenshotPng(target, path);
+		const float luma = bgl::test::MeanColor(path, boxX, boxY, c_Box, c_Box).Luma();
+		std::filesystem::remove(path);
+		return luma;
+	};
+
+	// Feet only: a zero-intensity disc draws nothing of its own.
+	auto desc             = bgl::BlobShadowDesc();
+	desc.intensity        = 0.0f;
+	desc.feet             = bgl::FootShadowDesc();
+	desc.feet->radius     = c_Radius;
+	desc.feet->intensity  = 0.6f;
+	desc.feet->fadeHeight = 0.3f;
+
+	const float bareBase = sample("bernini_feet_grass_bare_base");
+	feet.view->SetBlobShadow(instance, desc);
+	const float bareShaded = sample("bernini_feet_grass_bare_shaded");
+	REQUIRE(bareBase > 0.05f);
+	CHECK(bareShaded > bareBase * 0.98f);
+
+	feet.view->ClearBlobShadow(instance);
+	feet.scene->AttachGrass(feet.groundGeom, bgl::test::MakeGrassField(120, 0.04f), 0, looks);
+	const float grassBase = sample("bernini_feet_grass_base");
+	feet.view->SetBlobShadow(instance, desc);
+	const float grassShaded = sample("bernini_feet_grass_shaded");
+
+	INFO(
+		"bare " << bareBase << " -> " << bareShaded << ", grass " << grassBase << " -> "
+				<< grassShaded);
+	REQUIRE(grassBase > 0.05f);
+	CHECK(grassShaded < grassBase * 0.85f);
 }

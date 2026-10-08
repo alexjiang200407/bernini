@@ -23,4 +23,10 @@ namespace bgl
 	// world position.
 	constexpr bgpu::Format     c_MotionVectorFormat = bgpu::Format::RGBA16_FLOAT;
 	constexpr std::string_view c_OutlineMaskName    = "outlineMask";
+
+	// How far above its blade's root each grass pixel stands, in world Y; zero where no blade drew.
+	// The grass phase writes it and Blob Shadows reads it, to land a disc on a blade as on its
+	// ground.
+	constexpr bgpu::Format     c_GrassRootHeightFormat = bgpu::Format::R16_FLOAT;
+	constexpr std::string_view c_GrassRootHeightName   = "grassRootHeight";
 }

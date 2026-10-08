@@ -280,6 +280,32 @@ namespace bgl
 		maskSrvDesc.debugName = "Outline Mask SRV";
 
 		m_OutlineMaskSrv = m_ResourceManager->CreateSrv(m_OutlineMaskTexture, maskSrvDesc);
+
+		auto rootHeightDesc          = bgpu::TextureDesc();
+		rootHeightDesc.width         = GetRenderWidth();
+		rootHeightDesc.height        = GetRenderHeight();
+		rootHeightDesc.format        = c_GrassRootHeightFormat;
+		rootHeightDesc.usage         = bgpu::TextureUsage{ bgpu::TextureUsageFlag::kRenderTarget,
+			                                               bgpu::TextureUsageFlag::kSRV };
+		rootHeightDesc.initialLayout = bgpu::BarrierLayout::kRenderTarget;
+		rootHeightDesc.debugName     = "Grass Root Height";
+		rootHeightDesc.clearValue.SetColor(bgpu::Color(0.0f, 0.0f, 0.0f, 0.0f));
+
+		m_GrassRootHeightTexture = m_ResourceManager->CreateTexture(rootHeightDesc);
+
+		auto rootHeightRtvDesc      = bgpu::RtvDesc();
+		rootHeightRtvDesc.format    = c_GrassRootHeightFormat;
+		rootHeightRtvDesc.debugName = "Grass Root Height RTV";
+
+		m_GrassRootHeightRtv =
+			m_ResourceManager->CreateRtv(m_GrassRootHeightTexture, rootHeightRtvDesc);
+
+		auto rootHeightSrvDesc      = bgpu::SrvDesc();
+		rootHeightSrvDesc.format    = c_GrassRootHeightFormat;
+		rootHeightSrvDesc.debugName = "Grass Root Height SRV";
+
+		m_GrassRootHeightSrv =
+			m_ResourceManager->CreateSrv(m_GrassRootHeightTexture, rootHeightSrvDesc);
 	}
 
 	void
@@ -325,6 +351,12 @@ namespace bgl
 		// starts it over -- the buffers themselves are the output's and stay.
 		m_HistoryValid = false;
 
+		if (!m_GrassRootHeightSrv.IsNull())
+			m_ResourceManager->DestroySrv(m_GrassRootHeightSrv, false);
+		if (!m_GrassRootHeightRtv.IsNull())
+			m_ResourceManager->DestroyRtv(m_GrassRootHeightRtv, false);
+		if (!m_GrassRootHeightTexture.IsNull())
+			m_ResourceManager->DestroyTexture(m_GrassRootHeightTexture, false);
 		if (!m_OutlineMaskSrv.IsNull())
 			m_ResourceManager->DestroySrv(m_OutlineMaskSrv, false);
 		if (!m_OutlineMaskRtv.IsNull())

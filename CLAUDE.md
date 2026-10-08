@@ -311,8 +311,8 @@ tree and never reads an archive back, and why a mount key is a `string_view` and
 
 Grass the mesh stage builds from clumps rather than stores: the look and the cooked fields, how a
 blade is shaped and posed through one function every force goes through, how a field thins and
-coarsens with distance, what the pass costs and why it is geometry-bound, and what a blob shadow does
-not do to it.
+coarsens with distance, what the pass costs and why it is geometry-bound, and how a blob shadow lands
+on a blade as on its ground.
 
 **[Terrain](./docs/terrain.md)**
 

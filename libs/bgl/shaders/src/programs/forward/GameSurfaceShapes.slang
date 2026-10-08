@@ -110,13 +110,13 @@ float4 PSTransparent(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace) : SV_
 
 // The grass programs, one per contract.
 [shader("pixel")]
-ForwardPSOut PSGrass(GrassVSOut input)
+GrassPSOut PSGrass(GrassVSOut input)
 {
     return materialData.GameGrassProgram<NullSurface>(input);
 }
 
 [shader("pixel")]
-ForwardPSOut PSGrassLit(GrassVSOut input)
+GrassPSOut PSGrassLit(GrassVSOut input)
 {
     return materialData.GameLitGrassProgram<NullLitSurface>(input);
 }

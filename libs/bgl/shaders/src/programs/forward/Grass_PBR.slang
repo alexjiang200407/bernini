@@ -6,10 +6,7 @@ import lib.forward.MaterialData;
 
 // A grass blade over a baked triplet PBR material.
 [shader("pixel")]
-ForwardPSOut PSMain(GrassVSOut input)
+GrassPSOut PSMain(GrassVSOut input)
 {
-    ForwardPSOut output;
-    output.color = materialData.ShadeGrass<PbrMaterialRecord>(input);
-    output.motion = ComputeMotionVector(input.Surface());
-    return output;
+    return GrassPSOut(input, materialData.ShadeGrass<PbrMaterialRecord>(input));
 }

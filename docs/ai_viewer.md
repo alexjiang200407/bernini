@@ -50,11 +50,12 @@ Bare, it renders `assets/Data`'s apples — the one project `copy_assets` stages
 | `--terrain-seed`, `--terrain-size`, `--terrain-cell` | 1, 2000, 2 | the generator's seed, the field's side in metres, and the metres between samples |
 | `--terrain-material` | a plain green PBR | a `.bmaterial` in the project the field draws through, such as the test project's `Authored/Materials/Terrain/Battlefield.bmaterial` |
 | `--terrain-eye` | 40 | how far above the field's middle the camera stands, in metres |
-| `--grass` | none | a `.bgrass` to grow on a patch of bare ground in place of `--import`, or with `--terrain` on the field ([Grass § On a terrain](grass.md#on-a-terrain)) |
+| `--grass` | none | a `.bgrass` to grow on a patch of bare ground — with `--import`, the model stands at its centre — or with `--terrain` on the field ([Grass § On a terrain](grass.md#on-a-terrain)) |
 | `--grass-slope`, `--grass-below`, `--grass-coverage` | 90, unbounded, 1 | with `--terrain`: the steepest ground in degrees, the highest in metres and the share of the ground in patches `--grass` grows on |
 | `--patch-size`, `--patch-spacing` | twice the look's fade end, 0.25 | the patch's side and the distance between its clumps, in metres; the spacing is a terrain's grass's too |
 | `--distance` | 10 | how far from the patch's centre its camera stands, in metres, at eye height |
 | `--wind` | 0, calm | the grass's wind, on a patch or a terrain: steady and gust strength both, in [0, 1] |
+| `--blob` | 0, none | with `--grass` on a patch: a blob shadow of this radius in metres under the `--import` model, with a shadow under each foot when its rig has legs, or from a placement too small to see at the patch's centre; cast 0.2 m up, as the editor casts a grounded caster ([Grass § Blob shadows](grass.md#blob-shadows)) |
 | `--crowd`, `--crowd-columns` | 0, 6 | copies of the model in rows of that many, receding from the camera; 0 places it once |
 | `--source` | `per-instance`, or `auto` for a crowd | the pose source a skinned mesh is spawned on: `per-instance`, `table` or `auto` |
 | `--pose-budget`, `--pose-pixels` | `LodSelectionDesc`'s | the view's choice for `auto`: units posed per instance at once, and the size on screen below which a one-level mesh draws from its table |
@@ -80,7 +81,17 @@ for d in 2 10 40; do
 done
 ```
 
-Add `--wind 0.5` to see it bend. The patch is twice the look's fade end across by default, so the
+Add `--wind 0.5` to see it bend, and `--blob 1.5` to see a disc land on the blades as on the
+ground between them. Name `--import` as well and the model stands at the patch's centre, seen from
+the patch's camera rather than framed, and `--blob` is its shadow: one disc per model, however many
+mesh parts share its rig, and foot shadows when the rig has legs. A walking clip in place shows a
+foot's shadow fade as it lifts:
+
+```bash
+just run bgl_ai_viewer -- --project "<the test project>/Data" --env-root "$PWD/assets/Data" \
+	--import Authored/Meshes/Coyote.bimport --clip Walk_InPlace --grass Authored/Grass/meadow.bgrass \
+	--distance 2.5 --sun 2 --blob 1.5 --frames 30 --screenshot 10 --out-dir "<a directory of your own>"
+``` The patch is twice the look's fade end across by default, so the
 far run shows the field thinning to nothing; its `Forward Grass 0` row is what the look costs there.
 
 With `--terrain` as well, the look grows on the generated field by the `--grass-*` rules instead of
@@ -168,6 +179,6 @@ says; `--pose-budget 0` keeps every `auto` unit on its table.
 
 ## What it does not do
 
-No window and no input; one mesh, or one grass look, or one crowd of one mesh, and one clip per run — no blend spaces, no crossfades; no
+No window and no input; one mesh, or one grass look with or without one mesh in it, or one crowd of one mesh, and one clip per run — no blend spaces, no crossfades; no
 golden-image comparison. A *wrong* frame is diagnosed with [Graphics Debug](gfx_debug.md); this
 only shows you the frame.

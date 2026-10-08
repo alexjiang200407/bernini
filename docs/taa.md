@@ -67,7 +67,7 @@ The same field is a game's temporal upscaler: a scale below 1 shades the scene o
 the resolve reconstructs the output from it, which is the shape of UE5 TSR and FSR2's accumulation
 at its simplest — jittered low-resolution samples accumulated onto the output grid. What it buys is
 bounded by what runs on which grid. Every pass before the resolve — the forward phases, the blob
-decals, skybox, the motion and outline targets — is on the render grid; the resolve, bloom,
+decals, skybox, the motion, outline and grass root height targets — is on the render grid; the resolve, bloom,
 post-process and the overlay are on the output grid, and the resolve *reads* the output-sized
 history and writes it again whatever the render grid is. Measured with `bgl_pass_timings` on an
 M3 Pro at 3840x2160, TAA on, no sharpening, median of 120 frames, on the engine's `apples` and on
@@ -134,7 +134,8 @@ catalog](docs/api_catalog.md).
   The alpha hash seed advances on the same count.
 
 * **The accumulation lives on the output grid, not the render one.** A target carries two sizes:
-  scene colour, depth, velocity and the outline mask follow `RenderTargetDesc::renderScale`, while
+  scene colour, depth, velocity, the outline mask and the grass root height follow
+  `RenderTargetDesc::renderScale`, while
   the backbuffer and both histories are the size the target presents at. The resolve is the only
   pass that spans them. This is what makes a render scale a *reconstruction* rather than a stretch —
   and what attacks the loss a render-grid accumulation cannot: a moving mesh re-fetches its history

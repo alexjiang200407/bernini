@@ -99,7 +99,7 @@ namespace bgl
 	void
 	GrassForwardPhase::Declare(PassDesc& desc) const
 	{
-		desc.AddRenderTarget(c_MotionVectorsName);
+		desc.AddRenderTarget(c_MotionVectorsName).AddRenderTarget(c_GrassRootHeightName);
 		for (const auto& binding : c_GrassBuffers)
 		{
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
@@ -131,6 +131,7 @@ namespace bgl
 			{
 				continue;
 			}
+			state.frameBuffer.AddColorAttachment(draw.targets.grassRootHeight);
 
 			// One amplification group per chunk reference, laid out in rows no wider than one
 			// dispatch can launch, so a view past that many chunks still dispatches once.

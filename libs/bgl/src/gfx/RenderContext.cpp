@@ -613,6 +613,7 @@ namespace bgl
 		m_FrameGraph.ImportTexture(c_SceneColorName, rt.GetSceneColorTexture());
 		m_FrameGraph.ImportTexture(c_DepthName, rt.GetDepthTexture());
 		m_FrameGraph.ImportTexture(c_OutlineMaskName, rt.GetOutlineMaskTexture());
+		m_FrameGraph.ImportTexture(c_GrassRootHeightName, rt.GetGrassRootHeightTexture());
 
 		if (rt.IsTaaEnabled())
 		{
@@ -625,13 +626,16 @@ namespace bgl
 		// The backbuffer is not cleared: the tonemap covers it whole, and the overlay only ever
 		// blends over what the tonemap wrote. Zero motion is "this pixel did not move", which is
 		// what an untouched pixel should read as.
-		const std::array<ClearPass::ColorTarget, 3> colorTargets{
+		const std::array<ClearPass::ColorTarget, 4> colorTargets{
 			{ { std::string(c_SceneColorName), rt.GetSceneColorRtv(), { 0.0f, 0.0f, 0.0f, 1.0f } },
 			  { std::string(c_MotionVectorsName),
 			    rt.GetMotionVectorRtv(),
 			    { 0.0f, 0.0f, 0.0f, 0.0f } },
 			  { std::string(c_OutlineMaskName),
 			    rt.GetOutlineMaskRtv(),
+			    { 0.0f, 0.0f, 0.0f, 0.0f } },
+			  { std::string(c_GrassRootHeightName),
+			    rt.GetGrassRootHeightRtv(),
 			    { 0.0f, 0.0f, 0.0f, 0.0f } } }
 		};
 		const std::array<ClearPass::DepthTarget, 1> depthTargets{ { { std::string(c_DepthName),
@@ -862,6 +866,8 @@ namespace bgl
 		draw.targets.depthSrv             = m_ActiveTarget->GetDepthSrv();
 		draw.targets.motionVector         = m_ActiveTarget->GetMotionVectorRtv();
 		draw.targets.outlineMask          = m_ActiveTarget->GetOutlineMaskRtv();
+		draw.targets.grassRootHeight      = m_ActiveTarget->GetGrassRootHeightRtv();
+		draw.targets.grassRootHeightSrv   = m_ActiveTarget->GetGrassRootHeightSrv();
 
 		draw.materialArena            = scene->GetMaterialBinding();
 		draw.samplers.anisoLinearWrap = scene->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);

@@ -284,6 +284,36 @@ namespace bgl
 			m_OutlineMask.srvHandle =
 				m_ResourceManager->CreateSrv(m_OutlineMask.textureHandle, srvDesc);
 		}
+
+		{
+			auto rootHeightDesc      = bgpu::TextureDesc();
+			rootHeightDesc.format    = c_GrassRootHeightFormat;
+			rootHeightDesc.width     = GetRenderWidth();
+			rootHeightDesc.height    = GetRenderHeight();
+			rootHeightDesc.dimension = bgpu::TextureDimension::kTexture2D;
+			rootHeightDesc.debugName = "Grass Root Height";
+			rootHeightDesc.usage     = bgpu::TextureUsage{ bgpu::TextureUsageFlag::kRenderTarget,
+				                                           bgpu::TextureUsageFlag::kSRV };
+			rootHeightDesc.initialLayout = bgpu::BarrierLayout::kRenderTarget;
+
+			rootHeightDesc.clearValue.SetColor(bgpu::Color(0.0f, 0.0f, 0.0f, 0.0f));
+
+			m_GrassRootHeight.textureHandle = m_ResourceManager->CreateTexture(rootHeightDesc);
+
+			auto rtvDesc      = bgpu::RtvDesc();
+			rtvDesc.format    = c_GrassRootHeightFormat;
+			rtvDesc.debugName = "Grass Root Height RTV";
+
+			m_GrassRootHeight.rtvHandle =
+				m_ResourceManager->CreateRtv(m_GrassRootHeight.textureHandle, rtvDesc);
+
+			auto srvDesc      = bgpu::SrvDesc();
+			srvDesc.format    = c_GrassRootHeightFormat;
+			srvDesc.debugName = "Grass Root Height SRV";
+
+			m_GrassRootHeight.srvHandle =
+				m_ResourceManager->CreateSrv(m_GrassRootHeight.textureHandle, srvDesc);
+		}
 	}
 
 	void
@@ -585,6 +615,20 @@ namespace bgl
 			m_ResourceManager->DestroyTexture(m_OutlineMask.textureHandle, false);
 		}
 		m_OutlineMask = {};
+
+		if (!m_GrassRootHeight.srvHandle.IsNull())
+		{
+			m_ResourceManager->DestroySrv(m_GrassRootHeight.srvHandle, false);
+		}
+		if (!m_GrassRootHeight.rtvHandle.IsNull())
+		{
+			m_ResourceManager->DestroyRtv(m_GrassRootHeight.rtvHandle, false);
+		}
+		if (!m_GrassRootHeight.textureHandle.IsNull())
+		{
+			m_ResourceManager->DestroyTexture(m_GrassRootHeight.textureHandle, false);
+		}
+		m_GrassRootHeight = {};
 	}
 
 	RenderTargetRef
