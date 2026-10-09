@@ -11,7 +11,7 @@ or in memory: a field costs its clumps.
 
 | | where | what |
 |---|---|---|
-| a look | `bgl::GrassDesc` ([GrassDesc.h](../libs/bgl/include/bgl/types/GrassDesc.h)), authored as a `.bgrass` | the material, the blade's shape, blades per clump, the fade and the thinning, the response to wind, the lighting terms |
+| a look | `bgl::GrassDesc` ([GrassDesc.h](../libs/bgl/include/bgl/types/GrassDesc.h)), authored as a `.bgrass` | the material, the blade's shape, blades per clump, the fade and the thinning, the response to wind, the lighting terms, how far a terrain's blades take their ground's colour |
 | the fields | `assetlib::GrassGeometry` ([GrassGeometry.h](../libs/assetlib_structs/include/assetlib_structs/GrassGeometry.h)), embedded in `BMesh::grassFields` | named fields with a mesh index and look slot; chunks of at most `c_GrassClumpsPerChunk` (64) clumps with a bound each; the clumps |
 | a terrain's layers | `bgl::TerrainGrassDesc` ([TerrainGrassDesc.h](../libs/bgl/include/bgl/types/TerrainGrassDesc.h)), through `IScene::AttachTerrainGrass` | the look, the clumps' spacing, and the slope, height and patch rules that scale them -- nothing per clump ([On a terrain](#on-a-terrain)) |
 
@@ -211,6 +211,9 @@ geometry, which the mesh stage builds into the vertex it hands the pixel stage
 - **Translucency** (`GrassTranslucency`) is the sun through a blade seen against it: a wrapped
   diffuse term on the far side of the normal, in the look's colour and strength, added after
   `ShadeSurface`. It is the one lighting term PBR lacks.
+- **The ground's colour**, on a terrain ([Ground colour](#ground-colour), below): as far as a blade
+  takes it, its tinted colour gives way to the ground's albedo, and its root occlusion and
+  translucency to nothing.
 
 A surface on the lit contract (`ILitSurfaceSource`) owns all of its lighting, so a blade drawn with
 one gets none of the above but the normal: the program calls its `Shade` and adds nothing. The rest
@@ -224,6 +227,37 @@ uv1 on a blade is never a second UV set, so `HasUv1()` is false there and a geom
 is read as white, for the engine's kinds and a surface's alike. Its `y` carries the entry of the
 blade's look, which the program reads the translucency from: an interpolant constant along the blade
 costs nothing where a flat attribute for it cost the pass a third more on Apple silicon.
+
+## Ground colour
+
+A blade's colour is its look's, and a terrain's ground is whatever its surface paints there: a
+tiled albedo, varied by noise, banded by slope. Where a field fades or thins, the eye sees blades
+of one colour settling onto ground of another, and every blade that leaves shows. A look's
+`groundColorNear` and `groundColorFar` -- shares at the camera and at the fade end, as the
+normal's are -- say how far a terrain's blades take the albedo of the ground under their roots
+instead (`GroundColorBlend`). At 1 a far blade is the ground's colour and shades as the ground does,
+so a fading or thinning field settles into ground of its own colour. Both 0 by default.
+
+The ground's albedo comes from the view's ground-colour texture, which the Ground Color pass
+([passes.md](passes.md#ground-color)) draws every frame from straight above through the terrain's
+own material: a square around the camera reaching the furthest fade end of the looks that take it,
+`c_GroundColorTexels` a side, its corner snapped to whole texels. The mesh stage reads it once per
+blade, at the root, and hands the colour and the share on as one interpolant (`groundColor` in
+`GrassVSOut`); the pixel stage blends there, because a blade's tint multiplies the material's
+colour there:
+
+- the base colour moves from the tinted material's toward the ground's,
+- the occlusion toward 1, and
+- the translucency toward nothing,
+
+so a blade taking all of it, with its normal blended to the ground's as well, lights exactly as the
+ground beside it. `GroundColor_test` holds that to within 0.02 a channel. Under a lit surface
+(`ILitSurfaceSource`) the texture holds no colour, and blades over it keep their own; a mesh's
+fields have no ground to read and never take it.
+
+Unreal's runtime virtual texture, used for grass the same way, is the standard this follows. The
+texture is redrawn whole every frame; an incremental, toroidal update is the next step if the pass
+ever costs.
 
 ## Cost
 
@@ -274,7 +308,10 @@ A terrain's grass is paid for in the look's fade and the layer's spacing.
   (`BladeAddress`), so a mesh group's run of blades spreads over the chunk; Tsushima's compute pass
   compacts its blades into a buffer instead.
 - **The lighting terms.** A normal rounded across the blade's width, blended toward the terrain's
-  with distance, and a translucency term for the sun behind a blade: Tsushima again. Turning each
+  with distance, and a translucency term for the sun behind a blade: Tsushima again.
+- **The ground's colour.** A camera-centred texture of the terrain's albedo, drawn from its own
+  material and read under each blade's root: Unreal's runtime virtual texture as landscape grass
+  uses it. Turning each
   blade's face toward the camera is the engine's own, so a blade needs no back-face flip.
 
 ## What it does not do

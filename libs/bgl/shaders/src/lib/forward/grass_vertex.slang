@@ -23,11 +23,15 @@ public struct GrassVSOut
     // -- and the root-to-tip occlusion in a.
     public float4 tint : GRASSTINT;
 
+    // The ground's albedo under the blade's root, linear, and in a how far the blade takes it in
+    // place of its own tinted colour; a is 0 for a blade with no ground colour.
+    public float4 groundColor : GRASSGROUNDCOLOR;
+
     // How far above its blade's root this point stands, in world Y: what Blob Shadows lowers a
     // blade pixel by to shade it as its ground.
     public float rootHeight : GRASSROOTHEIGHT;
 
-    public __init(ForwardVSOut surface, float4 tint, float rootHeight)
+    public __init(ForwardVSOut surface, float4 tint, float4 groundColor, float rootHeight)
     {
         position = surface.position;
         worldPos = surface.worldPos;
@@ -40,6 +44,7 @@ public struct GrassVSOut
         prevClip = surface.prevClip;
         cameraPrevClip = surface.cameraPrevClip;
         this.tint = tint;
+        this.groundColor = groundColor;
         this.rootHeight = rootHeight;
     }
 

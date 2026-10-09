@@ -32,18 +32,22 @@ public extension MaterialData
     }
 
     // A blade's surface lit through the entry every Forward program uses, with the blade's tint and
-    // occlusion applied first and its translucency added after.
+    // occlusion applied first and its translucency added after. As far as the blade takes its
+    // ground's colour, it takes the ground's albedo in place of its tinted one and loses what makes
+    // it a blade rather than ground -- the root's occlusion and the sun through it -- so a blade
+    // taking all of it shades as the ground under it.
     float4 ShadeGrassSurface(GrassVSOut input, PbrSurface evaluated)
     {
+        let ground = saturate(input.groundColor.a);
         var surface = evaluated;
-        surface.baseColor.rgb *= input.tint.rgb;
-        surface.orm.r *= input.tint.a;
+        surface.baseColor.rgb = lerp(surface.baseColor.rgb * input.tint.rgb, input.groundColor.rgb, ground);
+        surface.orm.r *= lerp(input.tint.a, 1.0, ground);
 
         let lit = ShadeSurface(input.Surface(), surface, true);
         let look = grassData.looks.Get(uint(round(input.uv1.y)));
         let translucent = GrassTranslucency(surface, normalize(input.normal), GetShadingParams(), look.translucency);
 
-        return float4(lit + translucent, 1.0);
+        return float4(lit + translucent * (1.0 - ground), 1.0);
     }
 
     // An engine kind on a blade, as Shade is on a mesh. Its geometry occlusion is read as white: uv1

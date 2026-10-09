@@ -120,7 +120,7 @@ namespace bgl
 	}
 
 	void
-	TerrainForwardPhase::Declare(PassDesc& desc) const
+	TerrainForwardPhase::Declare(PassDesc& desc, const DrawData& /*draw*/) const
 	{
 		desc.AddRenderTarget(c_MotionVectorsName);
 		DeclareBuffers(desc);

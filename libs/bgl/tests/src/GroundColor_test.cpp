@@ -1,5 +1,6 @@
 #include "scene/SceneView.h"
 #include "scene/ground_color.h"
+#include "util/GoldenImage.h"
 #include "util/TestEnvironment.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
@@ -28,7 +29,9 @@
 #include <core/glm.h>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <span>
+#include <string>
 
 // A view's ground-colour texture as the pass that draws it and the grass that reads it agree on: the
 // square it covers around the camera, and when the view has one at all.
@@ -206,7 +209,7 @@ TEST_CASE(
 		colour.texture,
 		bgl::c_GroundColorTexels,
 		bgl::c_GroundColorTexels,
-		bgpu::BarrierLayout::kRenderTarget);
+		bgpu::BarrierLayout::kShaderResource);
 
 	const auto at = [&](const float x, const float z) {
 		const glm::vec2 uv = (glm::vec2(x, z) - colour.rect.origin) / colour.rect.size;
@@ -236,4 +239,98 @@ TEST_CASE(
 		INFO("off the field at " << off.x << ", " << off.y);
 		CHECK(at(off.x, off.y).a == 0);
 	}
+}
+
+TEST_CASE(
+	"A blade taking all of its ground's colour shades as the ground under it",
+	"[grass][groundcolor][render]")
+{
+	constexpr uint32_t c_W = 640;
+	constexpr uint32_t c_H = 480;
+
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
+	auto gfx                         = bgl::test::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_W);
+	targetDesc.height   = static_cast<int>(c_H);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                = bgl::SceneDesc();
+	sceneDesc.initialPbrMaterials = 4;
+	auto scene                    = gfx->CreateScene(sceneDesc);
+	auto view                     = gfx->CreateSceneView(scene, 8);
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	// Ground and blade alike but for their colour: brown earth, red blades.
+	auto earthDesc            = bgl::PbrMaterialDesc();
+	earthDesc.metallicFactor  = 0.0f;
+	earthDesc.roughnessFactor = 1.0f;
+	earthDesc.baseColorFactor = glm::vec4(0.3f, 0.22f, 0.1f, 1.0f);
+	const auto earth          = scene->CreatePbrMaterial(earthDesc);
+	auto       redDesc        = earthDesc;
+	redDesc.baseColorFactor   = glm::vec4(0.8f, 0.05f, 0.05f, 1.0f);
+	const auto red            = scene->CreatePbrMaterial(redDesc);
+
+	const auto field = Flat(64);
+	const auto terrain =
+		scene->CreateTerrain(bgl::TerrainDesc().SetHeightfield(&field).SetMaterial(earth));
+
+	auto lookDesc                      = bgl::GrassDesc();
+	lookDesc.material                  = red;
+	lookDesc.blade.rootWidth           = 0.05f;
+	lookDesc.density.fadeStart         = 10.0f;
+	lookDesc.density.fadeEnd           = 30.0f;
+	lookDesc.lighting.groundNormalNear = 1.0f;
+	lookDesc.lighting.groundNormalFar  = 1.0f;
+	const auto look                    = scene->CreateGrass(lookDesc);
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.viewport = bgl::Viewport(static_cast<float>(c_W), static_cast<float>(c_H));
+	job.camera
+		.LookAt(
+			glm::vec3(32.0f, 3.0f, 40.0f),
+			glm::vec3(32.0f, 0.0f, 32.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(glm::radians(60.0f), static_cast<float>(c_W) / c_H, 0.1f, 300.0f);
+
+	// The mean of the frame's centre once TAA has blended the earlier frames out.
+	const auto settled = [&](const char* name) {
+		for (int i = 0; i < 24; ++i)
+		{
+			gfx->DrawFrame(target, job);
+		}
+		const auto path =
+			(std::filesystem::temp_directory_path() / (std::string(name) + ".png")).string();
+		gfx->ScreenshotPng(target, path);
+		const bgl::test::Rgba box = bgl::test::MeanColor(path, 220, 200, 200, 120);
+		std::filesystem::remove(path);
+		return box;
+	};
+
+	const bgl::test::Rgba bare = settled("ground_color_bare");
+
+	const auto layer = bgl::TerrainGrassDesc().SetLook(look).SetSpacing(0.12f);
+	scene->AttachTerrainGrass(terrain, std::span<const bgl::TerrainGrassDesc>(&layer, 1));
+	const bgl::test::Rgba own = settled("ground_color_own");
+
+	lookDesc.color.groundColorNear = 1.0f;
+	lookDesc.color.groundColorFar  = 1.0f;
+	scene->UpdateGrass(look, lookDesc);
+	const bgl::test::Rgba taken = settled("ground_color_taken");
+
+	INFO("bare " << bare.r << ", " << bare.g << ", " << bare.b);
+	INFO("own colour " << own.r << ", " << own.g << ", " << own.b);
+	INFO("ground's colour " << taken.r << ", " << taken.g << ", " << taken.b);
+
+	// Its own colour, the field reads red over the earth; taking the ground's, it reads as the earth.
+	CHECK(own.r - own.g > bare.r - bare.g + 0.1f);
+	CHECK(std::abs(taken.r - bare.r) < 0.02f);
+	CHECK(std::abs(taken.g - bare.g) < 0.02f);
+	CHECK(std::abs(taken.b - bare.b) < 0.02f);
 }

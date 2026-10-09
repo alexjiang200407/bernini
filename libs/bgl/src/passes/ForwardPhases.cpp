@@ -398,7 +398,7 @@ namespace bgl
 		}
 		desc.AddBufferRead(c_ToonShadingRigBlocksName, bgpu::BarrierSyncFlag::kPixelShader);
 
-		phase.Declare(desc);
+		phase.Declare(desc, draw);
 
 		desc.SetExec([this, draw, &phase](const PassContext& resources) {
 			Execute(phase, draw, resources);

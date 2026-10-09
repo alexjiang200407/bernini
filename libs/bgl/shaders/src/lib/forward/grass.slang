@@ -294,6 +294,13 @@ public float GroundNormalBlend(GrassLook look, float distance)
     return lerp(look.groundNormalNear, look.groundNormalFar, saturate(distance / look.fadeEnd));
 }
 
+// How far a terrain's blade at `distance` takes the albedo of the ground under its root in place of
+// its own colour: the look's near share at the camera, its far share at the fade end.
+public float GroundColorBlend(GrassLook look, float distance)
+{
+    return lerp(look.groundColorNear, look.groundColorFar, saturate(distance / look.fadeEnd));
+}
+
 // The shading normal at a vertex of a blade: its face, already turned toward the camera, tilted toward
 // the edge the vertex sits on (`edgeSign` -1 or 1 along `side`), then blended toward the ground.
 public float3 BladeNormal(float3 face, float3 side, float edgeSign, float rounding, float3 ground, float groundBlend)

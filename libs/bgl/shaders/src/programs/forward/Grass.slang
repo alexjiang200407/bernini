@@ -209,6 +209,7 @@ struct PosedBlade
     float groundBlend;
     float3 color;
     float random;
+    float4 groundColor; // the ground's albedo under the root, and how far the blade takes it
 };
 groupshared PosedBlade gPosed[cGrassVerticesPerGroup / 4u];
 
@@ -305,6 +306,14 @@ void MSMain(
         posed.groundBlend = GroundNormalBlend(look, distanceToCamera);
         posed.color = BladeColor(look, clump, shape.random);
         posed.random = shape.random;
+        posed.groundColor = float4(0.0, 0.0, 0.0, 0.0);
+        let takesGround = max(look.groundColorNear, look.groundColorFar) > 0.0;
+        if (source.onTerrain && takesGround && grassData.groundColorRect.w > 0.0)
+        {
+            let uv = (rootWorld.xz - grassData.groundColorRect.xy) * grassData.groundColorRect.z;
+            let albedo = grassData.groundColor.SampleLevel(grassData.heightSampler, uv, 0.0);
+            posed.groundColor = float4(albedo.rgb, GroundColorBlend(look, distanceToCamera) * albedo.a);
+        }
         gPosed[gtid] = posed;
     }
     GroupMemoryBarrierWithGroupSync();
@@ -329,7 +338,9 @@ void MSMain(
         surface.uv1 = float2(posed.random, float(draw.look.GetOffset()));
         surface.tangent = float4(posed.side, posed.facing);
         surface.materialOffset = look.materialOffset;
-        verts[v] = GrassVSOut(surface, float4(BladeTint(look, posed.color, t), BladeOcclusion(look, t)), position.y - posed.now.p0.y);
+        verts[v] = GrassVSOut(
+            surface, float4(BladeTint(look, posed.color, t), BladeOcclusion(look, t)), posed.groundColor, position.y - posed.now.p0.y
+        );
     }
 
     for (uint p = gtid; p < survivors * trisPerBlade; p += cMeshGroupSize)
