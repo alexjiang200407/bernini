@@ -5,9 +5,6 @@
 #include <QJsonObject>
 #include <QLabel>
 
-#include <assetlib/image_io.h>
-#include <assetlib_structs/ImageData.h>
-#include <bgl/IScene.h>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -22,13 +19,12 @@
 #include <qwidget.h>
 #include <utility>
 
+#include "Windows/MeshEditor/TextureUploads.h"
 #include "Windows/MeshEditor/nodes/ChannelData.h"
 #include "Windows/MeshEditor/nodes/SurfaceTextureData.h"
 #include <QtNodes/internal/Definitions.hpp>
 #include <QtNodes/internal/NodeData.hpp>
 #include <QtNodes/internal/NodeDelegateModel.hpp>
-#include <editor_plugin_api/IEditorHost.h>
-#include <editor_plugin_api/IEditorViewport.h>
 #include <editor_plugin_api/ILanguageResolver.h>
 #include <editor_plugin_api/localize.h>
 #include <editor_sdk/StampedPixmapCache.h>
@@ -41,9 +37,9 @@ namespace
 
 TextureNode::TextureNode(
 	const editor::ILanguageResolver& language,
-	editor::IEditorHost*             host,
+	TextureUploads*                  uploads,
 	TexturePreviewCache*             previews) :
-	m_Language(language), m_Host(host), m_Previews(previews),
+	m_Language(language), m_Uploads(uploads), m_Previews(previews),
 	m_Caption(editor::Localize(m_Language, "bernini.material_nodes.texture_caption", "Texture"))
 {
 	if (m_Previews == nullptr)
@@ -61,6 +57,12 @@ TextureNode::TextureNode(
 			m_Preview = preview;
 			RefreshPreview();
 		});
+}
+
+TextureNode::~TextureNode()
+{
+	if (m_Uploads != nullptr && !m_Path.isEmpty())
+		m_Uploads->Release(m_Path);
 }
 
 QWidget*
@@ -143,33 +145,25 @@ TextureNode::portCaption(QtNodes::PortType, QtNodes::PortIndex port) const
 void
 TextureNode::SetTexturePath(const QString& path)
 {
+	const QString previous = m_Path;
+
 	m_Path    = path;
 	m_Preview = QPixmap();
 	RefreshPreview();
 
-	if (m_Host == nullptr || path.isEmpty())
-		return;
-
-	try
+	if (m_Uploads == nullptr || path.isEmpty())
 	{
-		// Decoded here, so only the upload costs the render thread a round-trip.
-		auto image = assetlib::loadKTX2(std::filesystem::path(path.toStdWString()));
-
-		m_Host->InvokeRender([&](editor::RenderContext& context) {
-			m_Texture = context.scene.AddTextureAsset(std::move(image));
-		});
-		m_Caption = QFileInfo(path).fileName();
-	}
-	catch (const std::exception& e)
-	{
-		qWarning("TextureNode: failed to load '%s': %s", qPrintable(path), e.what());
-		m_Texture = {};
-		m_Caption = editor::Localize(
-			m_Language,
-			"bernini.material_nodes.texture_failed_caption",
-			"Texture (failed)");
+		if (m_Uploads != nullptr && !previous.isEmpty())
+			m_Uploads->Release(previous);
 		return;
 	}
+
+	m_Uploads->Acquire(path);
+	TakeUpload();
+
+	// Retired, not released: the material the ports fed still draws it until the panel recompiles.
+	if (!previous.isEmpty())
+		m_Uploads->Release(previous);
 
 	if (m_Previews != nullptr)
 	{
@@ -181,6 +175,23 @@ TextureNode::SetTexturePath(const QString& path)
 		else
 			RefreshPreview();
 	}
+}
+
+void
+TextureNode::TakeUpload()
+{
+	if (m_Uploads == nullptr || m_Path.isEmpty())
+		return;
+
+	m_Texture = m_Uploads->Handle(m_Path);
+
+	const bool failed = !m_Texture.textureSlot && !m_Uploads->IsLoading(m_Path);
+	m_Caption         = failed ? editor::Localize(
+									 m_Language,
+									 "bernini.material_nodes.texture_failed_caption",
+									 "Texture (failed)") :
+	                             QFileInfo(m_Path).fileName();
+	Q_EMIT requestNodeUpdate();
 
 	for (unsigned int port = 0; port < c_PortCount; ++port)
 		Q_EMIT dataUpdated(static_cast<QtNodes::PortIndex>(port));

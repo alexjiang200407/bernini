@@ -582,6 +582,42 @@ namespace assetlib
 		return texture;
 	}
 
+	// readKtx2Tail over a host file: read once, and sliced rather than re-read when the cut applies.
+	static std::vector<std::byte>
+	readHostKtx2Tail(const std::filesystem::path& path, uint32_t maxDim, const char* what)
+	{
+		std::vector<std::byte> bytes = core::file::read_file_bytes(path);
+		const Ktx2Source       source{
+			[&bytes] { return std::move(bytes); },
+			[&bytes, &path, what](uint64_t offset, uint64_t size) {
+				if (size > bytes.size() || offset > bytes.size() - size)
+					core::throw_runtime_error(
+						"{}: '{}' ends before byte {}",
+						what,
+						path.string(),
+						offset + size);
+				const auto first = bytes.begin() + static_cast<std::ptrdiff_t>(offset);
+				return std::vector<std::byte>(first, first + static_cast<std::ptrdiff_t>(size));
+			},
+		};
+		return readKtx2Tail(source, maxDim);
+	}
+
+	static std::vector<std::byte>
+	readMountedKtx2Tail(
+		const core::file::IFileSystem& fileSystem,
+		std::string_view               path,
+		uint32_t                       maxDim)
+	{
+		const Ktx2Source source{
+			[&] { return fileSystem.Read(path); },
+			[&](uint64_t offset, uint64_t size) {
+				return fileSystem.ReadRange(path, offset, size);
+			},
+		};
+		return readKtx2Tail(source, maxDim);
+	}
+
 	ImageData
 	loadKTX2(const std::filesystem::path& path, Ktx2Decode decode, uint32_t maxDim)
 	{
@@ -599,23 +635,9 @@ namespace assetlib
 			return imageFromKtx(texture, decode, maxDim, path);
 		}
 
-		// Read once; `whole` hands the buffer on when the cut turns out not to apply.
-		std::vector<std::byte> bytes = core::file::read_file_bytes(path);
-		const Ktx2Source       source{
-			[&bytes] { return std::move(bytes); },
-			[&bytes, &path](uint64_t offset, uint64_t size) {
-				if (size > bytes.size() || offset > bytes.size() - size)
-					core::throw_runtime_error(
-						"assetlib::loadKTX2: '{}' ends before byte {}",
-						path.string(),
-						offset + size);
-				const auto first = bytes.begin() + static_cast<std::ptrdiff_t>(offset);
-				return std::vector<std::byte>(first, first + static_cast<std::ptrdiff_t>(size));
-			},
-		};
 		return imageFromKtx(
 			openKtxFromMemory(
-				readKtx2Tail(source, maxDim),
+				readHostKtx2Tail(path, maxDim, "assetlib::loadKTX2"),
 				"assetlib::loadKTX2: failed to load",
 				path),
 			decode,
@@ -630,15 +652,9 @@ namespace assetlib
 		Ktx2Decode                     decode,
 		uint32_t                       maxDim)
 	{
-		const Ktx2Source source{
-			[&] { return fileSystem.Read(path); },
-			[&](uint64_t offset, uint64_t size) {
-				return fileSystem.ReadRange(path, offset, size);
-			},
-		};
 		return imageFromKtx(
 			openKtxFromMemory(
-				readKtx2Tail(source, maxDim),
+				readMountedKtx2Tail(fileSystem, path, maxDim),
 				"assetlib::loadKTX2: failed to read",
 				path),
 			decode,
@@ -737,13 +753,8 @@ namespace assetlib
 			core::throw_runtime_error("assetlib::loadKTX2Preview: maxDim must be non-zero");
 
 		Ktx2Owner owner;
-
-		errno = 0;  // so check() reads this call's reason, not a stale one
-		check(
-			ktxTexture2_CreateFromNamedFile(
-				path.string().c_str(),
-				KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT,
-				&owner.tex),
+		owner.tex = openKtxFromMemory(
+			readHostKtx2Tail(path, maxDim, "assetlib::loadKTX2Preview"),
 			"assetlib::loadKTX2Preview: failed to load",
 			path);
 
@@ -759,10 +770,11 @@ namespace assetlib
 		if (maxDim == 0)
 			core::throw_runtime_error("assetlib::loadKTX2Preview: maxDim must be non-zero");
 
-		const std::vector<std::byte> bytes = fileSystem.Read(path);
-
 		Ktx2Owner owner;
-		owner.tex = openKtxFromMemory(bytes, "assetlib::loadKTX2Preview: failed to read", path);
+		owner.tex = openKtxFromMemory(
+			readMountedKtx2Tail(fileSystem, path, maxDim),
+			"assetlib::loadKTX2Preview: failed to read",
+			path);
 
 		return previewFromKtx(owner, maxDim, path);
 	}

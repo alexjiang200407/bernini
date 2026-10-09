@@ -14,6 +14,7 @@
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
+#include <QElapsedTimer>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
@@ -35,6 +36,7 @@
 #include <QStackedWidget>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <qtypes.h>
 
 #include <QtNodes/DataFlowGraphModel>
 #include <QtNodes/DataFlowGraphicsScene>
@@ -75,6 +77,7 @@
 #include "Windows/MeshEditor/MaterialGraphModel.h"
 #include "Windows/MeshEditor/MaterialGraphScene.h"
 #include "Windows/MeshEditor/MaterialGraphView.h"
+#include "Windows/MeshEditor/TextureUploads.h"
 #include "Windows/MeshEditor/graph_compiler.h"
 #include "Windows/MeshEditor/material_graph.h"
 #include "Windows/MeshEditor/material_io.h"
@@ -99,6 +102,9 @@ namespace
 	// Long enough that a drag or a run of keystrokes is one write, short enough that a glance at
 	// the Content Explorer after an edit shows it.
 	constexpr int c_WriteDelayMs = 500;
+
+	// How long one turn of the event loop spends opening a mesh's graphs before it yields.
+	constexpr qint64 c_OpenSliceMs = 8;
 
 	/**
 	 * Holds a flag for a scope, so an early return cannot leave the panel thinking it is loading.
@@ -196,6 +202,30 @@ MeshEditorWindow::MeshEditorWindow(
 	m_WriteTimer->setSingleShot(true);
 	m_WriteTimer->setInterval(c_WriteDelayMs);
 	connect(m_WriteTimer, &QTimer::timeout, this, [this]() { FlushEditedGraphs(); });
+
+	m_BakeJudges.setMaxThreadCount(1);
+
+	m_OpenTimer = new QTimer(this);
+	m_OpenTimer->setSingleShot(true);
+	m_OpenTimer->setInterval(0);
+	connect(m_OpenTimer, &QTimer::timeout, this, [this]() { OpenNextGraphs(); });
+
+	m_CompileTimer = new QTimer(this);
+	m_CompileTimer->setSingleShot(true);
+	m_CompileTimer->setInterval(0);
+	connect(m_CompileTimer, &QTimer::timeout, this, [this]() {
+		auto graphs = std::vector<MaterialGraphSet::Graph*>();
+		for (const int graphIndex : m_PendingCompiles)
+			if (m_Graphs.Holds(graphIndex))
+				graphs.push_back(&m_Graphs.At(graphIndex));
+		m_PendingCompiles.clear();
+
+		if (m_Preview != nullptr)
+			editor::CompilePreviewMaterials(graphs, m_Host, *m_Preview);
+
+		// What the compiles just moved the materials off.
+		m_TextureUploads->ReleaseRetired();
+	});
 
 	// The list's actions are its context menu and its keys, so each one is written once. The strip
 	// under the list triggers the same two.
@@ -378,6 +408,27 @@ MeshEditorWindow::MeshEditorWindow(
 	}
 
 	m_TexturePreviews = new TexturePreviewCache(this);
+	m_TextureUploads  = new TextureUploads(m_Host, this);
+	connect(m_TextureUploads, &TextureUploads::Retired, this, [this]() {
+		m_CompileTimer->start();
+	});
+	connect(m_TextureUploads, &TextureUploads::Settled, this, [this](const QString& path) {
+		// Not an edit: the material names the file whatever its upload is doing.
+		const LoadGuard loading(m_Loading);
+
+		for (MaterialGraphSet::Graph& entry : m_Graphs.All())
+		{
+			if (entry.model == nullptr)
+				continue;
+
+			for (const QtNodes::NodeId id : entry.model->allNodeIds())
+			{
+				auto* texture = entry.model->delegateModel<TextureNode>(id);
+				if (texture != nullptr && texture->TexturePath() == path)
+					texture->TakeUpload();
+			}
+		}
+	});
 
 	// The reflected surfaces, copied off the render thread once -- the set is fixed inside
 	// CreateGraphics, so this is all of them for the editor's lifetime.
@@ -391,7 +442,7 @@ MeshEditorWindow::MeshEditorWindow(
 
 	m_Registry = MakeMaterialNodeRegistry(
 		m_Host.GetLanguageResolver(),
-		&m_Host,
+		m_TextureUploads,
 		m_TexturePreviews,
 		surfaces);
 
@@ -525,12 +576,11 @@ MeshEditorWindow::RebuildGraph(
 
 	entry.scene.reset();
 	entry.model = std::make_unique<MaterialGraphModel>(m_Registry);
-	entry.scene = std::make_unique<MaterialGraphScene>(*entry.model);
 
 	build(*entry.model);
 
 	if (current)
-		m_GraphView->setScene(entry.scene.get());
+		m_GraphView->setScene(SceneOf(graphIndex));
 
 	// Every edit the board makes, not only the ones that reach the sink: a node moved or deleted
 	// changes the document too, and the panel is what saves it.
@@ -558,6 +608,15 @@ MeshEditorWindow::RebuildGraph(
 	}
 
 	return output;
+}
+
+MaterialGraphScene*
+MeshEditorWindow::SceneOf(int graphIndex)
+{
+	MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
+	if (entry.scene == nullptr)
+		entry.scene = std::make_unique<MaterialGraphScene>(*entry.model);
+	return entry.scene.get();
 }
 
 void
@@ -591,7 +650,7 @@ MeshEditorWindow::WatchOutputNode(int graphIndex)
 	if (output != nullptr)
 	{
 		connect(output, &MaterialSinkNode::Changed, this, [this, graphIndex]() {
-			CompileGraph(graphIndex);
+			ScheduleCompile(graphIndex);
 			MarkGraphEdited(graphIndex);
 
 			// A load or a seed changes the sink's layer without touching the panel; the panel
@@ -679,58 +738,93 @@ MeshEditorWindow::SetPreviewGeometry(const QStringList& submeshNames)
 
 	m_SubmeshSelector->clear();
 	m_GraphView->setScene(nullptr);
+	m_PendingCompiles.clear();
+	m_OpenTimer->stop();
+	++m_BakeJudgement;  // a verdict still on its way is the last mesh's
 	m_Graphs.Reset(static_cast<int>(submeshNames.size()));
 
 	// A new mesh shows every submesh's default; what the previous one was showing means nothing here.
 	m_ShownOverrides.assign(static_cast<size_t>(submeshNames.size()), QString());
 
-	const QStringList materialPaths =
-		m_Preview != nullptr ? m_Preview->SubmeshMaterialPaths() : QStringList();
+	m_GraphPaths = m_Preview != nullptr ? m_Preview->SubmeshMaterialPaths() : QStringList();
+	m_NextGraph  = 0;
 
-	for (int index = 0; index < submeshNames.size(); ++index)
-	{
-		m_SubmeshSelector->addItem(submeshNames[index]);
-
-		const QString materialPath = materialPaths.value(index);
-
-		// A submesh naming a material an earlier one already opened joins its graph, so editing that
-		// material once updates every submesh wearing it. Only a real file is shared; an unbound
-		// submesh gets its own blank graph.
-		if (const int shared = materialPath.isEmpty() ? -1 : m_Graphs.FindForPath(materialPath);
-		    shared >= 0)
-		{
-			m_Graphs.Share(shared, index);
-
-			const MaterialGraphSet::Graph& entry = m_Graphs.At(shared);
-			if (entry.preview.IsValid())
-				m_Preview->SetSubmeshMaterial(static_cast<uint32_t>(index), entry.preview);
-			continue;
-		}
-
-		const int graphIndex = m_Graphs.Add(index);
-
-		ResetGraph(graphIndex, QJsonObject());
-
-		if (!materialPath.isEmpty() &&
-		    std::filesystem::exists(std::filesystem::path(materialPath.toStdWString())))
-		{
-			OpenMaterialInto(graphIndex, materialPath, false);  // compiles the graph it loads
-			continue;
-		}
-
-		CompileGraph(graphIndex);
-	}
-
+	m_SubmeshSelector->addItems(submeshNames);
 	m_SubmeshSelector->setEnabled(!submeshNames.isEmpty());
 
-	// After the selector is filled, so the looks are indexed by the same submeshes it lists.
-	ReloadRegisteredMaterials();
-	RefreshBakeState();
+	// After the selector is filled, so the looks are indexed by the same submeshes it lists. From
+	// what the preview read, since reading the mesh again costs as much as opening it did.
+	if (m_Preview != nullptr)
+		IndexRegisteredMaterials(m_Preview->MeshBindings(), m_Preview->MeshSourceKey());
+
+	OpenNextGraphs();
 
 	if (!submeshNames.isEmpty())
 		m_SubmeshSelector->setCurrentIndex(0);
+	RefreshActions();
+}
+
+void
+MeshEditorWindow::OpenNextGraphs()
+{
+	const LoadGuard loading(m_Loading);
+	const LoadGuard opening(m_OpeningMesh);
+
+	auto slice = QElapsedTimer();
+	slice.start();
+
+	// The first always, so the board on screen is never the one waiting.
+	do
+	{
+		if (m_NextGraph >= m_SubmeshSelector->count())
+			break;
+		OpenSubmeshGraph(m_NextGraph++);
+	} while (slice.elapsed() < c_OpenSliceMs);
+
+	if (m_NextGraph < m_SubmeshSelector->count())
+		m_OpenTimer->start();
+	else
+		JudgeBakesOffThread();
 
 	RefreshActions();
+}
+
+void
+MeshEditorWindow::OpenSubmeshGraph(int index)
+{
+	const QString materialPath = m_GraphPaths.value(index);
+
+	// A submesh naming a material an earlier one already opened joins its graph, so editing that
+	// material once updates every submesh wearing it. Only a real file is shared; an unbound
+	// submesh gets its own blank graph.
+	if (const int shared = materialPath.isEmpty() ? -1 : m_Graphs.FindForPath(materialPath);
+	    shared >= 0)
+	{
+		m_Graphs.Share(shared, index);
+
+		const MaterialGraphSet::Graph& entry = m_Graphs.At(shared);
+		if (entry.preview.IsValid())
+			m_Preview->SetSubmeshMaterial(static_cast<uint32_t>(index), entry.preview);
+		if (index == m_Graphs.CurrentSubmesh())
+			SelectSubmesh(index);
+		return;
+	}
+
+	const int graphIndex = m_Graphs.Add(index);
+
+	ResetGraph(graphIndex, QJsonObject());
+
+	if (!materialPath.isEmpty() &&
+	    std::filesystem::exists(std::filesystem::path(materialPath.toStdWString())))
+	{
+		OpenMaterialInto(
+			graphIndex,
+			materialPath,
+			false);  // schedules the compile of what it loads
+		return;
+	}
+
+	ScheduleCompile(graphIndex);
 }
 
 void
@@ -761,7 +855,7 @@ MeshEditorWindow::SelectSubmesh(int index)
 	m_Graphs.SetCurrentSubmesh(index);
 
 	const int graphIndex = m_Graphs.ForSubmesh(index);
-	m_GraphView->setScene(graphIndex >= 0 ? m_Graphs.At(graphIndex).scene.get() : nullptr);
+	m_GraphView->setScene(graphIndex >= 0 ? SceneOf(graphIndex) : nullptr);
 
 	SyncOutputSelector();
 	SyncLayerSection();
@@ -920,39 +1014,104 @@ MeshEditorWindow::AddTextureNode(const QString& path, const QPointF& scenePos)
 void
 MeshEditorWindow::RefreshBakeState()
 {
-	for (MaterialGraphSet::Graph& entry : m_Graphs.All())
-	{
-		if (entry.materialPath.isEmpty())
-		{
-			// Nothing on disk to have baked: not stale, just not there yet.
-			entry.bakeStale = false;
-			continue;
-		}
+	++m_BakeJudgement;  // a verdict still on its way was reached before this one
+	for (MaterialGraphSet::Graph& entry : m_Graphs.All()) JudgeBake(entry);
+}
 
-		// Unreadable -- deleted or corrupted behind the panel -- is not an all-clear: the badge is
-		// the only thing on screen that would say so, and the bake is what puts a map back.
+void
+MeshEditorWindow::JudgeBake(MaterialGraphSet::Graph& entry)
+{
+	++m_BakeJudgement;  // a verdict still on its way was reached before this one
+	if (entry.materialPath.isEmpty())
+	{
+		// Nothing on disk to have baked: not stale, just not there yet.
+		entry.bakeStale = false;
+		return;
+	}
+
+	// Unreadable -- deleted or corrupted behind the panel -- is not an all-clear: the badge is the
+	// only thing on screen that would say so, and the bake is what puts a map back.
+	const assetlib::BMaterial* material = entry.onDisk.Get(m_Host.GetStore(), entry.materialPath);
+	if (material == nullptr)
+	{
+		entry.bakeStale = true;
+		return;
+	}
+
+	try
+	{
+		// A material written but never baked reads as stale, which is what it is: it has no
+		// optimized textures yet.
+		entry.bakeStale = m_Host.GetStore().BakeIsStale(*material);
+	}
+	catch (const std::exception& e)
+	{
+		// A data root that has gone reads as needing a bake rather than throwing out of a slot: the
+		// pessimistic answer costs a bake nobody needed, the other loses one.
+		entry.bakeStale = true;
+		qWarning("MeshEditor: cannot judge the bake: %s", e.what());
+	}
+}
+
+void
+MeshEditorWindow::JudgeBakesOffThread()
+{
+	const uint64_t judgement = ++m_BakeJudgement;
+
+	struct Judged
+	{
+		int                 graphIndex = 0;
+		assetlib::BMaterial material;
+		bool                stale = true;
+	};
+
+	auto judged = std::make_shared<std::vector<Judged>>();
+	for (int graphIndex = 0; m_Graphs.Holds(graphIndex); ++graphIndex)
+	{
+		// No badge until judged: one that came and went on every open would read as an alarm.
+		MaterialGraphSet::Graph& entry = m_Graphs.At(graphIndex);
+		entry.bakeStale                = false;
+		if (entry.materialPath.isEmpty())
+			continue;
+
 		const assetlib::BMaterial* material =
 			entry.onDisk.Get(m_Host.GetStore(), entry.materialPath);
 		if (material == nullptr)
-		{
 			entry.bakeStale = true;
-			continue;
+		else
+			judged->push_back({ graphIndex, *material });
+	}
+
+	RefreshActions();
+	if (judged->empty())
+		return;
+
+	m_BakeJudges.start([this, judged, judgement, &store = m_Host.GetStore()] {
+		for (Judged& entry : *judged)
+		{
+			try
+			{
+				entry.stale = store.BakeIsStale(entry.material);
+			}
+			catch (const std::exception& e)
+			{
+				qWarning("MeshEditor: cannot judge the bake: %s", e.what());
+			}
 		}
 
-		try
-		{
-			// A material written but never baked reads as stale, which is what it is: it has no
-			// optimized textures yet.
-			entry.bakeStale = m_Host.GetStore().BakeIsStale(*material);
-		}
-		catch (const std::exception& e)
-		{
-			// A data root that has gone reads as needing a bake rather than throwing out of a
-			// slot: the pessimistic answer costs a bake nobody needed, the other loses one.
-			entry.bakeStale = true;
-			qWarning("MeshEditor: cannot judge the bake: %s", e.what());
-		}
-	}
+		QMetaObject::invokeMethod(
+			this,
+			[this, judged, judgement] {
+				if (judgement != m_BakeJudgement)
+					return;
+
+				for (const Judged& entry : *judged)
+					if (m_Graphs.Holds(entry.graphIndex))
+						m_Graphs.At(entry.graphIndex).bakeStale = entry.stale;
+				RefreshActions();
+			},
+			Qt::QueuedConnection);
+	});
 }
 
 uint64_t
@@ -1505,7 +1664,10 @@ MeshEditorWindow::ShowMaterialForSubmesh(int submeshIndex, const QString& materi
 
 		if (!materialPath.isEmpty() &&
 		    std::filesystem::exists(std::filesystem::path(materialPath.toStdWString())))
-			OpenMaterialInto(graphIndex, materialPath, false);  // compiles the graph it loads
+			OpenMaterialInto(
+				graphIndex,
+				materialPath,
+				false);  // schedules the compile of the graph it loads
 		else
 			CompileGraph(graphIndex);
 	}
@@ -1514,7 +1676,7 @@ MeshEditorWindow::ShowMaterialForSubmesh(int submeshIndex, const QString& materi
 	if (m_Preview != nullptr && entry.preview.IsValid())
 		m_Preview->SetSubmeshMaterial(static_cast<uint32_t>(submeshIndex), entry.preview);
 
-	m_GraphView->setScene(entry.scene.get());
+	m_GraphView->setScene(SceneOf(graphIndex));
 	SyncOutputSelector();
 	SyncLayerSection();
 	FrameOnOutput();
@@ -1523,31 +1685,44 @@ MeshEditorWindow::ShowMaterialForSubmesh(int submeshIndex, const QString& materi
 void
 MeshEditorWindow::ReloadRegisteredMaterials()
 {
-	m_Registered.assign(static_cast<size_t>(m_SubmeshSelector->count()), {});
-	m_MeshSourceKey.clear();
-
 	if (m_Preview == nullptr || m_Preview->MeshPath().empty())
+	{
+		IndexRegisteredMaterials({}, {});
 		return;
+	}
 
 	try
 	{
-		const auto mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), m_Preview->MeshPath());
-		m_MeshSourceKey = mesh.sourceKey;
-
-		for (size_t submesh = 0; submesh < m_Registered.size(); ++submesh)
-		{
-			const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submesh));
-			if (source == assetlib::c_InvalidIndex)
-				continue;
-
-			m_Registered[submesh] = editor::RegisteredMaterialsFor(mesh.bindings, source);
-		}
+		auto mesh = editor::LoadMeshThroughSeam(m_Host.GetStore(), m_Preview->MeshPath());
+		IndexRegisteredMaterials(mesh.bindings, std::move(mesh.sourceKey));
 	}
 	catch (const std::exception& e)
 	{
 		// A UI refresh, so a mesh that will not read leaves the looks unlisted rather than
 		// throwing out of a slot; the panel still shows the default the preview loaded.
 		qWarning("MeshEditor: cannot read the registered materials: %s", e.what());
+		IndexRegisteredMaterials({}, {});
+	}
+}
+
+void
+MeshEditorWindow::IndexRegisteredMaterials(
+	const assetlib::MeshBindings& bindings,
+	std::string                   sourceKey)
+{
+	m_Registered.assign(static_cast<size_t>(m_SubmeshSelector->count()), {});
+	m_MeshSourceKey = std::move(sourceKey);
+
+	if (m_Preview == nullptr)
+		return;
+
+	for (size_t submesh = 0; submesh < m_Registered.size(); ++submesh)
+	{
+		const uint32_t source = m_Preview->SourceSubmesh(static_cast<uint32_t>(submesh));
+		if (source == assetlib::c_InvalidIndex)
+			continue;
+
+		m_Registered[submesh] = editor::RegisteredMaterialsFor(bindings, source);
 	}
 }
 
@@ -1755,7 +1930,8 @@ MeshEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool int
 			return;
 
 		m_Graphs.At(graphIndex).writtenHash = CompiledHash(graphIndex);
-		RefreshBakeState();
+		if (!m_OpeningMesh)
+			JudgeBake(m_Graphs.At(graphIndex));
 
 		// Last, and again: a branch that refreshed on its way out painted the badge from the
 		// material it was replacing.
@@ -1866,7 +2042,7 @@ MeshEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool int
 		}
 
 		m_Graphs.At(graphIndex).materialPath = path;
-		CompileGraph(graphIndex);
+		ScheduleCompile(graphIndex);
 		RefreshActions();
 		return;
 	}
@@ -1888,9 +2064,17 @@ MeshEditorWindow::OpenMaterialInto(int graphIndex, const QString& path, bool int
 
 	m_Graphs.At(graphIndex).materialPath = path;
 
-	CompileGraph(graphIndex);
+	ScheduleCompile(graphIndex);
 
 	RefreshActions();
+}
+
+void
+MeshEditorWindow::ScheduleCompile(int graphIndex)
+{
+	if (std::ranges::find(m_PendingCompiles, graphIndex) == m_PendingCompiles.end())
+		m_PendingCompiles.push_back(graphIndex);
+	m_CompileTimer->start();
 }
 
 void

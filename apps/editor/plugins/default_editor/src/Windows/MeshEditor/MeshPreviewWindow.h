@@ -2,6 +2,7 @@
 
 #include "Windows/MeshEditor/lod_view.h"
 
+#include <assetlib/MeshBindings.h>
 #include <editor_plugin_api/IEditorHost.h>
 #include <editor_plugin_api/IEditorViewport.h>
 #include <editor_sdk/OrbitCamera.h>
@@ -13,6 +14,7 @@
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/MeshInstanceHandle.h>
+#include <core/glm.h>
 #include <cstdint>
 #include <filesystem>
 #include <gamelib/Raycaster.h>
@@ -33,6 +35,17 @@ class QDropEvent;
 class QMimeData;
 class QMouseEvent;
 class QWheelEvent;
+
+namespace assetlib
+{
+	struct RegenMesh;
+}
+
+namespace bgl
+{
+	class IScene;
+	class ISceneView;
+}
 
 using MeshPreviewEnv = editor::EnvironmentApplyDesc;
 
@@ -76,6 +89,16 @@ public:
 	 */
 	void
 	SetSubmeshMaterial(uint32_t submeshIndex, bgl::MaterialHandle material);
+
+	struct SubmeshMaterial
+	{
+		uint32_t            submeshIndex = 0;
+		bgl::MaterialHandle material;
+	};
+
+	/** SetSubmeshMaterial for each of `materials`, in one render-thread round trip. */
+	void
+	SetSubmeshMaterials(std::span<const SubmeshMaterial> materials);
 
 	struct SubmeshRef
 	{
@@ -150,6 +173,20 @@ public:
 	MeshPath() const noexcept
 	{
 		return m_MeshPath;
+	}
+
+	/** The open mesh's binding snapshot as it was read, or empty for the sphere. */
+	[[nodiscard]] const assetlib::MeshBindings&
+	MeshBindings() const noexcept
+	{
+		return m_MeshBindings;
+	}
+
+	/** The source the open mesh was imported from, as it was read, or empty for the sphere. */
+	[[nodiscard]] const std::string&
+	MeshSourceKey() const noexcept
+	{
+		return m_MeshSourceKey;
 	}
 
 	uint32_t
@@ -292,6 +329,36 @@ private:
 	void
 	ClearGeometry();
 
+	// What UploadMesh hands back for LoadMesh to take on: everything ClearGeometry resets.
+	struct Upload
+	{
+		std::vector<bgl::GeomHandle>  geoms;
+		std::vector<editor::MeshLods> geomLods;
+		std::vector<InstanceRef>      instances;
+		std::vector<SubmeshRef>       submeshRefs;
+		QStringList                   submeshNames;
+		QStringList                   submeshMaterialPaths;
+		game::Raycaster               raycaster;
+		glm::vec3                     center = glm::vec3(0.0f);
+		float                         radius = 1.0f;
+	};
+
+	/**
+	 * Cooks every level of every mesh `loaded` places, builds the picker's copy of them, and
+	 * commits the upload and the placements to the scene. Off the GUI thread -- the loading
+	 * screen's worker -- so it reads no member LoadMesh writes. Deletes whatever it committed when
+	 * it throws.
+	 */
+	[[nodiscard]] Upload
+	UploadMesh(const assetlib::RegenMesh& loaded) const;
+
+	static void
+	DeleteGeometry(
+		bgl::IScene&                     scene,
+		bgl::ISceneView&                 view,
+		std::span<const InstanceRef>     instances,
+		std::span<const bgl::GeomHandle> geoms) noexcept;
+
 	// Restores the default sphere (shown when no mesh is selected).
 	void
 	ShowDefaultSphere();
@@ -303,12 +370,14 @@ private:
 	std::optional<uint32_t>       m_LastLod;
 	std::vector<InstanceRef>      m_Instances;
 	std::vector<SubmeshRef>       m_SubmeshRefs;
-	std::vector<bool>     m_SubmeshToon;  // per submesh, whether its material is a toon model's
-	bgl::MaterialHandle   m_DefaultMaterial;
-	QStringList           m_SubmeshNames;
-	QStringList           m_SubmeshMaterialPaths;
-	std::filesystem::path m_MeshPath;  // empty for the default sphere
-	std::filesystem::path m_DataRoot;  // empty until a project is opened
+	std::vector<bool>      m_SubmeshToon;  // per submesh, whether its material is a toon model's
+	bgl::MaterialHandle    m_DefaultMaterial;
+	QStringList            m_SubmeshNames;
+	QStringList            m_SubmeshMaterialPaths;
+	std::filesystem::path  m_MeshPath;  // empty for the default sphere
+	assetlib::MeshBindings m_MeshBindings;
+	std::string            m_MeshSourceKey;
+	std::filesystem::path  m_DataRoot;  // empty until a project is opened
 
 	// The configured environment is kept whole because a drop carries only a path and Reset has to
 	// be able to get back to it. Its root stands in until a project opens and m_DataRoot names its

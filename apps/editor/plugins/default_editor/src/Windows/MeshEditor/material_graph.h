@@ -18,10 +18,7 @@
 
 class MaterialGraphModel;
 class TexturePreviewCache;
-namespace editor
-{
-	class IEditorHost;
-}
+class TextureUploads;
 
 /**
  * Rewrites `path` relative to `dir`, or resolves it against `dir` when `toRelative` is false.
@@ -71,11 +68,11 @@ UpgradeSurfaceSinkPorts(QJsonObject& graph, QtNodes::NodeDelegateModelRegistry& 
  * The node types a material graph can hold.
  *
  * `language` resolves every node's shown text; it must outlive the registry and every node it
- * creates, which is the same requirement `host` and `previews` are held to when they are not
+ * creates, which is the same requirement `uploads` and `previews` are held to when they are not
  * null.
  *
- * `host` and `previews` may be null: a TextureNode then shows no image, which is what lets a graph
- * be built and compiled with no graphics device.
+ * `uploads` and `previews` may be null: a TextureNode then uploads nothing and shows no image, which
+ * is what lets a graph be built and compiled with no graphics device.
  *
  * `surfaces` registers one surface sink per entry, named `SurfaceOutput:<name>` -- what the engine
  * reflected at startup, or hand-built types in a test. Each entry is copied into its creator, so
@@ -85,7 +82,7 @@ UpgradeSurfaceSinkPorts(QJsonObject& graph, QtNodes::NodeDelegateModelRegistry& 
 [[nodiscard]] std::shared_ptr<QtNodes::NodeDelegateModelRegistry>
 MakeMaterialNodeRegistry(
 	const editor::ILanguageResolver&  language,
-	editor::IEditorHost*              host,
+	TextureUploads*                   uploads,
 	TexturePreviewCache*              previews,
 	std::span<const bgl::SurfaceType> surfaces = {});
 

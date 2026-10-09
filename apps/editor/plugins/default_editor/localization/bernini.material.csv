@@ -81,12 +81,10 @@ save_summary_saved_many,Saved {0} materials.
 save_summary_saved_one,Saved {0} material.
 save_summary_unattached,"Written, but the mesh could not be made to name them:
 {0}"
-show_mesh_failed,"Could not show '{0}':
-
-{1}"
 submesh_label,Submesh
 surface_not_registered,"'{0}' is drawn by surface '{1}', which this session has not registered. Open the project that provides it and relaunch."
 tangent_warning,"This submesh has no tangents, so its normal map is being ignored."
 title,Mesh Editor
 unbound_material,(unbound)
 unbound_material_tooltip,This submesh has no material yet. Saving one binds it.
+uploading_mesh_progress,Uploading geometry...

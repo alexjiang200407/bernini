@@ -132,7 +132,8 @@ namespace assetlib
 	 *
 	 * @param path Path to a `.ktx2` file.
 	 * @param maxDim Target length of the longer edge. The smallest mip at least this large wins,
-	 *        or the base mip when the whole image is smaller.
+	 *        or the base mip when the whole image is smaller. The container is cut as loadKTX2's
+	 *        cap cuts it, so the levels above the one shown are neither read nor transcoded.
 	 * @throws std::runtime_error if the file cannot be read, or carries a format with no CPU
 	 *         decode path: HDR float maps, and block-compressed images with no Basis payload.
 	 */

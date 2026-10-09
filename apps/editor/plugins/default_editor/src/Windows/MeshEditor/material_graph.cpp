@@ -285,15 +285,15 @@ UpgradeSurfaceSinkPorts(QJsonObject& graph, QtNodes::NodeDelegateModelRegistry& 
 std::shared_ptr<QtNodes::NodeDelegateModelRegistry>
 MakeMaterialNodeRegistry(
 	const editor::ILanguageResolver&  language,
-	editor::IEditorHost*              host,
+	TextureUploads*                   uploads,
 	TexturePreviewCache*              previews,
 	std::span<const bgl::SurfaceType> surfaces)
 {
 	auto registry = std::make_shared<QtNodes::NodeDelegateModelRegistry>();
 
 	registry->registerModel<TextureNode>(
-		[&language, host, previews]() {
-			return std::make_unique<TextureNode>(language, host, previews);
+		[&language, uploads, previews]() {
+			return std::make_unique<TextureNode>(language, uploads, previews);
 		},
 		"Input");
 

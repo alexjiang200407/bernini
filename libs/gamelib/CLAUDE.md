@@ -115,7 +115,10 @@ the file, so handing one in *is* the guarantee the acquiring thread does no deco
 decode failed is simply left out, and was reported where it failed.
 
 The editor's `AssetThumbnailCache` is the reason it exists: it decodes on a worker and uploads on the
-UI thread, which is the only way a folder of meshes can populate without freezing the editor.
+UI thread, which is the only way a folder of meshes can populate without freezing the editor. The
+Mesh Editor's texture nodes take the same route through `TextureUploads`: a worker decodes each map
+once and hands it over in a prefetch, so a mesh with dozens of maps opens without the GUI thread
+decoding any of them.
 
 **Skins.** `SetSubmeshMaterial` changes a geom's **default**, so it reaches every instance placed from
 it. `SetInstanceSubmeshMaterial` overrides **one instance** and leaves its siblings alone — the same

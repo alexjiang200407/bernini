@@ -342,6 +342,37 @@ TEST_CASE("A capped load from a mount reads and transcodes only the mip tail", "
 		RequireSameTail(full, tail, 3);
 	}
 
+	SECTION("a preview reads and transcodes only the levels from the one it shows")
+	{
+		const ImageData full    = loadKTX2(fs, "basis.ktx2", Ktx2Decode::kRgba8, 0);
+		fs.wholeReads           = 0;
+		fs.furthestByte         = 0;
+		const ImageData preview = loadKTX2Preview(fs, "basis.ktx2", 32);
+
+		CHECK(fs.wholeReads == 0);
+		CHECK(fs.furthestByte < fileSize / 4);
+
+		REQUIRE(preview.width == 32);
+		REQUIRE(preview.mipLevels == 1);
+		const auto& level = full.subresources[3];
+		REQUIRE(preview.pixels.size() == level.slicePitch);
+		CHECK(
+			std::memcmp(
+				preview.pixels.data(),
+				full.pixels.data() + level.offset,
+				level.slicePitch) == 0);
+	}
+
+	SECTION("a preview of a host file is cut the same way")
+	{
+		const ImageData mounted = loadKTX2Preview(fs, "basis.ktx2", 32);
+		const ImageData host    = loadKTX2Preview(dir / "basis.ktx2", 32);
+
+		REQUIRE(host.width == 32);
+		REQUIRE(host.pixels.size() == mounted.pixels.size());
+		CHECK(std::memcmp(host.pixels.data(), mounted.pixels.data(), host.pixels.size()) == 0);
+	}
+
 	SECTION("a cap the whole chain fits under is one whole read")
 	{
 		const ImageData whole = loadKTX2(fs, "basis.ktx2", Ktx2Decode::kGpu, 4096);

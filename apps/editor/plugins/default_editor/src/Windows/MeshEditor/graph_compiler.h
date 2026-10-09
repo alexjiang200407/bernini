@@ -4,6 +4,7 @@
 #include "Windows/MeshEditor/nodes/SurfaceOutputNode.h"
 
 #include <bgl/types/SurfaceMaterialDesc.h>
+#include <span>
 
 class MeshPreviewWindow;
 namespace editor
@@ -47,4 +48,15 @@ namespace editor
 		MaterialGraphSet::Graph& graph,
 		editor::IEditorHost&     host,
 		MeshPreviewWindow&       preview);
+
+	/**
+	 * CompilePreviewMaterial for several graphs at a cost that does not grow with them: one
+	 * render-thread round trip compiles every one, one more binds the materials made new, and one
+	 * deletes what they replaced -- where one graph at a time pays those per graph.
+	 */
+	void
+	CompilePreviewMaterials(
+		std::span<MaterialGraphSet::Graph* const> graphs,
+		editor::IEditorHost&                      host,
+		MeshPreviewWindow&                        preview);
 }

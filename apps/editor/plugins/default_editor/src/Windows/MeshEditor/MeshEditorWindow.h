@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QThreadPool>
+#include <assetlib/MeshBindings.h>
 #include <gamelib/AssetManager.h>
 
 #include <QWidget>
@@ -23,6 +25,7 @@
 #include "Windows/MeshEditor/mesh_editor_ui.h"
 
 class TexturePreviewCache;
+class TextureUploads;
 
 class QAction;
 class QComboBox;
@@ -160,6 +163,14 @@ private:
 
 	/** Frames the graph view on the current submesh's output node, at 1:1. The sink is what you author
 	 *  back from, so it is where a freshly opened or freshly loaded graph should start. */
+	/**
+	 * The scene that draws graph `graphIndex`, built the first time it is shown: a scene builds a
+	 * graphics item and an embedded widget for every node, and a mesh opens a graph per submesh
+	 * of which one is on screen.
+	 */
+	MaterialGraphScene*
+	SceneOf(int graphIndex);
+
 	void
 	FrameOnOutput();
 
@@ -172,6 +183,15 @@ private:
 
 	void
 	CompileGraph(int graphIndex);
+
+	/**
+	 * Compiles `graphIndex` on a later turn of the event loop, once however often it is asked
+	 * before then and together with every other graph asked for: each compile waits on the render
+	 * thread, a sink reports one change per port an arriving texture feeds, and opening a mesh asks
+	 * for a graph per submesh.
+	 */
+	void
+	ScheduleCompile(int graphIndex);
 
 	/** Destroys every graph's preview material. The graphs must not be drawn after this. */
 	void
@@ -227,6 +247,29 @@ private:
 	void
 	RefreshBakeState();
 
+	/** RefreshBakeState for one graph: what a load changes the verdict of. */
+	void
+	JudgeBake(MaterialGraphSet::Graph& entry);
+
+	/**
+	 * Opens the next of the mesh's graphs for as long as one slice of the event loop allows -- the
+	 * first one at least -- and schedules the rest for the next turn. Their bakes are judged once
+	 * the last is open.
+	 */
+	void
+	OpenNextGraphs();
+
+	/** Opens the graph submesh `index` is drawn through, or joins the one its material has. */
+	void
+	OpenSubmeshGraph(int index);
+
+	/**
+	 * RefreshBakeState with the verdicts reached on a worker and applied when they land. For
+	 * opening a mesh: the first judgement of a session hashes every map its materials route.
+	 */
+	void
+	JudgeBakesOffThread();
+
 	/** What `graphIndex` compiles to right now, hashed, for the comparison a write makes. */
 	[[nodiscard]] uint64_t
 	CompiledHash(int graphIndex) const;
@@ -234,6 +277,10 @@ private:
 	/** Re-reads the mesh's registered looks into `m_Registered`, one entry per panel submesh. */
 	void
 	ReloadRegisteredMaterials();
+
+	/** Indexes the looks `bindings` registers into `m_Registered`, one entry per panel submesh. */
+	void
+	IndexRegisteredMaterials(const assetlib::MeshBindings& bindings, std::string sourceKey);
 
 	/** The looks the mesh registers for `submeshIndex`, or none for a mesh that has no file. */
 	[[nodiscard]] std::vector<editor::RegisteredMaterial>
@@ -318,6 +365,7 @@ private:
 	MeshPreviewWindow* m_Preview = nullptr;
 
 	TexturePreviewCache* m_TexturePreviews = nullptr;
+	TextureUploads*      m_TextureUploads  = nullptr;
 
 	std::shared_ptr<QtNodes::NodeDelegateModelRegistry> m_Registry;
 
@@ -335,9 +383,24 @@ private:
 	// burst of keystrokes is one write rather than one per keystroke.
 	QTimer* m_WriteTimer = nullptr;
 
+	QTimer*          m_CompileTimer = nullptr;
+	std::vector<int> m_PendingCompiles;
+
 	// Set while a graph is being loaded or seeded, so the edits that arrive from the load itself
 	// are not read as the user's and written straight back.
 	bool m_Loading = false;
+
+	// Set while a mesh's graphs are opened, whose bakes are judged together off the GUI thread.
+	bool m_OpeningMesh = false;
+
+	// What SetPreviewGeometry leaves OpenNextGraphs to do: the materials the submeshes are bound to,
+	// and the first submesh whose graph is not open yet.
+	QTimer*     m_OpenTimer = nullptr;
+	QStringList m_GraphPaths;
+	int         m_NextGraph = 0;
+
+	// Which JudgeBakesOffThread is current: an answer for a mesh since replaced is dropped.
+	uint64_t m_BakeJudgement = 0;
 
 	// Which look each submesh is showing: the name of a registered override, or empty for the
 	// submesh's default. Indexed by panel submesh, sized with the graphs.
@@ -371,4 +434,7 @@ private:
 	QAction*     m_MakeLookDefault  = nullptr;
 	QLabel*      m_TangentWarning   = nullptr;
 	QPushButton* m_GenerateTangents = nullptr;
+
+	// Last, so it is destroyed first: its destructor waits for a judgement still running.
+	QThreadPool m_BakeJudges;
 };
