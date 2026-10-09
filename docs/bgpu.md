@@ -298,7 +298,9 @@ against D3D12 and Metal:
   fence -- and the submit lock every owner of that `VkQueue` holds. `vkQueuePresentKHR` waits only on
   a binary semaphore, so `bgl`'s swapchain submits an empty batch that waits on the timeline at the
   frame's fence and signals one, under that lock. The instance enables `VK_KHR_surface` and
-  `VK_KHR_win32_surface`, the device `VK_KHR_swapchain`.
+  `VK_KHR_win32_surface`, the device `VK_KHR_swapchain`, and `VK_NV_low_latency2` with the
+  `VK_KHR_present_id` it requires only when the desc asks for maximum performance and the device has
+  both ([§ Maximum performance](#maximum-performance)).
 * **A buffer two copies of one list write is ordered between them**: a pass that clears a buffer
   whole and then rewrites part of it expects the writes to land in order, which two transfers do not
   promise, so the list barriers a second copy into a buffer it copied into since its last barrier.
@@ -334,6 +336,7 @@ a GPU time read without it is ambiguous.
 | Backend | The request | Unavailable when |
 |---|---|---|
 | D3D12 | NvAPI's Reflex entry point, `NvAPI_D3D_SetSleepMode` with `bLowLatencyBoost` on and nothing else: no low-latency mode, no frame interval | the device is not NVIDIA's, or no driver at R455 or later |
+| Vulkan | `VK_NV_low_latency2`: the device is created with it, and every swapchain with `latencyModeEnable` and `vkSetLatencySleepModeNV` with `lowLatencyBoost` on and nothing else | the device has no `VK_NV_low_latency2`, or not the `VK_KHR_present_id` it requires: AMD, Intel, NVIDIA before R545 |
 | Metal | none: Apple exposes no clock request to an application | always |
 
 * **D3D12 asks NVIDIA's driver through Reflex's boost alone.** It is the driver's documented
@@ -344,6 +347,13 @@ a GPU time read without it is ambiguous.
   (`THIRD_PARTY_NOTICES.md`); its `nvapi64.lib` is a stub that finds the driver's DLL at
   `NvAPI_Initialize`, so a machine with no NVIDIA driver links and runs, and logs the request
   unavailable. AMD and Intel publish no such request on D3D12.
+* **Vulkan's request rides on the swapchain.** `VK_NV_low_latency2` is the same Reflex sleep mode,
+  set per swapchain rather than per device, so the context only enables the extension and reports
+  `kRequested`, and bgl's swapchain makes the call each time it creates one, a resize included. A
+  context that presents nothing holds no clock, which costs nothing: a headless run never idles.
+  The extension is looked up as the minimum requirements' are, and an absent one is a device
+  created without it and a warning in `bgpu.log`, never a refusal: it is the one device extension
+  the bar does not require.
 * **Metal has nothing to call.** The only "GPU performance state" control on Apple silicon is a
   developer one, Xcode's and Instruments' device condition, which a shipping application cannot set.
   macOS Game Mode is the OS's own policy for a fullscreen application bundle declared a game, not a

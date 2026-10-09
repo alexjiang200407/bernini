@@ -25,6 +25,32 @@ namespace
 		return desc.VendorId;
 	}
 }
+#elif defined(RENDERER_BACKEND_VULKAN)
+#	include "native_device_vulkan.h"
+#	include "volk_vulkan.h"
+#	include <algorithm>
+#	include <cstdint>
+#	include <string_view>
+#	include <vector>
+
+namespace
+{
+	[[nodiscard]] bool
+	HasExtension(const bgpu::GpuContext& context, const std::string_view name)
+	{
+		const VkPhysicalDevice physical = bgpu::GetVulkanHandles(context).physicalDevice;
+		uint32_t               count    = 0;
+		REQUIRE(
+			vkEnumerateDeviceExtensionProperties(physical, nullptr, &count, nullptr) == VK_SUCCESS);
+		auto extensions = std::vector<VkExtensionProperties>(count);
+		REQUIRE(
+			vkEnumerateDeviceExtensionProperties(physical, nullptr, &count, extensions.data()) ==
+			VK_SUCCESS);
+		return std::ranges::any_of(extensions, [name](const VkExtensionProperties& extension) {
+			return std::string_view(extension.extensionName) == name;
+		});
+	}
+}
 #endif
 
 // The clock itself is only observable in a vsync'd window (docs/bgpu.md § Maximum performance);
@@ -52,6 +78,13 @@ TEST_CASE("A request for maximum performance never fails the context", "[device]
 	const auto expected = DefaultAdapterVendor() == c_NvidiaVendorId ?
 	                          bgpu::MaximumPerformance::kRequested :
 	                          bgpu::MaximumPerformance::kUnavailable;
+	CHECK(context->GetMaximumPerformance() == expected);
+#elif defined(RENDERER_BACKEND_VULKAN)
+	// Granted when the device is created with the extension; each swapchain then sets the boost.
+	const bool boost = HasExtension(*context, VK_NV_LOW_LATENCY_2_EXTENSION_NAME) &&
+	                   HasExtension(*context, VK_KHR_PRESENT_ID_EXTENSION_NAME);
+	const auto expected =
+		boost ? bgpu::MaximumPerformance::kRequested : bgpu::MaximumPerformance::kUnavailable;
 	CHECK(context->GetMaximumPerformance() == expected);
 #endif
 }

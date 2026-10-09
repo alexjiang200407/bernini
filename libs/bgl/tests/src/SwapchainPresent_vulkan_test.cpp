@@ -49,12 +49,13 @@ namespace
 	};
 
 	void
-	PresentFrames(HWND hwnd)
+	PresentFrames(HWND hwnd, const bool preferMaximumPerformance = false)
 	{
 		auto opts                                = bgl::test::GraphicsSetup();
 		opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
 		opts.gpuContext.enableDebugLayer         = true;
 		opts.gpuContext.enableGPUValidationLayer = bgl::test::GpuValidationEnabled();
+		opts.gpuContext.preferMaximumPerformance = preferMaximumPerformance;
 
 		auto gfx = bgl::test::CreateGraphics(opts);
 		REQUIRE(gfx != nullptr);
@@ -93,6 +94,18 @@ TEST_CASE(
 
 	PresentFrames(window.Get());
 	PresentFrames(window.Get());
+}
+
+// On a driver with VK_NV_low_latency2 the swapchain is created for it and its sleep mode set, both
+// under the validation layer; on one without, the request is skipped and the window presents as ever.
+TEST_CASE(
+	"A windowed target presents on Vulkan with maximum performance requested",
+	"[present][graphics][vulkan][maxperf]")
+{
+	const auto window = HiddenWindow();
+	REQUIRE(window.Get() != nullptr);
+
+	PresentFrames(window.Get(), true);
 }
 
 #endif
