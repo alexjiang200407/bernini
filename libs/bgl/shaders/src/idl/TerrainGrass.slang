@@ -24,6 +24,5 @@ public struct TerrainGrass
 
     public float patchSize;
     public float patchCoverage;
-
-    public uint pad;
+    public float patchEdge; // the patch noise either side of the coverage threshold a clump grows across
 };

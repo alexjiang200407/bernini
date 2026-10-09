@@ -13,9 +13,6 @@ import lib.terrain.nodes;
 // heightfield, and the layer's rules scale it by where it stands. Tiles are counted from the
 // terrain's origin, so a clump is the same clump wherever the window has moved to.
 
-// How far a patch's edge runs either side of the coverage threshold, in noise units.
-static const float cPatchEdge = 0.06;
-
 float2 FieldSize(Terrain terrain)
 {
     return float2(terrain.samplesX - 1u, terrain.samplesZ - 1u) * terrain.originAndCellSize.w;
@@ -76,7 +73,8 @@ public void TerrainGrassTileBox(
 }
 
 // How much of the ground the layer's patches cover at `xz`: a low-frequency noise against the
-// coverage, with a soft edge so a patch thins out rather than ending on a line.
+// coverage, with an edge the layer's patchEdge wide so a patch shortens out rather than ending on a
+// line.
 float PatchGrowth(TerrainGrass layer, float2 xz)
 {
     if (layer.patchCoverage >= 1.0)
@@ -90,7 +88,7 @@ float PatchGrowth(TerrainGrass layer, float2 xz)
     let p = xz / layer.patchSize + float(layer.seed) * float2(37.1, 17.3);
     let noise = 0.65 * ValueNoise(p) + 0.35 * ValueNoise(p * 2.03 + 19.1);
     let threshold = 1.0 - layer.patchCoverage;
-    return smoothstep(threshold - cPatchEdge, threshold + cPatchEdge, noise);
+    return smoothstep(threshold - layer.patchEdge, threshold + layer.patchEdge, noise);
 }
 
 // How tall a clump standing at `position` on ground facing `normal` grows, as a share of the look's

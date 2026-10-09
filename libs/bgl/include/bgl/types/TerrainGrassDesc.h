@@ -48,6 +48,11 @@ namespace bgl
 		float patchSize     = 20.0f;
 		float patchCoverage = 1.0f;
 
+		// How wide a patch's edge is, as a share of the patch noise either side of the coverage
+		// threshold, in (0, 0.5]: across it a clump grows from nothing to full height, so a wider
+		// edge lets a field shorten into a bare patch rather than end on a line.
+		float patchEdge = 0.06f;
+
 		template <typename Self>
 		Self&&
 		SetLook(this Self&& self, GrassHandle value) noexcept
@@ -89,6 +94,14 @@ namespace bgl
 		{
 			self.patchSize     = size;
 			self.patchCoverage = coverage;
+			return std::forward<Self>(self);
+		}
+
+		template <typename Self>
+		Self&&
+		SetPatchEdge(this Self&& self, float value) noexcept
+		{
+			self.patchEdge = value;
 			return std::forward<Self>(self);
 		}
 	};

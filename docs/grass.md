@@ -64,7 +64,8 @@ A stored clump list grows with the field's area; a layer costs the same on a fie
 - **The rules.** How tall a clump grows is the product of three shares: the slope rule (full height
   up to `maxSlope`, nothing `slopeBlend` steeper), the height rule (nothing outside
   `[minHeight, maxHeight]`, full height `heightBlend` inside it), and the patches (a low-frequency
-  value noise about `patchSize` across against `patchCoverage`, with a soft edge). A clump scaled
+  value noise about `patchSize` across against `patchCoverage`, with a soft edge `patchEdge` of the
+  noise wide either side of the threshold). A clump scaled
   to nothing is not drawn, and one near a rule's edge is shorter, so grass thins toward rock or
   snow rather than ending on a line. Nothing is painted: the rules are set to agree with the
   ground's surface by hand, since the engine cannot read a project surface's bands.

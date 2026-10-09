@@ -60,6 +60,10 @@ namespace bgl
 			{
 				refuse("patchCoverage must be in [0, 1]");
 			}
+			if (!(layer.patchEdge > 0.0f && layer.patchEdge <= 0.5f))
+			{
+				refuse("patchEdge must be in (0, 0.5]");
+			}
 		}
 
 		[[nodiscard]] idl::TerrainGrass
@@ -80,6 +84,7 @@ namespace bgl
 			record.heightBlend  = layer.heightBlend;
 			record.patchSize    = layer.patchSize;
 			record.patchCoverage = layer.patchCoverage;
+			record.patchEdge     = layer.patchEdge;
 			return record;
 		}
 	}
