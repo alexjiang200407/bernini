@@ -1,6 +1,32 @@
 #include <bgpu/GpuContext.h>
 #include <catch2/catch_test_macros.hpp>
 
+#if defined(RENDERER_BACKEND_DX12)
+#	include <combaseapi.h>
+#	include <cstdint>
+#	include <dxgi.h>
+#	include <winerror.h>
+#	include <wrl/client.h>
+
+namespace
+{
+	constexpr uint32_t c_NvidiaVendorId = 0x10DE;
+
+	// The adapter D3D12CreateDevice takes when it is given none, as the context's is.
+	[[nodiscard]] uint32_t
+	DefaultAdapterVendor()
+	{
+		Microsoft::WRL::ComPtr<IDXGIFactory1> factory;
+		Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+		auto                                  desc = DXGI_ADAPTER_DESC1();
+		REQUIRE(SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))));
+		REQUIRE(SUCCEEDED(factory->EnumAdapters1(0, &adapter)));
+		REQUIRE(SUCCEEDED(adapter->GetDesc1(&desc)));
+		return desc.VendorId;
+	}
+}
+#endif
+
 // The clock itself is only observable in a vsync'd window (docs/bgpu.md § Maximum performance);
 // these pin what each backend tells the driver, and what it reports back.
 
@@ -21,5 +47,11 @@ TEST_CASE("A request for maximum performance never fails the context", "[device]
 	CHECK(context->GetMaximumPerformance() != bgpu::MaximumPerformance::kNotRequested);
 #if defined(__APPLE__)
 	CHECK(context->GetMaximumPerformance() == bgpu::MaximumPerformance::kUnavailable);
+#elif defined(RENDERER_BACKEND_DX12)
+	// Every driver since Reflex arrived (R455) takes the request; no other vendor's has it.
+	const auto expected = DefaultAdapterVendor() == c_NvidiaVendorId ?
+	                          bgpu::MaximumPerformance::kRequested :
+	                          bgpu::MaximumPerformance::kUnavailable;
+	CHECK(context->GetMaximumPerformance() == expected);
 #endif
 }

@@ -1,3 +1,4 @@
+#include "ClockBoost_d3d12.h"
 #include "ContextBase.h"
 #include "native_device_d3d12.h"
 #include <atomic>
@@ -12,6 +13,7 @@
 #include <cstdint>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <slang.h>
 #include <spdlog/spdlog.h>
 #include <string>
@@ -153,6 +155,13 @@ namespace bgpu
 					auto error = UnsupportedSystem(std::move(unmet));
 					spdlog::critical("{}", error.what());
 					throw error;
+				}
+
+				if (desc.preferMaximumPerformance)
+				{
+					m_ClockBoost.emplace(m_Device.Get());
+					if (m_ClockBoost->Granted())
+						GrantMaximumPerformance();
 				}
 
 				// Debug-layer and GPU-based-validation messages otherwise only reach an attached
@@ -311,6 +320,9 @@ namespace bgpu
 				if (severe && self != nullptr && self->GetDesc().strictError)
 					core::fatal("[D3D12] strict error: {}", description);
 			}
+
+			// Before the device and released after everything holding it: NvAPI outlives the device.
+			std::optional<D3d12ClockBoost> m_ClockBoost;
 
 			wrl::ComPtr<ID3D12Device>     m_Device;
 			wrl::ComPtr<ID3D12Debug1>     m_DebugController;

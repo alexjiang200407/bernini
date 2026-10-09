@@ -333,8 +333,17 @@ a GPU time read without it is ambiguous.
 
 | Backend | The request | Unavailable when |
 |---|---|---|
+| D3D12 | NvAPI's Reflex entry point, `NvAPI_D3D_SetSleepMode` with `bLowLatencyBoost` on and nothing else: no low-latency mode, no frame interval | the device is not NVIDIA's, or no driver at R455 or later |
 | Metal | none: Apple exposes no clock request to an application | always |
 
+* **D3D12 asks NVIDIA's driver through Reflex's boost alone.** It is the driver's documented
+  request for "maximum GPU clock frequency regardless of workload", the same thing the control
+  panel's setting does, and it is settled once per device: the context makes it right after the
+  device, never per frame, and nothing calls `NvAPI_D3D_Sleep` or sets a marker. NvAPI is
+  NVIDIA's SDK, MIT-licensed, fetched by the overlay port `cmake/ports/nvapi` at a pinned commit
+  (`THIRD_PARTY_NOTICES.md`); its `nvapi64.lib` is a stub that finds the driver's DLL at
+  `NvAPI_Initialize`, so a machine with no NVIDIA driver links and runs, and logs the request
+  unavailable. AMD and Intel publish no such request on D3D12.
 * **Metal has nothing to call.** The only "GPU performance state" control on Apple silicon is a
   developer one, Xcode's and Instruments' device condition, which a shipping application cannot set.
   macOS Game Mode is the OS's own policy for a fullscreen application bundle declared a game, not a

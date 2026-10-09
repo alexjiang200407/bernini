@@ -49,6 +49,10 @@ if (WIN32)
     find_dependency(winpixevent CONFIG)
     # A static renderer's backend links DirectX-Headers, and the package names that target.
     find_dependency(directx-headers CONFIG)
+    # ...and on D3D12 NvAPI, whose port is x64 only.
+    if (BERNINI_RENDERER_BACKEND STREQUAL "DX12")
+        find_dependency(unofficial-nvapi CONFIG)
+    endif()
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/BerniniTargets.cmake")
