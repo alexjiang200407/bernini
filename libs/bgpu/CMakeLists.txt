@@ -6,7 +6,8 @@
 file(GLOB_RECURSE BGPU_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 )
-list(FILTER BGPU_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal|vulkan)/.*")
+# exe_exports/ is the executables' own, never this library's: bgpu_discrete_gpu below.
+list(FILTER BGPU_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal|vulkan|exe_exports)/.*")
 
 file(GLOB_RECURSE BGPU_HEADERS CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/include/bgpu/*.h
@@ -97,11 +98,14 @@ endif()
 if(RENDERER_BACKEND STREQUAL "DX12")
 	find_package(directx-headers CONFIG REQUIRED)
 	find_package(winpixevent CONFIG REQUIRED)
+	# NvAPI's static stub, for GpuContextDesc::preferMaximumPerformance: it finds the driver's
+	# nvapi64.dll at run time, so a machine with no NVIDIA driver links and runs (cmake/ports/nvapi).
+	find_package(unofficial-nvapi CONFIG REQUIRED)
 	# PUBLIC: what a caller does with a native pointer bgpu hands out -- the renderer's swapchain --
 	# needs these headers, though bgpu's own public headers only forward-declare the interfaces.
 	target_link_libraries(bgpu
 		PUBLIC  Microsoft::DirectX-Headers
-		PRIVATE d3d12 dxgi dxguid Microsoft::WinPixEventRuntime)
+		PRIVATE d3d12 dxgi dxguid Microsoft::WinPixEventRuntime unofficial::nvapi::nvapi)
 	target_compile_definitions(bgpu PRIVATE $<$<CONFIG:Debug>:USE_PIX>)
 elseif(RENDERER_BACKEND STREQUAL "METAL")
 	# metal-cpp is Apple's C++ interface to Metal -- header-only, not on vcpkg, so pulled in here.
@@ -203,6 +207,14 @@ elseif(RENDERER_BACKEND STREQUAL "VULKAN")
 			"No Vulkan validation layer in ${BGPU_VULKAN_LAYER_DIR}: GpuContextDesc::enableDebugLayer "
 			"needs one installed on the machine")
 	endif()
+endif()
+
+# NvOptimusEnablement and AmdPowerXpressRequestHighPerformance, which a hybrid laptop's driver reads
+# from the executable to put the discrete GPU first: whatever the backend, so an OBJECT library each
+# executable that renders links itself, as it does bgpu_d3d12_agility.
+if(WIN32)
+	add_library(bgpu_discrete_gpu OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/src/exe_exports/discrete_gpu.cpp)
+	enable_strict_compiler(bgpu_discrete_gpu)
 endif()
 
 # The RHI's Slang half: the offset primitives (idl.Entry, idl.Range ...), the buffer family that reads
@@ -393,7 +405,7 @@ if (BUILD_TESTS AND NOT RENDERER_BACKEND STREQUAL "NONE")
 
 	if(RENDERER_BACKEND STREQUAL "DX12")
 		# The Agility SDK's two exports must be the executable's.
-		target_link_libraries(bgpu_tests PRIVATE d3d12 bgpu_d3d12_agility)
+		target_link_libraries(bgpu_tests PRIVATE d3d12 dxgi bgpu_d3d12_agility)
 		# A shared bgpu exports only what BGPU_API marks, and the allocator it tests directly is not
 		# part of that surface, so the case compiles its own copy.
 		if(BERNINI_RENDERER_LIBRARY_TYPE STREQUAL "SHARED")

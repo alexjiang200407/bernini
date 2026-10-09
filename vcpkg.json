@@ -20,6 +20,7 @@
     { "name": "directx-dxc", "platform": "windows" },
     { "name": "directx12-agility", "platform": "windows" },
     { "name": "winpixevent", "platform": "windows" },
+    { "name": "nvapi", "platform": "windows & x64" },
     { "name": "volk", "platform": "windows" },
     { "name": "vulkan-utility-libraries", "platform": "windows" },
     { "name": "vulkan-validationlayers", "platform": "windows" }

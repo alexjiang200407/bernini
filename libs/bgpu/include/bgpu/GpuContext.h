@@ -54,8 +54,29 @@ namespace bgpu
 		// relative to the working directory. Empty disables the cache for every owner.
 		std::filesystem::path shaderCacheDir;
 
+		// Asks the driver to hold the GPU at its maximum clock however idle a frame leaves it, so a
+		// vsync'd window's light frames do not drop it to a clock a heavy frame then overruns at.
+		// A game turns it on; a tool leaves it off. GpuContext::GetMaximumPerformance says what came
+		// of it (docs/bgpu.md § Maximum performance).
+		bool preferMaximumPerformance = false;
+
 		bool
 		operator==(const GpuContextDesc&) const = default;
+	};
+
+	/** What came of GpuContextDesc::preferMaximumPerformance. */
+	enum class MaximumPerformance
+	{
+		// The desc did not ask: the driver manages the clock.
+		kNotRequested,
+
+		// The desc asked and this backend, GPU or driver has no way to: the driver manages the
+		// clock, and bgpu.log says why.
+		kUnavailable,
+
+		// The driver accepted the request. On Vulkan it rides on each swapchain, so a context that
+		// presents nothing holds no clock.
+		kRequested,
 	};
 
 	/**
@@ -107,6 +128,10 @@ namespace bgpu
 		 */
 		[[nodiscard]] virtual bool
 		GpuValidationActive() const noexcept = 0;
+
+		/** What the driver was told of the desc's preferMaximumPerformance, settled at creation. */
+		[[nodiscard]] virtual MaximumPerformance
+		GetMaximumPerformance() const noexcept = 0;
 
 		/**
 		 * The engine's staged tree and the suite's, then the desc's client directory when it is not

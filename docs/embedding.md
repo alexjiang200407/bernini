@@ -156,6 +156,10 @@ target_link_libraries(subway PRIVATE Bernini::gamelib Bernini::bgl)  # bgpu come
 if (TARGET Bernini::bgpu_d3d12_agility)
     target_link_libraries(subway PRIVATE Bernini::bgpu_d3d12_agility)
 endif()
+# Windows: the exports that put a hybrid laptop's discrete GPU first (docs/bgpu.md).
+if (TARGET Bernini::bgpu_discrete_gpu)
+    target_link_libraries(subway PRIVATE Bernini::bgpu_discrete_gpu)
+endif()
 target_precompile_headers(subway PRIVATE ${BERNINI_ROOT}/PCH/pch.h)
 bernini_stage_runtime(subway)
 ```

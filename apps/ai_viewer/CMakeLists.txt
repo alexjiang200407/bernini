@@ -20,6 +20,9 @@ target_link_libraries(bgl_ai_viewer PRIVATE core bgl gamelib assetlib terrainlib
 if(RENDERER_BACKEND STREQUAL "DX12")
     target_link_libraries(bgl_ai_viewer PRIVATE bgpu_d3d12_agility Shell32)
 endif()
+if(TARGET bgpu_discrete_gpu)
+    target_link_libraries(bgl_ai_viewer PRIVATE bgpu_discrete_gpu)
+endif()
 
 enable_strict_compiler(bgl_ai_viewer)
 

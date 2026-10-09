@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
+#include <bgpu/GpuContext.h>
 #include <bgpu/cmd/CommandQueue.h>
 #include <bgpu/device/Device.h>
 #include <bgpu/resource/NativeTextureDesc.h>
@@ -62,7 +63,10 @@ namespace bgl
 				m_Physical(device->GetNativeObject(bgpu::NativeObjectType::kVkPhysicalDevice)
 			                   .As<VkPhysicalDevice_T>()),
 				m_Device(
-					device->GetNativeObject(bgpu::NativeObjectType::kVkDevice).As<VkDevice_T>())
+					device->GetNativeObject(bgpu::NativeObjectType::kVkDevice).As<VkDevice_T>()),
+				m_ClockBoost(
+					device->GetGpuContext().GetMaximumPerformance() ==
+					bgpu::MaximumPerformance::kRequested)
 			{
 				LoadVulkanFunctions(m_Instance, m_Device);
 
@@ -374,9 +378,34 @@ namespace bgl
 				// DXGI's Present(1, 0): one image per vertical blank.
 				info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
 				info.clipped     = VK_TRUE;
+
+				// The context enabled VK_NV_low_latency2 for the desc's preferMaximumPerformance, and
+				// its sleep mode is set per swapchain: the boost alone, no latency mode, no limit.
+				auto latency              = VkSwapchainLatencyCreateInfoNV();
+				latency.sType             = VK_STRUCTURE_TYPE_SWAPCHAIN_LATENCY_CREATE_INFO_NV;
+				latency.latencyModeEnable = VK_TRUE;
+				if (m_ClockBoost)
+					info.pNext = &latency;
+
 				Check(
 					vkCreateSwapchainKHR(m_Device, &info, nullptr, &m_Swapchain),
 					"vkCreateSwapchainKHR");
+
+				if (m_ClockBoost)
+				{
+					auto sleepMode            = VkLatencySleepModeInfoNV();
+					sleepMode.sType           = VK_STRUCTURE_TYPE_LATENCY_SLEEP_MODE_INFO_NV;
+					sleepMode.lowLatencyMode  = VK_FALSE;
+					sleepMode.lowLatencyBoost = VK_TRUE;
+					const VkResult boosted =
+						vkSetLatencySleepModeNV(m_Device, m_Swapchain, &sleepMode);
+					if (boosted != VK_SUCCESS)
+					{
+						spdlog::warn(
+							"maximum GPU performance: vkSetLatencySleepModeNV failed: {}",
+							string_VkResult(boosted));
+					}
+				}
 
 				uint32_t count = 0;
 				Check(
@@ -437,9 +466,10 @@ namespace bgl
 
 			bgpu::CommandQueueRef m_Queue;
 			bgpu::NativeVkQueue   m_Native;
-			VkInstance            m_Instance = VK_NULL_HANDLE;
-			VkPhysicalDevice      m_Physical = VK_NULL_HANDLE;
-			VkDevice              m_Device   = VK_NULL_HANDLE;
+			VkInstance            m_Instance   = VK_NULL_HANDLE;
+			VkPhysicalDevice      m_Physical   = VK_NULL_HANDLE;
+			VkDevice              m_Device     = VK_NULL_HANDLE;
+			bool                  m_ClockBoost = false;
 
 			VkSurfaceKHR   m_Surface   = VK_NULL_HANDLE;
 			VkSwapchainKHR m_Swapchain = VK_NULL_HANDLE;

@@ -448,11 +448,23 @@ namespace bgpu
 				for (VkBool32 VkPhysicalDeviceFeatures::* const feature : c_GraphicsFeatures)
 					required.features2.features.*feature = VK_TRUE;
 
-				const auto extensions = std::to_array<const char*>({
+				auto extensions = std::vector<const char*>({
 					VK_EXT_MESH_SHADER_EXTENSION_NAME,
 					VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME,
 					VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 				});
+
+				// NVIDIA's driver offers it from R545; AMD's, Intel's and older ones do not. It requires
+				// VK_KHR_present_id, enabled with it and its feature left off.
+				const bool clockBoost =
+					GetDesc().preferMaximumPerformance &&
+					HasExtension(m_PhysicalDevice, VK_NV_LOW_LATENCY_2_EXTENSION_NAME) &&
+					HasExtension(m_PhysicalDevice, VK_KHR_PRESENT_ID_EXTENSION_NAME);
+				if (clockBoost)
+				{
+					extensions.push_back(VK_KHR_PRESENT_ID_EXTENSION_NAME);
+					extensions.push_back(VK_NV_LOW_LATENCY_2_EXTENSION_NAME);
+				}
 
 				auto info                    = VkDeviceCreateInfo();
 				info.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -468,6 +480,21 @@ namespace bgpu
 					ThrowFailed("vkCreateDevice", created);
 
 				volkLoadDevice(m_Device);
+
+				if (clockBoost)
+				{
+					GrantMaximumPerformance();
+					spdlog::info(
+						"maximum GPU performance: requested on every swapchain ({})",
+						VK_NV_LOW_LATENCY_2_EXTENSION_NAME);
+				}
+				else if (GetDesc().preferMaximumPerformance)
+				{
+					spdlog::warn(
+						"maximum GPU performance unavailable: the device has no {} with {}",
+						VK_NV_LOW_LATENCY_2_EXTENSION_NAME,
+						VK_KHR_PRESENT_ID_EXTENSION_NAME);
+				}
 
 				for (uint32_t family = 0; family < familyCount; ++family)
 				{

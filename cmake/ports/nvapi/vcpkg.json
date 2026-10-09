@@ -1,0 +1,8 @@
+{
+  "name": "nvapi",
+  "version-string": "R615",
+  "description": "NVIDIA's NvAPI SDK: the headers and the static library that reaches the driver's nvapi64.dll.",
+  "homepage": "https://github.com/NVIDIA/nvapi",
+  "license": "MIT",
+  "supports": "windows & x64"
+}

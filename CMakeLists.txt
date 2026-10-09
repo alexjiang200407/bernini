@@ -360,6 +360,10 @@ if (PROJECT_IS_TOP_LEVEL AND TARGET gamelib AND BERNINI_HAS_RENDERER_CONSUMERS)
     set(BERNINI_PACKAGE_TARGETS
         core_process core assetlib_structs bgpu bgl_headers bgl_idl bgl_objects
         bgl assetlib gamelib crowdlib_objects crowdlib terrainlib)
+    # Exports that pick a hybrid laptop's discrete GPU; linked into the consumer's executable.
+    if (TARGET bgpu_discrete_gpu)
+        list(APPEND BERNINI_PACKAGE_TARGETS bgpu_discrete_gpu)
+    endif()
     # Exports the Agility SDK's version from the executable; it must be linked into the consumer's.
     if (RENDERER_BACKEND STREQUAL "DX12")
         list(APPEND BERNINI_PACKAGE_TARGETS bgpu_d3d12_agility)

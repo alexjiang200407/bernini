@@ -127,7 +127,11 @@ An Intel Mac is refused even when its GPU supports Metal 3: the engine is built 
 silicon only.
 On Windows that is NVIDIA Turing (GTX 1660, RTX 2060) and newer, AMD RDNA2 (Radeon RX 6000) and
 newer, and Intel Arc. A machine whose first adapter is an integrated GPU without mesh shaders is
-refused, even when a second GPU would pass, because the engine does not choose an adapter.
+refused, even when a second GPU would pass, because the engine does not choose an adapter. A hybrid
+laptop is the exception the drivers make for it: the editor, `bgl_ai_viewer` and a game link
+`bgpu_discrete_gpu`, whose `NvOptimusEnablement` and `AmdPowerXpressRequestHighPerformance` exports
+tell NVIDIA's and AMD's drivers to put the discrete GPU first. They must be the executable's own, as
+the Agility SDK's are, so an executable that renders links the OBJECT library itself.
 
 * **The error is for a player, and the data is for the client.** `what()` says that this computer
   does not meet the minimum requirements. It then names each thing to replace or update once, with
@@ -298,7 +302,9 @@ against D3D12 and Metal:
   fence -- and the submit lock every owner of that `VkQueue` holds. `vkQueuePresentKHR` waits only on
   a binary semaphore, so `bgl`'s swapchain submits an empty batch that waits on the timeline at the
   frame's fence and signals one, under that lock. The instance enables `VK_KHR_surface` and
-  `VK_KHR_win32_surface`, the device `VK_KHR_swapchain`.
+  `VK_KHR_win32_surface`, the device `VK_KHR_swapchain`, and `VK_NV_low_latency2` with the
+  `VK_KHR_present_id` it requires only when the desc asks for maximum performance and the device has
+  both ([§ Maximum performance](#maximum-performance)).
 * **A buffer two copies of one list write is ordered between them**: a pass that clears a buffer
   whole and then rewrites part of it expects the writes to land in order, which two transfers do not
   promise, so the list barriers a second copy into a buffer it copied into since its last barrier.
@@ -314,6 +320,53 @@ over the queues, and a timed span. `TextureRoundTrip_test` runs on every backend
 and read back, one a kernel samples through its view and a sampler, and a colour and a depth target
 read back as what they were cleared to. `MeshDispatch_test` pins which way up a mesh dispatch draws
 and how many groups an indirect one runs, a count of zero included.
+
+## Maximum performance
+
+A vsync'd window leaves the GPU idle most of each frame, and the driver's power management reads
+that as a light load and lowers the core clock. The frame's work then takes several times longer
+than it would headless, which never idles: on an RTX 4060, gpu-battle-sim's 1.5 ms frame read 5 to
+8 ms in a window. The cost is not the reading but the frame that follows a quiet stretch: a sudden
+heavy one runs at the floor clock, overruns the vblank and drops — a hitch. A player could fix it in
+the driver's control panel ("Prefer maximum performance"); `GpuContextDesc::preferMaximumPerformance`
+makes the request so no player has to.
+
+It is off by default: a tool, the editor included, has no frame budget to protect and would burn
+power for nothing. A game turns it on. It is a request, never a requirement: a backend, GPU or
+driver with no way to make it logs why in `bgpu.log` and carries on, and
+`GpuContext::GetMaximumPerformance` says which happened, so a client can show it beside a timing —
+a GPU time read without it is ambiguous.
+
+| Backend | The request | Unavailable when |
+|---|---|---|
+| D3D12 | NvAPI's Reflex entry point, `NvAPI_D3D_SetSleepMode` with `bLowLatencyBoost` on and nothing else: no low-latency mode, no frame interval | the device is not NVIDIA's, or no driver at R455 or later |
+| Vulkan | `VK_NV_low_latency2`: the device is created with it, and every swapchain with `latencyModeEnable` and `vkSetLatencySleepModeNV` with `lowLatencyBoost` on and nothing else | the device has no `VK_NV_low_latency2`, or not the `VK_KHR_present_id` it requires: AMD, Intel, NVIDIA before R545 |
+| Metal | none: Apple exposes no clock request to an application | always |
+
+* **D3D12 asks NVIDIA's driver through Reflex's boost alone.** It is the driver's documented
+  request for "maximum GPU clock frequency regardless of workload", the same thing the control
+  panel's setting does, and it is settled once per device: the context makes it right after the
+  device, never per frame, and nothing calls `NvAPI_D3D_Sleep` or sets a marker. NvAPI is
+  NVIDIA's SDK, MIT-licensed, fetched by the overlay port `cmake/ports/nvapi` at a pinned commit
+  (`THIRD_PARTY_NOTICES.md`); its `nvapi64.lib` is a stub that finds the driver's DLL at
+  `NvAPI_Initialize`, so a machine with no NVIDIA driver links and runs, and logs the request
+  unavailable. AMD and Intel publish no such request on D3D12.
+* **Vulkan's request rides on the swapchain.** `VK_NV_low_latency2` is the same Reflex sleep mode,
+  set per swapchain rather than per device, so the context only enables the extension and reports
+  `kRequested`, and bgl's swapchain makes the call each time it creates one, a resize included. A
+  context that presents nothing holds no clock, which costs nothing: a headless run never idles.
+  The extension is looked up as the minimum requirements' are, and an absent one is a device
+  created without it and a warning in `bgpu.log`, never a refusal: it is the one device extension
+  the bar does not require.
+* **Metal has nothing to call.** The only "GPU performance state" control on Apple silicon is a
+  developer one, Xcode's and Instruments' device condition, which a shipping application cannot set.
+  macOS Game Mode is the OS's own policy for a fullscreen application bundle declared a game, not a
+  request an API makes. So on a Mac the option is accepted and logged as unavailable, and what is
+  left there is a frame whose cost does not collapse when the clock does.
+
+`bgpu_tests` `[maxperf]` pins the default, the state a context reports with the option off and on,
+and on each backend whether the request was made or skipped as that machine's GPU decides. The
+clock itself is only observable in a window.
 
 ## Threading & Synchronization
 
