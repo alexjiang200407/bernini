@@ -164,9 +164,10 @@ namespace editor
 
 		/**
 		 * Whether what the viewport shows is toon-shaded -- a mesh with a toon material, say. Such a
-		 * viewport draws ViewportDesc::toonBackdrop instead of its sky and ends in
-		 * bgl::DisplayCurve::kGranTurismo, the curve a toon look is authored under; any other ends in
-		 * AgX. The rest of its post-process is every viewport's.
+		 * viewport draws ViewportDesc::toonBackdrop instead of its sky, is lit by the editor's sun, and
+		 * ends in bgl::DisplayCurve::kGranTurismo, the curve a toon look is authored under; any other
+		 * is lit by its environment alone and ends in AgX. The rest of its post-process is every
+		 * viewport's.
 		 */
 		virtual void
 		SetShowsToonContent(bool toon) = 0;

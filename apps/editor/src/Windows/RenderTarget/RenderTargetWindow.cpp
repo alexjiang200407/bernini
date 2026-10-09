@@ -1,7 +1,7 @@
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 
 #include "Render/Renderer.h"
-#include "util/default_sun.h"
+#include "util/editor_sun.h"
 #include "util/toon_backdrop.h"
 #include <algorithm>
 #include <cmath>
@@ -310,7 +310,7 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 		auto view = m_Desc.renderer->GetGraphics()->CreateSceneView(
 			m_Desc.renderer->GetScene(),
 			m_Desc.initialInstances);
-		view->SetDirectionalLight(editor::DefaultSun());
+		view->SetDirectionalLight(editor::EditorSun(m_ShowsToonContent));
 		return view;
 	});
 
@@ -561,6 +561,7 @@ RenderTargetWindow::ApplyBackdrop()
 			m_SceneView->SetBackdrop(*backdrop);
 		else
 			m_SceneView->ClearBackdrop();
+		m_SceneView->SetDirectionalLight(editor::EditorSun(m_ShowsToonContent));
 	});
 }
 

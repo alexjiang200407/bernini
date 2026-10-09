@@ -1,6 +1,6 @@
 #include "Thumbnails/AssetThumbnailCache.h"
-#include "util/default_sun.h"
 #include "util/editor_language.h"
+#include "util/editor_sun.h"
 #include "util/toon_backdrop.h"
 #include <QThread>
 #include <algorithm>
@@ -313,7 +313,6 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 			m_SceneView    = m_Desc.renderer->GetGraphics()->CreateSceneView(
 				m_Desc.renderer->GetScene(),
 				m_Desc.initialInstances);
-			m_SceneView->SetDirectionalLight(editor::DefaultSun());
 		}
 		catch (const std::exception& e)
 		{
@@ -1149,6 +1148,7 @@ AssetThumbnailCache::BuildShot(Shot& shot)
 	m_RenderTarget->SetPostProcess(
 		bgl::PostProcess{ .curve =
 	                          toon ? bgl::DisplayCurve::kGranTurismo : bgl::DisplayCurve::kAgX });
+	m_SceneView->SetDirectionalLight(editor::EditorSun(toon));
 	if (toon)
 		m_SceneView->SetBackdrop(m_Desc.toonBackdrop);
 	else

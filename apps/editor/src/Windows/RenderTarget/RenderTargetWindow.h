@@ -122,8 +122,9 @@ public:
 	void
 	SetOutlineEnabled(bool enabled);
 
-	// Turns an effect on or off for this viewport, with the settings config.json gave it. Unlike TAA nothing is allocated at creation -- bloom's chain appears at
-	// the first frame that blooms -- so any viewport can turn any effect on.
+	// Turns an effect on or off for this viewport, with the settings config.json gave it. Unlike
+	// TAA nothing is allocated at creation -- bloom's chain appears at the first frame that blooms
+	// -- so any viewport can turn any effect on.
 	void
 	SetEffectEnabled(ViewportEffect effect, bool enabled);
 
