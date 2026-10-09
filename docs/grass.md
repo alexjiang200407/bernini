@@ -282,7 +282,7 @@ no colour and a layer following its cover still make the view draw the pass, whi
 either way. A lit surface (`ILitSurfaceSource`) returns no `PbrSurface` and covers everything.
 
 The cover is sampled at the clump, not the blade, so a patch's edge is as fine as the clumps are
-spaced and the texture is, about 9 cm a texel at a 45 m fade; a surface's own soft edge does the
+spaced and the texture is, about 18 cm a texel at a 45 m fade; a surface's own soft edge does the
 rest. It is the painted density Unreal's Landscape Grass Type reads off its layer weights, with the
 surface in place of the weights: nothing is painted in the engine, and a map a game paints reaches
 the grass the moment its surface samples it.
