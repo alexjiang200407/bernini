@@ -172,6 +172,8 @@ namespace bgl
 			tonemap["maskSampler"].SetIfValid(args.maskSampler);
 			tonemap["tonemapLut"].SetIfValid(args.tonemapLut);
 			tonemap["lutSampler"].SetIfValid(args.lutSampler);
+			// PostProcess.slang's c_CurveGranTurismo.
+			static_assert(static_cast<uint32_t>(DisplayCurve::kGranTurismo) == 1u);
 			tonemap["curve"].SetIfValid(static_cast<uint32_t>(args.postProcess.curve));
 			tonemap["outlineEnabled"].SetIfValid(args.outlineEnabled ? 1u : 0u);
 			if (args.outlineEnabled)

@@ -79,8 +79,8 @@ public float3 AgX<L : ITonemapLut>(float3 color, L lut)
 }
 
 // The stylized display curve: Gran Turismo's (Hajime Uchimura, CEDEC 2017), per channel, with its
-// published parameters. A toe below `m`, the identity from `m` for `l0`, then a shoulder that approaches `P`
-// and never reaches it. Its result is display-linear, for the sRGB target to encode. See
+// published parameters. A toe below `m`, the identity from `m` for `(P - m) * l / a` (0.312), then a
+// shoulder that approaches `P` and never reaches it. Its result is display-linear, for the sRGB target to encode. See
 // docs/passes.md.
 
 static const float c_GtMaxBrightness = 1.0;   // P
