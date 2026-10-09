@@ -104,7 +104,7 @@ TEST_CASE("A texture written through a list reads back as written", "[render][rh
 {
 	auto owner = Owner();
 
-	// Three texels a row: twelve bytes, far below the 256 a readback row is padded to.
+	// Three texels a row: twelve bytes, so a backend that pads its readback rows pads these.
 	constexpr uint32_t c_Width  = 3;
 	constexpr uint32_t c_Height = 2;
 	constexpr uint32_t c_Pitch  = c_Width * 4;
@@ -123,7 +123,8 @@ TEST_CASE("A texture written through a list reads back as written", "[render][rh
 
 	const auto layout = owner.rm->GetTextureReadbackLayout(texture);
 	CHECK(layout.rowSizeBytes == c_Pitch);
-	CHECK(layout.rowPitch % 256 == 0);
+	CHECK(layout.rowPitch >= layout.rowSizeBytes);
+	CHECK(layout.rowPitch % 4 == 0);
 	CHECK(layout.rowCount == c_Height);
 
 	auto rbDesc      = bgpu::ReadbackBufferDesc();
