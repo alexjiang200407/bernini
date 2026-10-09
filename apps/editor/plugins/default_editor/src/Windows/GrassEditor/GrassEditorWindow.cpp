@@ -431,6 +431,14 @@ GrassEditorWindow::BuildColumn()
 		4.0,
 		0.1,
 		[](Look& l) -> float& { return l.density.widening; });
+	AddReal(
+		density,
+		"thin_start",
+		editor::Localize(m_Host.GetLanguageResolver(), "bernini.grass.thin_start", "Thin from"),
+		0.0,
+		500.0,
+		1.0,
+		[](Look& l) -> float& { return l.density.thinStart; });
 
 	QFormLayout* response = group(
 		editor::Localize(
@@ -505,6 +513,14 @@ GrassEditorWindow::BuildColumn()
 		[](Look& l) -> float& { return l.lighting.groundNormalFar; });
 	AddReal(
 		lighting,
+		"ground_by",
+		editor::Localize(m_Host.GetLanguageResolver(), "bernini.grass.ground_by", "Ground by"),
+		0.0,
+		500.0,
+		1.0,
+		[](Look& l) -> float& { return l.lighting.groundBy; });
+	AddReal(
+		lighting,
 		"translucency",
 		editor::Localize(
 			m_Host.GetLanguageResolver(),
@@ -543,6 +559,28 @@ GrassEditorWindow::BuildColumn()
 		1.0,
 		0.05,
 		[](Look& l) -> float& { return l.color.variation; });
+	AddReal(
+		colour,
+		"ground_color_near",
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.grass.ground_color_near",
+			"Ground colour near"),
+		0.0,
+		1.0,
+		0.05,
+		[](Look& l) -> float& { return l.color.groundColorNear; });
+	AddReal(
+		colour,
+		"ground_color_far",
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.grass.ground_color_far",
+			"Ground colour far"),
+		0.0,
+		1.0,
+		0.05,
+		[](Look& l) -> float& { return l.color.groundColorFar; });
 
 	layout->addStretch(1);
 	scroll->setWidget(column);

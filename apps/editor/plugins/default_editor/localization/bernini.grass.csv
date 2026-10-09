@@ -11,6 +11,9 @@ empty_prompt,Open a .bgrass from the Content Explorer to edit the look and watch
 fade_end,Fade end
 fade_start,Fade start
 far_segments,Segments far
+ground_by,Ground by
+ground_color_far,Ground colour far
+ground_color_near,Ground colour near
 ground_normal_far,Ground normal far
 ground_normal_near,Ground normal near
 gust_response,Gust response
@@ -34,6 +37,7 @@ root_width,Root width
 save_button,Save
 save_failed,'{0}' could not be saved: {1}
 stiffness,Stiffness
+thin_start,Thin from
 tip_tint,Tip tint
 tip_width,Tip width
 title,Grass Editor

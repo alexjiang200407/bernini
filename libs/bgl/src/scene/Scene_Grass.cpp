@@ -208,6 +208,10 @@ namespace bgl
 		{
 			refuse("density.widening must be finite and non-negative");
 		}
+		if (!core::is_finite_non_negative(density.thinStart))
+		{
+			refuse("density.thinStart must be finite and non-negative");
+		}
 
 		if (!core::is_unit_interval(desc.response.stiffness) ||
 		    !core::is_finite_non_negative(desc.response.gustResponse))
@@ -227,6 +231,10 @@ namespace bgl
 				"lighting.rootOcclusion, normalRounding and both ground-normal blends must be "
 				"in [0, 1]");
 		}
+		if (!core::is_finite_non_negative(lighting.groundBy))
+		{
+			refuse("lighting.groundBy must be finite and non-negative");
+		}
 		if (!IsColor(lighting.translucencyColor) ||
 		    !core::is_finite_non_negative(lighting.translucency))
 		{
@@ -237,6 +245,11 @@ namespace bgl
 		    !core::is_unit_interval(desc.color.variation))
 		{
 			refuse("colour tints must be finite and non-negative, and variation in [0, 1]");
+		}
+		if (!core::is_unit_interval(desc.color.groundColorNear) ||
+		    !core::is_unit_interval(desc.color.groundColorFar))
+		{
+			refuse("ground colour blends must be in [0, 1]");
 		}
 	}
 
@@ -451,6 +464,10 @@ namespace bgl
 		look.widening    = desc.density.widening;
 		look.fadeStart   = desc.density.fadeStart;
 		look.fadeEnd     = desc.density.fadeEnd;
+		look.thinStart   = desc.density.thinStart;
+
+		look.groundColorNear = desc.color.groundColorNear;
+		look.groundColorFar  = desc.color.groundColorFar;
 
 		look.stiffness    = desc.response.stiffness;
 		look.gustResponse = desc.response.gustResponse;
@@ -459,6 +476,7 @@ namespace bgl
 		look.normalRounding   = desc.lighting.normalRounding;
 		look.groundNormalNear = desc.lighting.groundNormalNear;
 		look.groundNormalFar  = desc.lighting.groundNormalFar;
+		look.groundBy         = desc.lighting.groundBy;
 
 		look.nearSegments   = desc.blade.nearSegments;
 		look.farSegments    = desc.blade.farSegments;

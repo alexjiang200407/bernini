@@ -36,7 +36,7 @@ namespace bgl
 		HasWork(const DrawData& draw) const override;
 
 		void
-		Declare(PassDesc& desc) const override;
+		Declare(PassDesc& desc, const DrawData& draw) const override;
 
 		void
 		Record(

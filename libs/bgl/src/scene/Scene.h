@@ -605,7 +605,8 @@ namespace bgl
 		{
 			uint32_t       entry = 0;
 			MaterialHandle material;
-			float          fadeEnd = 0.0f;
+			float          fadeEnd          = 0.0f;
+			bool           takesGroundColor = false;
 		};
 
 		/** @pre IsGrassAlive(grass). */
@@ -613,9 +614,11 @@ namespace bgl
 		GetGrassLook(GrassHandle grass) const noexcept
 		{
 			const GrassMeta& meta = m_Grass[grass.handle.index];
-			return { .entry    = meta.entry.index,
-				     .material = meta.desc.material,
-				     .fadeEnd  = meta.desc.density.fadeEnd };
+			return { .entry            = meta.entry.index,
+				     .material         = meta.desc.material,
+				     .fadeEnd          = meta.desc.density.fadeEnd,
+				     .takesGroundColor = meta.desc.color.groundColorNear > 0.0f ||
+				                         meta.desc.color.groundColorFar > 0.0f };
 		}
 
 		/**

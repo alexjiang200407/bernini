@@ -704,10 +704,11 @@ namespace assetlib
 			grass.clump.bladesPerClump,
 			grass.clump.radius);
 		out += std::format(
-			"  density      fade {}..{}  widening {}\n",
+			"  density      fade {}..{}  widening {}  thin from {}\n",
 			grass.density.fadeStart,
 			grass.density.fadeEnd,
-			grass.density.widening);
+			grass.density.widening,
+			grass.density.thinStart);
 		out += std::format(
 			"  response     stiffness {}  gusts {}\n",
 			grass.response.stiffness,
@@ -715,25 +716,28 @@ namespace assetlib
 
 		const GrassLightingParams& lighting = grass.lighting;
 		out += std::format(
-			"  lighting     root AO {}  rounding {}  ground normal {}..{}  translucency {} "
+			"  lighting     root AO {}  rounding {}  ground normal {}..{} by {}  translucency {} "
 			"({}, {}, {})\n",
 			lighting.rootOcclusion,
 			lighting.normalRounding,
 			lighting.groundNormalNear,
 			lighting.groundNormalFar,
+			lighting.groundBy,
 			lighting.translucency,
 			lighting.translucencyColor.x,
 			lighting.translucencyColor.y,
 			lighting.translucencyColor.z);
 		out += std::format(
-			"  color        root ({}, {}, {})  tip ({}, {}, {})  variation {}\n",
+			"  color        root ({}, {}, {})  tip ({}, {}, {})  variation {}  ground {}..{}\n",
 			grass.color.rootTint.x,
 			grass.color.rootTint.y,
 			grass.color.rootTint.z,
 			grass.color.tipTint.x,
 			grass.color.tipTint.y,
 			grass.color.tipTint.z,
-			grass.color.variation);
+			grass.color.variation,
+			grass.color.groundColorNear,
+			grass.color.groundColorFar);
 
 		return out;
 	}

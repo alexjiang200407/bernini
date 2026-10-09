@@ -23,7 +23,7 @@ namespace bgl
 	}
 
 	void
-	TransparentForwardPhase::Declare(PassDesc& desc) const
+	TransparentForwardPhase::Declare(PassDesc& desc, const DrawData& /*draw*/) const
 	{
 		desc.AddBufferReadWrite(
 				c_SortedTransparentInstancesName,

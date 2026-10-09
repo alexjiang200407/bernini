@@ -7,6 +7,7 @@
 #include "passes/SceneBindings.h"
 #include "scene/SceneView.h"
 #include "scene/TextureAssetStore.h"
+#include "scene/ground_color.h"
 #include "scene/scene_buffer_names.h"
 #include <algorithm>
 #include <array>
@@ -68,10 +69,11 @@ namespace bgl
 			    bgpu::BarrierSyncFlag::kVertexShader } }
 		};
 
-		constexpr std::array<std::string_view, 12> c_Fields = {
+		constexpr std::array<std::string_view, 14> c_Fields = {
 			"cameraPos"sv,     "pixelsPerUnit"sv,    "firstRef"sv,     "refCount"sv,
 			"dispatchWidth"sv, "windDirection"sv,    "windStrength"sv, "windGustScale"sv,
 			"windGustSpeed"sv, "windGustStrength"sv, "heights"sv,      "heightSampler"sv,
+			"groundColor"sv,   "groundColorRect"sv,
 		};
 
 		/** The wind's horizontal direction, unit; SetWind refused a direction without one. */
@@ -97,12 +99,16 @@ namespace bgl
 	}
 
 	void
-	GrassForwardPhase::Declare(PassDesc& desc) const
+	GrassForwardPhase::Declare(PassDesc& desc, const DrawData& draw) const
 	{
 		desc.AddRenderTarget(c_MotionVectorsName).AddRenderTarget(c_GrassRootHeightName);
 		for (const auto& binding : c_GrassBuffers)
 		{
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
+		}
+		if (ViewOf(draw).GetGroundColor().rect.size > 0.0f)
+		{
+			desc.AddTextureRead(c_GroundColorName, bgpu::BarrierSyncFlag::kVertexShader);
 		}
 	}
 
@@ -118,6 +124,14 @@ namespace bgl
 
 		const SceneView& view = ViewOf(draw);
 		const WindDesc&  wind = view.GetWind();
+
+		// The ground colour's square as the stage reads it: the corner, the inverse of the side, and
+		// whether there is a texture at all.
+		const SceneView::GroundColorTarget& ground = view.GetGroundColor();
+		const bool      hasGround = ground.rect.size > 0.0f && !ground.srv.IsNull();
+		const glm::vec4 groundRect =
+			hasGround ? glm::vec4(ground.rect.origin, 1.0f / ground.rect.size, 1.0f) :
+						glm::vec4(0.0f);
 
 		for (const SceneView::GrassBatch& batch : view.GetGrassBatches())
 		{
@@ -154,6 +168,12 @@ namespace bgl
 			if (!batch.heights.textureSlot.is_null())
 			{
 				uniforms["heights"] = batch.heights;
+			}
+
+			uniforms["groundColorRect"] = groundRect;
+			if (hasGround)
+			{
+				uniforms["groundColor"] = ground.srv;
 			}
 
 			uniforms["windDirection"]    = WindDirection(wind);

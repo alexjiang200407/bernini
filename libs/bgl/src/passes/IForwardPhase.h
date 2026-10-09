@@ -49,12 +49,12 @@ namespace bgl
 		}
 
 		/**
-		 * Declares what its dispatches read. Naming a resource the shared set already declares is
+		 * Declares what its dispatches for `draw` read. Naming a resource the shared set already declares is
 		 * harmless -- one pass's accesses to a resource merge into one state -- so a phase declares
 		 * everything it reads and needs no knowledge of what the others do.
 		 */
 		virtual void
-		Declare(PassDesc& desc) const = 0;
+		Declare(PassDesc& desc, const DrawData& draw) const = 0;
 
 		/**
 		 * Records its dispatches. `state` arrives with the viewport set; the phase sets the

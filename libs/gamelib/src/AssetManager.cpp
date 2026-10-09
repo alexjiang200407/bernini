@@ -138,6 +138,7 @@ namespace game
 			desc.density.fadeStart = look.density.fadeStart;
 			desc.density.fadeEnd   = look.density.fadeEnd;
 			desc.density.widening  = look.density.widening;
+			desc.density.thinStart = look.density.thinStart;
 
 			desc.response.stiffness    = look.response.stiffness;
 			desc.response.gustResponse = look.response.gustResponse;
@@ -148,10 +149,13 @@ namespace game
 			desc.lighting.groundNormalFar   = look.lighting.groundNormalFar;
 			desc.lighting.translucencyColor = look.lighting.translucencyColor;
 			desc.lighting.translucency      = look.lighting.translucency;
+			desc.lighting.groundBy          = look.lighting.groundBy;
 
-			desc.color.rootTint  = look.color.rootTint;
-			desc.color.tipTint   = look.color.tipTint;
-			desc.color.variation = look.color.variation;
+			desc.color.rootTint        = look.color.rootTint;
+			desc.color.tipTint         = look.color.tipTint;
+			desc.color.variation       = look.color.variation;
+			desc.color.groundColorNear = look.color.groundColorNear;
+			desc.color.groundColorFar  = look.color.groundColorFar;
 			return desc;
 		}
 

@@ -22,6 +22,7 @@
 #include "postprocess/post_process.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
+#include "scene/ground_color.h"
 #include "util/util.h"
 #include <algorithm>
 #include <array>
@@ -93,6 +94,50 @@ namespace bgl
 				viewport.maxY * y,
 				viewport.minZ,
 				viewport.maxZ);
+		}
+
+		/**
+		 * The draw Ground Color fills the view's texture with: the terrain seen straight down over
+		 * `rect`, world x across the texture and z down it, so texel (u, v) lies at
+		 * rect.origin + (u, v) * rect.size -- the mapping the grass stage reads it back by. The
+		 * camera position, pixels per unit and level-of-detail terms stay the view's, so a terrain
+		 * patch is as fine here as where the colour pass draws it.
+		 */
+		DrawData
+		GroundColorDraw(const DrawData& draw, const GroundColorRect& rect)
+		{
+			// World heights within this of zero land inside [0, 1] clip depth.
+			constexpr float c_DepthSpan = 1.0e5f;
+
+			const float scale = rect.size > 0.0f ? 2.0f / rect.size : 0.0f;
+			auto        top   = glm::mat4(0.0f);
+			top[0][0]         = scale;
+			top[3][0]         = -rect.origin.x * scale - 1.0f;
+			top[2][1]         = -scale;
+			top[3][1]         = rect.origin.y * scale + 1.0f;
+			top[1][2]         = 0.5f / c_DepthSpan;
+			top[3][2]         = 0.5f;
+			top[3][3]         = 1.0f;
+
+			DrawData ground                     = draw;
+			ground.viewState.viewProj           = top;
+			ground.viewState.prevViewProj       = top;
+			ground.viewState.unjitteredViewProj = top;
+			ground.viewState.jitter             = glm::vec2(0.0f);
+			ground.viewState.prevJitter         = glm::vec2(0.0f);
+			ground.viewState.viewport           = bgpu::Viewport(
+				0.0f,
+				static_cast<float>(c_GroundColorTexels),
+				0.0f,
+				static_cast<float>(c_GroundColorTexels),
+				0.0f,
+				1.0f);
+			const idl::CullView square = BuildCullView(top);
+			for (uint32_t plane = 0; plane < 6; ++plane)
+			{
+				ground.viewState.cullView.frustumPlanes[plane] = square.frustumPlanes[plane];
+			}
+			return ground;
 		}
 
 		// Backbuffer readbacks come back as B8G8R8A8; these formats need R/B swapped to write RGBA.
@@ -845,6 +890,9 @@ namespace bgl
 		m_FrameGraph.SetResourceNamespace(view->GetResourceNamespace());
 
 		scene->AttachToFrameGraph(m_FrameGraph, drawIdx);
+		// Before the view imports its resources: the ground-colour texture is made the first time
+		// it is needed, and imported only once it exists.
+		view->PrepareGroundColor(glm::vec3(invView[3]));
 		view->AttachToFrameGraph(m_FrameGraph, drawIdx);
 
 		auto draw                         = DrawData();
@@ -959,6 +1007,10 @@ namespace bgl
 
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kTerrain);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kWorld);
+		m_Forward.AttachGroundColor(
+			m_FrameGraph,
+			GroundColorDraw(draw, view->GetGroundColor().rect),
+			m_ResourceManager.Get());
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kGrass);
 		// The depth holds the terrain, the world and its grass alone here: the seam an HZB build
 		// belongs at.

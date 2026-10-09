@@ -29,19 +29,22 @@ namespace
 
 TEST_CASE("a sample reads its own height, above the origin as the renderer lays it", "[terrain]")
 {
+	// The renderer lays a sample of 0 at origin.y + minHeight (Scene::CreateTerrain's baseHeight):
+	// 7 - 4 = 3 here, and a full sample ten above it.
 	const auto field  = Ramp();
 	const auto origin = glm::vec3(100.0f, 7.0f, 50.0f);
 
-	CHECK(terrain::HeightAt(field, origin, { 100.0f, 50.0f }) == Catch::Approx(7.0f));
-	CHECK(terrain::HeightAt(field, origin, { 104.0f, 50.0f }) == Catch::Approx(17.0f));
-	CHECK(terrain::HeightAt(field, origin, { 100.0f, 52.0f }) == Catch::Approx(17.0f));
-	CHECK(terrain::HeightAt(field, origin, { 104.0f, 52.0f }) == Catch::Approx(7.0f));
+	CHECK(terrain::HeightAt(field, origin, { 100.0f, 50.0f }) == Catch::Approx(3.0f));
+	CHECK(terrain::HeightAt(field, origin, { 104.0f, 50.0f }) == Catch::Approx(13.0f));
+	CHECK(terrain::HeightAt(field, origin, { 100.0f, 52.0f }) == Catch::Approx(13.0f));
+	CHECK(terrain::HeightAt(field, origin, { 104.0f, 52.0f }) == Catch::Approx(3.0f));
 }
 
 TEST_CASE("between samples the height is bilinear", "[terrain]")
 {
+	// Raised by the field's 4 below its origin, so a sample of 0 lies at 0.
 	const auto field  = Ramp();
-	const auto origin = glm::vec3(0.0f);
+	const auto origin = glm::vec3(0.0f, 4.0f, 0.0f);
 
 	// Halfway along x and z between the corners 0, 5, 10 and 5: the mean of the four.
 	CHECK(terrain::HeightAt(field, origin, { 1.0f, 1.0f }) == Catch::Approx(5.0f).margin(1e-3));
@@ -54,14 +57,14 @@ TEST_CASE("between samples the height is bilinear", "[terrain]")
 TEST_CASE("past the field's edge the height is the edge's", "[terrain]")
 {
 	const auto field  = Ramp();
-	const auto origin = glm::vec3(0.0f);
+	const auto origin = glm::vec3(0.0f, 4.0f, 0.0f);
 
 	CHECK(terrain::HeightAt(field, origin, { -50.0f, -50.0f }) == Catch::Approx(0.0f));
 	CHECK(terrain::HeightAt(field, origin, { 50.0f, -50.0f }) == Catch::Approx(10.0f));
 	CHECK(terrain::HeightAt(field, origin, { 50.0f, 50.0f }) == Catch::Approx(0.0f));
 }
 
-TEST_CASE("a generated field reads every sample as its own height above the origin", "[terrain]")
+TEST_CASE("a generated field reads every sample as its own height, from its lowest", "[terrain]")
 {
 	const auto field = terrain::Generate(
 		terrain::TerrainGenerateDesc().SetSeed(3).SetSamples(65, 65).SetCellSize(4.0f));
@@ -79,7 +82,9 @@ TEST_CASE("a generated field reads every sample as its own height above the orig
 				origin,
 				{ origin.x + static_cast<float>(x) * field.cellSize,
 			      origin.z + static_cast<float>(z) * field.cellSize });
-			CHECK(height == Catch::Approx(origin.y + sample * field.heightRange).margin(1e-3));
+			CHECK(
+				height == Catch::Approx(origin.y + field.minHeight + sample * field.heightRange)
+							  .margin(1e-3));
 		}
 	}
 }

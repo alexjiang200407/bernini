@@ -35,6 +35,7 @@ namespace assetlib
 		float fadeStart = 10.0f;
 		float fadeEnd   = 60.0f;
 		float widening  = 1.0f;
+		float thinStart = 0.0f;
 
 		bool
 		operator==(const GrassDensityParams&) const = default;
@@ -57,6 +58,7 @@ namespace assetlib
 		float     groundNormalFar   = 0.8f;
 		glm::vec3 translucencyColor = glm::vec3(1.0f);
 		float     translucency      = 0.0f;
+		float     groundBy          = 0.0f;
 
 		bool
 		operator==(const GrassLightingParams&) const = default;
@@ -64,9 +66,11 @@ namespace assetlib
 
 	struct GrassColorParams
 	{
-		glm::vec3 rootTint  = glm::vec3(1.0f);
-		glm::vec3 tipTint   = glm::vec3(1.0f);
-		float     variation = 0.0f;
+		glm::vec3 rootTint        = glm::vec3(1.0f);
+		glm::vec3 tipTint         = glm::vec3(1.0f);
+		float     variation       = 0.0f;
+		float     groundColorNear = 0.0f;
+		float     groundColorFar  = 0.0f;
 
 		bool
 		operator==(const GrassColorParams&) const = default;

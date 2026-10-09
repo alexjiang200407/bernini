@@ -169,11 +169,13 @@ TEST_CASE(
 		{ "a negative slope", [](auto& d) { d.maxSlope                      = -0.1f; } },
 		{ "a negative slope blend", [](auto& d) { d.slopeBlend              = -0.1f; } },
 		{ "heights that cross", [](auto& d) { d.SetHeights(5.0f, 1.0f, 0.0f); } },
-		{ "a height that is not a number", [](auto& d) { d.minHeight = c_Nan; } },
-		{ "a negative height blend", [](auto& d) { d.heightBlend     = -1.0f; } },
-		{ "zero patch size", [](auto& d) { d.patchSize               = 0.0f; } },
-		{ "coverage over one", [](auto& d) { d.patchCoverage         = 1.5f; } },
-		{ "negative coverage", [](auto& d) { d.patchCoverage         = -0.5f; } },
+		{ "a height that is not a number", [](auto& d) { d.minHeight    = c_Nan; } },
+		{ "a negative height blend", [](auto& d) { d.heightBlend        = -1.0f; } },
+		{ "zero patch size", [](auto& d) { d.patchSize                  = 0.0f; } },
+		{ "coverage over one", [](auto& d) { d.patchCoverage            = 1.5f; } },
+		{ "negative coverage", [](auto& d) { d.patchCoverage            = -0.5f; } },
+		{ "no patch edge", [](auto& d) { d.patchEdge                    = 0.0f; } },
+		{ "a patch edge past half the noise", [](auto& d) { d.patchEdge = 0.6f; } },
 	};
 
 	for (const Refused& refused : cases)

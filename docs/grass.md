@@ -11,7 +11,7 @@ or in memory: a field costs its clumps.
 
 | | where | what |
 |---|---|---|
-| a look | `bgl::GrassDesc` ([GrassDesc.h](../libs/bgl/include/bgl/types/GrassDesc.h)), authored as a `.bgrass` | the material, the blade's shape, blades per clump, the fade, the response to wind, the lighting terms |
+| a look | `bgl::GrassDesc` ([GrassDesc.h](../libs/bgl/include/bgl/types/GrassDesc.h)), authored as a `.bgrass` | the material, the blade's shape, blades per clump, the fade and the thinning, the response to wind, the lighting terms, how far a terrain's blades take their ground's colour |
 | the fields | `assetlib::GrassGeometry` ([GrassGeometry.h](../libs/assetlib_structs/include/assetlib_structs/GrassGeometry.h)), embedded in `BMesh::grassFields` | named fields with a mesh index and look slot; chunks of at most `c_GrassClumpsPerChunk` (64) clumps with a bound each; the clumps |
 | a terrain's layers | `bgl::TerrainGrassDesc` ([TerrainGrassDesc.h](../libs/bgl/include/bgl/types/TerrainGrassDesc.h)), through `IScene::AttachTerrainGrass` | the look, the clumps' spacing, and the slope, height and patch rules that scale them -- nothing per clump ([On a terrain](#on-a-terrain)) |
 
@@ -64,7 +64,8 @@ A stored clump list grows with the field's area; a layer costs the same on a fie
 - **The rules.** How tall a clump grows is the product of three shares: the slope rule (full height
   up to `maxSlope`, nothing `slopeBlend` steeper), the height rule (nothing outside
   `[minHeight, maxHeight]`, full height `heightBlend` inside it), and the patches (a low-frequency
-  value noise about `patchSize` across against `patchCoverage`, with a soft edge). A clump scaled
+  value noise about `patchSize` across against `patchCoverage`, with a soft edge `patchEdge` of the
+  noise wide either side of the threshold). A clump scaled
   to nothing is not drawn, and one near a rule's edge is shorter, so grass thins toward rock or
   snow rather than ending on a line. Nothing is painted: the rules are set to agree with the
   ground's surface by hand, since the engine cannot read a project surface's bands.
@@ -112,21 +113,35 @@ differs from the last, and the velocity says so.
 
 ## Distance
 
-Two things fall off with distance: how large every blade is, and how finely it is built.
+Three things fall off with distance: how large every blade is, how many a look keeps, and how
+finely each is built.
 
 - **How large.** Every blade is whole up to `fadeStart` and shrinks, height and width together, to
   nothing at `fadeEnd`, linearly between (`FadeScale`, `ThinningAt`); the look's `widening` makes a
-  fading blade narrow more slowly than it shortens. The whole field shrinks as one: **no blade is
-  dropped while it can be seen**. The only blades not drawn are those whose height spans less than
+  fading blade narrow more slowly than it shortens. The whole field shrinks as one: unless the look
+  thins by count (below), **no blade is dropped while it can be seen**. The only other blades not
+  drawn are those whose height spans less than
   `cGrassMinBladeHeightPixels` (1) on the render grid (`BladeVisible`), which show nothing; a chunk
   whose largest blade, at its *nearest* point, is under that launches no mesh groups at all.
 
-  Thinning by count was tried first and replaced. A share of the blades kept by index -- down with the
-  fade, and further to keep survivors 8 px wide -- is cheaper, but every blade crosses its threshold
-  as the camera moves, and at a runner's speed that read as patches of grass swapping in and out.
-  Shrinking a blade across a band of the share instead of dropping it softened the switch and did not
-  end it. What is left of a fading field is short grass settling into the ground, which the look's
+  What is left of a fading field is short grass settling into the ground, which the look's
   ground-normal blend (below) makes read as the ground itself.
+- **How many.** A look with a `thinStart` keeps every blade of a clump up to that distance and a share
+  `(thinStart / d)^2` of them past it, never fewer than one a clump (`ThinShare`), so the blades a
+  pixel of ground holds stay about constant. Blade `k` of a clump keeps `bladesPerClump * share - k`
+  of its size, clamped to [0, 1], so a dropped blade shrinks out over the distance the share falls by
+  one blade, and the survivors widen by `1 / share` to cover the ground the clump did. Blades are
+  numbered across a chunk's clumps (`BladeAddress`), so the blades kept at the chunk's nearest point
+  are a prefix of its numbering, and the amplification stage launches only that prefix
+  (`KeptBladesPerClump`): a thinned field costs the blades it keeps. A look whose `thinStart` is 0,
+  the default, never thins by count.
+
+  Thinning was off for every look before it was a look's choice. At a runner's speed every blade of
+  a verge crosses its threshold as the camera moves, and with blades whose colour is not the
+  ground's, that reads as patches of grass swapping in and out, shrinking or not. A look whose blades
+  sit on a ground of nearly their colour, seen from where far grass is a few pixels tall, hides it,
+  and saves most of the field: gpu-battle-sim's meadow, thinning from 25 m, takes its grass from
+  2.56 ms to 0.95 ms from 1.8 m up in it (RTX 4060, release, 1080 lines shaded).
 - **How finely.** Segments along a blade go from `nearSegments` at the camera to `farSegments` at
   `fadeEnd`, and no more than one per `cGrassPixelsPerSegment` (6) pixels of the blade's height on
   screen, chosen once per chunk at its nearest point.
@@ -189,14 +204,20 @@ geometry, which the mesh stage builds into the vertex it hands the pixel stage
   judged once at its middle, so both sides of a blade shade alike and the program always shades the
   front. The normal then tilts toward the edge a vertex sits on by `normalRounding`, which makes the
   flat strip read as rounded, and blends toward its clump's ground normal by a share that runs from
-  `groundNormalNear` at the camera to `groundNormalFar` at the fade end. At 1 and 1 every blade
-  shades as the ground under it: the usual stylized setup, and what hides a field's thin far blades.
+  `groundNormalNear` at the camera to `groundNormalFar` at the look's `groundBy` -- the fade end
+  where it names none (`GroundShareAt`). At 1 and 1 every blade shades as the ground under it: the
+  usual stylized setup, and what hides a field's thin far blades. A `groundBy` nearer than the fade
+  end lights a blade as its ground before it has shrunk away, so the field's edge is ground lit as
+  ground, not small blades lit as blades.
 - **Colour and occlusion.** The base colour is multiplied by the look's tints from root to tip, the
   clump's colour and the blade's variation, and the occlusion by `rootOcclusion` falling off to the
   tip. Occlusion scales the environment's light and not the sun's, as it does on every surface.
 - **Translucency** (`GrassTranslucency`) is the sun through a blade seen against it: a wrapped
   diffuse term on the far side of the normal, in the look's colour and strength, added after
   `ShadeSurface`. It is the one lighting term PBR lacks.
+- **The ground's colour**, on a terrain ([Ground colour](#ground-colour), below): as far as a blade
+  takes it, its tinted colour gives way to the ground's albedo, and its root occlusion and
+  translucency to nothing.
 
 A surface on the lit contract (`ILitSurfaceSource`) owns all of its lighting, so a blade drawn with
 one gets none of the above but the normal: the program calls its `Shade` and adds nothing. The rest
@@ -210,6 +231,37 @@ uv1 on a blade is never a second UV set, so `HasUv1()` is false there and a geom
 is read as white, for the engine's kinds and a surface's alike. Its `y` carries the entry of the
 blade's look, which the program reads the translucency from: an interpolant constant along the blade
 costs nothing where a flat attribute for it cost the pass a third more on Apple silicon.
+
+## Ground colour
+
+A blade's colour is its look's, and a terrain's ground is whatever its surface paints there: a
+tiled albedo, varied by noise, banded by slope. Where a field fades or thins, the eye sees blades
+of one colour settling onto ground of another, and every blade that leaves shows. A look's
+`groundColorNear` and `groundColorFar` -- shares at the camera and at `groundBy`, as the
+normal's are -- say how far a terrain's blades take the albedo of the ground under their roots
+instead (`GroundColorBlend`). At 1 a far blade is the ground's colour and shades as the ground does,
+so a fading or thinning field settles into ground of its own colour. Both 0 by default.
+
+The ground's albedo comes from the view's ground-colour texture, which the Ground Color pass
+([passes.md](passes.md#ground-color)) draws every frame from straight above through the terrain's
+own material: a square around the camera reaching the furthest fade end of the looks that take it,
+`c_GroundColorTexels` a side, its corner snapped to whole texels. The mesh stage reads it once per
+blade, at the root, and hands the colour and the share on as one interpolant (`groundColor` in
+`GrassVSOut`); the pixel stage blends there, because a blade's tint multiplies the material's
+colour there:
+
+- the base colour moves from the tinted material's toward the ground's,
+- the occlusion toward 1, and
+- the translucency toward nothing,
+
+so a blade taking all of it, with its normal blended to the ground's as well, lights exactly as the
+ground beside it. `GroundColor_test` holds that to within 0.02 a channel. Under a lit surface
+(`ILitSurfaceSource`) the texture holds no colour, and blades over it keep their own; a mesh's
+fields have no ground to read and never take it.
+
+Unreal's runtime virtual texture, used for grass the same way, is the standard this follows. The
+texture is redrawn whole every frame; an incremental, toroidal update is the next step if the pass
+ever costs.
 
 ## Cost
 
@@ -260,7 +312,10 @@ A terrain's grass is paid for in the look's fade and the layer's spacing.
   (`BladeAddress`), so a mesh group's run of blades spreads over the chunk; Tsushima's compute pass
   compacts its blades into a buffer instead.
 - **The lighting terms.** A normal rounded across the blade's width, blended toward the terrain's
-  with distance, and a translucency term for the sun behind a blade: Tsushima again. Turning each
+  with distance, and a translucency term for the sun behind a blade: Tsushima again.
+- **The ground's colour.** A camera-centred texture of the terrain's albedo, drawn from its own
+  material and read under each blade's root: Unreal's runtime virtual texture as landscape grass
+  uses it. Turning each
   blade's face toward the camera is the engine's own, so a blade needs no back-face flip.
 
 ## What it does not do

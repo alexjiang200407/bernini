@@ -188,6 +188,7 @@ TEST_CASE("CreateGrass refuses a look no pass could draw", "[grass][contract]")
 		{ "a fade that ends before it starts",
 		  [](bgl::GrassDesc& d) { d.density.fadeEnd = d.density.fadeStart; } },
 		{ "negative widening", [](bgl::GrassDesc& d) { d.density.widening              = -1.0f; } },
+		{ "a negative thinning start", [](bgl::GrassDesc& d) { d.density.thinStart     = -1.0f; } },
 		{ "a stiffness above one", [](bgl::GrassDesc& d) { d.response.stiffness        = 1.5f; } },
 		{ "a negative gust response", [](bgl::GrassDesc& d) { d.response.gustResponse  = -1.0f; } },
 		{ "root occlusion above one", [](bgl::GrassDesc& d) { d.lighting.rootOcclusion = 2.0f; } },
@@ -198,6 +199,11 @@ TEST_CASE("CreateGrass refuses a look no pass could draw", "[grass][contract]")
 		  [nan](bgl::GrassDesc& d) { d.lighting.translucencyColor.y                    = nan; } },
 		{ "a negative tint", [](bgl::GrassDesc& d) { d.color.tipTint.x                 = -1.0f; } },
 		{ "variation above one", [](bgl::GrassDesc& d) { d.color.variation             = 1.5f; } },
+		{ "a near ground colour blend below zero",
+		  [](bgl::GrassDesc& d) { d.color.groundColorNear                              = -0.1f; } },
+		{ "a far ground colour blend above one",
+		  [](bgl::GrassDesc& d) { d.color.groundColorFar                               = 1.5f; } },
+		{ "a negative ground distance", [](bgl::GrassDesc& d) { d.lighting.groundBy    = -1.0f; } },
 	};
 
 	CHECK_NOTHROW(scene->DeleteGrass(scene->CreateGrass(ValidLook(material))));

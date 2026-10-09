@@ -44,6 +44,6 @@ namespace terrain
 			glm::mix(at(x0, z0), at(x1, z0), t.x),
 			glm::mix(at(x0, z1), at(x1, z1), t.x),
 			t.y);
-		return origin.y + share * field.heightRange;
+		return origin.y + field.minHeight + share * field.heightRange;
 	}
 }

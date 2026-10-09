@@ -7,6 +7,7 @@
 #include "scene/NamedBuffer.h"
 #include "scene/ToonShadingRigState.h"
 #include "scene/TransparentSortState.h"
+#include "scene/ground_color.h"
 #include "scene/scene_buffer_names.h"
 #include "types/AutoRecord.h"
 #include "types/DrawBucketMask.h"
@@ -607,6 +608,33 @@ namespace bgl
 			return m_TerrainBatches;
 		}
 
+		/** The view's ground-colour texture: what Ground Color draws, and terrain grass reads. */
+		struct GroundColorTarget
+		{
+			bgpu::TextureHandle texture;
+			bgpu::RtvHandle     rtv;
+			bgpu::SrvHandle     srv;
+			GroundColorRect     rect;
+		};
+
+		/**
+		 * Places the ground-colour texture around `camera` for this frame, creating it the first
+		 * time a terrain's grass takes its ground's colour, wide enough for the furthest fade end of
+		 * those looks. The rect's size is 0 when no terrain look takes it; a texture once made is
+		 * kept for the view's life.
+		 *
+		 * @pre RefreshGrass has run this frame.
+		 */
+		void
+		PrepareGroundColor(const glm::vec3& camera);
+
+		/** @pre PrepareGroundColor has run this frame. */
+		[[nodiscard]] const GroundColorTarget&
+		GetGroundColor() const noexcept
+		{
+			return m_GroundColor;
+		}
+
 		/** Every bucket the terrains draw through. @pre RefreshTerrain has run this frame. */
 		[[nodiscard]] const DrawBucketMask&
 		TerrainDrawBuckets() const noexcept
@@ -857,6 +885,11 @@ namespace bgl
 		DrawBucketMask            m_TerrainDrawBuckets;
 		bool                      m_TerrainDirty      = true;
 		uint64_t                  m_SceneTerrainEpoch = 0;
+
+		// The furthest fade end of the terrain looks taking their ground's colour, found by
+		// RefreshGrass; 0 when none does.
+		float             m_GroundColorReach = 0.0f;
+		GroundColorTarget m_GroundColor;
 
 		// One entry per frustum this view is culled against; index 0 is the camera.
 		std::vector<CullState> m_CullStates;

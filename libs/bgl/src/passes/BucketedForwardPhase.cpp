@@ -35,7 +35,7 @@ namespace bgl
 	}
 
 	void
-	BucketedForwardPhase::Declare(PassDesc& desc) const
+	BucketedForwardPhase::Declare(PassDesc& desc, const DrawData& /*draw*/) const
 	{
 		desc.AddRenderTarget(c_MotionVectorsName).AddIndirectArgs(c_CompactDispatchArgsName);
 

@@ -105,6 +105,7 @@ namespace assetlib
 			taker.Take("fadeStart", grass.density.fadeStart);
 			taker.Take("fadeEnd", grass.density.fadeEnd);
 			taker.Take("widening", grass.density.widening);
+			taker.Take("thinStart", grass.density.thinStart);
 		});
 
 		takeGroup(json, c_ResponseKey, [&grass](const doc::Taker& taker) {
@@ -120,12 +121,15 @@ namespace assetlib
 			taker.Take("groundNormalFar", lighting.groundNormalFar);
 			taker.Take("translucencyColor", lighting.translucencyColor);
 			taker.Take("translucency", lighting.translucency);
+			taker.Take("groundBy", lighting.groundBy);
 		});
 
 		takeGroup(json, c_ColorKey, [&grass](const doc::Taker& taker) {
 			taker.Take("rootTint", grass.color.rootTint);
 			taker.Take("tipTint", grass.color.tipTint);
 			taker.Take("variation", grass.color.variation);
+			taker.Take("groundColorNear", grass.color.groundColorNear);
+			taker.Take("groundColorFar", grass.color.groundColorFar);
 		});
 
 		grass.extraJson = json.dump();
@@ -157,6 +161,7 @@ namespace assetlib
 		density["fadeStart"]    = doc::plainFloat(grass.density.fadeStart);
 		density["fadeEnd"]      = doc::plainFloat(grass.density.fadeEnd);
 		density["widening"]     = doc::plainFloat(grass.density.widening);
+		density["thinStart"]    = doc::plainFloat(grass.density.thinStart);
 
 		nlohmann::json& response = groupOf(json, c_ResponseKey);
 		response["stiffness"]    = doc::plainFloat(grass.response.stiffness);
@@ -169,11 +174,14 @@ namespace assetlib
 		lighting["groundNormalFar"]   = doc::plainFloat(grass.lighting.groundNormalFar);
 		lighting["translucencyColor"] = doc::vecToJson(grass.lighting.translucencyColor);
 		lighting["translucency"]      = doc::plainFloat(grass.lighting.translucency);
+		lighting["groundBy"]          = doc::plainFloat(grass.lighting.groundBy);
 
-		nlohmann::json& color = groupOf(json, c_ColorKey);
-		color["rootTint"]     = doc::vecToJson(grass.color.rootTint);
-		color["tipTint"]      = doc::vecToJson(grass.color.tipTint);
-		color["variation"]    = doc::plainFloat(grass.color.variation);
+		nlohmann::json& color    = groupOf(json, c_ColorKey);
+		color["rootTint"]        = doc::vecToJson(grass.color.rootTint);
+		color["tipTint"]         = doc::vecToJson(grass.color.tipTint);
+		color["variation"]       = doc::plainFloat(grass.color.variation);
+		color["groundColorNear"] = doc::plainFloat(grass.color.groundColorNear);
+		color["groundColorFar"]  = doc::plainFloat(grass.color.groundColorFar);
 
 		return doc::toBytes(json);
 	}

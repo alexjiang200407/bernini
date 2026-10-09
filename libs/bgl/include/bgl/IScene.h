@@ -124,8 +124,8 @@ namespace bgl
 		 *         where GrassDesc says so; a share is outside [0, 1]; `minHeight > maxHeight`; the
 		 *         segment counts are not 1 <= far <= near <= c_MaxGrassBladeSegments;
 		 *         `bladesPerClump` is outside [1, c_MaxGrassBladesPerClump]; `fadeEnd <= fadeStart`;
-		 *         or a colour, `widening`, `gustResponse` or `translucency` is negative or not
-		 *         finite.
+		 *         or a colour, `widening`, `thinStart`, `gustResponse` or `translucency` is negative
+		 *         or not finite.
 		 */
 		virtual GrassHandle
 		CreateGrass(const GrassDesc& desc) = 0;

@@ -7,4 +7,5 @@ public struct CullStats
     public Atomic<uint> grassChunksTested;
     public Atomic<uint> grassChunksCulled;
     public Atomic<uint> grassBladesEmitted;
+    public Atomic<uint> grassMeshGroups;
 }

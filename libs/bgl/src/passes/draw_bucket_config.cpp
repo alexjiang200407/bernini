@@ -81,6 +81,15 @@ namespace bgl
 			LayerSuffix(desc.layer));
 	}
 
+	std::string
+	DrawBucketGroundColorSrc(const DrawBucketDesc& desc)
+	{
+		core::ensure(
+			desc.geom == GeometryStage::kTerrain,
+			"Only a terrain's bucket draws the ground colour");
+		return std::format("programs.forward.GroundColor_{}", ProgramStem(desc.material));
+	}
+
 	std::string_view
 	DrawBucketGeometrySrc(const DrawBucketDesc& desc)
 	{

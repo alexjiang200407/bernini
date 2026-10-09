@@ -45,17 +45,23 @@ namespace
 			               .nearSegments = 6,
 			               .farSegments  = 2 };
 		grass.clump    = { .bladesPerClump = 11, .radius = 0.2f };
-		grass.density  = { .fadeStart = 12.5f, .fadeEnd = 75.0f, .widening = 1.5f };
+		grass.density  = { .fadeStart = 12.5f,
+			               .fadeEnd   = 75.0f,
+			               .widening  = 1.5f,
+			               .thinStart = 20.0f };
 		grass.response = { .stiffness = 0.35f, .gustResponse = 0.8f };
 		grass.lighting = { .rootOcclusion     = 0.7f,
 			               .normalRounding    = 0.6f,
 			               .groundNormalNear  = 0.1f,
 			               .groundNormalFar   = 0.9f,
 			               .translucencyColor = glm::vec3(0.8f, 1.0f, 0.4f),
-			               .translucency      = 0.3f };
-		grass.color    = { .rootTint  = glm::vec3(0.4f, 0.5f, 0.2f),
-			               .tipTint   = glm::vec3(0.9f, 1.0f, 0.6f),
-			               .variation = 0.25f };
+			               .translucency      = 0.3f,
+			               .groundBy          = 35.0f };
+		grass.color    = { .rootTint        = glm::vec3(0.4f, 0.5f, 0.2f),
+			               .tipTint         = glm::vec3(0.9f, 1.0f, 0.6f),
+			               .variation       = 0.25f,
+			               .groundColorNear = 0.15f,
+			               .groundColorFar  = 0.85f };
 		return grass;
 	}
 

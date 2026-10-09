@@ -51,8 +51,8 @@ namespace bgl
 
 	/**
 	 * How the field fades with distance from the camera: every blade is whole up to `fadeStart`, and
-	 * every blade shrinks together, linearly, to nothing at `fadeEnd`. No blade is dropped while it
-	 * can be seen, so none appears or vanishes on its own as the camera moves.
+	 * every blade shrinks together, linearly, to nothing at `fadeEnd`. With `thinStart` zero no blade
+	 * is dropped while it can be seen, so none appears or vanishes on its own as the camera moves.
 	 */
 	struct GrassDensityDesc
 	{
@@ -62,6 +62,11 @@ namespace bgl
 		// A fading blade's width is multiplied by 1 + widening * (1 - its scale) on top of the scale,
 		// so it narrows more slowly than it shortens. Zero shrinks width and height alike.
 		float widening = 1.0f;
+
+		// Past this distance a clump keeps a share (thinStart / distance)^2 of its blades, never fewer
+		// than one, each dropped blade shrinking out and the survivors widened to cover. Zero never
+		// thins. docs/grass.md § Distance.
+		float thinStart = 0.0f;
 	};
 
 	/**
@@ -89,7 +94,7 @@ namespace bgl
 		float normalRounding = 0.5f;
 
 		// How far the shading normal blends toward the clump's ground normal, at the camera and at
-		// the fade end. 1 and 1 shade every blade with the ground's normal.
+		// `groundBy`. 1 and 1 shade every blade with the ground's normal.
 		float groundNormalNear = 0.0f;
 		float groundNormalFar  = 0.8f;
 
@@ -97,6 +102,12 @@ namespace bgl
 		// material whose surface owns its lighting. Zero adds nothing; the colour is linear.
 		glm::vec3 translucencyColor = glm::vec3(1.0f);
 		float     translucency      = 0.0f;
+
+		// The distance, in world units, by which the ground normal and the ground colour
+		// (GrassColorDesc) reach their far shares, from their near shares at the camera. 0 reaches
+		// them at the fade end. Nearer than the fade end, a blade is lit as its ground before it has
+		// shrunk away, so a fading field ends in ground lit as the ground is.
+		float groundBy = 0.0f;
 	};
 
 	/** Linear multipliers on the material's base colour. White everywhere leaves it as it is. */
@@ -107,6 +118,12 @@ namespace bgl
 
 		// In [0, 1]: how far each blade's brightness varies by its own random.
 		float variation = 0.0f;
+
+		// In [0, 1]: how far a terrain's blade takes the albedo of the ground under its root in
+		// place of its own tinted colour, at the camera and at GrassLightingDesc::groundBy. 1 and 1 colour every
+		// blade as its ground. A field on a mesh has no ground colour and ignores both.
+		float groundColorNear = 0.0f;
+		float groundColorFar  = 0.0f;
 	};
 
 	/**

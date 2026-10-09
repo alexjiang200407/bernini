@@ -330,3 +330,29 @@ other programs.
 `bgpu.log` holds no `spirv-val` error: every renderer builds the toon program, and the grass cases
 build the grass one. **Check first** whether the program named passes a struct it read from a buffer
 into a function of its own that calls an asserting accessor; if it does, inline that function.
+
+## The build fails compiling a grass program: `dxc` reports `llvm::cast<X>() argument of incompatible type!`
+
+**Symptom.** `just build` stops at `Compiling Slang Entry Point: Grass.slang [ASMain]` (or
+`[MSMain]`) with `dxc 1.9: error: llvm::cast<X>() argument of incompatible type!` and nothing else:
+no line, no Slang diagnostic. `slangc` with the build's own arguments (the `FAILED:` line of the log)
+reproduces it at once, with or without `-g2`, and only for the D3D12 target, where Slang hands its
+HLSL to DXC.
+
+**Cause.** A DXC 1.9 crash on an amplification payload that carries a struct array. Two shapes of
+it were found, both in the grass stage's payload, which hands the mesh groups the chunk's kept
+clumps: storing a whole struct into the payload's array at an index known only at run time (the
+amplification stage), and passing the payload itself to a function (the mesh stage) -- the second
+crashes even once the array holds plain vectors. It is not the debug information, the groupshared
+`InterlockedOr`, the stats counters, a default-constructed `GrassLook` or the clump's own reads: each
+was ruled out by removing it from a copy of the program and compiling that alone.
+
+**Fixed by** the payload carrying its clumps as flat arrays of vectors (`clumpPositionScale`,
+`clumpNormal`, `clumpColorSeed`) written one element at a time, and the mesh stage passing a clump's
+elements into `LaunchedClump` rather than the payload
+([Grass.slang](../libs/bgl/shaders/src/programs/forward/Grass.slang)).
+
+**Gates.** `just build`: the build compiles `Grass.slang`'s `ASMain` and `MSMain` through `slangc`
+and DXC (`libs/bgl/shaders/CMakeLists.txt`), and fails on the crash. **Check first** whether the
+change puts a struct into a payload array, or passes a payload or a struct read from one into a
+function; if it does, flatten the struct into vectors or pass its members.
