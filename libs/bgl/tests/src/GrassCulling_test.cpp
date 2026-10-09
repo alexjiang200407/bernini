@@ -69,7 +69,7 @@ namespace
 
 	/** A flat field over XZ at y = 0, growing up, chunked in runs of whole rows. */
 	assetlib::BGrassFields
-	MakeField()
+	MakeField(const float heightScale = 1.0f)
 	{
 		auto grass  = assetlib::BGrassFields();
 		grass.looks = { "unused.bgrass" };
@@ -83,7 +83,7 @@ namespace
 											  origin + c_Spacing * static_cast<float>(x),
 											  0.0f,
 											  origin + c_Spacing * static_cast<float>(z)),
-				                          .heightScale = 1.0f,
+				                          .heightScale = heightScale,
 				                          .normal      = glm::vec3(0.0f, 1.0f, 0.0f),
 				                          .color       = glm::u8vec4(255) });
 
@@ -126,7 +126,7 @@ namespace
 		std::optional<bgl::ForwardPhases>        forwardPhases;
 		std::optional<bgl::BrdfLutGenPass>       brdfLut;
 
-		explicit Harness(const float thinStart = 0.0f)
+		explicit Harness(const float thinStart = 0.0f, const float heightScale = 1.0f)
 		{
 			auto opts                                = bgl::test::GraphicsSetup();
 			opts.gpuContext.shaderCacheDir           = bgl::test::ShaderCacheDir();
@@ -171,7 +171,7 @@ namespace
 			look.density.fadeEnd                        = c_FadeEnd;
 			look.density.thinStart                      = thinStart;
 			const std::array<bgl::GrassHandle, 1> looks = { sceneRef->CreateGrass(look) };
-			sceneRef->AttachGrass(ground, MakeField(), 0, looks);
+			sceneRef->AttachGrass(ground, MakeField(heightScale), 0, looks);
 
 			view->RefreshGrass();
 			const bgl::DrawBucketTable& table     = gfxBase->GetRenderContext()->DrawBuckets();
@@ -291,6 +291,7 @@ namespace
 			stats.grassChunksTested  = mapped->grassChunksTested;
 			stats.grassChunksCulled  = mapped->grassChunksCulled;
 			stats.grassBladesEmitted = mapped->grassBladesEmitted;
+			stats.grassMeshGroups    = mapped->grassMeshGroups;
 			resourceManager->UnmapReadback(readback);
 			return stats;
 		}
@@ -348,6 +349,26 @@ TEST_CASE("A look that thins by count launches only the blades it keeps", "[gras
 	CHECK(kept.grassBladesEmitted > 0u);
 	CHECK(kept.grassBladesEmitted <= c_Side * c_Side);
 	CHECK(kept.grassBladesEmitted * 3u < all.grassBladesEmitted);
+}
+
+TEST_CASE("A chunk whose clumps grow nothing launches no mesh groups", "[grass][cull]")
+{
+	const auto eye = glm::vec3(0.0f, 2.0f, 4.0f);
+
+	Harness                   growing;
+	const bgl::idl::CullStats some = growing.Frame(eye, glm::vec3(0.0f));
+	INFO("growing: groups " << some.grassMeshGroups << ", blades " << some.grassBladesEmitted);
+	CHECK(some.grassChunksCulled == 0u);
+	CHECK(some.grassMeshGroups > 0u);
+
+	// The same field in view, every clump scaled to nothing: each chunk is tested and none culled,
+	// and the amplification stage, finding no clump that grows, launches nothing at all.
+	Harness                   bare(0.0f, 0.0f);
+	const bgl::idl::CullStats none = bare.Frame(eye, glm::vec3(0.0f));
+	CHECK(none.grassChunksTested == c_ChunkCount);
+	CHECK(none.grassChunksCulled == 0u);
+	CHECK(none.grassMeshGroups == 0u);
+	CHECK(none.grassBladesEmitted == 0u);
 }
 
 #endif

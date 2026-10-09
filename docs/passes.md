@@ -832,10 +832,13 @@ constant buffer, which the grass program reads a blade's look from as well.
 
 It culls in two places. The amplification group tests the chunk's sphere -- a terrain tile's box,
 between the heights of the terrain nodes under it -- inflated by the furthest a blade can reach,
-against the same `cull.view` planes Forward World uses, and launches as many mesh
-groups as the chunk keeps blades at its nearest point. Each mesh group keeps or drops each blade
+against the same `cull.view` planes Forward World uses. One amplification thread per clump then
+builds its clump once -- a terrain's from the heightfield and the layer's rules -- and keeps it only
+if it grows a blade large enough to see where it stands; the kept clumps go to the mesh groups in
+the payload, and the group launches as many as the kept clumps' blades need at the chunk's nearest
+point, none for a chunk that keeps no clump. Each mesh group keeps or drops each blade
 against its own root's distance. In `BERNINI_GPU_DEBUG` builds it adds to `cull.stats`'
-`grassChunksTested`, `grassChunksCulled` and `grassBladesEmitted`. Velocity comes from the
+`grassChunksTested`, `grassChunksCulled`, `grassMeshGroups` and `grassBladesEmitted`. Velocity comes from the
 placement's current and previous transform through the same `ProjectVertex` the world's meshlets
 use, so moved grass moves in the motion vectors and still grass writes none; a terrain's grass has
 no placement and moves only in the wind.

@@ -112,36 +112,86 @@ bool SourceOf(GrassChunkRef chunkRef, GrassDraw draw, out ChunkSource source)
     return TerrainGrassTile(source.layer, source.terrain, grassData.cameraPos, draw.windowTiles, chunkRef.chunk, source.tile);
 }
 
+// A clump's colour as the payload carries it, rgb8.
+uint PackClumpColor(float3 color)
+{
+    let rgb = uint3(round(saturate(color) * 255.0));
+    return rgb.r | (rgb.g << 8u) | (rgb.b << 16u) | (255u << 24u);
+}
+
+// What a chunk launches its mesh groups with: the blades it keeps, how they are cut, and the chunk's
+// clumps that grow anything visible, in their order in the chunk. Blades are numbered across these
+// alone (BladeAddress), so a clump that grows nothing launches nothing.
 struct GrassPayload
 {
     uint chunkRefIndex;
     uint keptBlades;
     uint segments;
     uint bladesPerGroup;
+    uint liveCount;
+
+    // The kept clumps, built once for every blade the mesh groups build from them rather than once
+    // per blade: position and height scale, ground normal, and colour and seed. Flat arrays of
+    // vectors: DXC 1.9 crashes (llvm::cast) on a payload array of structs indexed at run time.
+    float4 clumpPositionScale[cGrassClumpsPerChunk];
+    float4 clumpNormal[cGrassClumpsPerChunk];
+    uint2 clumpColorSeed[cGrassClumpsPerChunk];
 };
 
 groupshared GrassPayload gGrassPayload;
 
-[numthreads(1, 1, 1)]
+// Kept clump `i` of a launch, from its parts.
+ClumpPoint LaunchedClump(float4 positionScale, float4 normal, uint2 colorSeed)
+{
+    ClumpPoint clump;
+    clump.position = positionScale.xyz;
+    clump.heightScale = positionScale.w;
+    clump.normal = normal.xyz;
+    clump.color = UnpackColor(colorSeed.x).rgb;
+    clump.seed = colorSeed.y;
+    return clump;
+}
+
+// Which of the chunk's clumps grow anything visible, a bit each, and what the chunk test found.
+groupshared uint gLiveMask[cGrassClumpsPerChunk / 32u];
+groupshared uint gChunkVisible;
+groupshared float gChunkNearest;
+groupshared float gChunkMaxHeightScale;
+
+// One group per chunk reference, one thread per clump. Thread 0 tests the chunk against the frustum
+// and its nearest distance; then every thread builds its clump once -- for a terrain, from the
+// heightfield and the layer's rules -- and keeps it only if it grows a blade large enough to see
+// where it stands. A chunk with no clump kept launches nothing, which is most of a sparse terrain
+// layer's window.
+[numthreads(cGrassClumpsPerChunk, 1, 1)]
 [shader("amplification")]
-void ASMain(uint3 gid: SV_GroupID)
+void ASMain(uint3 gid: SV_GroupID, uint gtid: SV_GroupIndex)
 {
     let refIndex = gid.y * grassData.dispatchWidth + gid.x;
-    uint groups = 0u;
+    let inRange = refIndex < grassData.refCount;
 
-    ChunkSource source;
-    if (refIndex < grassData.refCount)
+    ChunkSource source = {};
+    var look = GrassLook();
+    var found = false;
+    if (inRange)
     {
         let chunkRef = grassData.chunkRefs[grassData.firstRef + refIndex];
         let draw = grassData.draws[chunkRef.draw];
-        let look = grassData.looks.Get(draw.look);
-        let found = SourceOf(chunkRef, draw, source);
+        look = grassData.looks.Get(draw.look);
+        found = SourceOf(chunkRef, draw, source);
+    }
 
+    if (gtid < cGrassClumpsPerChunk / 32u)
+    {
+        gLiveMask[gtid] = 0u;
+    }
+    if (gtid == 0u)
+    {
         // The nearest any blade of the chunk can be, and the largest any can be scaled.
         var visible = false;
         var nearest = 0.0;
         var maxHeightScale = 1.0;
-        if (found && source.onTerrain)
+        if (inRange && found && source.onTerrain)
         {
             float3 lo;
             float3 hi;
@@ -152,7 +202,7 @@ void ASMain(uint3 gid: SV_GroupID)
             visible = BoxInFrustum(expansionData.cullView[0].frustumPlanes, lo, hi);
             nearest = NearestDistance(lo, hi, grassData.cameraPos);
         }
-        else if (found)
+        else if (inRange && found)
         {
             let chunk = source.chunk;
             let local =
@@ -164,31 +214,85 @@ void ASMain(uint3 gid: SV_GroupID)
         }
 
 #if defined(BERNINI_GPU_DEBUG)
-        expansionData.stats[0].grassChunksTested.add(1u);
-        if (!visible)
+        if (inRange)
         {
-            expansionData.stats[0].grassChunksCulled.add(1u);
+            expansionData.stats[0].grassChunksTested.add(1u);
+            if (!visible)
+            {
+                expansionData.stats[0].grassChunksCulled.add(1u);
+            }
         }
 #endif
 
-        if (visible)
-        {
-            // A chunk whose largest blade is too small to see where it is nearest launches nothing,
-            // and otherwise the blades the look keeps there: blades are numbered across the
-            // clumps (BladeAddress), so the first k of every clump are the first k * clumps.
-            let tallest = look.maxHeight * maxHeightScale;
-            let seen = BladeVisible(tallest * ThinningAt(look, nearest, 0u).scale, nearest, grassData.pixelsPerUnit);
-            let kept = seen ? source.clumpCount * KeptBladesPerClump(look, nearest) : 0u;
-            let segments = SegmentsAt(look, nearest, tallest, grassData.pixelsPerUnit);
-            let perGroup = BladesPerGroup(segments, cGrassVerticesPerGroup, cGrassPrimsPerGroup);
+        // A chunk whose largest blade is too small to see where it is nearest launches nothing.
+        let tallest = look.maxHeight * maxHeightScale;
+        let seen = visible && BladeVisible(tallest * ThinningAt(look, nearest, 0u).scale, nearest, grassData.pixelsPerUnit);
+        gChunkVisible = seen ? 1u : 0u;
+        gChunkNearest = nearest;
+        gChunkMaxHeightScale = maxHeightScale;
+    }
+    GroupMemoryBarrierWithGroupSync();
 
-            gGrassPayload.chunkRefIndex = refIndex;
-            gGrassPayload.keptBlades = kept;
-            gGrassPayload.segments = segments;
-            gGrassPayload.bladesPerGroup = perGroup;
-            groups = (kept + perGroup - 1u) / perGroup;
+    let chunkSeen = gChunkVisible != 0u;
+    var live = false;
+    var clump = ClumpPoint();
+    if (chunkSeen && gtid < source.clumpCount)
+    {
+        clump = source.Clump(gtid);
+        let away = distance(grassData.cameraPos, source.WorldPoint(clump.position));
+        let tallest = look.maxHeight * clump.heightScale * ThinningAt(look, away, 0u).scale;
+        live = clump.heightScale > 0.0 && BladeVisible(tallest, away, grassData.pixelsPerUnit);
+    }
+    if (live)
+    {
+        InterlockedOr(gLiveMask[gtid / 32u], 1u << (gtid % 32u));
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    // Kept clumps land in the payload in their order in the chunk: each one's slot is the count of
+    // kept clumps below it.
+    var liveCount = 0u;
+    var below = 0u;
+    for (uint word = 0u; word < cGrassClumpsPerChunk / 32u; ++word)
+    {
+        let bits = gLiveMask[word];
+        liveCount += countbits(bits);
+        if (word < gtid / 32u)
+        {
+            below += countbits(bits);
+        }
+        else if (word == gtid / 32u)
+        {
+            below += countbits(bits & ((1u << (gtid % 32u)) - 1u));
         }
     }
+    if (live)
+    {
+        gGrassPayload.clumpPositionScale[below] = float4(clump.position, clump.heightScale);
+        gGrassPayload.clumpNormal[below] = float4(clump.normal, 0.0);
+        gGrassPayload.clumpColorSeed[below] = uint2(PackClumpColor(clump.color), clump.seed);
+    }
+
+    // The blades the look keeps at the chunk's nearest point: blades are numbered across the kept
+    // clumps (BladeAddress), so the first k of every clump are the first k * clumps.
+    let nearest = gChunkNearest;
+    let tallest = look.maxHeight * gChunkMaxHeightScale;
+    let kept = chunkSeen ? liveCount * KeptBladesPerClump(look, nearest) : 0u;
+    let segments = SegmentsAt(look, nearest, tallest, grassData.pixelsPerUnit);
+    let perGroup = BladesPerGroup(segments, cGrassVerticesPerGroup, cGrassPrimsPerGroup);
+    let groups = (kept + perGroup - 1u) / perGroup;
+    if (gtid == 0u)
+    {
+        gGrassPayload.chunkRefIndex = refIndex;
+        gGrassPayload.keptBlades = kept;
+        gGrassPayload.segments = segments;
+        gGrassPayload.bladesPerGroup = perGroup;
+        gGrassPayload.liveCount = liveCount;
+#if defined(BERNINI_GPU_DEBUG)
+        expansionData.stats[0].grassMeshGroups.add(groups);
+#endif
+    }
+    GroupMemoryBarrierWithGroupSync();
 
     DispatchMesh(groups, 1, 1, gGrassPayload);
 }
@@ -246,8 +350,8 @@ void MSMain(
     {
         uint clumpLocal;
         uint bladeInClump;
-        BladeAddress(b, source.clumpCount, clumpLocal, bladeInClump);
-        let clump = source.Clump(clumpLocal);
+        BladeAddress(b, launch.liveCount, clumpLocal, bladeInClump);
+        let clump = LaunchedClump(launch.clumpPositionScale[clumpLocal], launch.clumpNormal[clumpLocal], launch.clumpColorSeed[clumpLocal]);
         let rootWorld = source.WorldPoint(clump.position);
         let away = distance(grassData.cameraPos, rootWorld);
         let tallest = look.maxHeight * clump.heightScale * ThinningAt(look, away, bladeInClump).scale;
@@ -279,8 +383,8 @@ void MSMain(
     {
         uint clumpLocal;
         uint bladeInClump;
-        BladeAddress(gSurvivors[gtid], source.clumpCount, clumpLocal, bladeInClump);
-        let clump = source.Clump(clumpLocal);
+        BladeAddress(gSurvivors[gtid], launch.liveCount, clumpLocal, bladeInClump);
+        let clump = LaunchedClump(launch.clumpPositionScale[clumpLocal], launch.clumpNormal[clumpLocal], launch.clumpColorSeed[clumpLocal]);
         var shape = MakeBladeShape(look, clump, bladeInClump);
         let wind = ViewWind();
         let rootWorld = source.WorldPoint(shape.root);
