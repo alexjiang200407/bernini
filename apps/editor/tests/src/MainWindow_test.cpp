@@ -43,6 +43,7 @@
 #include <bgl/types/BloomSettings.h>
 #include <bgl/types/ColorGradeSettings.h>
 #include <bgl/types/ColorSplitSettings.h>
+#include <bgl/types/DisplayCurve.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/InstanceDesc.h>
 #include <bgl/types/MaterialHandle.h>
@@ -1081,11 +1082,12 @@ TEST_CASE(
 	CHECK(animationView->GetPostProcess().bloom);
 }
 
-// The toon backdrop is what is shown deciding the background; the post-process is every viewport's
-// whatever it shows. Its colours are config.json's per viewport, defaulting to the toon look-dev
-// gradient, and clamped like the bloom.
+// What is shown decides the background and the curve: toon content stands against the toon
+// backdrop and ends in Gran Turismo's curve, anything else in the sky and AgX. The effects are
+// every viewport's whatever it shows. The backdrop's colours are config.json's per viewport,
+// defaulting to the toon look-dev gradient, and clamped like the bloom.
 TEST_CASE(
-	"A viewport draws its toon backdrop for toon content alone, and keeps its post-process",
+	"A viewport draws its toon backdrop and curve for toon content alone, and keeps its effects",
 	"[mainwindow][backdrop][render]")
 {
 	const HeadlessEditor editor;
@@ -1107,6 +1109,7 @@ TEST_CASE(
 	REQUIRE(animationView != nullptr);
 
 	CHECK_FALSE(materialView->GetBackdrop().has_value());
+	CHECK(materialView->GetPostProcess().curve == bgl::DisplayCurve::kAgX);
 
 	materialView->SetShowsToonContent(true);
 	const std::optional<bgl::BackdropGradient> named = materialView->GetBackdrop();
@@ -1123,10 +1126,13 @@ TEST_CASE(
 	CHECK(unnamed->top == bgl::BackdropGradient().top);
 
 	const bgl::PostProcess toonPost = materialView->GetPostProcess();
+	CHECK(toonPost.curve == bgl::DisplayCurve::kGranTurismo);
+	CHECK(animationView->GetPostProcess().curve == bgl::DisplayCurve::kGranTurismo);
 	materialView->SetShowsToonContent(false);
 	CHECK_FALSE(materialView->GetBackdrop().has_value());
 
 	const bgl::PostProcess pbrPost = materialView->GetPostProcess();
+	CHECK(pbrPost.curve == bgl::DisplayCurve::kAgX);
 	CHECK(toonPost.bloom.has_value() == pbrPost.bloom.has_value());
 	CHECK(toonPost.grade.has_value() == pbrPost.grade.has_value());
 	CHECK(toonPost.grain.has_value() == pbrPost.grain.has_value());

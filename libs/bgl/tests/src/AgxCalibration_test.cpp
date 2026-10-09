@@ -1,6 +1,6 @@
-#include "util/AgxProbe.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
+#include "util/TonemapProbe.h"
 #include <array>
 #include <bgl/IGraphics.h>
 #include <catch2/catch_approx.hpp>

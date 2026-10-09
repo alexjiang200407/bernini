@@ -28,7 +28,10 @@ struct PostProcessData
     float2 maskSize;
     uint outlineEnabled;
 
-    // The display curve's LUT and the linear clamp it is read through.
+    // bgl::DisplayCurve: 0 AgX, 1 Gran Turismo. One per target, so the branch is uniform.
+    uint curve;
+
+    // AgX's LUT and the linear clamp it is read through.
     Texture2D.Handle tonemapLut;
     SamplerState.Handle lutSampler;
 
@@ -65,6 +68,8 @@ struct PostProcessData
 };
 
 ConstantBuffer<PostProcessData> gPostProcessData;
+
+static const uint c_CurveGranTurismo = 1;
 
 // Display-space: the outline is editor feedback, composited after the tonemap so exposure and the
 // display curve cannot shift it.
@@ -194,7 +199,7 @@ float3 SampleScene(float2 uv)
     return scene;
 }
 
-// AgX leaves its result linear so the sRGB target re-encodes it. Alpha is forced opaque: the
+// Either curve leaves its result linear so the sRGB target encodes it. Alpha is forced opaque: the
 // backbuffer is a display surface, and scene alpha is a surface's own coverage, not the pixel's --
 // a hashed or cutout survivor carries its texture alpha, and passing that through hands a capture
 // (and anything compositing the backbuffer) transparency the image does not have.
@@ -220,19 +225,20 @@ float4 PSMain(VSOut input) : SV_Target
         glow = gPostProcessData.bloomIntensity * gPostProcessData.bloom.SampleLevel(gPostProcessData.bloomSampler, input.uv, 0.0).rgb;
     }
 
-    TonemapLut lut;
-    lut.strip = gPostProcessData.tonemapLut;
-    lut.sampler = gPostProcessData.lutSampler;
-
+    const bool graded = gPostProcessData.gradeEnabled != 0;
     float3 color;
 
-    if (gPostProcessData.gradeEnabled != 0)
+    if (gPostProcessData.curve == c_CurveGranTurismo)
     {
-        color = AgXGraded(scene + glow, input.uv, TargetGrade(), lut);
+        color = graded ? GranTurismoGraded(scene + glow, input.uv, TargetGrade()) : GranTurismo(scene + glow);
     }
     else
     {
-        color = AgX(scene + glow, lut);
+        TonemapLut lut;
+        lut.strip = gPostProcessData.tonemapLut;
+        lut.sampler = gPostProcessData.lutSampler;
+
+        color = graded ? AgXGraded(scene + glow, input.uv, TargetGrade(), lut) : AgX(scene + glow, lut);
     }
 
     // A share of the displayed value, so black stays black and a lifted black carries a little.

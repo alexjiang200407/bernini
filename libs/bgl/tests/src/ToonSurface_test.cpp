@@ -16,12 +16,14 @@
 #include <bgl/glm.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/DirectionalLightDesc.h>
+#include <bgl/types/DisplayCurve.h>
 #include <bgl/types/GrassDesc.h>
 #include <bgl/types/GrassHandle.h>
 #include <bgl/types/LayerType.h>
 #include <bgl/types/LodSelectionDesc.h>
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/PostProcess.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/StaticMeshGeomDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
@@ -586,6 +588,68 @@ TEST_CASE(
 		CHECK(bgl::test::MeanColor(facing, 150, 100, 100, 100).Luma() > 0.05f);
 		CHECK(middle(facing, tilted) < c_Same);
 	}
+}
+
+// A cel-shaded sphere under a sun from the left and a uniform sky, on a target set to Gran
+// Turismo's curve, as the editor shows toon content: it is not AgX's frame, its lit side keeps the
+// painted orange's hue, and its lit and shaded sides are distinct tones. Measured rather than
+// compared with a golden image, whose pixels the curve's own cases (PostProcess_test,
+// GranTurismo_test) already pin.
+TEST_CASE("A toon character under Gran Turismo's curve", "[surface][render][toon][granturismo]")
+{
+	auto gfx = bgl::test::CreateGraphics(ToonOptions());
+	REQUIRE(gfx != nullptr);
+	auto scene = gfx->CreateScene(ToonScene());
+
+	const auto character = scene->CreateSurfaceMaterial(Cel(c_Flat, {}));
+
+	const auto shoot = [&](DisplayCurve curve, const char* png) {
+		auto targetDesc        = bgl::RenderTargetDesc();
+		targetDesc.width       = 400;
+		targetDesc.height      = 300;
+		targetDesc.headless    = true;
+		targetDesc.postProcess = bgl::PostProcess{ .curve = curve };
+		auto target            = gfx->CreateRenderTarget(targetDesc);
+		REQUIRE(target != nullptr);
+
+		auto view = gfx->CreateSceneView(scene, 8);
+		bgl::test::ApplySkyEnvironment(scene.Get(), view.Get(), glm::vec3(0.4f, 0.5f, 0.7f), 0x3fu);
+		view->SetDirectionalLight(
+			{ .direction = glm::normalize(glm::vec3(0.9f, -0.3f, -0.2f)),
+		      .color     = glm::vec3(1.0f, 0.95f, 0.9f),
+		      .intensity = 1.0f });
+		view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(scene->AddSphereGeom(32, 32, 4.0f, character)));
+
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = SphereCamera();
+		job.viewport = bgl::Viewport(400.0f, 300.0f);
+		for (int i = 0; i < 6; ++i) gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, png);
+	};
+
+	const auto* gt  = "assets/golden/toon_sphere_gt.got.png";
+	const auto* agx = "assets/golden/toon_sphere_agx.got.png";
+	shoot(DisplayCurve::kGranTurismo, gt);
+	shoot(DisplayCurve::kAgX, agx);
+
+	CHECK(bgl::test::MaxChannelDelta(gt, agx) > 0.05f);
+
+	// The sphere spans about 90 pixels either side of the frame's centre, its second shade a band
+	// along its right edge, the sun travelling toward +X.
+	const auto lit    = bgl::test::MeanColor(gt, 140, 140, 16, 16);
+	const auto shaded = bgl::test::MeanColor(gt, 274, 150, 8, 8);
+	INFO(
+		"lit " << lit.r << " " << lit.g << " " << lit.b << ", shaded " << shaded.r << " "
+			   << shaded.g << " " << shaded.b);
+	CHECK(lit.r > lit.g);
+	CHECK(lit.g > lit.b);
+	const float hue = 60.0f * (lit.g - lit.b) / (lit.r - lit.b);
+	CHECK(hue > 15.0f);
+	CHECK(hue < 45.0f);
+	CHECK(lit.Luma() > shaded.Luma() + 0.1f);
+	std::filesystem::remove(agx);
 }
 
 namespace

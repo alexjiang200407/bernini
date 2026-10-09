@@ -96,10 +96,10 @@ flowchart TD
 The diagram is the contract ownership/call topology. The production loader owns both registries.
 Each project host borrows its store, renderer and asset manager while project panels exist.
 
-Every viewport ends in AgX, as every target does. A panel says it shows a toon-shaded asset with
-`IEditorViewport::SetShowsToonContent`, and that swaps the viewport's sky for its
-`ViewportDesc::toonBackdrop` gradient and changes nothing else: the background follows what is
-shown. The host reads the gradient from the
+A panel says it shows a toon-shaded asset with `IEditorViewport::SetShowsToonContent`, and that
+swaps the viewport's sky for its `ViewportDesc::toonBackdrop` gradient and its curve from AgX to
+Gran Turismo's, the one a toon look is authored under, and changes nothing else: the background
+and the curve follow what is shown. A thumbnail follows the same rule. The host reads the gradient from the
 viewport's `config.json` section, `toonBackdrop` (`bottom` and `top`, each `{ "r", "g", "b" }`,
 scene-linear), and defaults it to the toon look-dev one, pale horizon to sky blue. The asset
 thumbnails follow the same rule per shot -- a toon mesh or material against the `thumbnails`

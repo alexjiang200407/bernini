@@ -38,4 +38,23 @@ namespace bgl::test
 		glm::vec3                      sceneLinear,
 		glm::vec2                      uv,
 		const bgl::ColorGradeSettings& settings);
+
+	/**
+	 * `sceneLinear` through Gran Turismo's curve, display-linear: one dispatch of
+	 * CSGranTurismoProbe, which calls the function PostProcess calls.
+	 */
+	[[nodiscard]] glm::vec3
+	RunGranTurismo(bgl::IGraphics& gfx, glm::vec3 sceneLinear);
+
+	/** RunGranTurismo of a grey, one channel of it. */
+	[[nodiscard]] float
+	RunGranTurismo(bgl::IGraphics& gfx, float sceneLinear);
+
+	/** RunGradedAgX's grade ahead of Gran Turismo's curve instead, as a target set to it runs. */
+	[[nodiscard]] glm::vec3
+	RunGradedGranTurismo(
+		bgl::IGraphics&                gfx,
+		glm::vec3                      sceneLinear,
+		glm::vec2                      uv,
+		const bgl::ColorGradeSettings& settings);
 }

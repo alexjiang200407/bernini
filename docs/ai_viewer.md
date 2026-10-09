@@ -40,7 +40,8 @@ Bare, it renders `assets/Data`'s apples — the one project `copy_assets` stages
 | `--backdrop` | `sky` | what is drawn behind the scene: `sky`, the environment's, or `gradient`, the toon look-dev backdrop the editor's toon previews draw, pale horizon to sky blue (`ISceneView::SetBackdrop`). Only the background changes; `--env` still lights the scene |
 | `-w`, `-h`, `--taa` | 1280, 720, on | the output, as a viewport renders it |
 | `--render-scale` | 1 | the grid the geometry passes render on, relative to the output; below 1 the TAA resolve reconstructs the output ([Temporal Antialiasing](taa.md) § Render scale) |
-| `--bloom` | off | bloom at `bgl::BloomSettings`' defaults, added ahead of AgX; its `BloomDown*`/`BloomUp*` passes join the timings |
+| `--curve` | `agx` | the display curve the target ends in: `agx`, or `granTurismo`, the stylized one the editor shows toon content under ([Passes](passes.md) § Scene colour). A flag rather than the content's rule, so a toon model can be judged under either |
+| `--bloom` | off | bloom at `bgl::BloomSettings`' defaults, added ahead of the curve; its `BloomDown*`/`BloomUp*` passes join the timings |
 | `--film-grain` | off | film grain at `bgl::FilmGrainSettings`' defaults. The pattern follows the target's frame count, so frame N carries the same grain every run and two screenshots of one run differ by it |
 | `--color-split` | off | the colour split at `bgl::ColorSplitSettings`' defaults: red two pixels left of green at 2160 lines and blue two right, scaled to `-h` |
 | `--frame-clip` | off | frame the camera on the playing clip's poses rather than every clip's |

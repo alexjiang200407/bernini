@@ -1,8 +1,8 @@
-#include "util/AgxProbe.h"
 #include "util/GoldenImage.h"
 #include "util/TestEnvironment.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
+#include "util/TonemapProbe.h"
 #include <array>
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
@@ -343,6 +343,86 @@ TEST_CASE(
 		s.vignette.smoothness = 1.0f;
 		const auto smooth     = glm::vec3(bgl::test::RunGradedAgX(*gfx, grey, midway, s));
 		CHECK(Luma(smooth) < Luma(sharp) - c_Moved);
+	}
+}
+
+/**
+ * Under Gran Turismo's curve the grade runs in the same log coordinate and is decoded back to scene
+ * linear, so a neutral grade is that curve alone -- past the top of the encoding's middle too, where
+ * a clamp in the decode would cut a highlight before the shoulder could roll it off.
+ */
+TEST_CASE(
+	"A neutral grade leaves Gran Turismo's output where it was",
+	"[colorgrade][tonemap][granturismo]")
+{
+	auto gfx = MakeGraphics();
+
+	const std::array<glm::vec3, 6> sweep = { {
+		glm::vec3(0.001f),
+		glm::vec3(0.01f),
+		glm::vec3(0.18f),
+		glm::vec3(1.0f),
+		glm::vec3(3.0f, 0.4f, 0.05f),
+		glm::vec3(8.0f),
+	} };
+
+	for (const glm::vec3 v : sweep)
+	{
+		const glm::vec3 plain = bgl::test::RunGranTurismo(*gfx, v);
+		const glm::vec3 graded =
+			bgl::test::RunGradedGranTurismo(*gfx, v, c_Centre, bgl::ColorGradeSettings());
+
+		INFO(
+			"scene-linear " << v.r << " " << v.g << " " << v.b << ": " << plain.r << " " << plain.g
+							<< " " << plain.b << " vs " << graded.r << " " << graded.g << " "
+							<< graded.b);
+		CHECK(graded.r == Catch::Approx(plain.r).margin(1e-5));
+		CHECK(graded.g == Catch::Approx(plain.g).margin(1e-5));
+		CHECK(graded.b == Catch::Approx(plain.b).margin(1e-5));
+	}
+}
+
+TEST_CASE(
+	"The grade moves Gran Turismo's image the way it moves AgX's",
+	"[colorgrade][tonemap][granturismo]")
+{
+	auto gfx = MakeGraphics();
+
+	const auto grey    = glm::vec3(0.18f);
+	const auto orange  = glm::vec3(0.6f, 0.25f, 0.08f);
+	const auto neutral = bgl::ColorGradeSettings();
+
+	const auto graded = [&](glm::vec3 color, const bgl::ColorGradeSettings& settings) {
+		return bgl::test::RunGradedGranTurismo(*gfx, color, c_Centre, settings);
+	};
+
+	// No saturation leaves a colour grey.
+	{
+		auto s       = neutral;
+		s.saturation = 0.0f;
+		const auto c = graded(orange, s);
+		INFO("desaturated orange: " << c.r << " " << c.g << " " << c.b);
+		CHECK(Spread(c) < c_Moved);
+	}
+
+	// Contrast pivots at middle grey: grey holds, the shadows fall and the highlights rise.
+	{
+		auto s     = neutral;
+		s.contrast = 1.3f;
+		CHECK(graded(grey, s).g == Catch::Approx(graded(grey, neutral).g).margin(1e-4));
+
+		const auto shadow    = glm::vec3(0.03f);
+		const auto highlight = glm::vec3(1.0f);
+		CHECK(Luma(graded(shadow, s)) < Luma(graded(shadow, neutral)) - c_Moved);
+		CHECK(Luma(graded(highlight, s)) > Luma(graded(highlight, neutral)) + c_Moved);
+	}
+
+	// Warmer is red over blue.
+	{
+		auto s        = neutral;
+		s.temperature = 50.0f;
+		const auto w  = graded(grey, s);
+		CHECK(w.r > w.b + c_Moved);
 	}
 }
 

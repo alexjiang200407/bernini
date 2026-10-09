@@ -10,6 +10,7 @@
 #include <bgl/types/BloomSettings.h>
 #include <bgl/types/ColorGradeSettings.h>
 #include <bgl/types/ColorSplitSettings.h>
+#include <bgl/types/DisplayCurve.h>
 #include <bgl/types/FilmGrainSettings.h>
 #include <bgl/types/PostProcess.h>
 #include <bgpu/cmd/CommandList.h>
@@ -46,7 +47,7 @@ namespace bgl
 		// Every member Execute writes. Kept beside the code that writes them so
 		// BindingNameCheck catches a shader rename at startup: an optional write is silent, so
 		// a stale name would otherwise resolve to nothing every frame and say nothing.
-		constexpr std::array<std::string_view, 30> c_Fields = {
+		constexpr std::array<std::string_view, 31> c_Fields = {
 			"sceneColor"sv,
 			"sourceTexelSize"sv,
 			"rcasStrength"sv,
@@ -57,6 +58,7 @@ namespace bgl
 			"maskSize"sv,
 			"tonemapLut"sv,
 			"lutSampler"sv,
+			"curve"sv,
 			"bloom"sv,
 			"bloomSampler"sv,
 			"bloomIntensity"sv,
@@ -170,6 +172,7 @@ namespace bgl
 			tonemap["maskSampler"].SetIfValid(args.maskSampler);
 			tonemap["tonemapLut"].SetIfValid(args.tonemapLut);
 			tonemap["lutSampler"].SetIfValid(args.lutSampler);
+			tonemap["curve"].SetIfValid(static_cast<uint32_t>(args.postProcess.curve));
 			tonemap["outlineEnabled"].SetIfValid(args.outlineEnabled ? 1u : 0u);
 			if (args.outlineEnabled)
 			{

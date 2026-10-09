@@ -5,9 +5,10 @@
 namespace bgl
 {
 	/**
-	 * PostProcess's grade around AgX: white balance and the vignette in scene linear, the ASC
-	 * CDL and contrast in the log coordinate AgX's formation reads. Every default is neutral. See
-	 * docs/passes.md § The colour grade.
+	 * PostProcess's grade, ahead of either display curve: white balance and the vignette in scene
+	 * linear, the ASC CDL and contrast in the log coordinate AgX's formation reads, decoded back
+	 * to scene linear for Gran Turismo's. Every default is neutral. See docs/passes.md § The colour
+	 * grade.
 	 */
 	struct ColorGradeSettings
 	{

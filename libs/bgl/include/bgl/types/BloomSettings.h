@@ -2,7 +2,7 @@
 
 namespace bgl
 {
-	/** How a target blooms: added to the scene in linear radiance, ahead of AgX. */
+	/** How a target blooms: added to the scene in linear radiance, ahead of the display curve. */
 	struct BloomSettings
 	{
 		// The glow's weight.

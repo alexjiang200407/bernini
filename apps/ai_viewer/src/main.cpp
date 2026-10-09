@@ -26,6 +26,7 @@
 #include <bgl/types/Camera.h>
 #include <bgl/types/ColorSplitSettings.h>
 #include <bgl/types/DirectionalLightDesc.h>
+#include <bgl/types/DisplayCurve.h>
 #include <bgl/types/FilmGrainSettings.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/GrassHandle.h>
@@ -104,6 +105,9 @@ namespace
 
 		// What is drawn behind the scene: "sky", the environment's, or "gradient", the toon backdrop.
 		std::string backdrop = "sky";
+
+		// The display curve: "agx", or "granTurismo", the one toon content is authored under.
+		std::string curve = "agx";
 
 		// The camera frames the box every clip's poses fill unless asked for the playing clip's
 		// alone: a clip set with root motion walks that box far past any one pose.
@@ -805,6 +809,12 @@ try
 			   "What is drawn behind the scene: sky, the environment's, or gradient, the toon "
 			   "look-dev backdrop (ISceneView::SetBackdrop); the lighting is the same either way")
 			->check(CLI::IsMember({ "sky", "gradient" }));
+		app.add_option(
+			   "--curve",
+			   opts.curve,
+			   "The display curve: agx, or granTurismo, the one the editor shows toon content "
+			   "under")
+			->check(CLI::IsMember({ "agx", "granTurismo" }));
 		app.add_flag(
 			"--frame-clip",
 			opts.frameClip,
@@ -942,6 +952,8 @@ try
 		opts.taa,
 		opts.renderScale);
 	auto postProcess = bgl::PostProcess();
+	postProcess.curve =
+		opts.curve == "granTurismo" ? bgl::DisplayCurve::kGranTurismo : bgl::DisplayCurve::kAgX;
 	if (opts.bloom)
 		postProcess.bloom = bgl::BloomSettings();
 	if (opts.filmGrain)

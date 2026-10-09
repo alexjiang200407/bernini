@@ -127,12 +127,14 @@ rest through programs of their own, whose vertices carry the placement's evaluat
 blended character, and one dissolving between levels, shade without the rig. It returns
 pre-exposure radiance, so exposure and tonemapping apply after it as for every surface.
 
-**A toon look is authored under the one AgX curve and grade the game uses.** Every target ends
-in AgX ([Passes](passes.md) § Scene colour), so a character's cel colours are lifted and
-desaturated by it like every surface's, and a character's look is tuned under that curve -- in the
-editor, whose viewports and thumbnails end in it too -- rather than for a screen that shows its
-colours as typed. That is what lets a toon character and a PBR world share one image with one look:
-the style is the shading's, not the post-process's.
+**A toon look is authored under Gran Turismo's curve.** A target's curve is its own
+([Passes](passes.md) § Scene colour), and AgX, the default, desaturates bright colour toward white,
+which washes a painted look out. Gran Turismo's keeps a colour lit into its linear section as
+painted, each channel alone, and rolls only highlights off, so the editor shows toon content under
+it -- a viewport or thumbnail showing a toon material ends in it. A game that puts toon characters
+in a world sets that curve on the target they share, and the world is lit and graded for it too:
+one curve and one grade per target is what lets a toon character and a PBR world share one image
+with one look, the style the shading's, not the post-process's.
 
 **A toon surface draws through the lit record.** Registration binds a toon slot to the model's
 adapter over the game's type — `ToonCharacterLit<G>` in `lib.math.ToonShading` — which conforms

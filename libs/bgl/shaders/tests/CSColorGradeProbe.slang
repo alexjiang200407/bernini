@@ -20,11 +20,14 @@ struct Uniforms
     float contrast;
     float vignetteIntensity;
     float vignetteSmoothness;
+
+    // bgl::DisplayCurve, as the post pass reads it.
+    uint curve;
 };
 
 ConstantBuffer<Uniforms> gUniforms;
 
-// The grade PostProcess runs, over one colour at one output position, so each control's direction
+// The grade and curve PostProcess runs, over one colour at one output position, so each control's direction
 // can be read off a number rather than a screenshot.
 [shader("compute")]
 [numthreads(1, 1, 1)]
@@ -44,5 +47,7 @@ void main(uint3 id: SV_DispatchThreadID)
     lut.strip = gUniforms.lut;
     lut.sampler = gUniforms.lutSampler;
 
-    gUniforms.outColor[0] = float4(AgXGraded(gUniforms.sceneLinear, gUniforms.uv, grade, lut), 1.0);
+    const float3 shown = gUniforms.curve == 1 ? GranTurismoGraded(gUniforms.sceneLinear, gUniforms.uv, grade)
+                                              : AgXGraded(gUniforms.sceneLinear, gUniforms.uv, grade, lut);
+    gUniforms.outColor[0] = float4(shown, 1.0);
 }

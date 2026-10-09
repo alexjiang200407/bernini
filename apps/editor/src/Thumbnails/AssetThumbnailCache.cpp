@@ -16,7 +16,9 @@
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/PreparedStaticMesh.h>
+#include <bgl/types/DisplayCurve.h>
 #include <bgl/types/MeshInstanceHandle.h>
+#include <bgl/types/PostProcess.h>
 #include <cctype>
 #include <cstddef>
 #include <editor_plugin_api/IEditorRegistry.h>
@@ -1143,6 +1145,10 @@ AssetThumbnailCache::BuildShot(Shot& shot)
 {
 	const bool toon =
 		shot.item.type == ThumbnailType::kMesh ? BuildMesh(shot) : BuildMaterial(shot);
+	// The asset as authored: a toon one under the curve it is authored under, as its preview is.
+	m_RenderTarget->SetPostProcess(
+		bgl::PostProcess{ .curve =
+	                          toon ? bgl::DisplayCurve::kGranTurismo : bgl::DisplayCurve::kAgX });
 	if (toon)
 		m_SceneView->SetBackdrop(m_Desc.toonBackdrop);
 	else

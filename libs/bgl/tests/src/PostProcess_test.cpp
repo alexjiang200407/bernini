@@ -1,6 +1,7 @@
 #include "util/GoldenImage.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
+#include "util/TonemapProbe.h"
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
@@ -9,6 +10,7 @@
 #include <bgl/types/BloomSettings.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/ColorGradeSettings.h>
+#include <bgl/types/DisplayCurve.h>
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/PostProcess.h>
 #include <bgl/types/RenderJob.h>
@@ -16,7 +18,9 @@
 #include <bgl/types/StaticMeshInstanceDesc.h>
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <bgl/types/Viewport.h>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cstdint>
 #include <string>
 
 // The post-process a target ends in, as one value. A full-frame Unlit plane puts a known radiance
@@ -122,4 +126,46 @@ TEST_CASE(
 	const auto* created = "assets/golden/post_process_created.got.png";
 	plane.Shoot(radiance, 1.0f, created);
 	CHECK(bgl::test::MaxChannelDelta(graded, created) == 0.0f);
+}
+
+// The curve is the target's: AgX unless it is set, Gran Turismo's when it is, and back. A colour in
+// Gran Turismo's linear section is shown as it is, which AgX does not do; the probe says what each
+// curve should show.
+TEST_CASE("A target ends in the curve its post-process names", "[tonemap][granturismo][render]")
+{
+	Plane           plane;
+	const glm::vec3 radiance(0.45f, 0.3f, 0.25f);
+
+	const auto* agx     = "assets/golden/post_process_agx.got.png";
+	const auto* gt      = "assets/golden/post_process_gt.got.png";
+	const auto* sameAgx = "assets/golden/post_process_agx_again.got.png";
+
+	CHECK(plane.target->GetPostProcess().curve == bgl::DisplayCurve::kAgX);
+	const bgl::test::Rgba underAgx = plane.Shoot(radiance, 1.0f, agx);
+
+	plane.target->SetPostProcess(bgl::PostProcess{ .curve = bgl::DisplayCurve::kGranTurismo });
+	const bgl::test::Rgba underGt = plane.Shoot(radiance, 1.0f, gt);
+
+	const glm::vec3 expectGt = bgl::test::RunGranTurismo(*plane.gfx, radiance);
+	CHECK(underGt.r == Catch::Approx(bgl::test::EncodeSrgb(expectGt.r)).margin(1.5 / 255.0));
+	CHECK(underGt.g == Catch::Approx(bgl::test::EncodeSrgb(expectGt.g)).margin(1.5 / 255.0));
+	CHECK(underGt.b == Catch::Approx(bgl::test::EncodeSrgb(expectGt.b)).margin(1.5 / 255.0));
+	CHECK(underGt.r == Catch::Approx(bgl::test::EncodeSrgb(radiance.r)).margin(1.5 / 255.0));
+
+	const glm::vec3 expectAgx =
+		glm::vec3(bgl::test::RunGradedAgX(*plane.gfx, radiance, glm::vec2(0.5f), {}));
+	CHECK(underAgx.r == Catch::Approx(bgl::test::EncodeSrgb(expectAgx.r)).margin(1.5 / 255.0));
+	CHECK(bgl::test::MaxChannelDelta(agx, gt) > 0.03f);
+
+	plane.target->SetPostProcess(bgl::PostProcess());
+	plane.Shoot(radiance, 1.0f, sameAgx);
+	CHECK(bgl::test::MaxChannelDelta(agx, sameAgx) == 0.0f);
+
+	// A value that names no curve is refused, and the target keeps the one it had.
+	plane.target->SetPostProcess(bgl::PostProcess{ .curve = bgl::DisplayCurve::kGranTurismo });
+	CHECK_THROWS_AS(
+		plane.target->SetPostProcess(
+			bgl::PostProcess{ .curve = static_cast<bgl::DisplayCurve>(uint32_t{ 7 }) }),
+		bgl::GraphicsError);
+	CHECK(plane.target->GetPostProcess().curve == bgl::DisplayCurve::kGranTurismo);
 }

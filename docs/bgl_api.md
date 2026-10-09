@@ -318,9 +318,11 @@ flowchart TD
 ### IRenderTarget
 
 * **`SetPostProcess(postProcess)` / `GetPostProcess()`** — what the output ends in, one
-  `bgl::PostProcess` (`types/PostProcess.h`): the effects around AgX, the one curve every target
-  has, an `optional` apiece that is off when absent: `bloom`, `grade` (`ColorGradeSettings`, a CDL in
-  AgX's log encoding), `grain` and `split`. A target's and not a view's, since it runs once on the
+  `bgl::PostProcess` (`types/PostProcess.h`): `curve`, a `bgl::DisplayCurve`
+  (`types/DisplayCurve.h`) -- `kAgX`, the default and the curve for realistic assets, or
+  `kGranTurismo`, the stylized one a toon look is authored under -- and the effects around it, an
+  `optional` apiece that is off when absent: `bloom`, `grade` (`ColorGradeSettings`, a CDL in AgX's
+  log encoding, ahead of either curve), `grain` and `split`. A target's and not a view's, since it runs once on the
   output; `RenderTargetDesc::postProcess` starts it. @throws `GraphicsError` naming the first field
   outside its range and keeps the value the target had, so a refused set changes nothing. Bloom's
   chain is allocated at the first frame

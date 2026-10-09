@@ -792,12 +792,36 @@ struct FlatToon : IToonCharacterSurfaceSource
 			}
 		return sum / 16.0f;
 	}
+
+	// lib.math.Tonemap's GranTurismo, written out for one channel at its shipped parameters.
+	float
+	GranTurismo(float x)
+	{
+		const float m        = 0.22f;
+		const float l0       = (1.0f - m) * 0.4f;
+		const float s0       = m + l0;
+		const float cp       = -1.0f / (1.0f - s0);
+		const float t        = std::clamp(x / m, 0.0f, 1.0f);
+		const float w0       = 1.0f - t * t * (3.0f - 2.0f * t);
+		const float w2       = x >= s0 ? 1.0f : 0.0f;
+		const float toe      = m * std::pow(std::max(x / m, 1e-6f), 1.33f);
+		const float shoulder = 1.0f - (1.0f - s0) * std::exp(cp * (x - s0));
+		return toe * w0 + x * (1.0f - w0 - w2) + shoulder * w2;
+	}
+
+	float
+	EncodeSrgb(float linear)
+	{
+		return linear <= 0.0031308f ? linear * 12.92f :
+		                              1.055f * std::pow(linear, 1.0f / 2.4f) - 0.055f;
+	}
 }
 
 // A toon asset's thumbnail stands against the toon backdrop, as its preview does, and anything else
 // against the sky: the background follows what is shown. Read at the corners, which the sphere does
-// not reach: through AgX the gradient's top is still sky blue and its bottom a pale, near-neutral
-// horizon brighter than it.
+// not reach: the gradient's top is still sky blue and its bottom a pale, near-neutral horizon
+// brighter than it. And a toon thumbnail ends in Gran Turismo's curve, as its preview does: its
+// top corner is the gradient there through that curve, channel by channel.
 TEST_CASE(
 	"A toon material thumbnails against the toon backdrop, and a PBR one against the sky",
 	"[thumbnails][backdrop][render]")
@@ -847,6 +871,20 @@ TEST_CASE(
 		std::max({ bottom.r, bottom.g, bottom.b }) - std::min({ bottom.r, bottom.g, bottom.b }) <
 		0.05f);
 	CHECK(bottom.g > top.g);
+
+	{
+		const bgl::BackdropGradient gradient;
+		const float                 height = 1.0f - 2.0f / static_cast<float>(toonImage.height());
+		const glm::vec3 linear = gradient.bottom + (gradient.top - gradient.bottom) * height;
+		const auto      shown  = glm::vec3(
+			EncodeSrgb(GranTurismo(linear.r)),
+			EncodeSrgb(GranTurismo(linear.g)),
+			EncodeSrgb(GranTurismo(linear.b)));
+		INFO("top under Gran Turismo " << shown.r << " " << shown.g << " " << shown.b);
+		CHECK(std::abs(top.r - shown.r) < 0.015f);
+		CHECK(std::abs(top.g - shown.g) < 0.015f);
+		CHECK(std::abs(top.b - shown.b) < 0.015f);
+	}
 
 	cache.SetStore(&fixture.store);
 	cache.Request(c_MaterialPath);

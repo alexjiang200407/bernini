@@ -1,8 +1,8 @@
 import idl.ITonemapLut;
 import lib.math.Tonemap;
 
-// The frame grade: white balance and a vignette in scene linear, then the ASC CDL and contrast in
-// the log coordinate AgX's formation reads. See docs/passes.md.
+// The frame grade, ahead of either display curve: white balance and a vignette in scene linear, then
+// the ASC CDL and contrast in the log coordinate AgX's formation reads. See docs/passes.md.
 public struct ColorGrade
 {
     // CAT02 LMS gains, derived from temperature and tint on the CPU.
@@ -57,14 +57,26 @@ public float3 ApplyContrast(float3 coord, float contrast, float pivot)
     return (coord - pivot) * contrast + pivot;
 }
 
-public float3 AgXGraded<L : ITonemapLut>(float3 color, float2 uv, ColorGrade grade, L lut)
+// The grade's controls ahead of either curve: white balance and the vignette in scene linear, then
+// the CDL and contrast in AgX's log coordinate, which is returned.
+float3 GradedLogCoord(float3 color, float2 uv, ColorGrade grade)
 {
     float3 sceneLinear = WhiteBalance(color, grade.whiteBalance);
     sceneLinear *= Vignette(uv, grade.vignetteIntensity, grade.vignetteSmoothness);
 
     float3 coord = AgXLogEncode(sceneLinear);
     coord = ApplyCdl(coord, grade.slope, grade.offset, grade.power, grade.saturation);
-    coord = ApplyContrast(coord, grade.contrast, AgXLogEncode(float3(0.18, 0.18, 0.18)).g);
+    return ApplyContrast(coord, grade.contrast, AgXLogEncode(float3(0.18, 0.18, 0.18)).g);
+}
 
-    return AgXFormation(coord, lut);
+public float3 AgXGraded<L : ITonemapLut>(float3 color, float2 uv, ColorGrade grade, L lut)
+{
+    return AgXFormation(GradedLogCoord(color, uv, grade), lut);
+}
+
+// The same grade decoded back to scene linear for Gran Turismo's curve. The decode is the encode's
+// inverse and unclamped, so a neutral grade is the curve alone and a highlight reaches its shoulder.
+public float3 GranTurismoGraded(float3 color, float2 uv, ColorGrade grade)
+{
+    return GranTurismo(AgXLogDecode(GradedLogCoord(color, uv, grade)));
 }

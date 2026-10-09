@@ -3,11 +3,13 @@
 #include <bgl/types/BloomSettings.h>
 #include <bgl/types/ColorGradeSettings.h>
 #include <bgl/types/ColorSplitSettings.h>
+#include <bgl/types/DisplayCurve.h>
 #include <bgl/types/FilmGrainSettings.h>
 #include <bgl/types/PostProcess.h>
 #include <bgl/types/VignetteSettings.h>
 #include <cmath>
 #include <core/glm.h>
+#include <cstdint>
 #include <format>
 #include <optional>
 #include <string_view>
@@ -125,6 +127,12 @@ namespace bgl
 	void
 	ValidatePostProcess(const PostProcess& postProcess)
 	{
+		if (postProcess.curve >= DisplayCurve::kCount)
+			throw GraphicsError(
+				std::format(
+					"PostProcess::curve must be a DisplayCurve, got {}",
+					static_cast<uint32_t>(postProcess.curve)));
+
 		ValidateIfSet(postProcess.bloom);
 		ValidateIfSet(postProcess.grade);
 		ValidateIfSet(postProcess.grain);

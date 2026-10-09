@@ -103,20 +103,45 @@ what both the importer and the passes name them by.
 Every geometry pass renders into `sceneColor`, an `RGBA16_FLOAT` texture the render target owns, and
 `PostProcess` is what turns that into the backbuffer. The buffer holds **linear HDR with exposure already
 applied**: exposure is a per-view scale and a target may carry several views, so the geometry passes
-fold it in, while the display curve — `AgX` in
+fold it in, while the display curve — `AgX` or `GranTurismo` in
 [lib/math/Tonemap.slang](libs/bgl/shaders/src/lib/math/Tonemap.slang) — belongs to the output and runs once.
-`AgX` leaves its result linear, so the sRGB backbuffer view is still what encodes it.
+Either leaves its result linear, so the sRGB backbuffer view is still what encodes it.
 
-**The post-process is the target's, and every target's curve is AgX.** `IRenderTarget::SetPostProcess`
-(and `RenderTargetDesc::postProcess`) sets it per output as one `bgl::PostProcess`, which holds the
-effects around the curve, each an `optional` that is off when absent: bloom ([Bloom](#bloom)), a
-grade ([the colour grade](#the-colour-grade)), [film grain](#film-grain) and
-[the colour split](#the-colour-split). Setting it takes the whole value. There is no second curve:
-a game's toon characters and its PBR world reach the screen through one AgX and one grade, so they
-sit in one image with one look, and a toon character's style is its shading's
-([Game-Defined Surfaces](game_defined_surfaces.md)). The rest of this section is the curve.
+**The post-process is the target's, and so is its curve.** `IRenderTarget::SetPostProcess`
+(and `RenderTargetDesc::postProcess`) sets it per output as one `bgl::PostProcess`: the curve,
+`PostProcess::curve`, a `bgl::DisplayCurve` that is `kAgX` unless set, and the effects around it,
+each an `optional` that is off when absent: bloom ([Bloom](#bloom)), a grade
+([the colour grade](#the-colour-grade)), [film grain](#film-grain) and
+[the colour split](#the-colour-split). Setting it takes the whole value. One curve per target per
+frame: the pass's constant buffer carries it and the pixel shader branches on it once, a uniform
+branch. Everything a target draws goes through its one curve and one grade, so a game whose toon
+characters stand in a PBR world sets one curve on that target and the two sit in one image with
+one look; a toon character's style is its shading's
+([Game-Defined Surfaces](game_defined_surfaces.md)).
 
-**The curve is Blender 5.2's AgX, and the LUT is Blender's own file.** Blender's `AgX Base sRGB`
+**Two curves, for two kinds of content.** AgX is the default and the curve for realistic,
+physically lit assets: it rolls highlights off and desaturates bright colour toward white as film
+does, and it is Blender's, so a render is compared with Blender's pixel for pixel. Gran Turismo's
+is the stylized one. AgX's desaturation is the wrong answer for a painted look: judged on a toon
+character's renders, it washed the hair's and skin's authored colour out at any exposure. Gran
+Turismo's curve keeps that colour through its linear section and rolls only highlights off — the
+family of curve Genshin Impact's SDR pipeline uses. Khronos PBR Neutral and an ACES fit were
+weighed for that role too and read too saturated, and paler and yellower, respectively. The
+editor picks the curve by content: a viewport or a
+thumbnail showing toon content ends in Gran Turismo's, anything else in AgX
+([Editor plugins](editor_plugins.md)).
+
+**Gran Turismo's is Uchimura's curve (Gran Turismo Sport, CEDEC 2017), per channel, with its
+published parameters**: maximum brightness `P = 1`, contrast `a = 1`, a linear section starting at
+`m = 0.22` for `l = 0.4` of the remaining range, black tightness `c = 1.33`, no pedestal. Three
+pieces blended by weights: a power toe below `m` that deepens shadows a little, the identity from
+0.22 to 0.532, and an exponential shoulder above that approaches 1 and never reaches it. Scene-linear
+0.18 shows at 0.179, display 0.46 after the sRGB encode, and 1.0 at 0.83. Its price is AgX's
+virtue: a per-channel shoulder moves a very bright saturated colour toward its strongest primary
+rather than toward white. `GranTurismo_test` pins it: the identity on the linear section, black at
+zero, the toe and shoulder against the formula by hand, a rise everywhere and a ceiling of 1.
+
+**AgX is Blender 5.2's, and the LUT is Blender's own file.** Blender's `AgX Base sRGB`
 view is a 57³ formation LUT applied in FilmLight E-Gamut log2 space, then a Rec.1886 decode, and
 that is what `AgX` does: the Rec.709-to-E-Gamut matrix and the 25-stop log encoding are the OCIO
 config's view transform written out, the LUT is `AgX_Base_sRGB.cube` from the Blender install
@@ -1025,9 +1050,9 @@ The way to control it today is **emissive-only bloom**: set `threshold` above th
 surface (around 1.0–1.5 at the exposure environments are normalized to) and drive glow through
 the surface's `emissive` ([Game-Defined Surfaces](game_defined_surfaces.md)), which lands in the
 scene colour at whatever radiance the surface asks for. Specular peaks can still cross a threshold
-set this way, so a stylized material wants little specular. Glow colour also goes through AgX,
-which pulls very bright colours toward white — a saturated emissive glows paler than it is
-authored. The chain's level is added to the scene ahead of the curve, which rolls the sum off, and
+set this way, so a stylized material wants little specular. Glow colour also goes through the curve:
+AgX pulls very bright colours toward white, so a saturated emissive glows paler than it is
+authored, and Gran Turismo's clips its strongest channel first, so it glows toward that primary. The chain's level is added to the scene ahead of the curve, which rolls the sum off, and
 the chain is not clamped to the display's range, so an emissive above one glows further than one at
 it. With the threshold at zero the chain is a blur of the whole frame and the result is the
 diffusion filter of cel animation: every lit region haloed, the mid-brightness ones too.
@@ -1044,13 +1069,14 @@ reading four more point taps of it. Otherwise the branch is skipped and the fram
 always was. A target with [the colour split](#the-colour-split) on reads red and blue from
 displaced taps of that. Then it combines the [Bloom](#bloom) chain's finished level — in linear radiance, scaled by
 `BloomSettings::intensity`, behind a flag so a bloom-less frame binds nothing; added ahead of the
-curve — then applies the display curve — `AgX` through the LUT above — graded when the target
+curve — then applies the target's display curve — `AgX` through the LUT above, or
+`GranTurismo` — graded when the target
 sets a `grade` (see [the colour grade](#the-colour-grade) below), then
 [film grain](#film-grain) when it sets `grain`, then — on a frame where a
 [Outline Mask](#outline-mask) pass ran — composites the selection outline: a pixel outside the mask but within the outline width of it
 takes the display-space outline colour instead of the tonemapped result. Compositing after the
-curve is deliberate: the outline is editor feedback rather than radiance, so exposure and AgX must
-not shift it, and TAA (which resolves earlier) can neither eat nor ghost it. The pass is named for
+curve is deliberate: the outline is editor feedback rather than radiance, so exposure and the curve
+must not shift it, and TAA (which resolves earlier) can neither eat nor ghost it. The pass is named for
 the stage rather than those steps: everything between a resolved scene and the screen — exposure
 adaptation next — belongs here as it lands.
 
@@ -1093,7 +1119,16 @@ between and before them:
    curve put it.
 
 Every default is the identity, and a neutral grade with the toggle on renders the ungraded image
-exactly (`ColorGrade_test`). There is no look: Blender's looks run in its `AgX Log` space, which no
+exactly (`ColorGrade_test`).
+
+**Under Gran Turismo's curve the grade is the same**, in the same coordinate: `GranTurismoGraded`
+runs the steps above and then `AgXLogDecode`, the encode's exact inverse back to scene-linear
+Rec.709, and the curve. The encode is not clamped above (only the LUT read saturates its
+coordinate), so neither is the decode: a highlight the sun or bloom puts past the encoding's top
+reaches the curve at its own value and is rolled off by the shoulder rather than cut at
+2<sup>4.03</sup> × 0.18. The encode's floor, 2<sup>−12.47</sup> ≈ 0.00017 per E-Gamut channel, stays,
+since a log has no answer at zero; the curve's toe shows it at 0.000017, a twentieth of the first
+8-bit step. So a neutral grade is Gran Turismo's curve alone to float precision (`ColorGrade_test`). There is no look: Blender's looks run in its `AgX Log` space, which no
 CDL in this coordinate reproduces, and a game authors its grade from the controls instead. The
 grade is evaluated per pixel rather than baked into a per-frame LUT as Unreal's CombineLUTs and
 Unity's LutBuilder do, because a baked LUT is a per-target allocation and a pass of its own for
@@ -1108,7 +1143,8 @@ centre and growing linearly outward. Red moves by the setting and blue by its op
 fringes of an edge are that far either side of it.
 
 It runs on the scene sample, **ahead of the curve** — where a lens puts it, and where Unreal's and
-Unity's run — so a fringe goes through AgX like any other colour, mixed into the other channels. The glow is combined
+Unity's run — so a fringe goes through the curve like any other colour, mixed into the other
+channels under AgX. The glow is combined
 unsplit, since a blur does not show a displacement of a pixel or two, and the outline, composited
 last, is not split either.
 

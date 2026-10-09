@@ -1,9 +1,9 @@
-#include "util/AgxProbe.h"
 #include "util/GoldenImage.h"
 #include "util/SyntheticCube.h"
 #include "util/TestEnvironment.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
+#include "util/TonemapProbe.h"
 #include <array>
 #include <assetlib/envmap.h>
 #include <bgl/IGraphics.h>

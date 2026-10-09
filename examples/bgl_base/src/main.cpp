@@ -67,7 +67,7 @@ main(int argc, char** argv)
 			auto* exposureOpt = app.add_option(
 									   "-e,--exposure",
 									   exposure,
-									   "Camera exposure: scales radiance before the AgX tone map. "
+									   "Camera exposure: scales radiance before the tone map. "
 									   "Defaults to the value the .benv derived for its own maps, "
 									   "which is the correct one for them")
 			                        ->check(CLI::NonNegativeNumber);

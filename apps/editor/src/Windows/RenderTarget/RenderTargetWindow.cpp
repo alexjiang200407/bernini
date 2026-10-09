@@ -34,6 +34,7 @@
 #include <bgl/types/BloomSettings.h>
 #include <bgl/types/ColorGradeSettings.h>
 #include <bgl/types/ColorSplitSettings.h>
+#include <bgl/types/DisplayCurve.h>
 #include <bgl/types/FilmGrainSettings.h>
 #include <bgl/types/PassTiming.h>
 #include <bgl/types/PostProcess.h>
@@ -522,13 +523,17 @@ RenderTargetWindow::SetShowsToonContent(bool toon)
 {
 	m_ShowsToonContent = toon;
 	ApplyBackdrop();
+	ApplyPostProcess();
 }
 
 bgl::PostProcess
 RenderTargetWindow::BuildPostProcess() const
 {
 	const editor::PostProcessConfig& c = m_Desc.postProcess;
-	return bgl::PostProcess{ .bloom = Resolved(c.bloom),
+	// Toon content is authored under the stylized curve, so it is shown under it.
+	return bgl::PostProcess{ .curve = m_ShowsToonContent ? bgl::DisplayCurve::kGranTurismo :
+		                                                   bgl::DisplayCurve::kAgX,
+		                     .bloom = Resolved(c.bloom),
 		                     .grade = Resolved(c.grade),
 		                     .grain = Resolved(c.grain),
 		                     .split = Resolved(c.split) };
