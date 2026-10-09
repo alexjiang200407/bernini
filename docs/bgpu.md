@@ -315,6 +315,36 @@ and read back, one a kernel samples through its view and a sampler, and a colour
 read back as what they were cleared to. `MeshDispatch_test` pins which way up a mesh dispatch draws
 and how many groups an indirect one runs, a count of zero included.
 
+## Maximum performance
+
+A vsync'd window leaves the GPU idle most of each frame, and the driver's power management reads
+that as a light load and lowers the core clock. The frame's work then takes several times longer
+than it would headless, which never idles: on an RTX 4060, gpu-battle-sim's 1.5 ms frame read 5 to
+8 ms in a window. The cost is not the reading but the frame that follows a quiet stretch: a sudden
+heavy one runs at the floor clock, overruns the vblank and drops — a hitch. A player could fix it in
+the driver's control panel ("Prefer maximum performance"); `GpuContextDesc::preferMaximumPerformance`
+makes the request so no player has to.
+
+It is off by default: a tool, the editor included, has no frame budget to protect and would burn
+power for nothing. A game turns it on. It is a request, never a requirement: a backend, GPU or
+driver with no way to make it logs why in `bgpu.log` and carries on, and
+`GpuContext::GetMaximumPerformance` says which happened, so a client can show it beside a timing —
+a GPU time read without it is ambiguous.
+
+| Backend | The request | Unavailable when |
+|---|---|---|
+| Metal | none: Apple exposes no clock request to an application | always |
+
+* **Metal has nothing to call.** The only "GPU performance state" control on Apple silicon is a
+  developer one, Xcode's and Instruments' device condition, which a shipping application cannot set.
+  macOS Game Mode is the OS's own policy for a fullscreen application bundle declared a game, not a
+  request an API makes. So on a Mac the option is accepted and logged as unavailable, and what is
+  left there is a frame whose cost does not collapse when the clock does.
+
+`bgpu_tests` `[maxperf]` pins the default, the state a context reports with the option off and on,
+and on each backend whether the request was made or skipped as that machine's GPU decides. The
+clock itself is only observable in a window.
+
 ## Threading & Synchronization
 
 * **Sessions are per thread.** A thread's first compile creates its own global session and session,

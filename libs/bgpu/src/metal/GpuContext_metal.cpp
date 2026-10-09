@@ -104,6 +104,10 @@ namespace bgpu
 
 				spdlog::info("Metal device: {}", m_Device->name()->utf8String());
 
+				if (desc.preferMaximumPerformance)
+					spdlog::warn(
+						"maximum GPU performance: Metal has no clock request; the OS manages it");
+
 				// Metal's validation is switched on by the environment, not by us, so the option
 				// alone cannot say whether it is running. Either variable instruments shaders enough
 				// that a binary archive written without them no longer describes what the driver

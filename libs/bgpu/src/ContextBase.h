@@ -3,6 +3,7 @@
 #include "SlangSessions.h"
 #include <bgpu/GpuContext.h>
 #include <bgpu/ProgramCache.h>
+#include <core/err/util.h>
 #include <core/ref/RefCounter.h>
 #include <cstdint>
 #include <memory>
@@ -50,6 +51,12 @@ namespace bgpu
 			return m_Desc;
 		}
 
+		MaximumPerformance
+		GetMaximumPerformance() const noexcept override
+		{
+			return m_MaximumPerformance;
+		}
+
 		const std::vector<std::string>&
 		GetShaderSearchPaths() const noexcept override
 		{
@@ -92,6 +99,17 @@ namespace bgpu
 			m_Slang.ReleaseAll();
 		}
 
+	protected:
+		/** For a backend whose driver accepted the desc's request; until then it is kUnavailable. */
+		void
+		GrantMaximumPerformance() noexcept
+		{
+			core::ensure(
+				m_Desc.preferMaximumPerformance,
+				"Maximum performance granted without the desc asking");
+			m_MaximumPerformance = MaximumPerformance::kRequested;
+		}
+
 	private:
 		// Declared first, so the claim is made before anything below touches the device.
 		struct ProcessSlot
@@ -106,9 +124,12 @@ namespace bgpu
 			operator=(ProcessSlot&&) = delete;
 		};
 
-		ProcessSlot    m_Slot;
-		GpuContextDesc m_Desc;
-		SlangSessions  m_Slang;
+		ProcessSlot        m_Slot;
+		GpuContextDesc     m_Desc;
+		MaximumPerformance m_MaximumPerformance = m_Desc.preferMaximumPerformance ?
+		                                              MaximumPerformance::kUnavailable :
+		                                              MaximumPerformance::kNotRequested;
+		SlangSessions      m_Slang;
 
 		// After the sessions it keys against, so it is destroyed before them.
 		std::unique_ptr<DiskProgramCache> m_ProgramCache;
