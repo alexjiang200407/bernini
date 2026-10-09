@@ -1,13 +1,13 @@
 key,en
 bloom,Bloom
-bloom_tip,"Spill the viewports' bright pixels into a glow: added ahead of the curve under Filmic, screened over the colour under Toon. How they bloom is each viewport's `filmic.bloom` and `toon.bloom` section in config.json."
+bloom_tip,"Spill the viewports' bright pixels into a glow, added ahead of the curve. How they bloom is each viewport's `postProcess.bloom` section in config.json."
 checking_derived_assets,Checking derived assets...
 checking_imported_sources,Checking imported sources...
 clean_unused_textures_title,Clean Unused Textures
 color_grade,Color Grade
-color_grade_tip,"White-balance and grade the viewports. Each type has its own grade: `filmic.grade` in config.json, a CDL in AgX's log encoding, and `toon.grade`, the black and white the screen shows."
+color_grade_tip,"White-balance and grade the viewports: a CDL in AgX's log encoding, each viewport's `postProcess.grade` section in config.json."
 color_split,Color Split
-color_split_tip,"Displace the viewports' red and blue from green, as a misregistered print or a lens does. The split is each viewport's `filmic.colorSplit` and `toon.colorSplit` section in config.json."
+color_split_tip,"Displace the viewports' red and blue from green, as a misregistered print or a lens does. The split is each viewport's `postProcess.colorSplit` section in config.json."
 compiling_shaders,Compiling shaders...
 compressing_progress,Compressing {0} ({1} of {2})...
 content_explorer_title,Content Explorer
@@ -22,7 +22,7 @@ delete_partial_failure,"Deleted {0} textures, but {1} could not be removed:
 delete_success_status,"Deleted {0} unused baked textures, reclaiming {1}"
 failed_item_line,{0}: {1}
 film_grain,Film Grain
-film_grain_tip,"Grain the viewports after the display curve, in proportion to each pixel's brightness. The grain is each viewport's `filmic.filmGrain` and `toon.filmGrain` section in config.json."
+film_grain_tip,"Grain the viewports after the display curve, in proportion to each pixel's brightness. The grain is each viewport's `postProcess.filmGrain` section in config.json."
 frame_stats_tooltip,"The rendering viewport's frame time: mean and worst over the last 120 frames, and how many frame-start intervals exceeded 20 ms since the tab was selected. This measures render-loop timing, not missed display refreshes."
 gpu_pass_timing,GPU Pass Timing
 gpu_pass_timing_tip,"Time every pass of the viewports' frames on the GPU, for Log GPU Pass Timings to write out. Costs a little per frame, which is why it is off until asked for."
@@ -43,11 +43,6 @@ plugin_asset_title,Plugin Asset
 plugin_import_title,Plugin Import
 plugin_panel_title,Plugin Panel
 plugins_menu,Plugins
-post_process_auto,Auto
-post_process_filmic,Filmic
-post_process_menu,Post Process
-post_process_tip,"The post-process the viewports end in: Filmic (AgX), or Toon -- the colour as it is, which a toon look is authored for. Auto is the project's, and Toon for a viewport showing toon content."
-post_process_toon,Toon
 project_data_status,Project data: {0}
 rebuild_failed_info,Anything that draws one will report that the project needs updating until its source is back.
 rebuild_failed_text,Some assets could not be rebuilt.

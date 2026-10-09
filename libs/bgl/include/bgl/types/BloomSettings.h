@@ -2,10 +2,7 @@
 
 namespace bgl
 {
-	/**
-	 * How a target blooms, under either post-process: added to the scene ahead of AgX by
-	 * FilmicPostProcess, screened over the clamped scene by ToonPostProcess.
-	 */
+	/** How a target blooms: added to the scene in linear radiance, ahead of AgX. */
 	struct BloomSettings
 	{
 		// The glow's weight.

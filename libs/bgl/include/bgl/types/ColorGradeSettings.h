@@ -5,7 +5,7 @@
 namespace bgl
 {
 	/**
-	 * FilmicPostProcess's grade around AgX: white balance and the vignette in scene linear, the ASC
+	 * PostProcess's grade around AgX: white balance and the vignette in scene linear, the ASC
 	 * CDL and contrast in the log coordinate AgX's formation reads. Every default is neutral. See
 	 * docs/passes.md § The colour grade.
 	 */

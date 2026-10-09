@@ -11,8 +11,8 @@ namespace bgl
 	 * Presentation, like SkyboxDesc::backdrop: both colours are scene-linear and drawn as they are,
 	 * ahead of the display curve, without the view's exposure. The lighting is untouched.
 	 *
-	 * The default is the toon look-dev background -- pale horizon to sky blue -- which a toon look
-	 * shown through the toon post-process is judged against.
+	 * The default is the toon look-dev background -- pale horizon to sky blue -- which a toon look is
+	 * judged against.
 	 */
 	struct BackdropGradient
 	{

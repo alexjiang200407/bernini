@@ -20,19 +20,12 @@ struct Uniforms
     float contrast;
     float vignetteIntensity;
     float vignetteSmoothness;
-
-    // Nonzero runs the toon grade, whose input is display-linear and which reads no LUT; it takes
-    // these levels in place of the CDL above.
-    uint toon;
-    float3 black;
-    float3 white;
-    float3 gamma;
 };
 
 ConstantBuffer<Uniforms> gUniforms;
 
-// The grade PostProcess runs under either post-process type, over one colour at one output
-// position, so each control's direction can be read off a number rather than a screenshot.
+// The grade PostProcess runs, over one colour at one output position, so each control's direction
+// can be read off a number rather than a screenshot.
 [shader("compute")]
 [numthreads(1, 1, 1)]
 void main(uint3 id: SV_DispatchThreadID)
@@ -51,22 +44,5 @@ void main(uint3 id: SV_DispatchThreadID)
     lut.strip = gUniforms.lut;
     lut.sampler = gUniforms.lutSampler;
 
-    if (gUniforms.toon != 0)
-    {
-        ToonGrade toon;
-        toon.whiteBalance = gUniforms.whiteBalance;
-        toon.black = gUniforms.black;
-        toon.white = gUniforms.white;
-        toon.gamma = gUniforms.gamma;
-        toon.saturation = gUniforms.saturation;
-        toon.contrast = gUniforms.contrast;
-        toon.vignetteIntensity = gUniforms.vignetteIntensity;
-        toon.vignetteSmoothness = gUniforms.vignetteSmoothness;
-
-        gUniforms.outColor[0] = float4(ToonGraded(gUniforms.sceneLinear, gUniforms.uv, toon), 1.0);
-    }
-    else
-    {
-        gUniforms.outColor[0] = float4(AgXGraded(gUniforms.sceneLinear, gUniforms.uv, grade, lut), 1.0);
-    }
+    gUniforms.outColor[0] = float4(AgXGraded(gUniforms.sceneLinear, gUniforms.uv, grade, lut), 1.0);
 }

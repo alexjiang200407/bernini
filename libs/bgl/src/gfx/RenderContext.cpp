@@ -19,7 +19,6 @@
 #include "passes/DrawData.h"
 #include "passes/PassInitContext.h"
 #include "postprocess/BloomChain.h"
-#include "postprocess/post_process.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "scene/ground_color.h"
@@ -34,7 +33,9 @@
 #include <bgl/IRenderTarget.h>
 #include <bgl/MaterialType.h>
 #include <bgl/SurfaceType.h>
+#include <bgl/types/BloomSettings.h>
 #include <bgl/types/PassTiming.h>
+#include <bgl/types/PostProcess.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/Viewport.h>
 #include <bgpu/constants/constants.h>
@@ -1215,7 +1216,7 @@ namespace bgl
 		}
 
 		const PostProcess                   postProcess = rt.GetPostProcess();
-		const std::optional<BloomSettings>& bloom       = BloomOf(postProcess);
+		const std::optional<BloomSettings>& bloom       = postProcess.bloom;
 
 		BloomChain& bloomChain = rt.GetBloomChain();
 
@@ -1281,7 +1282,7 @@ namespace bgl
 		postProcessArgs.postProcess = postProcess;
 		postProcessArgs.frameCount  = rt.GetFrameCount();
 
-		if (SplitOf(postProcess))
+		if (postProcess.split)
 		{
 			// A displaced tap lands between texels, and at a texel's centre linear is the point tap.
 			postProcessArgs.sampler = m_LinearClampSampler;

@@ -779,13 +779,6 @@ struct FlatToon : IToonCharacterSurfaceSource
 };
 )";
 
-	float
-	SrgbEncode(float linear)
-	{
-		return linear <= 0.0031308f ? 12.92f * linear :
-		                              1.055f * std::pow(linear, 1.0f / 2.4f) - 0.055f;
-	}
-
 	// The mean colour of a 4x4 box, each channel in [0,1].
 	glm::vec3
 	MeanColour(const QImage& image, int x, int y)
@@ -803,7 +796,8 @@ struct FlatToon : IToonCharacterSurfaceSource
 
 // A toon asset's thumbnail stands against the toon backdrop, as its preview does, and anything else
 // against the sky: the background follows what is shown. Read at the corners, which the sphere does
-// not reach -- through the toon post-process the gradient lands there as its own sRGB encoding.
+// not reach: through AgX the gradient's top is still sky blue and its bottom a pale, near-neutral
+// horizon brighter than it.
 TEST_CASE(
 	"A toon material thumbnails against the toon backdrop, and a PBR one against the sky",
 	"[thumbnails][backdrop][render]")
@@ -842,19 +836,17 @@ TEST_CASE(
 	const QImage toonImage = cache.Lookup(toonPath).toImage();
 	REQUIRE(!toonImage.isNull());
 
-	// The corner rows sit within 2% of the frame's edges, so the gradient there is its end colour to
-	// well inside this margin.
-	constexpr float c_Margin = 0.03f;
-	const int       last     = toonImage.height() - 4;
-	const glm::vec3 top      = MeanColour(toonImage, 0, 0);
-	const glm::vec3 bottom   = MeanColour(toonImage, 0, last);
-	const auto      gradient = bgl::BackdropGradient();
-	for (int i = 0; i < 3; ++i)
-	{
-		INFO("channel " << i);
-		CHECK(top[i] == Catch::Approx(SrgbEncode(gradient.top[i])).margin(c_Margin));
-		CHECK(bottom[i] == Catch::Approx(SrgbEncode(gradient.bottom[i])).margin(c_Margin));
-	}
+	const int       last   = toonImage.height() - 4;
+	const glm::vec3 top    = MeanColour(toonImage, 0, 0);
+	const glm::vec3 bottom = MeanColour(toonImage, 0, last);
+	INFO("top " << top.r << " " << top.g << " " << top.b);
+	INFO("bottom " << bottom.r << " " << bottom.g << " " << bottom.b);
+	CHECK(top.b > top.r + 0.15f);
+	CHECK(top.b > top.g + 0.05f);
+	CHECK(
+		std::max({ bottom.r, bottom.g, bottom.b }) - std::min({ bottom.r, bottom.g, bottom.b }) <
+		0.05f);
+	CHECK(bottom.g > top.g);
 
 	cache.SetStore(&fixture.store);
 	cache.Request(c_MaterialPath);
@@ -863,7 +855,7 @@ TEST_CASE(
 	REQUIRE(!pbrImage.isNull());
 
 	const glm::vec3 pbrTop = MeanColour(pbrImage, 0, 0);
-	CHECK(glm::abs(pbrTop.b - SrgbEncode(gradient.top.b)) > 0.1f);
+	CHECK(std::abs(pbrTop.b - top.b) > 0.1f);
 }
 
 // What makes a stochastic material safe to thumbnail, and the gate on the cache's reroute: it

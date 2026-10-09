@@ -50,15 +50,6 @@ struct PostProcessData
     float gradeVignetteSmoothness;
     uint gradeEnabled;
 
-    // lib.math.ToonGrade's levels; its white balance, saturation, contrast and vignette are the
-    // fields above.
-    float3 gradeBlack;
-    float3 gradeWhite;
-    float3 gradeGamma;
-
-    // The toon post-process: Blender's Standard view, the exposed value clamped and no curve.
-    uint toon;
-
     // Where red is read from, relative to green, in uv: `splitOffset` everywhere, plus
     // `splitRadial` per unit of distance from the centre. Blue is read from the opposite side.
     float2 splitOffset;
@@ -119,13 +110,6 @@ float SampleOutline(float2 uv)
     return covered > 0.0 ? 1.0 : 0.0;
 }
 
-// The glow over a display value with no curve to roll it off: the sum where both are small, and
-// short of white however bright either is. Written so that no glow returns `base` exactly.
-float3 ScreenBlend(float3 base, float3 layer)
-{
-    return base + layer * (1.0 - base);
-}
-
 // Triangular in (-1, 1): the sum of two uniforms, which has film grain's soft-shouldered
 // distribution where one uniform is flat to its edges.
 float GrainCell(int2 cell, uint pattern)
@@ -147,20 +131,6 @@ float Grain(float2 pixelCentre, float pitch, uint pattern)
     const float bottom = lerp(GrainCell(cell + int2(0, 1), pattern), GrainCell(cell + int2(1, 1), pattern), f.x);
 
     return lerp(top, bottom, f.y);
-}
-
-ToonGrade TargetToonGrade()
-{
-    ToonGrade grade;
-    grade.whiteBalance = gPostProcessData.gradeWhiteBalance;
-    grade.black = gPostProcessData.gradeBlack;
-    grade.white = gPostProcessData.gradeWhite;
-    grade.gamma = gPostProcessData.gradeGamma;
-    grade.saturation = gPostProcessData.gradeSaturation;
-    grade.contrast = gPostProcessData.gradeContrast;
-    grade.vignetteIntensity = gPostProcessData.gradeVignetteIntensity;
-    grade.vignetteSmoothness = gPostProcessData.gradeVignetteSmoothness;
-    return grade;
 }
 
 ColorGrade TargetGrade()
@@ -224,7 +194,7 @@ float3 SampleScene(float2 uv)
     return scene;
 }
 
-// AgX and Standard leave their result linear so the sRGB target re-encodes it. Alpha is forced opaque: the
+// AgX leaves its result linear so the sRGB target re-encodes it. Alpha is forced opaque: the
 // backbuffer is a display surface, and scene alpha is a surface's own coverage, not the pixel's --
 // a hashed or cutout survivor carries its texture alpha, and passing that through hands a capture
 // (and anything compositing the backbuffer) transparency the image does not have.
@@ -233,8 +203,7 @@ float4 PSMain(VSOut input) : SV_Target
 {
     float3 scene = SampleScene(input.uv);
 
-    // Ahead of the curve, where a lens puts it; toon's curve is a per-channel clamp, so there it
-    // is a split of the displayed image exactly. The glow is too soft to show one.
+    // Ahead of the curve, where a lens puts it. The glow is too soft to show one.
     if (gPostProcessData.splitEnabled != 0)
     {
         const float2 red = gPostProcessData.splitOffset + (input.uv - 0.5) * gPostProcessData.splitRadial;
@@ -243,7 +212,7 @@ float4 PSMain(VSOut input) : SV_Target
         scene.b = SampleScene(input.uv + red).b;
     }
 
-    // Linear radiance. Filmic adds it ahead of the curve, which rolls it off; toon has no curve.
+    // Linear radiance, added ahead of the curve, which rolls it off.
     float3 glow = float3(0.0, 0.0, 0.0);
 
     if (gPostProcessData.bloomEnabled != 0)
@@ -257,16 +226,7 @@ float4 PSMain(VSOut input) : SV_Target
 
     float3 color;
 
-    if (gPostProcessData.toon != 0)
-    {
-        color = ScreenBlend(saturate(scene), saturate(glow));
-
-        if (gPostProcessData.gradeEnabled != 0)
-        {
-            color = ToonGraded(color, input.uv, TargetToonGrade());
-        }
-    }
-    else if (gPostProcessData.gradeEnabled != 0)
+    if (gPostProcessData.gradeEnabled != 0)
     {
         color = AgXGraded(scene + glow, input.uv, TargetGrade(), lut);
     }

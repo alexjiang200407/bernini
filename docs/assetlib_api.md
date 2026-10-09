@@ -291,12 +291,11 @@ The dotted edge is the asymmetry: reads go through the store, writes go around i
 
 ### Project
 
-* **The `.bproj`** keys are `name`, `version`, `dataDirectory`, `plugins`
-  ([Editor plugins](editor_plugins.md)) and the optional `postProcess` -- `"filmic"` or `"toon"`,
-  the post-process the project's look is authored for and its renders end in
-  (`Project::GetPostProcessType`; bgl's `FilmicPostProcess` or `ToonPostProcess`). Absent, it is filmic,
-  and Save writes it only when it is not, so a project that never sets it keeps its file's shape;
-  any other value refuses the file. A toon game is authored for toon.
+* **The `.bproj`** keys are `name`, `version`, `dataDirectory` and `plugins`
+  ([Editor plugins](editor_plugins.md)). Any other key is ignored when the file is read and gone
+  after the next Save, which writes only these: a `postProcess` an older project names, from when a
+  project picked its curve, opens like any other and is dropped. Unlike the authored documents, the
+  `.bproj` keeps no unknown key.
 
 ### Reference graph
 * **`AssetRefGraph::Scan`** — `@throws` if a *referrer* cannot be read, deliberately: an edge we

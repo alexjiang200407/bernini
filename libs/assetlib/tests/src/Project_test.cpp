@@ -426,44 +426,27 @@ TEST_CASE("originOf answers only for a key inside a half", "[project][origin]")
 	CHECK_FALSE(originOf("DerivedThings/a.bmesh").has_value());
 }
 
-TEST_CASE("A project's post-process type round-trips, filmic unless it says otherwise", "[project]")
+// `postProcess` named a curve every target now shares. A project that still names one opens like
+// any other, whatever the value, and its next save drops the key as it drops every key it does not
+// know.
+TEST_CASE("A project that names a post-process opens, and saving drops the key", "[project]")
 {
-	const Sandbox sandbox("bernini_project_post_process_round_trips");
+	const Sandbox sandbox("bernini_project_post_process_dropped");
 
-	Project created = Project::Create(sandbox.ProjectFile(), "MyGame");
-	CHECK(created.GetPostProcessType() == assetlib::PostProcessType::kFilmic);
-	// Create writes what it always wrote: filmic is the absent key.
-	CHECK_FALSE(nlohmann::json::parse(ReadText(sandbox.ProjectFile())).contains("postProcess"));
-
-	created.SetPostProcessType(assetlib::PostProcessType::kToon);
-	created.Save();
-	CHECK(nlohmann::json::parse(ReadText(sandbox.ProjectFile())).at("postProcess") == "toon");
-	CHECK(
-		Project::Open(sandbox.ProjectFile()).GetPostProcessType() ==
-		assetlib::PostProcessType::kToon);
-
-	created.SetPostProcessType(assetlib::PostProcessType::kFilmic);
-	created.Save();
-	CHECK_FALSE(nlohmann::json::parse(ReadText(sandbox.ProjectFile())).contains("postProcess"));
-
-	// A project that predates the key draws as it always did.
-	WriteText(sandbox.ProjectFile(), R"({ "name": "MyGame", "version": 1 })");
-	CHECK(
-		Project::Open(sandbox.ProjectFile()).GetPostProcessType() ==
-		assetlib::PostProcessType::kFilmic);
-}
-
-TEST_CASE("A project refuses a post-process type it does not know", "[project]")
-{
-	const Sandbox sandbox("bernini_project_post_process_refused");
-
-	for (const std::string_view value : { R"("standard")", R"(1)", R"("Toon")" })
+	for (const std::string_view value : { R"("toon")", R"("filmic")", R"(1)" })
 	{
 		INFO(value);
 		WriteText(
 			sandbox.ProjectFile(),
 			std::string(R"({ "name": "MyGame", "version": 1, "postProcess": )") +
 				std::string(value) + " }");
-		CHECK_THROWS_AS(Project::Open(sandbox.ProjectFile()), std::runtime_error);
+
+		const Project opened = Project::Open(sandbox.ProjectFile());
+		CHECK(opened.GetName() == "MyGame");
+
+		opened.Save();
+		const auto saved = nlohmann::json::parse(ReadText(sandbox.ProjectFile()));
+		CHECK_FALSE(saved.contains("postProcess"));
+		CHECK(saved.at("name") == "MyGame");
 	}
 }

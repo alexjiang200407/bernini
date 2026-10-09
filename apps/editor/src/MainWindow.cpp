@@ -80,7 +80,6 @@
 #include <bgl/types/ColorSplitSettings.h>
 #include <bgl/types/FilmGrainSettings.h>
 #include <bgl/types/PassTiming.h>
-#include <bgl/types/ToonGradeSettings.h>
 #include <bgl/types/VignetteSettings.h>
 #include <core/str/str.h>
 #include <memory>
@@ -278,18 +277,6 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 			return s;
 		};
 
-		const auto readToonGrade = [&](const auto& node, bgl::ToonGradeSettings s) {
-			s.temperature = node["temperature"].GetOrDefault(s.temperature);
-			s.tint        = node["tint"].GetOrDefault(s.tint);
-			s.black       = readRgb(node["black"], s.black);
-			s.white       = readRgb(node["white"], s.white);
-			s.gamma       = readRgb(node["gamma"], s.gamma);
-			s.saturation  = node["saturation"].GetOrDefault(s.saturation);
-			s.contrast    = node["contrast"].GetOrDefault(s.contrast);
-			s.vignette    = readVignette(node["vignette"], s.vignette);
-			return s;
-		};
-
 		const auto readGrain = [](const auto& node, bgl::FilmGrainSettings s) {
 			s.intensity  = node["intensity"].GetOrDefault(s.intensity);
 			s.size       = node["size"].GetOrDefault(s.size);
@@ -310,11 +297,9 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 			return effect;
 		};
 
-		// Each post-process type's effects are its own section, so a grade written for one is never
-		// read as the other's.
-		const auto readFilmic = [&](const auto& section) {
-			auto       c = editor::FilmicConfig();
-			const auto n = section["filmic"];
+		const auto readPostProcess = [&](const auto& section) {
+			auto       c = editor::PostProcessConfig();
+			const auto n = section["postProcess"];
 			c.bloom      = readEffect(n["bloom"], c.bloom, readBloom);
 			c.grade      = readEffect(n["grade"], c.grade, readGrade);
 			c.grain      = readEffect(n["filmGrain"], c.grain, readGrain);
@@ -322,27 +307,17 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 			return c;
 		};
 
-		const auto readToon = [&](const auto& section) {
-			auto       c = editor::ToonConfig();
-			const auto n = section["toon"];
-			c.bloom      = readEffect(n["bloom"], c.bloom, readBloom);
-			c.grade      = readEffect(n["grade"], c.grade, readToonGrade);
-			c.grain      = readEffect(n["filmGrain"], c.grain, readGrain);
-			c.split      = readEffect(n["colorSplit"], c.split, readSplit);
-			return c;
-		};
-
-		// The sections a viewport named before each type had its own. Not read: which type's they
-		// were cannot be told, so they would be a guess.
+		// The sections a viewport's effects were read from before `postProcess`. Not read: a `toon`
+		// grade is not this grade, and which curve a flat section was meant for cannot be told.
 		const auto warnRetired = [](const auto& section) {
-			for (const char* key : { "bloom", "colorGrade", "filmGrain", "colorSplit" })
+			for (const char* key :
+			     { "bloom", "colorGrade", "filmGrain", "colorSplit", "filmic", "toon" })
 			{
 				if (section[key])
 				{
 					qWarning(
-						"config.json: a viewport's `%s` section is no longer read; each "
-						"post-process "
-						"type has its own, under `filmic` and `toon`",
+						"config.json: a viewport's `%s` section is no longer read; its effects are "
+						"under `postProcess`",
 						key);
 				}
 			}
@@ -360,8 +335,7 @@ MainWindow::Build(const std::filesystem::path& configPath, assetlib::Project pro
 			viewport.renderScale            = section["renderScale"].GetOrDefault(1.0f);
 			viewport.taaReconstructionWidth = section["taaReconstructionWidth"].GetOrDefault(0.4f);
 			viewport.taaSharpness           = section["taaSharpness"].GetOrDefault(1.0f);
-			viewport.filmic                 = readFilmic(section);
-			viewport.toon                   = readToon(section);
+			viewport.postProcess            = readPostProcess(section);
 			viewport.toonBackdrop           = readToonBackdrop(section);
 			return viewport;
 		};
@@ -645,10 +619,8 @@ MainWindow::SetUpRenderMenu()
 	bloom->setStatusTip(
 		editor::Localize(
 			"editor.main_window.bloom_tip",
-			"Spill the viewports' bright pixels into a glow: added ahead of the curve under "
-			"Filmic, "
-			"screened over the colour under Toon. How they bloom is each viewport's `filmic.bloom` "
-			"and `toon.bloom` section in config.json."));
+			"Spill the viewports' bright pixels into a glow, added ahead of the curve. How they "
+			"bloom is each viewport's `postProcess.bloom` section in config.json."));
 
 	connect(bloom, &QAction::toggled, this, [this](bool enabled) {
 		m_BloomOverride = enabled;
@@ -668,9 +640,8 @@ MainWindow::SetUpRenderMenu()
 	grade->setStatusTip(
 		editor::Localize(
 			"editor.main_window.color_grade_tip",
-			"White-balance and grade the viewports. Each type has its own grade: `filmic.grade` in "
-			"config.json, a CDL in AgX's log encoding, and `toon.grade`, the black and white the "
-			"screen shows."));
+			"White-balance and grade the viewports: a CDL in AgX's log encoding, each viewport's "
+			"`postProcess.grade` section in config.json."));
 
 	connect(grade, &QAction::toggled, this, [this](bool enabled) {
 		m_ColorGradeOverride = enabled;
@@ -695,8 +666,8 @@ MainWindow::SetUpRenderMenu()
 		editor::Localize(
 			"editor.main_window.film_grain_tip",
 			"Grain the viewports after the display curve, in proportion to each pixel's "
-			"brightness. The grain is each viewport's `filmic.filmGrain` and `toon.filmGrain` "
-			"section in config.json."));
+			"brightness. The grain is each viewport's `postProcess.filmGrain` section in "
+			"config.json."));
 
 	connect(grain, &QAction::toggled, this, [this](bool enabled) {
 		m_FilmGrainOverride = enabled;
@@ -712,16 +683,13 @@ MainWindow::SetUpRenderMenu()
 		editor::Localize(
 			"editor.main_window.color_split_tip",
 			"Displace the viewports' red and blue from green, as a misregistered print or a lens "
-			"does. The split is each viewport's `filmic.colorSplit` and `toon.colorSplit` section "
-			"in config.json."));
+			"does. The split is each viewport's `postProcess.colorSplit` section in config.json."));
 
 	connect(split, &QAction::toggled, this, [this](bool enabled) {
 		m_ColorSplitOverride = enabled;
 		for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
 			view->SetEffectEnabled(ViewportEffect::kSplit, enabled);
 	});
-
-	SetUpPostProcessMenu(render);
 
 	auto* timing = render->addAction(
 		editor::Localize("editor.main_window.gpu_pass_timing", "GPU Pass Timing"));
@@ -754,47 +722,6 @@ MainWindow::SetUpRenderMenu()
 	connect(logTiming, &QAction::triggered, this, [this] { m_LogNextPassTimings = true; });
 
 	SetUpRenderScaleMenu(render);
-}
-
-// Auto lets each viewport decide -- Toon where it shows toon content, the project's elsewhere;
-// Filmic and Toon hold every viewport to one. The checked entry is always the user's choice, so
-// the menu never says one post-process while the viewport shows another.
-void
-MainWindow::SetUpPostProcessMenu(QMenu* render)
-{
-	QMenu* menu =
-		render->addMenu(editor::Localize("editor.main_window.post_process_menu", "Post Process"));
-	menu->setStatusTip(
-		editor::Localize(
-			"editor.main_window.post_process_tip",
-			"The post-process the viewports end in: Filmic (AgX), or Toon -- the colour as it is, "
-			"which a toon look is authored for. Auto is the project's, and Toon for a viewport "
-			"showing toon content."));
-
-	auto* group = new QActionGroup(menu);
-	group->setExclusive(true);
-
-	const auto addChoice = [&](const QString&                           label,
-	                           std::optional<assetlib::PostProcessType> choice) {
-		QAction* action = menu->addAction(label);
-		action->setCheckable(true);
-		action->setChecked(choice == m_PostProcessTypeOverride);
-		group->addAction(action);
-		connect(action, &QAction::triggered, this, [this, choice] {
-			m_PostProcessTypeOverride = choice;
-			for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
-				view->SetChosenPostProcessType(choice);
-		});
-		return action;
-	};
-	m_PostProcessTypeAuto =
-		addChoice(editor::Localize("editor.main_window.post_process_auto", "Auto"), std::nullopt);
-	addChoice(
-		editor::Localize("editor.main_window.post_process_filmic", "Filmic"),
-		assetlib::PostProcessType::kFilmic);
-	addChoice(
-		editor::Localize("editor.main_window.post_process_toon", "Toon"),
-		assetlib::PostProcessType::kToon);
 }
 
 void
@@ -1497,18 +1424,6 @@ MainWindow::SetActiveProject(assetlib::Project project)
 	m_Project = std::make_unique<assetlib::Project>(std::move(project));
 	editor::RecordRecentProject(m_RecentProjectsFile, m_Project->GetProjectFile());
 
-	m_ProjectPostProcessType = m_Project->GetPostProcessType();
-	// A new project starts at Auto: a choice made for the last one's look is not this one's.
-	m_PostProcessTypeOverride.reset();
-	if (m_PostProcessTypeAuto != nullptr)
-		m_PostProcessTypeAuto->setChecked(true);
-	for (RenderTargetWindow* view : findChildren<RenderTargetWindow*>())
-	{
-		view->SetProjectPostProcessType(m_ProjectPostProcessType);
-		view->SetChosenPostProcessType(std::nullopt);
-	}
-	if (m_Thumbnails)
-		m_Thumbnails->SetProjectPostProcessType(m_ProjectPostProcessType);
 	const auto dataDir = QString::fromStdWString(m_Project->GetDataDirectory().wstring());
 
 	// One manager over the editor's one scene: every viewport draws that scene, so a texture a material
@@ -2047,8 +1962,6 @@ MainWindow::ConfigureViewport(RenderTargetWindow& view)
 		view.SetEffectEnabled(ViewportEffect::kGrain, *m_FilmGrainOverride);
 	if (m_ColorSplitOverride)
 		view.SetEffectEnabled(ViewportEffect::kSplit, *m_ColorSplitOverride);
-	view.SetProjectPostProcessType(m_ProjectPostProcessType);
-	view.SetChosenPostProcessType(m_PostProcessTypeOverride);
 	view.SetOutlineEnabled(m_OutlineEnabled);
 	view.SetGpuTimingEnabled(m_GpuTimingAction != nullptr && m_GpuTimingAction->isChecked());
 }

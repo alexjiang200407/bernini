@@ -4,10 +4,9 @@
 namespace bgl
 {
 	/**
-	 * A colour split, under either post-process: red and blue displaced from green, as a
-	 * misregistered print or a lens does it, on the scene ahead of the curve. The selection outline
-	 * is not split. Distances are in pixels at a 2160-line output and scale with the output's
-	 * height.
+	 * A colour split: red and blue displaced from green, as a misregistered print or a lens does it,
+	 * on the scene ahead of the curve. The selection outline is not split. Distances are in pixels at
+	 * a 2160-line output and scale with the output's height.
 	 */
 	struct ColorSplitSettings
 	{

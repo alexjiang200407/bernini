@@ -4,7 +4,6 @@
 #include "postprocess/color_grade.h"
 #include <bgl/IGraphics.h>
 #include <bgl/types/ColorGradeSettings.h>
-#include <bgl/types/ToonGradeSettings.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
@@ -150,29 +149,6 @@ namespace bgl::test
 			uniforms["contrast"]     = settings.contrast;
 			uniforms["vignetteIntensity"]  = settings.vignette.intensity;
 			uniforms["vignetteSmoothness"] = settings.vignette.smoothness;
-			uniforms["toon"]               = 0u;
-		});
-	}
-
-	glm::vec4
-	RunGradedToon(
-		bgl::IGraphics&               gfx,
-		glm::vec3                     displayLinear,
-		glm::vec2                     uv,
-		const bgl::ToonGradeSettings& settings)
-	{
-		return RunProbe(gfx, "CSColorGradeProbe", [&](bgpu::Uniforms& uniforms) {
-			uniforms["sceneLinear"]  = displayLinear;
-			uniforms["uv"]           = uv;
-			uniforms["whiteBalance"] = WhiteBalanceLmsScale(settings.temperature, settings.tint);
-			uniforms["black"]        = settings.black;
-			uniforms["white"]        = settings.white;
-			uniforms["gamma"]        = settings.gamma;
-			uniforms["saturation"]   = settings.saturation;
-			uniforms["contrast"]     = settings.contrast;
-			uniforms["vignetteIntensity"]  = settings.vignette.intensity;
-			uniforms["vignetteSmoothness"] = settings.vignette.smoothness;
-			uniforms["toon"]               = 1u;
 		});
 	}
 }

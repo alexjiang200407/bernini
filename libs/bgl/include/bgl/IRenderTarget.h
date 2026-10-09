@@ -33,7 +33,7 @@ namespace bgl
 		float taaSharpness = 1.0f;
 
 		// What the target's frames end in; see IRenderTarget::SetPostProcess.
-		PostProcess postProcess = FilmicPostProcess();
+		PostProcess postProcess;
 
 		// The native surface a windowed target presents into: an HWND on D3D12 and Vulkan, a
 		// CAMetalLayer on Metal. Ignored when headless. On Vulkan the target takes on its window's
@@ -149,20 +149,19 @@ namespace bgl
 		GetPostProcess() const = 0;
 
 		/**
-		 * What subsequent frames end in: the curve, and the effects that curve has. A target's, not
-		 * a view's: it runs once on the output, however many views draw into it. Turning bloom on
-		 * allocates its chain at the first frame that blooms and keeps it when it is turned off
-		 * (~11 MiB at 1080p, ~44 MiB at 4K); nothing else allocates.
+		 * What subsequent frames end in: AgX, and the effects around it. A target's, not a view's:
+		 * it runs once on the output, however many views draw into it. Turning bloom on allocates
+		 * its chain at the first frame that blooms and keeps it when it is turned off (~11 MiB at
+		 * 1080p, ~44 MiB at 4K); nothing else allocates.
 		 *
 		 * @throws GraphicsError naming the first field outside its documented range, and keeps the
 		 *         post-process the target had: BloomSettings' intensity or threshold negative or not
-		 *         finite, softKnee or scatter outside [0, 1]; a grade's temperature or tint outside
-		 *         [-100, 100], a vignette intensity outside [0, 1] or smoothness outside (0, 1]; a
-		 *         ColorGradeSettings slope, saturation or contrast negative or not finite, an offset
-		 *         outside [-1, 1], a power not positive and finite; a ToonGradeSettings black or
-		 *         white outside [0, 1], a gamma not positive and finite, a saturation or contrast
-		 *         negative or not finite; a FilmGrainSettings intensity outside [0, 1] or a size not
-		 *         positive and finite; a ColorSplitSettings offset or radial not finite.
+		 *         finite, softKnee or scatter outside [0, 1]; a ColorGradeSettings temperature or
+		 *         tint outside [-100, 100], a slope, saturation or contrast negative or not finite,
+		 *         an offset outside [-1, 1], a power not positive and finite, a vignette intensity
+		 *         outside [0, 1] or smoothness outside (0, 1]; a FilmGrainSettings intensity outside
+		 *         [0, 1] or a size not positive and finite; a ColorSplitSettings offset or radial not
+		 *         finite.
 		 */
 		virtual void
 		SetPostProcess(const PostProcess& postProcess) = 0;

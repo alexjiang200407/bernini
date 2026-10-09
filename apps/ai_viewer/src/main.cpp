@@ -22,8 +22,11 @@
 #include <bgl/glm.h>
 #include <bgl/types/BackdropGradient.h>
 #include <bgl/types/BlobShadowDesc.h>
+#include <bgl/types/BloomSettings.h>
 #include <bgl/types/Camera.h>
+#include <bgl/types/ColorSplitSettings.h>
 #include <bgl/types/DirectionalLightDesc.h>
+#include <bgl/types/FilmGrainSettings.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/GrassHandle.h>
 #include <bgl/types/InstanceDesc.h>
@@ -32,6 +35,7 @@
 #include <bgl/types/MeshInstanceHandle.h>
 #include <bgl/types/PassTiming.h>
 #include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/PostProcess.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SkinnedMeshInstanceDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
@@ -97,9 +101,6 @@ namespace
 		bool bloom      = false;
 		bool filmGrain  = false;
 		bool colorSplit = false;
-
-		// The post-process, "filmic" or "toon".
-		std::string postProcessType = "filmic";
 
 		// What is drawn behind the scene: "sky", the environment's, or "gradient", the toon backdrop.
 		std::string backdrop = "sky";
@@ -799,13 +800,6 @@ try
 			opts.colorSplit,
 			"Render with the colour split at bgl's default settings");
 		app.add_option(
-			   "--post-process",
-			   opts.postProcessType,
-			   "The post-process: filmic (bgl's default, AgX) or toon, the exposed colour clamped, "
-			   "which a toon look is authored for and which screens bloom rather than adding it "
-			   "(bgl::FilmicPostProcess or bgl::ToonPostProcess)")
-			->check(CLI::IsMember({ "filmic", "toon" }));
-		app.add_option(
 			   "--backdrop",
 			   opts.backdrop,
 			   "What is drawn behind the scene: sky, the environment's, or gradient, the toon "
@@ -947,19 +941,14 @@ try
 		opts.height,
 		opts.taa,
 		opts.renderScale);
-	// The flags turn on each effect at bgl's defaults, in whichever type --post-process picks.
-	const auto withEffects = [&](auto postProcess) {
-		if (opts.bloom)
-			postProcess.bloom = bgl::BloomSettings();
-		if (opts.filmGrain)
-			postProcess.grain = bgl::FilmGrainSettings();
-		if (opts.colorSplit)
-			postProcess.split = bgl::ColorSplitSettings();
-		return bgl::PostProcess(postProcess);
-	};
-	target->SetPostProcess(
-		opts.postProcessType == "toon" ? withEffects(bgl::ToonPostProcess()) :
-										 withEffects(bgl::FilmicPostProcess()));
+	auto postProcess = bgl::PostProcess();
+	if (opts.bloom)
+		postProcess.bloom = bgl::BloomSettings();
+	if (opts.filmGrain)
+		postProcess.grain = bgl::FilmGrainSettings();
+	if (opts.colorSplit)
+		postProcess.split = bgl::ColorSplitSettings();
+	target->SetPostProcess(postProcess);
 
 	auto scene     = headless::CreateHeadlessScene(graphics);
 	auto view      = graphics->CreateSceneView(scene, std::max(128u, 64u * opts.crowd));
@@ -1015,8 +1004,7 @@ try
 
 	std::cout << std::format(
 		"{} frames at {} fps, {}x{}, render scale {}, {}, TAA {}, bloom {}, film grain {}, colour "
-		"split {}, {} post-process, {} "
-		"warm-up frames held at t = 0\n\n",
+		"split {}, {} warm-up frames held at t = 0\n\n",
 		opts.frames,
 		opts.fps,
 		opts.width,
@@ -1029,7 +1017,6 @@ try
 		opts.bloom ? "on" : "off",
 		opts.filmGrain ? "on" : "off",
 		opts.colorSplit ? "on" : "off",
-		opts.postProcessType,
 		opts.warmup);
 
 	const std::filesystem::path outDir = std::filesystem::absolute(opts.outDir);

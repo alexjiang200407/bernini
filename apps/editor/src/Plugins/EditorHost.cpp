@@ -67,8 +67,7 @@ namespace editor::plugins
 		                            .renderScale            = desc.renderScale,
 		                            .taaReconstructionWidth = desc.taaReconstructionWidth,
 		                            .taaSharpness           = desc.taaSharpness,
-		                            .filmic                 = desc.filmic,
-		                            .toon                   = desc.toon,
+		                            .postProcess            = desc.postProcess,
 		                            .toonBackdrop           = desc.toonBackdrop,
 		                            .headless               = m_Headless });
 		if (m_Dispatch.viewportCreated)

@@ -15,7 +15,6 @@
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/SkyboxDesc.h>
-#include <bgl/types/ToonGradeSettings.h>
 #include <bgl/types/Viewport.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
@@ -25,13 +24,11 @@
 #include <cstdio>
 #include <limits>
 #include <string>
-#include <variant>
 
 // The colour grade: its settings are validated where every target setting is, a neutral grade is
 // the ungraded image, and each control moves the output the way its name says. The directions are
 // read through CSColorGradeProbe, which runs the post pass's own grade code on one colour; the
-// render cases prove the settings reach that code through the target. The toon cases read the same
-// controls where no curve wraps them: the CDL and contrast act on the sRGB-encoded value there.
+// render cases prove the settings reach that code through the target.
 
 namespace
 {
@@ -59,21 +56,6 @@ namespace
 	Graded(bgl::IGraphics& gfx, glm::vec3 color, const bgl::ColorGradeSettings& settings)
 	{
 		return glm::vec3(bgl::test::RunGradedAgX(gfx, color, c_Centre, settings));
-	}
-
-	glm::vec3
-	ToonGraded(bgl::IGraphics& gfx, glm::vec3 color, const bgl::ToonGradeSettings& settings)
-	{
-		return glm::vec3(bgl::test::RunGradedToon(gfx, color, c_Centre, settings));
-	}
-
-	glm::vec3
-	Encoded(glm::vec3 linear)
-	{
-		return glm::vec3(
-			bgl::test::EncodeSrgb(linear.r),
-			bgl::test::EncodeSrgb(linear.g),
-			bgl::test::EncodeSrgb(linear.b));
 	}
 
 	float
@@ -174,11 +156,11 @@ TEST_CASE("Grade settings outside their documented ranges are refused", "[colorg
 	auto target         = gfx->CreateRenderTarget(targetDesc);
 	REQUIRE(target != nullptr);
 
-	CHECK(!std::get<bgl::FilmicPostProcess>(target->GetPostProcess()).grade);
+	CHECK(!target->GetPostProcess().grade);
 
 	auto kept     = bgl::ColorGradeSettings();
 	kept.contrast = 1.2f;
-	target->SetPostProcess(bgl::FilmicPostProcess{ .grade = kept });
+	target->SetPostProcess(bgl::PostProcess{ .grade = kept });
 
 	constexpr float c_Nan = std::numeric_limits<float>::quiet_NaN();
 	constexpr float c_Inf = std::numeric_limits<float>::infinity();
@@ -187,7 +169,7 @@ TEST_CASE("Grade settings outside their documented ranges are refused", "[colorg
 		auto bad = bgl::ColorGradeSettings();
 		mutate(bad);
 		CHECK_THROWS_AS(
-			target->SetPostProcess(bgl::FilmicPostProcess{ .grade = bad }),
+			target->SetPostProcess(bgl::PostProcess{ .grade = bad }),
 			bgl::GraphicsError);
 	};
 
@@ -205,29 +187,10 @@ TEST_CASE("Grade settings outside their documented ranges are refused", "[colorg
 	refuses([](auto& s) { s.vignette.intensity = 1.1f; });
 	refuses([](auto& s) { s.vignette.smoothness = 0.0f; });
 
-	const auto refusesToon = [&](auto mutate) {
-		auto bad = bgl::ToonGradeSettings();
-		mutate(bad);
-		CHECK_THROWS_AS(
-			target->SetPostProcess(bgl::ToonPostProcess{ .grade = bad }),
-			bgl::GraphicsError);
-	};
-
-	refusesToon([](auto& s) { s.temperature = -100.5f; });
-	refusesToon([](auto& s) { s.black.g = -0.01f; });
-	refusesToon([](auto& s) { s.white.r = 1.01f; });
-	refusesToon([](auto& s) { s.white.b = c_Nan; });
-	refusesToon([](auto& s) { s.gamma.g = 0.0f; });
-	refusesToon([](auto& s) { s.saturation = c_Inf; });
-	refusesToon([](auto& s) { s.contrast = -1.0f; });
-	refusesToon([](auto& s) { s.vignette.smoothness = 1.5f; });
-
-	// A refused post-process leaves the one the target had, of either type.
-	const bgl::PostProcess current = target->GetPostProcess();
-	const auto*            still   = std::get_if<bgl::FilmicPostProcess>(&current);
-	REQUIRE(still != nullptr);
-	REQUIRE(still->grade);
-	CHECK(still->grade->contrast == 1.2f);
+	// A refused post-process leaves the one the target had.
+	const bgl::PostProcess still = target->GetPostProcess();
+	REQUIRE(still.grade);
+	CHECK(still.grade->contrast == 1.2f);
 
 	// The edges of every range are in it.
 	auto edges                = bgl::ColorGradeSettings();
@@ -239,14 +202,7 @@ TEST_CASE("Grade settings outside their documented ranges are refused", "[colorg
 	edges.contrast            = 0.0f;
 	edges.vignette.intensity  = 1.0f;
 	edges.vignette.smoothness = 1.0f;
-	CHECK_NOTHROW(target->SetPostProcess(bgl::FilmicPostProcess{ .grade = edges }));
-
-	auto toonEdges       = bgl::ToonGradeSettings();
-	toonEdges.black      = glm::vec3(0.0f, 1.0f, 0.5f);
-	toonEdges.white      = glm::vec3(0.0f, 1.0f, 0.5f);
-	toonEdges.tint       = -100.0f;
-	toonEdges.saturation = 0.0f;
-	CHECK_NOTHROW(target->SetPostProcess(bgl::ToonPostProcess{ .grade = toonEdges }));
+	CHECK_NOTHROW(target->SetPostProcess(bgl::PostProcess{ .grade = edges }));
 }
 
 /**
@@ -390,144 +346,6 @@ TEST_CASE(
 	}
 }
 
-TEST_CASE("A neutral grade leaves a toon value where it was", "[colorgrade][tonemap]")
-{
-	auto gfx = MakeGraphics();
-
-	const std::array<glm::vec3, 5> sweep = { {
-		glm::vec3(0.0f),
-		glm::vec3(0.002f),
-		glm::vec3(0.18f),
-		glm::vec3(0.9f, 0.35f, 0.08f),
-		glm::vec3(1.0f),
-	} };
-
-	for (const glm::vec3& v : sweep)
-	{
-		const glm::vec3 graded = ToonGraded(*gfx, v, bgl::ToonGradeSettings());
-
-		INFO("display-linear " << v.r << " " << v.g << " " << v.b);
-		CHECK(graded.r == Catch::Approx(v.r).margin(1e-4));
-		CHECK(graded.g == Catch::Approx(v.g).margin(1e-4));
-		CHECK(graded.b == Catch::Approx(v.b).margin(1e-4));
-	}
-}
-
-TEST_CASE(
-	"The toon grade's black and white are the ends the display shows",
-	"[colorgrade][tonemap]")
-{
-	auto gfx = MakeGraphics();
-
-	const auto neutral = bgl::ToonGradeSettings();
-	const auto black   = glm::vec3(0.0f);
-	const auto white   = glm::vec3(1.0f);
-	const auto grey    = glm::vec3(0.18f);
-	const auto orange  = glm::vec3(0.6f, 0.25f, 0.08f);
-
-	// The lifted, tinted black of a film print and its cream white, each three numbers read
-	// straight off a frame.
-	auto print  = neutral;
-	print.black = glm::vec3(0.0f, 0.055f, 0.05f);
-	print.white = glm::vec3(1.0f, 0.95f, 0.85f);
-	{
-		const auto c = Encoded(ToonGraded(*gfx, black, print));
-		INFO("black, encoded: " << c.r << " " << c.g << " " << c.b);
-		CHECK(c.r == Catch::Approx(0.0f).margin(1e-4));
-		CHECK(c.g == Catch::Approx(0.055f).margin(1e-3));
-		CHECK(c.b == Catch::Approx(0.05f).margin(1e-3));
-
-		const auto w = Encoded(ToonGraded(*gfx, white, print));
-		INFO("white, encoded: " << w.r << " " << w.g << " " << w.b);
-		CHECK(w.r == Catch::Approx(1.0f).margin(1e-3));
-		CHECK(w.g == Catch::Approx(0.95f).margin(1e-3));
-		CHECK(w.b == Catch::Approx(0.85f).margin(1e-3));
-	}
-
-	// The levels come last, so contrast, gamma and saturation never move the ends the levels name.
-	{
-		auto s       = print;
-		s.contrast   = 1.4f;
-		s.gamma      = glm::vec3(1.3f);
-		s.saturation = 1.5f;
-
-		const auto c = Encoded(ToonGraded(*gfx, black, s));
-		CHECK(c.g == Catch::Approx(0.055f).margin(1e-3));
-		const auto w = Encoded(ToonGraded(*gfx, white, s));
-		CHECK(w.b == Catch::Approx(0.85f).margin(1e-3));
-	}
-
-	// Gamma above one lowers the middle and holds both ends.
-	{
-		auto s  = neutral;
-		s.gamma = glm::vec3(1.2f);
-		CHECK(Luma(ToonGraded(*gfx, grey, s)) < Luma(grey) - c_Moved);
-		CHECK(ToonGraded(*gfx, white, s).g == Catch::Approx(1.0f).margin(1e-4));
-		CHECK(ToonGraded(*gfx, black, s).g == Catch::Approx(0.0f).margin(1e-4));
-	}
-
-	// Saturation: none leaves a colour grey, more pushes its channels apart.
-	{
-		auto s       = neutral;
-		s.saturation = 0.0f;
-		CHECK(Spread(Encoded(ToonGraded(*gfx, orange, s))) < c_Moved);
-
-		s.saturation = 1.5f;
-		CHECK(Spread(ToonGraded(*gfx, orange, s)) > Spread(orange) + c_Moved);
-	}
-
-	// Contrast pivots at middle grey's encoding: 0.18 holds, the shadows fall, the highlights rise.
-	{
-		auto s     = neutral;
-		s.contrast = 1.3f;
-
-		CHECK(ToonGraded(*gfx, grey, s).g == Catch::Approx(0.18f).margin(1e-4));
-		CHECK(Luma(ToonGraded(*gfx, glm::vec3(0.03f), s)) < 0.03f - 0.002f);
-		CHECK(Luma(ToonGraded(*gfx, glm::vec3(0.6f), s)) > 0.6f + c_Moved);
-	}
-}
-
-TEST_CASE(
-	"Under toon white balance and the vignette act as they do under filmic",
-	"[colorgrade][tonemap]")
-{
-	auto gfx = MakeGraphics();
-
-	const auto grey    = glm::vec3(0.18f);
-	const auto neutral = bgl::ToonGradeSettings();
-
-	{
-		auto s        = neutral;
-		s.temperature = 50.0f;
-		const auto w  = ToonGraded(*gfx, grey, s);
-		CHECK(w.r > w.b + c_Moved);
-
-		s.temperature = 0.0f;
-		s.tint        = 50.0f;
-		const auto m  = ToonGraded(*gfx, grey, s);
-		CHECK(m.g < glm::min(m.r, m.b) - c_Moved);
-	}
-
-	{
-		auto s               = neutral;
-		s.vignette.intensity = 0.3f;
-
-		const auto centre = glm::vec3(bgl::test::RunGradedToon(*gfx, grey, c_Centre, s));
-		const auto corner = glm::vec3(bgl::test::RunGradedToon(*gfx, grey, glm::vec2(0.1f), s));
-
-		CHECK(centre.g == Catch::Approx(0.18f).margin(1e-4));
-		CHECK(Luma(corner) < Luma(centre) - c_Moved);
-
-		// The levels follow the vignette, so a darkened corner bottoms out at the lifted black
-		// rather than below it.
-		s.vignette.intensity = 1.0f;
-		s.black              = glm::vec3(0.05f);
-		const auto floor =
-			Encoded(glm::vec3(bgl::test::RunGradedToon(*gfx, grey, glm::vec2(0.0f), s)));
-		CHECK(floor.g == Catch::Approx(0.05f).margin(1e-3));
-	}
-}
-
 TEST_CASE("A neutral grade renders the ungraded image", "[colorgrade][render]")
 {
 	auto cube = OrangeCube();
@@ -538,7 +356,7 @@ TEST_CASE("A neutral grade renders the ungraded image", "[colorgrade][render]")
 	cube.Capture(offPath);
 	REQUIRE(OrangeCube::CentreProbe(offPath).Luma() > 0.1f);
 
-	cube.target->SetPostProcess(bgl::FilmicPostProcess{ .grade = bgl::ColorGradeSettings() });
+	cube.target->SetPostProcess(bgl::PostProcess{ .grade = bgl::ColorGradeSettings() });
 	cube.Capture(onPath);
 
 	const float delta = bgl::test::MaxChannelDelta(offPath, onPath);
@@ -566,7 +384,7 @@ TEST_CASE(
 
 	auto settings       = bgl::ColorGradeSettings();
 	settings.saturation = 0.0f;
-	cube.target->SetPostProcess(bgl::FilmicPostProcess{ .grade = settings });
+	cube.target->SetPostProcess(bgl::PostProcess{ .grade = settings });
 
 	cube.Capture(greyPath);
 	const auto grey = OrangeCube::CentreProbe(greyPath);
@@ -574,7 +392,7 @@ TEST_CASE(
 	CHECK(grey.r == Catch::Approx(grey.b).margin(0.02));
 	CHECK(grey.r == Catch::Approx(grey.g).margin(0.02));
 
-	cube.target->SetPostProcess(bgl::FilmicPostProcess());
+	cube.target->SetPostProcess(bgl::PostProcess());
 	cube.Capture(disabledPath);
 	CHECK(bgl::test::MaxChannelDelta(plainPath, disabledPath) <= 1.0f / 255.0f);
 

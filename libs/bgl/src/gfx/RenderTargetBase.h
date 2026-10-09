@@ -216,7 +216,7 @@ namespace bgl
 			ValidatePostProcess(postProcess);
 
 			// A chain a pool refused is tried again when bloom is turned back on.
-			if (BloomOf(postProcess) && !BloomOf(m_PostProcess))
+			if (postProcess.bloom && !m_PostProcess.bloom)
 				m_BloomChain.Retry();
 
 			m_PostProcess = postProcess;
@@ -500,7 +500,7 @@ namespace bgl
 
 		// Like the reconstruction width: shader constants, never an allocation -- the bloom chain is
 		// the render context's, sized lazily at the first frame that blooms.
-		PostProcess m_PostProcess = FilmicPostProcess();
+		PostProcess m_PostProcess;
 		BloomChain  m_BloomChain;
 
 		bool                                           m_GpuTimingEnabled = false;

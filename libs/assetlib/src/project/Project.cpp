@@ -24,17 +24,8 @@ namespace assetlib
 		{
 			std::string              name;
 			std::vector<std::string> plugins;
-			int                      version         = 1;
-			PostProcessType          postProcessType = PostProcessType::kFilmic;
+			int                      version = 1;
 		};
-
-		constexpr std::string_view c_PostProcessKey = "postProcess";
-
-		[[nodiscard]] std::string_view
-		postProcessName(const PostProcessType postProcessType) noexcept
-		{
-			return postProcessType == PostProcessType::kToon ? "toon" : "filmic";
-		}
 
 		ProjectMetadata
 		readMetadata(const std::filesystem::path& projectFile, const int currentVersion)
@@ -51,20 +42,6 @@ namespace assetlib
 				metadata.name    = json.value("name", projectFile.stem().string());
 				metadata.version = json.value("version", currentVersion);
 				metadata.plugins = json.value("plugins", std::vector<std::string>());
-
-				if (const auto it = json.find(c_PostProcessKey); it != json.end())
-				{
-					const std::string value = it->is_string() ? it->get<std::string>() : "";
-					if (value == "filmic")
-						metadata.postProcessType = PostProcessType::kFilmic;
-					else if (value == "toon")
-						metadata.postProcessType = PostProcessType::kToon;
-					else
-						core::throw_runtime_error(
-							"Malformed project file: '{}' is {}, not \"filmic\" or \"toon\"",
-							c_PostProcessKey,
-							it->dump());
-				}
 				return metadata;
 			}
 			catch (const nlohmann::json::exception& e)
@@ -129,11 +106,10 @@ namespace assetlib
 		const ProjectMetadata metadata = readMetadata(projectFile, c_FormatVersion);
 
 		Project project;
-		project.m_ProjectFile     = projectFile;
-		project.m_Name            = metadata.name;
-		project.m_PluginIds       = metadata.plugins;
-		project.m_FormatVersion   = metadata.version;
-		project.m_PostProcessType = metadata.postProcessType;
+		project.m_ProjectFile   = projectFile;
+		project.m_Name          = metadata.name;
+		project.m_PluginIds     = metadata.plugins;
+		project.m_FormatVersion = metadata.version;
 		if (registry != nullptr)
 			project.m_Registry = std::move(registry);
 
@@ -180,9 +156,6 @@ namespace assetlib
 			{ "dataDirectory", c_DataDirectoryName },
 			{ "plugins", m_PluginIds },
 		};
-		// Only a project off the default names its curve: an AgX file keeps its shape.
-		if (m_PostProcessType != PostProcessType::kFilmic)
-			json[std::string(c_PostProcessKey)] = std::string(postProcessName(m_PostProcessType));
 
 		std::ofstream stream(m_ProjectFile);
 		if (!stream)

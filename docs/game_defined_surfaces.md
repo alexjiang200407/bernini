@@ -125,11 +125,12 @@ rest through programs of their own, whose vertices carry the placement's evaluat
 blended character, and one dissolving between levels, shade without the rig. It returns
 pre-exposure radiance, so exposure and tonemapping apply after it as for every surface.
 
-**A toon look is authored for the toon post-process**, Blender's Standard view -- its cel colours
-are the screen's, which AgX's filmic curve would lift and desaturate -- so a toon game sets its
-project's `.bproj` `postProcess` to `"toon"` and its targets end in it
-(`IRenderTarget::SetPostProcess` with a `ToonPostProcess`); the editor shows a toon asset in it on
-its own.
+**A toon look is authored under the one AgX curve and grade the game uses.** Every target ends
+in AgX ([Passes](passes.md) § Scene colour), so a character's cel colours are lifted and
+desaturated by it like every surface's, and a character's look is tuned under that curve -- in the
+editor, whose viewports and thumbnails end in it too -- rather than for a screen that shows its
+colours as typed. That is what lets a toon character and a PBR world share one image with one look:
+the style is the shading's, not the post-process's.
 
 **A toon surface draws through the lit record.** Registration binds a toon slot to the model's
 adapter over the game's type — `ToonCharacterLit<G>` in `lib.math.ToonShading` — which conforms

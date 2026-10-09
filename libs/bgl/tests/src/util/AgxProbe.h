@@ -2,7 +2,6 @@
 
 #include <bgl/IGraphics.h>
 #include <bgl/types/ColorGradeSettings.h>
-#include <bgl/types/ToonGradeSettings.h>
 #include <core/glm.h>
 
 namespace bgl::test
@@ -39,15 +38,4 @@ namespace bgl::test
 		glm::vec3                      sceneLinear,
 		glm::vec2                      uv,
 		const bgl::ColorGradeSettings& settings);
-
-	/**
-	 * `displayLinear` at output position `uv` through the post pass's toon grade, which wraps no
-	 * curve: the same dispatch of CSColorGradeProbe, on its toon branch.
-	 */
-	[[nodiscard]] glm::vec4
-	RunGradedToon(
-		bgl::IGraphics&               gfx,
-		glm::vec3                     displayLinear,
-		glm::vec2                     uv,
-		const bgl::ToonGradeSettings& settings);
 }

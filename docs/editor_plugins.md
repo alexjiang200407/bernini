@@ -96,12 +96,10 @@ flowchart TD
 The diagram is the contract ownership/call topology. The production loader owns both registries.
 Each project host borrows its store, renderer and asset manager while project panels exist.
 
-A viewport's post-process is the host's to decide, by Render > Post Process: Filmic or Toon for
-every viewport, or Auto, the default and where a newly opened project starts. Under Auto a viewport
-ends in the project's `.bproj` `postProcess`, or in Toon -- what a toon look is authored for --
-when the panel says it shows a toon-shaded asset, with `IEditorViewport::SetShowsToonContent`.
-That call also swaps the viewport's sky for its `ViewportDesc::toonBackdrop` gradient, whatever
-the post-process pick: the background follows what is shown. The host reads the gradient from the
+Every viewport ends in AgX, as every target does. A panel says it shows a toon-shaded asset with
+`IEditorViewport::SetShowsToonContent`, and that swaps the viewport's sky for its
+`ViewportDesc::toonBackdrop` gradient and changes nothing else: the background follows what is
+shown. The host reads the gradient from the
 viewport's `config.json` section, `toonBackdrop` (`bottom` and `top`, each `{ "r", "g", "b" }`,
 scene-linear), and defaults it to the toon look-dev one, pale horizon to sky blue. The asset
 thumbnails follow the same rule per shot -- a toon mesh or material against the `thumbnails`
@@ -214,10 +212,8 @@ on the render thread, before its host dies. The host drains a viewport's pending
 destroying its view. Inactive tabs must suspend their viewports through `SetActive`.
 
 `ViewportDesc` supplies initial instance capacity, TAA allocation, render scale, reconstruction
-width and sharpness, and `filmic` and `toon`: each post-process type's effects with their settings
-and whether each is on. Which type a viewport ends in is the host's -- the project's, toon for toon
-content, or the user's pick -- so a plugin describes both; the Render menu switches an effect in both
-at once and keeps its settings while it is off. The host preserves these defaults until the user selects a Render-menu override. Those
+width and sharpness, and `postProcess`: the effects around the curve with their settings and
+whether each is on. The Render menu switches an effect and keeps its settings while it is off. The host preserves these defaults until the user selects a Render-menu override. Those
 choices also apply to viewports created later by lazy panel factories; outline and GPU timing follow
 the current host toggles. TAA availability is refreshed when the Render menu opens.
 

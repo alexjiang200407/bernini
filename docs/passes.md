@@ -107,19 +107,14 @@ fold it in, while the display curve — `AgX` in
 [lib/math/Tonemap.slang](libs/bgl/shaders/src/lib/math/Tonemap.slang) — belongs to the output and runs once.
 `AgX` leaves its result linear, so the sRGB backbuffer view is still what encodes it.
 
-**The post-process is the target's: filmic, or toon.** `IRenderTarget::SetPostProcess` (and
-`RenderTargetDesc::postProcess`) sets it per output as one `bgl::PostProcess`, a variant of
-`FilmicPostProcess` -- AgX, the default -- and `ToonPostProcess`, Blender's Standard view: the
-exposed value clamped to [0, 1] and no curve, so a colour authored to be seen as it is -- a toon
-look -- reaches the screen as authored, after the same sRGB encoding. **Each type holds the effects
-it has**, each an `optional` that is off when absent: bloom, a grade, [film grain](#film-grain) and
-[the colour split](#the-colour-split). Bloom, grain and the split take the same settings under both,
-but bloom is added ahead of AgX and screened over toon's clamp ([Bloom](#bloom)), which has no curve
-to roll a glow off. The grades are different types, because they are different maths: filmic's
-`ColorGradeSettings` is a CDL in AgX's log encoding, toon's `ToonGradeSettings` the black and white
-the screen shows ([the colour grade](#the-colour-grade)). So a grade can only be set on the type it
-works under, and switching type takes the whole value with it. RCAS and the editor's outline apply
-under both. The rest of this section is the filmic curve.
+**The post-process is the target's, and every target's curve is AgX.** `IRenderTarget::SetPostProcess`
+(and `RenderTargetDesc::postProcess`) sets it per output as one `bgl::PostProcess`, which holds the
+effects around the curve, each an `optional` that is off when absent: bloom ([Bloom](#bloom)), a
+grade ([the colour grade](#the-colour-grade)), [film grain](#film-grain) and
+[the colour split](#the-colour-split). Setting it takes the whole value. There is no second curve:
+a game's toon characters and its PBR world reach the screen through one AgX and one grade, so they
+sit in one image with one look, and a toon character's style is its shading's
+([Game-Defined Surfaces](game_defined_surfaces.md)). The rest of this section is the curve.
 
 **The curve is Blender 5.2's AgX, and the LUT is Blender's own file.** Blender's `AgX Base sRGB`
 view is a 57³ formation LUT applied in FilmLight E-Gamut log2 space, then a Rec.1886 decode, and
@@ -1032,17 +1027,10 @@ the surface's `emissive` ([Game-Defined Surfaces](game_defined_surfaces.md)), wh
 scene colour at whatever radiance the surface asks for. Specular peaks can still cross a threshold
 set this way, so a stylized material wants little specular. Glow colour also goes through AgX,
 which pulls very bright colours toward white — a saturated emissive glows paler than it is
-authored.
-
-**Under toon the glow is screened, not added.** Filmic adds the chain's level to the scene and AgX
-rolls the sum off. Toon has no curve, so an add over an already bright cel colour clips: 0.9 + 0.6
-and 0.6 + 0.6 both land on white, and an orange goes yellow. `PostProcess` screens it there instead
-— `base + glow * (1 - base)` on the clamped scene and the clamped, intensity-scaled level, in
-display-linear light — which is the add where both are small and stops short of white however
-bright either is. The chain itself is the same under both types and is not clamped to the display's
-range, so an emissive above one still glows further than one at it. With the threshold at zero the
-chain is a blur of the whole frame and the result is the diffusion filter of cel animation: every
-lit region haloed, the mid-brightness ones too.
+authored. The chain's level is added to the scene ahead of the curve, which rolls the sum off, and
+the chain is not clamped to the display's range, so an emissive above one glows further than one at
+it. With the threshold at zero the chain is a blur of the whole frame and the result is the
+diffusion filter of cel animation: every lit region haloed, the mid-brightness ones too.
 
 ### PostProcess — [passes/PostProcessPass.{h,cpp}](libs/bgl/src/passes/PostProcessPass.cpp)
 
@@ -1055,9 +1043,8 @@ first sharpens the resolved history with RCAS ([Temporal Antialiasing](docs/taa.
 reading four more point taps of it. Otherwise the branch is skipped and the frame is the one it
 always was. A target with [the colour split](#the-colour-split) on reads red and blue from
 displaced taps of that. Then it combines the [Bloom](#bloom) chain's finished level — in linear radiance, scaled by
-`BloomSettings::intensity`, behind a flag so a bloom-less frame binds nothing; added
-under filmic, screened under toon — then
-applies the display curve — `AgX` through the LUT above, or toon's clamp — graded when the target
+`BloomSettings::intensity`, behind a flag so a bloom-less frame binds nothing; added ahead of the
+curve — then applies the display curve — `AgX` through the LUT above — graded when the target
 sets a `grade` (see [the colour grade](#the-colour-grade) below), then
 [film grain](#film-grain) when it sets `grain`, then — on a frame where a
 [Outline Mask](#outline-mask) pass ran — composites the selection outline: a pixel outside the mask but within the outline width of it
@@ -1112,19 +1099,6 @@ grade is evaluated per pixel rather than baked into a per-frame LUT as Unreal's 
 Unity's LutBuilder do, because a baked LUT is a per-target allocation and a pass of its own for
 work this pass does in a few dozen ALU.
 
-**Toon's grade is its own type**, `ToonGradeSettings`, run by `ToonGraded` in the same module. Its
-input is the clamped scene with the glow already screened over it, which is display-linear: toon's
-scene and display coincide, so white balance and the vignette act on it as they do above. Then, on
-its **sRGB encoding**: contrast, pivoting at middle grey's encoding (0.461) so 0.18 holds as it does
-under filmic; `gamma`; saturation about Rec.709 luma; and last the **levels**, which map the
-encoded [0, 1] onto [`black`, `white`]. Last, so contrast, gamma and saturation never move the ends:
-`black` is the black the screen shows, per channel, and `white` the white -- a film print's lifted,
-tinted black and its cream white are read straight off a frame and typed in. The levels follow the
-vignette, so a darkened corner bottoms out at the lifted black and not below it
-(`ColorGrade_test`, `PostProcessType_test`). It is not the CDL in another encoding: a CDL's offset
-moves under its slope and its power, and the point of a toon grade is two ends that stay where they
-were put.
-
 #### The colour split
 
 A post-process with a `split` reads the scene's red from one side of each pixel and its blue from the
@@ -1134,8 +1108,7 @@ centre and growing linearly outward. Red moves by the setting and blue by its op
 fringes of an edge are that far either side of it.
 
 It runs on the scene sample, **ahead of the curve** — where a lens puts it, and where Unreal's and
-Unity's run. Under toon the curve is a per-channel clamp, so the result is a split of the displayed
-image exactly; under filmic a fringe goes through AgX like any other colour. The glow is combined
+Unity's run — so a fringe goes through AgX like any other colour, mixed into the other channels. The glow is combined
 unsplit, since a blur does not show a displacement of a pixel or two, and the outline, composited
 last, is not split either.
 
@@ -1155,7 +1128,7 @@ distribution where one uniform is flat to its edges. It is **a share of the pixe
 black stays black, a bright region carries the most, and a black the grade lifted carries a
 little — the shape measured off a film-look reference, whose grain's deviation tracked the pixel's
 level from the shadows to the lit screens. It is monochrome, and it runs after the curve and the
-grade, in display-linear light, under either post-process type; the outline is composited over it.
+grade, in display-linear light; the outline is composited over it.
 
 **There is no headroom above display white.** The backbuffer clamps at 1, so a pixel brighter
 than `1 / (1 + intensity)` — 0.89 at the default — loses the top of its upward swing, and the mean
