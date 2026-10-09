@@ -11,6 +11,8 @@ empty_prompt,Open a .bgrass from the Content Explorer to edit the look and watch
 fade_end,Fade end
 fade_start,Fade start
 far_segments,Segments far
+ground_color_far,Ground colour far
+ground_color_near,Ground colour near
 ground_normal_far,Ground normal far
 ground_normal_near,Ground normal near
 gust_response,Gust response

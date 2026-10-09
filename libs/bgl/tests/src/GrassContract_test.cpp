@@ -199,6 +199,10 @@ TEST_CASE("CreateGrass refuses a look no pass could draw", "[grass][contract]")
 		  [nan](bgl::GrassDesc& d) { d.lighting.translucencyColor.y                    = nan; } },
 		{ "a negative tint", [](bgl::GrassDesc& d) { d.color.tipTint.x                 = -1.0f; } },
 		{ "variation above one", [](bgl::GrassDesc& d) { d.color.variation             = 1.5f; } },
+		{ "a near ground colour blend below zero",
+		  [](bgl::GrassDesc& d) { d.color.groundColorNear                              = -0.1f; } },
+		{ "a far ground colour blend above one",
+		  [](bgl::GrassDesc& d) { d.color.groundColorFar                               = 1.5f; } },
 	};
 
 	CHECK_NOTHROW(scene->DeleteGrass(scene->CreateGrass(ValidLook(material))));

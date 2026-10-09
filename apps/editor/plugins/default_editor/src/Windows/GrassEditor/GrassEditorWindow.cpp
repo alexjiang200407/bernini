@@ -551,6 +551,28 @@ GrassEditorWindow::BuildColumn()
 		1.0,
 		0.05,
 		[](Look& l) -> float& { return l.color.variation; });
+	AddReal(
+		colour,
+		"ground_color_near",
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.grass.ground_color_near",
+			"Ground colour near"),
+		0.0,
+		1.0,
+		0.05,
+		[](Look& l) -> float& { return l.color.groundColorNear; });
+	AddReal(
+		colour,
+		"ground_color_far",
+		editor::Localize(
+			m_Host.GetLanguageResolver(),
+			"bernini.grass.ground_color_far",
+			"Ground colour far"),
+		0.0,
+		1.0,
+		0.05,
+		[](Look& l) -> float& { return l.color.groundColorFar; });
 
 	layout->addStretch(1);
 	scroll->setWidget(column);

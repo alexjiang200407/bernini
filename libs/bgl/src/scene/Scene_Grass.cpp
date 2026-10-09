@@ -242,6 +242,11 @@ namespace bgl
 		{
 			refuse("colour tints must be finite and non-negative, and variation in [0, 1]");
 		}
+		if (!core::is_unit_interval(desc.color.groundColorNear) ||
+		    !core::is_unit_interval(desc.color.groundColorFar))
+		{
+			refuse("ground colour blends must be in [0, 1]");
+		}
 	}
 
 	GrassHandle
@@ -456,6 +461,9 @@ namespace bgl
 		look.fadeStart   = desc.density.fadeStart;
 		look.fadeEnd     = desc.density.fadeEnd;
 		look.thinStart   = desc.density.thinStart;
+
+		look.groundColorNear = desc.color.groundColorNear;
+		look.groundColorFar  = desc.color.groundColorFar;
 
 		look.stiffness    = desc.response.stiffness;
 		look.gustResponse = desc.response.gustResponse;

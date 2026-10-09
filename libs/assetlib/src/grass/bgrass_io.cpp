@@ -127,6 +127,8 @@ namespace assetlib
 			taker.Take("rootTint", grass.color.rootTint);
 			taker.Take("tipTint", grass.color.tipTint);
 			taker.Take("variation", grass.color.variation);
+			taker.Take("groundColorNear", grass.color.groundColorNear);
+			taker.Take("groundColorFar", grass.color.groundColorFar);
 		});
 
 		grass.extraJson = json.dump();
@@ -172,10 +174,12 @@ namespace assetlib
 		lighting["translucencyColor"] = doc::vecToJson(grass.lighting.translucencyColor);
 		lighting["translucency"]      = doc::plainFloat(grass.lighting.translucency);
 
-		nlohmann::json& color = groupOf(json, c_ColorKey);
-		color["rootTint"]     = doc::vecToJson(grass.color.rootTint);
-		color["tipTint"]      = doc::vecToJson(grass.color.tipTint);
-		color["variation"]    = doc::plainFloat(grass.color.variation);
+		nlohmann::json& color    = groupOf(json, c_ColorKey);
+		color["rootTint"]        = doc::vecToJson(grass.color.rootTint);
+		color["tipTint"]         = doc::vecToJson(grass.color.tipTint);
+		color["variation"]       = doc::plainFloat(grass.color.variation);
+		color["groundColorNear"] = doc::plainFloat(grass.color.groundColorNear);
+		color["groundColorFar"]  = doc::plainFloat(grass.color.groundColorFar);
 
 		return doc::toBytes(json);
 	}

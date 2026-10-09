@@ -112,6 +112,12 @@ namespace bgl
 
 		// In [0, 1]: how far each blade's brightness varies by its own random.
 		float variation = 0.0f;
+
+		// In [0, 1]: how far a terrain's blade takes the albedo of the ground under its root in
+		// place of its own tinted colour, at the camera and at the fade end. 1 and 1 colour every
+		// blade as its ground. A field on a mesh has no ground colour and ignores both.
+		float groundColorNear = 0.0f;
+		float groundColorFar  = 0.0f;
 	};
 
 	/**

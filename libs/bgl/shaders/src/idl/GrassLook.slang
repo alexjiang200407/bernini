@@ -32,7 +32,7 @@ public struct GrassLook
     public uint materialOffset;
 
     public float thinStart; // 0: never thins by count
-    public uint pad0;
-    public uint pad1;
-    public uint pad2;
+    public float groundColorNear;
+    public float groundColorFar;
+    public uint pad;
 };

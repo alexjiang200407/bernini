@@ -65,9 +65,11 @@ namespace assetlib
 
 	struct GrassColorParams
 	{
-		glm::vec3 rootTint  = glm::vec3(1.0f);
-		glm::vec3 tipTint   = glm::vec3(1.0f);
-		float     variation = 0.0f;
+		glm::vec3 rootTint        = glm::vec3(1.0f);
+		glm::vec3 tipTint         = glm::vec3(1.0f);
+		float     variation       = 0.0f;
+		float     groundColorNear = 0.0f;
+		float     groundColorFar  = 0.0f;
 
 		bool
 		operator==(const GrassColorParams&) const = default;

@@ -727,14 +727,16 @@ namespace assetlib
 			lighting.translucencyColor.y,
 			lighting.translucencyColor.z);
 		out += std::format(
-			"  color        root ({}, {}, {})  tip ({}, {}, {})  variation {}\n",
+			"  color        root ({}, {}, {})  tip ({}, {}, {})  variation {}  ground {}..{}\n",
 			grass.color.rootTint.x,
 			grass.color.rootTint.y,
 			grass.color.rootTint.z,
 			grass.color.tipTint.x,
 			grass.color.tipTint.y,
 			grass.color.tipTint.z,
-			grass.color.variation);
+			grass.color.variation,
+			grass.color.groundColorNear,
+			grass.color.groundColorFar);
 
 		return out;
 	}

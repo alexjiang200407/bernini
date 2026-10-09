@@ -150,9 +150,11 @@ namespace game
 			desc.lighting.translucencyColor = look.lighting.translucencyColor;
 			desc.lighting.translucency      = look.lighting.translucency;
 
-			desc.color.rootTint  = look.color.rootTint;
-			desc.color.tipTint   = look.color.tipTint;
-			desc.color.variation = look.color.variation;
+			desc.color.rootTint        = look.color.rootTint;
+			desc.color.tipTint         = look.color.tipTint;
+			desc.color.variation       = look.color.variation;
+			desc.color.groundColorNear = look.color.groundColorNear;
+			desc.color.groundColorFar  = look.color.groundColorFar;
 			return desc;
 		}
 
