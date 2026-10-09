@@ -52,7 +52,8 @@ flowchart TD
         POSE --> TSR["Toon Shading Rigs (only when a placement holds a rig; one thread per rigged placement)"]
         TSR --> FTR["Forward Terrain (only when the scene has a terrain; one dispatch per terrain)"]
         FTR --> FWW["Forward World (indirect dispatch per static-tier bucket)"]
-        FWW --> GRS["Forward Grass (only when a drawn geom or a terrain has grass; one dispatch per grass bucket and terrain)"]
+        FWW --> GC["Ground Color (only when a terrain's grass takes its ground's colour; one dispatch per terrain)"]
+        GC --> GRS["Forward Grass (only when a drawn geom or a terrain has grass; one dispatch per grass bucket and terrain)"]
         GRS --> BLOB["Blob Shadows (only when the view has a disc; reads the depth as it stands)"]
         BLOB --> FWS["Forward Skinned (indirect dispatch per skinned-tier bucket)"]
         FWS --> FWT["Forward Transparent (one dispatch for the sorted list)"]
@@ -845,6 +846,32 @@ no placement and moves only in the wind.
   `scene.grassChunkRefs`, and a terrain's height texture.
 * **Out:** scene colour, the velocity buffer, depth.
 * **Skipped** -- no pass attached -- when no drawn geom or terrain has grass.
+
+#### Ground Color
+
+Draws every terrain of the scene into the view's ground-colour texture, from straight above, so
+that the grass a terrain grows can take the colour of the ground under each blade ([Grass § Ground
+colour](grass.md#ground-colour)). It is attached by `ForwardPhases::AttachGroundColor` rather than
+as a phase: its kernels have their own target, and it draws to no part of the screen.
+
+The texture is the view's (`SceneView::PrepareGroundColor`): `c_GroundColorTexels` square, sRGB
+RGBA8, centred on the camera and reaching the furthest fade end of the terrain looks that take
+their ground's colour, its corner snapped to whole texels so a still ground never shimmers. It is
+made the first time a look asks for it, and the pass clears it and redraws it every frame.
+
+A terrain bucket's ground-colour kernel pairs the terrain's own stages, `programs.forward.Terrain`,
+with the material kind's albedo program, `programs.forward.GroundColor_<kind>` (generated for a
+registered surface, as its grass program is), which writes the surface's unlit base colour with
+alpha 1 -- or alpha 0 for a lit surface, which has no albedo apart from its lighting. It writes no
+depth and no velocity and culls nothing: a heightfield seen from above covers each texel once. The
+draw is `RenderContext`'s `GroundColorDraw`: the view's draw with an orthographic projection over
+the square, world x across the texture and z down it, and the frustum planes of that square, but
+the view's own camera position, pixels per unit and level-of-detail terms, so the terrain's levels
+are chosen as the colour pass chooses them and the patches near the camera are as fine here.
+
+* **In:** the terrain stage's buffers and height texture, the material arena.
+* **Out:** the view's `groundColor` texture.
+* **Skipped** -- no pass attached -- when no terrain look takes its ground's colour.
 
 ### Blob Shadows — [passes/BlobShadowPass.{h,cpp}](libs/bgl/src/passes/BlobShadowPass.cpp)
 

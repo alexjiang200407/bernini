@@ -19,6 +19,13 @@ namespace bgl
 	[[nodiscard]] std::string
 	DrawBucketPixelSrc(const DrawBucketDesc& desc);
 
+	/**
+	 * The Ground Color pass's pixel program for a terrain bucket: `programs.forward.GroundColor_<kind>`,
+	 * which writes the material's unlit base colour. @pre the bucket is a terrain's.
+	 */
+	[[nodiscard]] std::string
+	DrawBucketGroundColorSrc(const DrawBucketDesc& desc);
+
 	/** The amplification/mesh module for the bucket's stage. @pre the bucket is not transparent. */
 	[[nodiscard]] std::string_view
 	DrawBucketGeometrySrc(const DrawBucketDesc& desc);

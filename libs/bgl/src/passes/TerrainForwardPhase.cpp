@@ -54,6 +54,63 @@ namespace bgl
 			core::ensure(view != nullptr, "The terrain phase requires a bgl::SceneView");
 			return *view;
 		}
+
+		/**
+		 * One dispatch per terrain of the view, through the kernel `bind` sets into `state` for the
+		 * terrain's bucket, with the terrain's stage uniforms bound from `draw`.
+		 */
+		template <typename BindKernel>
+		void
+		RecordBatches(
+			bgpu::MeshletState& state,
+			const DrawData&     draw,
+			const PassContext&  resources,
+			BindKernel&&        bind)
+		{
+			bgpu::ICommandList* cmd = resources.GetCommandList();
+			core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
+
+			for (const SceneView::TerrainBatch& batch : ViewOf(draw).GetTerrainBatches())
+			{
+				bgpu::MeshletKernel* kernel = bind(batch.bucket);
+				core::ensure(
+					kernel != nullptr,
+					"a terrain's bucket was drawn before its kernel was built");
+				if (kernel == nullptr || batch.nodeCount == 0)
+				{
+					continue;
+				}
+
+				// One amplification group per node, laid out in rows no wider than one dispatch can
+				// launch, so a terrain past that many nodes still dispatches once.
+				const uint32_t width = std::min(batch.nodeCount, idl::cMaxDispatchMeshGroups);
+				const uint32_t rows  = core::div_ceil(batch.nodeCount, width);
+
+				auto found = kernel->FindUniforms(c_Cbuffer);
+				if (!found)
+				{
+					core::fatal("Terrain shader is missing its '{}' constant buffer", c_Cbuffer);
+				}
+				auto& uniforms = *found;
+				BindSceneBuffers(uniforms, c_TerrainBuffers, resources);
+				uniforms["heights"]       = batch.heights;
+				uniforms["heightSampler"] = draw.samplers.linearClamp;
+				for (uint32_t plane = 0; plane < 6; ++plane)
+				{
+					uniforms["frustumPlanes"][plane] = draw.viewState.cullView.frustumPlanes[plane];
+				}
+				uniforms["cameraPos"]      = draw.viewState.cameraPos;
+				uniforms["pixelsPerUnit"]  = draw.viewState.pixelsPerUnit;
+				uniforms["lodPixelScale"]  = draw.viewState.cullView.lodPixelScale;
+				uniforms["terrain"]        = batch.record;
+				uniforms["firstNodeBound"] = batch.firstNodeBound;
+				uniforms["nodeCount"]      = batch.nodeCount;
+				uniforms["dispatchWidth"]  = width;
+
+				cmd->SetMeshletState(state);
+				cmd->DispatchMesh(width, rows, 1);
+			}
+		}
 	}
 
 	bool
@@ -66,6 +123,12 @@ namespace bgl
 	TerrainForwardPhase::Declare(PassDesc& desc) const
 	{
 		desc.AddRenderTarget(c_MotionVectorsName);
+		DeclareBuffers(desc);
+	}
+
+	void
+	TerrainForwardPhase::DeclareBuffers(PassDesc& desc) const
+	{
 		for (const auto& binding : c_TerrainBuffers)
 		{
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
@@ -79,51 +142,21 @@ namespace bgl
 		const DrawData&     draw,
 		const PassContext&  resources) const
 	{
-		bgpu::ICommandList* cmd = resources.GetCommandList();
-		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
+		RecordBatches(state, draw, resources, [&](const uint32_t bucket) {
+			return kernels.BindDrawBucketKernel(bucket, DrawLane::kAtRest, state, draw, resources);
+		});
+	}
 
-		for (const SceneView::TerrainBatch& batch : ViewOf(draw).GetTerrainBatches())
-		{
-			bgpu::MeshletKernel* kernel =
-				kernels
-					.BindDrawBucketKernel(batch.bucket, DrawLane::kAtRest, state, draw, resources);
-			core::ensure(
-				kernel != nullptr,
-				"a terrain's bucket was drawn before its kernel was built");
-			if (kernel == nullptr || batch.nodeCount == 0)
-			{
-				continue;
-			}
-
-			// One amplification group per node, laid out in rows no wider than one dispatch can
-			// launch, so a terrain past that many nodes still dispatches once.
-			const uint32_t width = std::min(batch.nodeCount, idl::cMaxDispatchMeshGroups);
-			const uint32_t rows  = core::div_ceil(batch.nodeCount, width);
-
-			auto found = kernel->FindUniforms(c_Cbuffer);
-			if (!found)
-			{
-				core::fatal("Terrain shader is missing its '{}' constant buffer", c_Cbuffer);
-			}
-			auto& uniforms = *found;
-			BindSceneBuffers(uniforms, c_TerrainBuffers, resources);
-			uniforms["heights"]       = batch.heights;
-			uniforms["heightSampler"] = draw.samplers.linearClamp;
-			for (uint32_t plane = 0; plane < 6; ++plane)
-			{
-				uniforms["frustumPlanes"][plane] = draw.viewState.cullView.frustumPlanes[plane];
-			}
-			uniforms["cameraPos"]      = draw.viewState.cameraPos;
-			uniforms["pixelsPerUnit"]  = draw.viewState.pixelsPerUnit;
-			uniforms["lodPixelScale"]  = draw.viewState.cullView.lodPixelScale;
-			uniforms["terrain"]        = batch.record;
-			uniforms["firstNodeBound"] = batch.firstNodeBound;
-			uniforms["nodeCount"]      = batch.nodeCount;
-			uniforms["dispatchWidth"]  = width;
-
-			cmd->SetMeshletState(state);
-			cmd->DispatchMesh(width, rows, 1);
-		}
+	void
+	TerrainForwardPhase::RecordGroundColor(
+		ForwardPhases&      kernels,
+		bgpu::MeshletState& state,
+		const DrawData&     draw,
+		const PassContext&  resources) const
+	{
+		RecordBatches(state, draw, resources, [&](const uint32_t bucket) {
+			return kernels.BindGroundColorKernel(bucket, state, draw, resources);
+		});
 	}
 
 	void

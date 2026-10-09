@@ -184,6 +184,21 @@ namespace bgl
 				slot);
 		}
 
+		// A surface's albedo as the Ground Color pass reads it off a terrain drawn through it.
+		std::string
+		GroundColorProgramSource(uint32_t slot, std::string_view program)
+		{
+			return std::format(
+				"import {};\nimport lib.forward.GroundColor;\nimport lib.forward.MaterialData;\n"
+				"import lib.forward.common;\n\n"
+				"[shader(\"pixel\")]\n"
+				"float4 PSMain(ForwardVSOut input) : SV_Target\n{{\n"
+				"    return materialData.{}<Slot{}Surface>(input);\n}}\n",
+				BindingModuleName(slot),
+				program,
+				slot);
+		}
+
 		// The shared blend program, with one arm per registered surface ahead of the engine's own
 		// kinds -- the arm's function picked by the surface's contract; it shadows
 		// programs/forward/Transparent.slang, which is this with no arms.
@@ -223,7 +238,8 @@ namespace bgl
 		}
 
 		// Every program a surface's draw buckets can ask for: an opaque, alpha-test and hashed colour
-		// program and a grass one -- the lit family where the surface owns its lighting. Named by the draw-bucket
+		// program, a grass one and a terrain's ground colour -- the lit family where the surface owns
+		// its lighting. Named by the draw-bucket
 		// config, so the names generated here are the names the passes build. A toon character has no
 		// grass program: a grass look refuses one.
 		std::vector<bgpu::SlangSourceModule>
@@ -268,6 +284,12 @@ namespace bgl
 				{ DrawBucketPixelSrc(
 					  DrawBucketDesc{ GeometryStage::kGrass, kind, LayerType::kOpaque }),
 				  GrassProgramSource(slot, lit ? "GameLitGrassProgram" : "GameGrassProgram"),
+				  false },
+				{ DrawBucketGroundColorSrc(
+					  DrawBucketDesc{ GeometryStage::kTerrain, kind, LayerType::kOpaque }),
+				  GroundColorProgramSource(
+					  slot,
+					  lit ? "GameLitGroundColorProgram" : "GameGroundColorProgram"),
 				  false },
 			};
 		}

@@ -7,6 +7,8 @@
 #include "passes/SceneBindings.h"
 #include "passes/draw_bucket_config.h"
 #include "scene/Scene.h"
+#include "scene/SceneView.h"
+#include "scene/ground_color.h"
 #include "scene/scene_buffer_names.h"
 #include "util/util.h"
 #include <array>
@@ -192,6 +194,39 @@ namespace bgl
 		}
 	}
 
+	namespace
+	{
+		// The terrain's own stages into one target: the albedo, with no depth -- a heightfield seen
+		// from straight above covers each texel once -- and no velocity, which nothing reprojects.
+		bgpu::MeshletPipelineDesc
+		GroundColorPipelineDesc(bgpu::IDevice* device, const DrawBucketDesc& desc)
+		{
+			const std::string geometry(DrawBucketGeometrySrc(desc));
+
+			auto pipelineDesc       = bgpu::MeshletPipelineDesc();
+			pipelineDesc.ampShader  = device->CreateShader(geometry, "ASMain");
+			pipelineDesc.meshShader = device->CreateShader(geometry, "MSMain");
+			pipelineDesc.pixelShader =
+				device->CreateShader(DrawBucketGroundColorSrc(desc), "PSMain");
+			pipelineDesc.AddRtvFormat(c_GroundColorFormat);
+
+			auto raster = bgpu::RasterState();
+			raster.SetFillMode(bgpu::RasterFillMode::kSolid)
+				.SetCullMode(bgpu::RasterCullMode::kNone)
+				.SetFrontCounterClockwise(true)
+				.SetDepthClipEnable(false);
+
+			auto depth = bgpu::DepthStencilState{};
+			depth.SetDepthTestEnable(false).SetDepthWriteEnable(false).SetStencilEnable(false);
+
+			pipelineDesc.renderState = bgpu::RenderState()
+			                               .SetRasterState(raster)
+			                               .SetBlendState(bgpu::BlendState{})
+			                               .SetDepthStencilState(depth);
+			return pipelineDesc;
+		}
+	}
+
 	bool
 	DrawBucketDissolves(const DrawBucketDesc& desc) noexcept
 	{
@@ -216,6 +251,7 @@ namespace bgl
 		{
 			m_Kernels.resize(count);
 			m_DissolveKernels.resize(count);
+			m_GroundColorKernels.resize(count);
 		}
 
 		for (uint32_t bucket = 0; bucket < count; ++bucket)
@@ -239,6 +275,12 @@ namespace bgl
 						ForwardPipelineDesc(
 							ctx.device,
 							ConfigFor(desc, DrawLane::kDissolve, toon)));
+				}
+				if (desc.geom == GeometryStage::kTerrain)
+				{
+					ctx.pipelines->Add(
+						m_GroundColorKernels[bucket],
+						GroundColorPipelineDesc(ctx.device, desc));
 				}
 			}
 		}
@@ -275,6 +317,7 @@ namespace bgl
 	{
 		CheckKernelNames(m_Kernels);
 		CheckKernelNames(m_DissolveKernels);
+		CheckKernelNames(m_GroundColorKernels);
 		CheckKernelNames({ &m_TransparentKernel, 1 });
 	}
 
@@ -385,6 +428,75 @@ namespace bgl
 		                        .AddColorAttachment(draw.targets.sceneColor)
 		                        .AddColorAttachment(draw.targets.motionVector)
 		                        .SetDepthAttachment(draw.targets.depth);
+		return &kernel;
+	}
+
+	void
+	ForwardPhases::AttachGroundColor(
+		FrameGraph&             fg,
+		const DrawData&         draw,
+		bgpu::IResourceManager* resourceManager)
+	{
+		const auto* view = draw.view->As<SceneView>();
+		core::ensure(view != nullptr, "Ground Color requires a bgl::SceneView");
+		const SceneView::GroundColorTarget& target = view->GetGroundColor();
+		if (target.rect.size <= 0.0f || target.texture.IsNull() || !m_Terrain.HasWork(draw))
+		{
+			return;
+		}
+
+		auto desc = PassDesc();
+		desc.SetName("Ground Color {}", draw.drawIdx).AddRenderTarget(c_GroundColorName);
+		for (const auto& binding : c_ForwardDataBuffers)
+		{
+			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
+		}
+		for (const auto& binding : c_ExpansionBuffers)
+		{
+			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
+		}
+		DeclareMeshletCullBuffers(desc);
+		for (const auto& binding : c_MaterialBuffers)
+		{
+			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
+		}
+		desc.AddBufferRead(c_ToonShadingRigBlocksName, bgpu::BarrierSyncFlag::kPixelShader);
+		m_Terrain.DeclareBuffers(desc);
+
+		// Cleared here rather than by the frame's Clear: the texture is the view's, and a texel no
+		// terrain covers must read as no ground colour.
+		desc.SetExec([this, draw, resourceManager, rtv = target.rtv](const PassContext& resources) {
+			float noGround[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+			resourceManager->ClearRtv(resources.GetCommandList(), rtv, noGround);
+
+			auto state = bgpu::MeshletState();
+			state.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
+			m_Terrain.RecordGroundColor(*this, state, draw, resources);
+		});
+
+		fg.AddPass(std::move(desc));
+	}
+
+	bgpu::MeshletKernel*
+	ForwardPhases::BindGroundColorKernel(
+		const uint32_t      bucket,
+		bgpu::MeshletState& state,
+		const DrawData&     draw,
+		const PassContext&  resources)
+	{
+		if (bucket >= m_GroundColorKernels.size() ||
+		    !m_GroundColorKernels[bucket].pipeline.IsInitialized())
+		{
+			return nullptr;
+		}
+
+		const auto* view = draw.view->As<SceneView>();
+		core::ensure(view != nullptr, "Ground Color requires a bgl::SceneView");
+
+		bgpu::MeshletKernel& kernel = m_GroundColorKernels[bucket];
+		BindKernel(kernel, draw, resources);
+		state.kernel      = &kernel;
+		state.frameBuffer = bgpu::FrameBuffer().AddColorAttachment(view->GetGroundColor().rtv);
 		return &kernel;
 	}
 

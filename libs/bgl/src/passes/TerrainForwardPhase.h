@@ -48,6 +48,21 @@ namespace bgl
 			const DrawData&     draw,
 			const PassContext&  resources) const override;
 
+		/** Declares the terrain buffers the phase's stages read, which Ground Color reads too. */
+		void
+		DeclareBuffers(PassDesc& desc) const;
+
+		/**
+		 * Every terrain drawn into the view's ground-colour texture through its bucket's albedo
+		 * kernel, the stages bound from `draw` exactly as Record binds them.
+		 */
+		void
+		RecordGroundColor(
+			ForwardPhases&      kernels,
+			bgpu::MeshletState& state,
+			const DrawData&     draw,
+			const PassContext&  resources) const;
+
 		/** Checks the names the phase binds into its own constant buffer. */
 		static void
 		CheckBindings(BindingNameCheck& check);

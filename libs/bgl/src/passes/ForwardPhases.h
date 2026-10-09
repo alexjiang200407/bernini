@@ -18,6 +18,7 @@ namespace bgpu
 {
 	class PipelineBatch;
 	class IDevice;
+	class IResourceManager;
 	struct MeshletState;
 }
 
@@ -125,6 +126,19 @@ namespace bgl
 		void
 		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw, ForwardPhase phase);
 
+		/**
+		 * Ground Color: clears the view's ground-colour texture and draws every terrain into it from
+		 * above, through each terrain bucket's albedo program. `draw` is the top-down draw -- its
+		 * viewProj and cull frustum the texture's square, its camera position and pixels per unit
+		 * the view's, so the patches near the camera are as fine as the colour pass draws them.
+		 * Attaches nothing when the view has no texture to fill.
+		 */
+		void
+		AttachGroundColor(
+			FrameGraph&             fg,
+			const DrawData&         draw,
+			bgpu::IResourceManager* resourceManager);
+
 		[[nodiscard]] const DrawBucketTable&
 		DrawBuckets() const noexcept
 		{
@@ -148,6 +162,17 @@ namespace bgl
 		 * The shared blend kernel, bound as BindDrawBucketKernel binds, with colour and depth alone:
 		 * a blended surface has no single depth to reproject, so its kernel declares no velocity.
 		 */
+		/**
+		 * The terrain bucket's albedo kernel, bound as BindDrawBucketKernel binds, with the view's
+		 * ground-colour texture as its one target. Null while it is unbuilt.
+		 */
+		[[nodiscard]] bgpu::MeshletKernel*
+		BindGroundColorKernel(
+			uint32_t            bucket,
+			bgpu::MeshletState& state,
+			const DrawData&     draw,
+			const PassContext&  resources);
+
 		[[nodiscard]] bgpu::MeshletKernel*
 		BindTransparentKernel(
 			bgpu::MeshletState& state,
@@ -173,6 +198,8 @@ namespace bgl
 		// lane's stays unbuilt for a bucket that does not dissolve.
 		std::vector<bgpu::MeshletKernel> m_Kernels;
 		std::vector<bgpu::MeshletKernel> m_DissolveKernels;
+		// A terrain bucket's albedo kernel, for Ground Color; uninitialized for every other bucket.
+		std::vector<bgpu::MeshletKernel> m_GroundColorKernels;
 
 		// The shared blend kernel (see DrawTransparent); no bucket owns it.
 		bgpu::MeshletKernel m_TransparentKernel;

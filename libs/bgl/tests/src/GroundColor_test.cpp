@@ -1,19 +1,26 @@
 #include "scene/SceneView.h"
 #include "scene/ground_color.h"
+#include "util/TestEnvironment.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
+#include "util/TextureReadback.h"
 #include <assetlib_structs/Heightfield.h>
 #include <bgl/IGraphics.h>
+#include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/types/Camera.h>
 #include <bgl/types/GrassDesc.h>
 #include <bgl/types/GrassHandle.h>
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/TerrainDesc.h>
 #include <bgl/types/TerrainGrassDesc.h>
 #include <bgl/types/TerrainHandle.h>
+#include <bgl/types/Viewport.h>
+#include <bgpu/types/Barrier.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -125,4 +132,108 @@ TEST_CASE(
 	view->RefreshGrass();
 	view->PrepareGroundColor(camera);
 	CHECK(view->GetGroundColor().rect.size == 0.0f);
+}
+
+namespace
+{
+	[[nodiscard]] float
+	SrgbToLinear(const uint8_t encoded)
+	{
+		const float c = static_cast<float>(encoded) / 255.0f;
+		return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
+	}
+}
+
+TEST_CASE(
+	"Ground Color writes a terrain's albedo under the square, and nothing off the field",
+	"[grass][groundcolor][render]")
+{
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
+	auto gfx                         = bgl::test::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 320;
+	targetDesc.height   = 240;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                = bgl::SceneDesc();
+	sceneDesc.initialPbrMaterials = 4;
+	auto scene                    = gfx->CreateScene(sceneDesc);
+	auto viewRef                  = gfx->CreateSceneView(scene, 8);
+	bgl::test::ApplyEnvironment(scene.Get(), viewRef.Get());
+
+	const auto albedo          = glm::vec3(0.2f, 0.6f, 0.1f);
+	auto       groundDesc      = bgl::PbrMaterialDesc();
+	groundDesc.baseColorFactor = glm::vec4(albedo, 1.0f);
+	const auto ground          = scene->CreatePbrMaterial(groundDesc);
+
+	// A 63 m field from the origin, the camera 5 m in from its corner: the square, reaching 20 m,
+	// hangs off the field on the -x and -z sides.
+	const auto field = Flat(64);
+	const auto terrain =
+		scene->CreateTerrain(bgl::TerrainDesc().SetHeightfield(&field).SetMaterial(ground));
+
+	auto lookDesc                 = bgl::GrassDesc();
+	lookDesc.material             = ground;
+	lookDesc.density.fadeStart    = 5.0f;
+	lookDesc.density.fadeEnd      = 20.0f;
+	lookDesc.color.groundColorFar = 1.0f;
+	const auto look               = scene->CreateGrass(lookDesc);
+	const auto layer              = bgl::TerrainGrassDesc().SetLook(look);
+	scene->AttachTerrainGrass(terrain, std::span<const bgl::TerrainGrassDesc>(&layer, 1));
+
+	auto job     = bgl::RenderJob();
+	job.view     = viewRef;
+	job.viewport = bgl::Viewport(320.0f, 240.0f);
+	job.camera
+		.LookAt(
+			glm::vec3(5.0f, 3.0f, 5.0f),
+			glm::vec3(20.0f, 0.0f, 20.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(glm::radians(60.0f), 320.0f / 240.0f, 0.1f, 300.0f);
+	gfx->DrawFrame(target, job);
+
+	const auto* view = viewRef->As<bgl::SceneView>();
+	REQUIRE(view != nullptr);
+	const bgl::SceneView::GroundColorTarget& colour = view->GetGroundColor();
+	REQUIRE_FALSE(colour.texture.IsNull());
+	const auto texels = bgl::test::ReadRgba8Texels(
+		gfx.Get(),
+		colour.texture,
+		bgl::c_GroundColorTexels,
+		bgl::c_GroundColorTexels,
+		bgpu::BarrierLayout::kRenderTarget);
+
+	const auto at = [&](const float x, const float z) {
+		const glm::vec2 uv = (glm::vec2(x, z) - colour.rect.origin) / colour.rect.size;
+		const auto      u  = static_cast<uint32_t>(uv.x * bgl::c_GroundColorTexels);
+		const auto      v  = static_cast<uint32_t>(uv.y * bgl::c_GroundColorTexels);
+		REQUIRE(u < bgl::c_GroundColorTexels);
+		REQUIRE(v < bgl::c_GroundColorTexels);
+		return texels[static_cast<size_t>(v) * bgl::c_GroundColorTexels + u];
+	};
+
+	for (const glm::vec2 on :
+	     { glm::vec2(10.0f, 10.0f), glm::vec2(1.0f, 20.0f), glm::vec2(20.0f, 1.0f) })
+	{
+		const glm::u8vec4 texel = at(on.x, on.y);
+		INFO(
+			"on the field at " << on.x << ", " << on.y << ": " << int(texel.r) << ", "
+							   << int(texel.g) << ", " << int(texel.b) << ", " << int(texel.a));
+		CHECK(texel.a == 255);
+		CHECK(SrgbToLinear(texel.r) == Catch::Approx(albedo.r).margin(0.01));
+		CHECK(SrgbToLinear(texel.g) == Catch::Approx(albedo.g).margin(0.01));
+		CHECK(SrgbToLinear(texel.b) == Catch::Approx(albedo.b).margin(0.01));
+	}
+
+	// Off the field along each axis: nothing drawn, so a blade there has no ground colour to take.
+	for (const glm::vec2 off : { glm::vec2(-10.0f, 10.0f), glm::vec2(10.0f, -10.0f) })
+	{
+		INFO("off the field at " << off.x << ", " << off.y);
+		CHECK(at(off.x, off.y).a == 0);
+	}
 }
