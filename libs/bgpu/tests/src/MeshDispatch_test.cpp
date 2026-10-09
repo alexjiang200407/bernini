@@ -187,11 +187,13 @@ TEST_CASE(
 	auto owner = Owner();
 	REQUIRE(owner.kernel.pipeline != nullptr);
 
-	// One group, as D3D12_DISPATCH_MESH_ARGUMENTS lays it out; and the counts zero and one.
-	constexpr auto c_Args   = std::to_array<uint32_t>({ 1, 1, 1 });
+	// Two arguments as D3D12_DISPATCH_MESH_ARGUMENTS lays them out, one group and none, and the
+	// counts zero and one. The verb's precondition pairs a zero count with the zero grid: Metal
+	// never reads the count and dispatches the grid as it is (CommandList.h).
+	constexpr auto c_Args   = std::to_array<uint32_t>({ 1, 1, 1, 0, 0, 0 });
 	constexpr auto c_Counts = std::to_array<uint32_t>({ 0, 1 });
 	const auto     args     = owner.rm->CreateStructBuffer(
-		bgpu::StructBufferDesc().SetElement<uint32_t>().SetElementCount(3).SetDebugName("args"));
+		bgpu::StructBufferDesc().SetElement<uint32_t>().SetElementCount(6).SetDebugName("args"));
 	const auto counts = owner.rm->CreateStructBuffer(
 		bgpu::StructBufferDesc().SetElement<uint32_t>().SetElementCount(2).SetDebugName("counts"));
 
@@ -214,7 +216,7 @@ TEST_CASE(
 	state.indirectArgs  = args;
 	state.commandCounts = counts;
 	owner.list->SetMeshletState(state);
-	owner.list->DispatchMeshIndirectCount(0, 0);
+	owner.list->DispatchMeshIndirectCount(1, 0);
 
 	state.frameBuffer = owner.StateFor(one).frameBuffer;
 	owner.list->SetMeshletState(state);
@@ -224,6 +226,15 @@ TEST_CASE(
 	owner.list->SetMeshletState(state);
 	owner.list->DispatchMeshIndirect(0);
 
+#if !defined(RENDERER_BACKEND_METAL)
+	// A backend that reads the count skips the dispatch on zero, whatever grid the argument names.
+	const Target skipped = owner.MakeTarget("count zero, one group");
+	state.frameBuffer    = owner.StateFor(skipped).frameBuffer;
+	owner.list->SetMeshletState(state);
+	owner.list->DispatchMeshIndirectCount(0, 0);
+	owner.ReadBack(skipped);
+#endif
+
 	owner.ReadBack(none);
 	owner.ReadBack(one);
 	owner.ReadBack(indirect);
@@ -232,6 +243,10 @@ TEST_CASE(
 	CHECK(owner.GreenAt(none, 0) == 0);
 	CHECK(owner.GreenAt(one, 0) == 255);
 	CHECK(owner.GreenAt(indirect, 0) == 255);
+#if !defined(RENDERER_BACKEND_METAL)
+	CHECK(owner.GreenAt(skipped, 0) == 0);
+	owner.Destroy(skipped);
+#endif
 
 	owner.Destroy(indirect);
 	owner.Destroy(one);

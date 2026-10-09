@@ -27,7 +27,7 @@ namespace bgpu
 	struct TextureReadbackLayout
 	{
 		uint64_t offset       = 0;
-		uint64_t rowPitch     = 0;  // padded bytes per row (256-aligned)
+		uint64_t rowPitch     = 0;  // stride between rows: the backend's, never below rowSizeBytes
 		uint64_t rowSizeBytes = 0;  // tight bytes per row (no padding)
 		uint32_t rowCount     = 0;
 		uint64_t totalBytes   = 0;
