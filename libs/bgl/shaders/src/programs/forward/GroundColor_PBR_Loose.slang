@@ -5,7 +5,7 @@ import lib.forward.MaterialData;
 
 // A terrain's albedo under an unbaked, per-channel "loose" PBR material, for the Ground Color pass.
 [shader("pixel")]
-float4 PSMain(ForwardVSOut input) : SV_Target
+GroundColorOut PSMain(ForwardVSOut input)
 {
     return materialData.GroundColorOf<LoosePbrMaterialRecord>(input);
 }

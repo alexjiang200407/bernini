@@ -99,24 +99,26 @@ TEST_CASE("A surface directory fills slots in filename order", "[surface][regist
 	REQUIRE(gfx != nullptr);
 
 	const std::span<const SurfaceType> types = gfx->GetSurfaceTypes();
-	REQUIRE(types.size() == 5u);
+	REQUIRE(types.size() == 6u);
 
 	// Filename order, so the directory alone decides which slot a surface lands in -- and the two
 	// contracts share the one namespace, so a lit surface takes a slot exactly as a PBR one does.
 	CHECK(types[0].surfaceName == "Band");
 	CHECK(types[0].kind == MaterialType::kGameStart);
 	CHECK(types[0].shading == SurfaceShading::kLit);
-	CHECK(types[1].surfaceName == "PbrLike");
+	CHECK(types[1].surfaceName == "Cover");
 	CHECK(types[1].shading == SurfaceShading::kPbrSurface);
-	CHECK(types[2].surfaceName == "Rim");
-	CHECK(types[3].surfaceName == "Tint");
+	CHECK(types[2].surfaceName == "PbrLike");
+	CHECK(types[2].shading == SurfaceShading::kPbrSurface);
+	CHECK(types[3].surfaceName == "Rim");
+	CHECK(types[4].surfaceName == "Tint");
 	CHECK(
-		types[3].kind ==
-		static_cast<MaterialType>(std::to_underlying(MaterialType::kGameStart) + 3u));
-	CHECK(types[4].surfaceName == "Unlit");
-	CHECK(types[4].shading == SurfaceShading::kLit);
+		types[4].kind ==
+		static_cast<MaterialType>(std::to_underlying(MaterialType::kGameStart) + 4u));
+	CHECK(types[5].surfaceName == "Unlit");
+	CHECK(types[5].shading == SurfaceShading::kLit);
 
-	const SurfaceParams& rim = types[2].params;
+	const SurfaceParams& rim = types[3].params;
 	REQUIRE(rim.values.size() == 3u);
 	CHECK(rim.values[0].name == "rimColor");
 	CHECK(rim.values[0].type == SurfaceValueType::kFloat3);
@@ -135,9 +137,9 @@ TEST_CASE("A surface directory fills slots in filename order", "[surface][regist
 	CHECK(rim.textures[0].index == 0u);
 
 	// A surface with no texture at all still registers; the record's handles simply go unread.
-	CHECK(types[3].params.textures.empty());
-	REQUIRE(types[3].params.values.size() == 1u);
-	CHECK(types[3].params.values[0].name == "tint");
+	CHECK(types[4].params.textures.empty());
+	REQUIRE(types[4].params.values.size() == 1u);
+	CHECK(types[4].params.values[0].name == "tint");
 }
 
 // A surface's programs are generated at registration, so the count is bounded only by the

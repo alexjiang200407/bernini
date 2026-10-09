@@ -192,7 +192,7 @@ namespace bgl
 				"import {};\nimport lib.forward.GroundColor;\nimport lib.forward.MaterialData;\n"
 				"import lib.forward.common;\n\n"
 				"[shader(\"pixel\")]\n"
-				"float4 PSMain(ForwardVSOut input) : SV_Target\n{{\n"
+				"GroundColorOut PSMain(ForwardVSOut input)\n{{\n"
 				"    return materialData.{}<Slot{}Surface>(input);\n}}\n",
 				BindingModuleName(slot),
 				program,

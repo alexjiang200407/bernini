@@ -25,4 +25,8 @@ public struct TerrainGrass
     public float patchSize;
     public float patchCoverage;
     public float patchEdge; // the patch noise either side of the coverage threshold a clump grows across
+
+    // 1 when each clump also grows by the ground's cover under it, read off the view's ground-cover
+    // texture (lib.forward.terrain_grass TerrainGroundCover).
+    public uint groundCover;
 };

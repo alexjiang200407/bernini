@@ -194,8 +194,9 @@ namespace bgl
 
 	namespace
 	{
-		// The terrain's own stages into one target: the albedo, with no depth -- a heightfield seen
-		// from straight above covers each texel once -- and no velocity, which nothing reprojects.
+		// The terrain's own stages into two targets, the albedo and the ground cover, with no depth
+		// -- a heightfield seen from straight above covers each texel once -- and no velocity, which
+		// nothing reprojects.
 		bgpu::MeshletPipelineDesc
 		GroundColorPipelineDesc(bgpu::IDevice* device, const DrawBucketDesc& desc)
 		{
@@ -207,6 +208,7 @@ namespace bgl
 			pipelineDesc.pixelShader =
 				device->CreateShader(DrawBucketGroundColorSrc(desc), "PSMain");
 			pipelineDesc.AddRtvFormat(c_GroundColorFormat);
+			pipelineDesc.AddRtvFormat(c_GroundCoverFormat);
 
 			auto raster = bgpu::RasterState();
 			raster.SetFillMode(bgpu::RasterFillMode::kSolid)
@@ -446,7 +448,9 @@ namespace bgl
 		}
 
 		auto desc = PassDesc();
-		desc.SetName("Ground Color {}", draw.drawIdx).AddRenderTarget(c_GroundColorName);
+		desc.SetName("Ground Color {}", draw.drawIdx)
+			.AddRenderTarget(c_GroundColorName)
+			.AddRenderTarget(c_GroundCoverName);
 		for (const auto& binding : c_ForwardDataBuffers)
 		{
 			desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
@@ -463,11 +467,14 @@ namespace bgl
 		desc.AddBufferRead(c_ToonShadingRigBlocksName, bgpu::BarrierSyncFlag::kPixelShader);
 		m_Terrain.DeclareBuffers(desc);
 
-		// Cleared here rather than by the frame's Clear: the texture is the view's, and a texel no
-		// terrain covers must read as no ground colour.
-		desc.SetExec([this, draw, resourceManager, rtv = target.rtv](const PassContext& resources) {
+		// Cleared here rather than by the frame's Clear: the textures are the view's, and a texel no
+		// terrain covers must read as no ground colour and as ground fully covered.
+		desc.SetExec([this, draw, resourceManager, rtv = target.rtv, coverRtv = target.coverRtv](
+						 const PassContext& resources) {
 			float noGround[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+			float covered[4]  = { 1.0f, 1.0f, 1.0f, 1.0f };
 			resourceManager->ClearRtv(resources.GetCommandList(), rtv, noGround);
+			resourceManager->ClearRtv(resources.GetCommandList(), coverRtv, covered);
 
 			auto state = bgpu::MeshletState();
 			state.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
@@ -496,7 +503,9 @@ namespace bgl
 		bgpu::MeshletKernel& kernel = m_GroundColorKernels[bucket];
 		BindKernel(kernel, draw, resources);
 		state.kernel      = &kernel;
-		state.frameBuffer = bgpu::FrameBuffer().AddColorAttachment(view->GetGroundColor().rtv);
+		state.frameBuffer = bgpu::FrameBuffer()
+		                        .AddColorAttachment(view->GetGroundColor().rtv)
+		                        .AddColorAttachment(view->GetGroundColor().coverRtv);
 		return &kernel;
 	}
 

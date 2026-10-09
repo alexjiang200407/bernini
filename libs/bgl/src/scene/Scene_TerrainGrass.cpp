@@ -85,6 +85,7 @@ namespace bgl
 			record.patchSize    = layer.patchSize;
 			record.patchCoverage = layer.patchCoverage;
 			record.patchEdge     = layer.patchEdge;
+			record.groundCover   = layer.groundCover ? 1u : 0u;
 			return record;
 		}
 	}
@@ -136,9 +137,10 @@ namespace bgl
 					BuildLayer(layers[i], meta, static_cast<uint32_t>(i));
 				records.push_back(
 					TerrainGrassRecord{
-						.look     = layers[i].look,
-						.entry    = m_TerrainGrass.Add(record),
-						.tileSize = record.tileSize,
+						.look        = layers[i].look,
+						.entry       = m_TerrainGrass.Add(record),
+						.tileSize    = record.tileSize,
+						.groundCover = layers[i].groundCover,
 					});
 			}
 		}

@@ -124,10 +124,10 @@ TEST_CASE("A surface material draws what the engine's own PBR path draws", "[sur
 	                         { "metallicFactor", glm::vec4(0.6f) } },
 		});
 
-	// Slot 1: the staged directory is filename-ordered and Band sits ahead of PbrLike.
+	// Slot 2: the staged directory is filename-ordered and Band and Cover sit ahead of PbrLike.
 	CHECK(
 		material.materialType ==
-		static_cast<MaterialType>(std::to_underlying(MaterialType::kGameStart) + 1u));
+		static_cast<MaterialType>(std::to_underlying(MaterialType::kGameStart) + 2u));
 
 	auto sphere = scene->AddSphereGeom(32, 32, 5.0f, material);
 	view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(sphere));

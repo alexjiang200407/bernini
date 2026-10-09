@@ -405,3 +405,239 @@ TEST_CASE(
 	const auto      v  = static_cast<uint32_t>(uv.y * bgl::c_GroundColorTexels);
 	CHECK(texels[static_cast<size_t>(v) * bgl::c_GroundColorTexels + u].a == 0);
 }
+
+TEST_CASE(
+	"A layer that follows its ground gives the view a ground-cover texture, colour taken or not",
+	"[grass][groundcolor][groundcover]")
+{
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = false;
+	auto gfx                         = bgl::test::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto       scene    = gfx->CreateScene(bgl::SceneDesc());
+	const auto material = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
+	const auto field    = Flat();
+	const auto terrain =
+		scene->CreateTerrain(bgl::TerrainDesc().SetHeightfield(&field).SetMaterial(material));
+
+	auto desc            = bgl::GrassDesc();
+	desc.material        = material;
+	desc.density.fadeEnd = 40.0f;
+	const auto look      = scene->CreateGrass(desc);
+
+	auto  viewRef = gfx->CreateSceneView(scene, 8);
+	auto* view    = viewRef->As<bgl::SceneView>();
+	REQUIRE(view != nullptr);
+	const auto camera = glm::vec3(4.0f, 2.0f, 4.0f);
+
+	const auto attach = [&](const bool follows) {
+		const auto layer = bgl::TerrainGrassDesc().SetLook(look).SetGroundCover(follows);
+		scene->AttachTerrainGrass(terrain, std::span<const bgl::TerrainGrassDesc>(&layer, 1));
+		view->RefreshGrass();
+		view->PrepareGroundColor(camera);
+	};
+
+	attach(false);
+	CHECK(view->GetGroundColor().rect.size == 0.0f);
+	CHECK(view->GetGroundColor().cover.IsNull());
+
+	attach(true);
+	const bgl::SceneView::GroundColorTarget& target = view->GetGroundColor();
+	CHECK(target.rect.size >= 2.0f * desc.density.fadeEnd);
+	CHECK_FALSE(target.texture.IsNull());
+	CHECK_FALSE(target.cover.IsNull());
+	CHECK_FALSE(target.coverRtv.IsNull());
+	CHECK_FALSE(target.coverSrv.IsNull());
+
+	attach(false);
+	CHECK(view->GetGroundColor().rect.size == 0.0f);
+}
+
+TEST_CASE(
+	"Ground Color writes the surface's cover under the square, and full cover off the field",
+	"[grass][groundcolor][groundcover][render]")
+{
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
+	opts.gpuContext.clientShaderDir  = "./shaders/tests/surfaces";
+	auto gfx                         = bgl::test::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 320;
+	targetDesc.height   = 240;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                    = bgl::SceneDesc();
+	sceneDesc.initialPbrMaterials     = 4;
+	sceneDesc.initialSurfaceMaterials = 4;
+	auto scene                        = gfx->CreateScene(sceneDesc);
+	auto viewRef                      = gfx->CreateSceneView(scene, 8);
+	bgl::test::ApplyEnvironment(scene.Get(), viewRef.Get());
+
+	constexpr float c_Cover = 0.25f;
+	const auto      ground  = scene->CreateSurfaceMaterial(
+		{ .surfaceName = "Cover", .values = { { "cover", glm::vec4(c_Cover) } } });
+	const auto blade = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
+
+	// As the colour case: the square, reaching 20 m from 5 m in, hangs off the field's -x, -z edges.
+	const auto field = Flat(64);
+	const auto terrain =
+		scene->CreateTerrain(bgl::TerrainDesc().SetHeightfield(&field).SetMaterial(ground));
+
+	auto lookDesc              = bgl::GrassDesc();
+	lookDesc.material          = blade;
+	lookDesc.density.fadeStart = 5.0f;
+	lookDesc.density.fadeEnd   = 20.0f;
+	const auto look            = scene->CreateGrass(lookDesc);
+	const auto layer           = bgl::TerrainGrassDesc().SetLook(look).SetGroundCover(true);
+	scene->AttachTerrainGrass(terrain, std::span<const bgl::TerrainGrassDesc>(&layer, 1));
+
+	auto job     = bgl::RenderJob();
+	job.view     = viewRef;
+	job.viewport = bgl::Viewport(320.0f, 240.0f);
+	job.camera
+		.LookAt(
+			glm::vec3(5.0f, 3.0f, 5.0f),
+			glm::vec3(20.0f, 0.0f, 20.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(glm::radians(60.0f), 320.0f / 240.0f, 0.1f, 300.0f);
+	gfx->DrawFrame(target, job);
+
+	const auto* view = viewRef->As<bgl::SceneView>();
+	REQUIRE(view != nullptr);
+	const bgl::SceneView::GroundColorTarget& colour = view->GetGroundColor();
+	REQUIRE_FALSE(colour.cover.IsNull());
+	const auto cover = bgl::test::ReadTextureBytes(
+		gfx.Get(),
+		colour.cover,
+		bgl::c_GroundColorTexels,
+		bgl::c_GroundColorTexels,
+		1,
+		bgpu::BarrierLayout::kShaderResource);
+
+	const auto at = [&](const float x, const float z) {
+		const glm::vec2 uv = (glm::vec2(x, z) - colour.rect.origin) / colour.rect.size;
+		const auto      u  = static_cast<uint32_t>(uv.x * bgl::c_GroundColorTexels);
+		const auto      v  = static_cast<uint32_t>(uv.y * bgl::c_GroundColorTexels);
+		REQUIRE(u < bgl::c_GroundColorTexels);
+		REQUIRE(v < bgl::c_GroundColorTexels);
+		return static_cast<int>(cover[static_cast<size_t>(v) * bgl::c_GroundColorTexels + u]);
+	};
+
+	for (const glm::vec2 on :
+	     { glm::vec2(10.0f, 10.0f), glm::vec2(1.0f, 20.0f), glm::vec2(20.0f, 1.0f) })
+	{
+		INFO("on the field at " << on.x << ", " << on.y << ": " << at(on.x, on.y));
+		CHECK(std::abs(at(on.x, on.y) - static_cast<int>(std::round(c_Cover * 255.0f))) <= 1);
+	}
+
+	// Off the field nothing is drawn: full cover, so a clump that could stand there is not held
+	// back by the texture.
+	for (const glm::vec2 off : { glm::vec2(-10.0f, 10.0f), glm::vec2(10.0f, -10.0f) })
+	{
+		INFO("off the field at " << off.x << ", " << off.y);
+		CHECK(at(off.x, off.y) == 255);
+	}
+}
+
+TEST_CASE(
+	"Grass that follows its ground grows nowhere the surface covers nothing",
+	"[grass][groundcolor][groundcover][render]")
+{
+	constexpr uint32_t c_W = 640;
+	constexpr uint32_t c_H = 480;
+
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
+	opts.gpuContext.clientShaderDir  = "./shaders/tests/surfaces";
+	auto gfx                         = bgl::test::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_W);
+	targetDesc.height   = static_cast<int>(c_H);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                    = bgl::SceneDesc();
+	sceneDesc.initialPbrMaterials     = 4;
+	sceneDesc.initialSurfaceMaterials = 4;
+	auto scene                        = gfx->CreateScene(sceneDesc);
+	auto view                         = gfx->CreateSceneView(scene, 8);
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	// Brown earth that says it is bare, red blades.
+	const auto earth = scene->CreateSurfaceMaterial(
+		{ .surfaceName = "Cover",
+	      .values      = { { "color", glm::vec4(0.3f, 0.22f, 0.1f, 1.0f) },
+	                       { "cover", glm::vec4(0.0f) } } });
+	auto redDesc            = bgl::PbrMaterialDesc();
+	redDesc.metallicFactor  = 0.0f;
+	redDesc.roughnessFactor = 1.0f;
+	redDesc.baseColorFactor = glm::vec4(0.8f, 0.05f, 0.05f, 1.0f);
+	const auto red          = scene->CreatePbrMaterial(redDesc);
+
+	const auto field = Flat(64);
+	const auto terrain =
+		scene->CreateTerrain(bgl::TerrainDesc().SetHeightfield(&field).SetMaterial(earth));
+
+	auto lookDesc              = bgl::GrassDesc();
+	lookDesc.material          = red;
+	lookDesc.blade.rootWidth   = 0.05f;
+	lookDesc.density.fadeStart = 10.0f;
+	lookDesc.density.fadeEnd   = 30.0f;
+	const auto look            = scene->CreateGrass(lookDesc);
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.viewport = bgl::Viewport(static_cast<float>(c_W), static_cast<float>(c_H));
+	job.camera
+		.LookAt(
+			glm::vec3(32.0f, 3.0f, 40.0f),
+			glm::vec3(32.0f, 0.0f, 32.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(glm::radians(60.0f), static_cast<float>(c_W) / c_H, 0.1f, 300.0f);
+
+	const auto settled = [&](const char* name) {
+		for (int i = 0; i < 24; ++i)
+		{
+			gfx->DrawFrame(target, job);
+		}
+		const auto path =
+			(std::filesystem::temp_directory_path() / (std::string(name) + ".png")).string();
+		gfx->ScreenshotPng(target, path);
+		const bgl::test::Rgba box = bgl::test::MeanColor(path, 220, 200, 200, 120);
+		std::filesystem::remove(path);
+		return box;
+	};
+
+	const bgl::test::Rgba bare = settled("ground_cover_bare");
+
+	const auto grow = [&](const bool follows) {
+		const auto layer =
+			bgl::TerrainGrassDesc().SetLook(look).SetSpacing(0.12f).SetGroundCover(follows);
+		scene->AttachTerrainGrass(terrain, std::span<const bgl::TerrainGrassDesc>(&layer, 1));
+	};
+
+	grow(false);
+	const bgl::test::Rgba ruled = settled("ground_cover_ruled");
+	grow(true);
+	const bgl::test::Rgba followed = settled("ground_cover_followed");
+
+	INFO("bare " << bare.r << ", " << bare.g << ", " << bare.b);
+	INFO("by its rules " << ruled.r << ", " << ruled.g << ", " << ruled.b);
+	INFO("following the ground " << followed.r << ", " << followed.g << ", " << followed.b);
+
+	// By its rules alone the field reads red over the earth; following a ground that covers
+	// nothing, it is the bare earth again.
+	CHECK(ruled.r - ruled.g > bare.r - bare.g + 0.1f);
+	CHECK(std::abs(followed.r - bare.r) < 0.02f);
+	CHECK(std::abs(followed.g - bare.g) < 0.02f);
+	CHECK(std::abs(followed.b - bare.b) < 0.02f);
+}

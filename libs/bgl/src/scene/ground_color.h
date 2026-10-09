@@ -7,16 +7,24 @@
 
 namespace bgl
 {
-	/** Texels along each side of a view's ground-colour texture. */
-	constexpr uint32_t c_GroundColorTexels = 1024;
+	/**
+	 * Texels along each side of a view's ground-colour texture: 18 cm a texel at a 45 m fade, finer
+	 * than any layer's clumps, and the Ground Color pass runs the terrain's surface once per texel
+	 * every frame.
+	 */
+	constexpr uint32_t c_GroundColorTexels = 512;
 
 	constexpr bgpu::Format     c_GroundColorFormat = bgpu::Format::SRGBA8_UNORM;
 	constexpr std::string_view c_GroundColorName   = "groundColor";
 
+	/** The ground-cover texture drawn beside it: the surface's PbrSurface::groundCover. */
+	constexpr bgpu::Format     c_GroundCoverFormat = bgpu::Format::R8_UNORM;
+	constexpr std::string_view c_GroundCoverName   = "groundCover";
+
 	/**
 	 * Where a view's ground-colour texture lies: the world xz of the outer corner of its texel
 	 * (0, 0), and its side in metres. A side of zero means the view draws no terrain grass that takes
-	 * its ground's colour, and has no texture.
+	 * its ground's colour or follows its cover, and has no texture.
 	 */
 	struct GroundColorRect
 	{

@@ -3,7 +3,8 @@
  * SurfaceLobes in lib.math.PbrShading, which a surface never sees. Another model reads another struct.
  *
  * Each default is what a surface that says nothing about the field means: white, a matte
- * dielectric, a flat normal, glTF's specular, no transmission, no emission. They apply to a value
+ * dielectric, a flat normal, glTF's specular, no transmission, no emission, full ground cover. They
+ * apply to a value
  * constructed as `PbrSurface()`; a bare `PbrSurface surface;` declaration leaves every field
  * undefined, so a surface constructs one and sets what it means to.
  */
@@ -26,4 +27,9 @@ public struct PbrSurface
 
     /// Scene-linear radiance the surface emits, under the same exposure as the lobes.
     public float3 emissive = float3(0.0, 0.0, 0.0);
+
+    /// How much of the ground here is covered, in [0, 1]: what a terrain's grass that follows its
+    /// ground grows by (docs/grass.md § Ground cover). Read by the Ground Color pass alone; the
+    /// lighting never sees it.
+    public float groundCover = 1.0;
 };

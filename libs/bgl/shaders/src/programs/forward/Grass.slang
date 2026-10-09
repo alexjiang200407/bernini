@@ -79,7 +79,16 @@ struct ChunkSource
     {
         if (onTerrain)
         {
-            return TerrainGrassClump(layer, terrain, grassData.heights, grassData.heightSampler, tile, clumpLocal);
+            return TerrainGrassClump(
+                layer,
+                terrain,
+                grassData.heights,
+                grassData.groundCover,
+                grassData.heightSampler,
+                grassData.groundColorRect,
+                tile,
+                clumpLocal
+            );
         }
         let index = chunk.firstClump + clumpLocal;
         return StoredClump(grassData.clumps[index], index);

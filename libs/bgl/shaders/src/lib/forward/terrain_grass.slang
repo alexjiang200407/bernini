@@ -91,6 +91,19 @@ float PatchGrowth(TerrainGrass layer, float2 xz)
     return smoothstep(threshold - layer.patchEdge, threshold + layer.patchEdge, noise);
 }
 
+// How much of the ground at `xz` the terrain's surface covers, as the Ground Color pass wrote it
+// into the view's ground-cover texture over `rect` (GrassData::groundColorRect): 1 for a layer that
+// does not follow its ground, and for a view with no texture.
+public float TerrainGroundCover(TerrainGrass layer, Texture2D.Handle cover, SamplerState.Handle clampSampler, float4 rect, float2 xz)
+{
+    if (layer.groundCover == 0u || rect.w <= 0.0)
+    {
+        return 1.0;
+    }
+    let uv = (xz - rect.xy) * rect.z;
+    return cover.SampleLevel(clampSampler, uv, 0.0).r;
+}
+
 // How tall a clump standing at `position` on ground facing `normal` grows, as a share of the look's
 // heights: the slope rule, the height rule and the patches, multiplied.
 public float TerrainGrassGrowth(TerrainGrass layer, float3 position, float3 normal)
@@ -103,12 +116,15 @@ public float TerrainGrassGrowth(TerrainGrass layer, float3 position, float3 norm
 }
 
 // Clump `k` of a tile, in world space: jittered within its cell, standing on the heightfield and
-// facing its normal, scaled by the layer's rules -- to nothing past the field's far edges.
+// facing its normal, scaled by the layer's rules and the ground's cover -- to nothing past the
+// field's far edges.
 public ClumpPoint TerrainGrassClump(
     TerrainGrass layer,
     Terrain terrain,
     Texture2D.Handle heights,
+    Texture2D.Handle groundCover,
     SamplerState.Handle clampSampler,
+    float4 groundRect,
     int2 tile,
     uint k
 )
@@ -131,6 +147,8 @@ public ClumpPoint TerrainGrassClump(
     clump.seed = seed;
 
     let onField = all(xz <= origin + FieldSize(terrain));
-    clump.heightScale = onField ? TerrainGrassGrowth(layer, clump.position, clump.normal) : 0.0;
+    clump.heightScale = onField ? TerrainGrassGrowth(layer, clump.position, clump.normal) *
+                                      TerrainGroundCover(layer, groundCover, clampSampler, groundRect, xz)
+                                : 0.0;
     return clump;
 }

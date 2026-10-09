@@ -424,9 +424,11 @@ flowchart TD
   axis-aligned. The refusals are listed on `CreateTerrain`; `DeleteTerrain` refuses a null or
   deleted handle, leaves the material alone and releases the looks the terrain's grass held.
 * **`AttachTerrainGrass(terrain, layers)`** — grass on a terrain, one `TerrainGrassDesc` per layer:
-  a look, the spacing of its clumps, and the slope, height and patch rules that decide how tall each
-  grows where it stands. Nothing per clump is stored or uploaded; the grass stage builds the clumps
-  around the camera from the heightfield ([Grass § On a terrain](grass.md#on-a-terrain)).
+  a look, the spacing of its clumps, the slope, height and patch rules that decide how tall each
+  grows where it stands, and whether the ground's own cover scales it too (`groundCover`, what the
+  terrain's surface declares, [Grass § Ground cover](grass.md#ground-cover)). Nothing per clump is
+  stored or uploaded; the grass stage builds the clumps around the camera from the heightfield
+  ([Grass § On a terrain](grass.md#on-a-terrain)).
   Attaching again replaces the terrain's layers and releases the looks they held; an empty span
   takes its grass away. Every layer is checked before any is written, and the refusals are listed
   on the call.
