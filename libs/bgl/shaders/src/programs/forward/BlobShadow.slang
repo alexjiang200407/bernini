@@ -5,6 +5,7 @@ import idl.DominantFrames;
 import idl.InstanceLod;
 import idl.InstancePose;
 import idl.MeshInstance;
+import idl.MeshInstanceFlag;
 import idl.PlaybackType;
 import idl.Rig;
 import idl.SkinnedAutoState;
@@ -50,6 +51,9 @@ struct Uniforms
     RangeBuffer<Clip> clipBuffer;
     float time;
 
+    // Discs listed: the groups past them, in a dispatch folded over two dimensions, emit nothing.
+    uint blobCount;
+
     // An automatic placement's table pose: the frames its table soles are read at.
     ComputeBuffer<DominantFrames> dominantFrames;
 
@@ -85,6 +89,9 @@ ConstantBuffer<Uniforms> gBlobShadowData;
 // How far the disc shrinks by the time it has fully faded: a receiver far below its caster sees a
 // disc tightened toward half the grounded radius as the contact softens away.
 static const float cLiftShrink = 0.5;
+
+// Groups a dispatch takes along x: a mesh dispatch's limit per dimension on every backend here.
+static const uint cBlobDispatchWidth = 65535u;
 
 // The quad's slack above the caster origin, as a share of fadeHeight: a receiver exactly at the
 // caster's height sits inside the covered volume instead of on its boundary.
@@ -246,9 +253,14 @@ void FootSole(uint placement, MeshInstance mesh, uint leg, out float3 heel, out 
 [shader("mesh")]
 [numthreads(4, 1, 1)]
 [outputtopology("triangle")]
-void MSMain(uint gid: SV_GroupID, uint gtid: SV_GroupThreadID, OutputVertices<VSOut, 4> verts, OutputIndices<uint3, 2> tris)
+void MSMain(uint3 groupId: SV_GroupID, uint gtid: SV_GroupThreadID, OutputVertices<VSOut, 4> verts, OutputIndices<uint3, 2> tris)
 {
-    let blob = gBlobShadowData.blobBuffer[gid];
+    // A dispatch's x counts to cBlobDispatchWidth and y carries the rest, so a list past one
+    // dimension's limit still draws every disc; the last row's groups past the list emit nothing,
+    // reading the first disc so no index runs off the buffer.
+    let gid = groupId.x + groupId.y * cBlobDispatchWidth;
+    let listed = gid < gBlobShadowData.blobCount;
+    let blob = gBlobShadowData.blobBuffer[listed ? gid : 0u];
     let mesh = gBlobShadowData.meshBuffer[blob.mesh];
 
     // A branch, not a select: a body disc's `leg` is no index, and a select loads both sides.
@@ -269,8 +281,10 @@ void MSMain(uint gid: SV_GroupID, uint gtid: SV_GroupThreadID, OutputVertices<VS
     // bounding rect needs no winding or camera-inside case, and the pixel stage rejects by
     // reconstruction anyway. A volume the frustum does not reach emits nothing, since every pixel
     // it covered would be rejected.
+    // A block's slot its writer hid this frame is still listed, since the CPU never learns which
+    // it hid: it emits nothing.
     let rect = ProjectBoxBounds(gBlobShadowData.viewProj, corners);
-    let quads = uint(!rect.IsEmpty());
+    let quads = uint(listed && !rect.IsEmpty() && !HasMeshInstanceFlag(mesh, MeshInstanceFlag.kHidden));
     SetMeshOutputCounts(4 * quads, 2 * quads);
 
     if (gtid < 4 * quads)

@@ -663,8 +663,9 @@ namespace bgl
 		void
 		RebuildPosedList();
 
-		// Re-derives m_BlobShadows from the live placements. O(placements), and only after a blob
-		// shadow was set or cleared, or a placement carrying one was destroyed.
+		// Re-derives m_BlobShadows from the live placements and every slot of a block that carries
+		// one: O(placements + block capacity), and only after a disc was set or cleared, a placement
+		// carrying one was destroyed, or such a block was made or deleted.
 		void
 		RebuildBlobShadowList();
 

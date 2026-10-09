@@ -1801,10 +1801,10 @@ namespace bgl
 				continue;
 			}
 			const MeshInstanceBlock& block = m_InstanceBlocks[index];
+			const uint32_t           legs  = LegCountOf(m_MeshBuffer.MetaAt(block.range.first));
 			for (uint32_t slot = 0; slot < block.capacity; ++slot)
 			{
-				const uint32_t meshIndex = block.range.first + slot;
-				add(meshIndex, *block.blobShadow, LegCountOf(m_MeshBuffer.MetaAt(meshIndex)));
+				add(block.range.first + slot, *block.blobShadow, legs);
 			}
 		}
 

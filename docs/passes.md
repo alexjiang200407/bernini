@@ -905,7 +905,9 @@ are chosen as the colour pass chooses them and the patches near the camera are a
 Drawn between Forward's world and skinned phases, it dispatches one mesh-shader group
 per disc (`ISceneView::SetBlobShadow`), off the view's dense
 `scene.blobShadows` list — the pose list's shape. A placement's own disc is one entry, and
-`BlobShadowDesc::feet` adds one per leg; a disc of zero intensity has none. Each group emits a screen-space quad over the
+`BlobShadowDesc::feet` adds one per leg; a disc of zero intensity has none. A block that carries
+one (`MeshInstanceBlockDesc::blobShadow`) lists a disc per slot, and the group of a slot its writer
+hid this frame emits nothing, since the CPU never learns which it hid. Each group emits a screen-space quad over the
 projected bounds of the caster's shadow volume (its footprint swept `fadeHeight` down the ground
 normal) once that box is clipped to the near plane, so a volume reaching behind the camera is
 bounded by where its edges cross it; a volume wholly outside any

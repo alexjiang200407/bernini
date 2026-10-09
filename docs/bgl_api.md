@@ -464,6 +464,9 @@ flowchart TD
   the `Write Instance Blocks` pass runs every block's writer first (docs/passes.md).
   `desc.toonShadingRig` gives every placement of the block one toon shading rig, checked as
   `SetToonShadingRig` checks a placement's and held by the block until it is deleted.
+  `desc.blobShadow` gives every placement of the block a blob shadow, checked as `SetBlobShadow`
+  checks a placement's: one disc per slot, cast from wherever its writer placed it that frame, and
+  none from a slot it hid.
 * **`SetBlockWriter(block, writer)` / `GetBlockParams(block)`** — binds a writer compiled by
   the same `IGraphics`, for the block's kind of geom, and gives the block its own copy of the writer's `Params`, written by name
   like any constant buffer and kept across frames. Rebinding starts from zeros; null unbinds, and
