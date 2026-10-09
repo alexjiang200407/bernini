@@ -203,6 +203,7 @@ TEST_CASE("CreateGrass refuses a look no pass could draw", "[grass][contract]")
 		  [](bgl::GrassDesc& d) { d.color.groundColorNear                              = -0.1f; } },
 		{ "a far ground colour blend above one",
 		  [](bgl::GrassDesc& d) { d.color.groundColorFar                               = 1.5f; } },
+		{ "a negative ground distance", [](bgl::GrassDesc& d) { d.lighting.groundBy    = -1.0f; } },
 	};
 
 	CHECK_NOTHROW(scene->DeleteGrass(scene->CreateGrass(ValidLook(material))));

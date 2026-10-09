@@ -34,5 +34,5 @@ public struct GrassLook
     public float thinStart; // 0: never thins by count
     public float groundColorNear;
     public float groundColorFar;
-    public uint pad;
+    public float groundBy; // 0: the far ground shares are reached at the fade end
 };

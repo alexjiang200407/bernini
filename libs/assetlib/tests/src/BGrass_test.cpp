@@ -55,7 +55,8 @@ namespace
 			               .groundNormalNear  = 0.1f,
 			               .groundNormalFar   = 0.9f,
 			               .translucencyColor = glm::vec3(0.8f, 1.0f, 0.4f),
-			               .translucency      = 0.3f };
+			               .translucency      = 0.3f,
+			               .groundBy          = 35.0f };
 		grass.color    = { .rootTint        = glm::vec3(0.4f, 0.5f, 0.2f),
 			               .tipTint         = glm::vec3(0.9f, 1.0f, 0.6f),
 			               .variation       = 0.25f,

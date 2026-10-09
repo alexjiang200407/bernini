@@ -513,6 +513,14 @@ GrassEditorWindow::BuildColumn()
 		[](Look& l) -> float& { return l.lighting.groundNormalFar; });
 	AddReal(
 		lighting,
+		"ground_by",
+		editor::Localize(m_Host.GetLanguageResolver(), "bernini.grass.ground_by", "Ground by"),
+		0.0,
+		500.0,
+		1.0,
+		[](Look& l) -> float& { return l.lighting.groundBy; });
+	AddReal(
+		lighting,
 		"translucency",
 		editor::Localize(
 			m_Host.GetLanguageResolver(),

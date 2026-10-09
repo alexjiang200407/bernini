@@ -291,14 +291,22 @@ public float3 BezierTangent(BladePose pose, float t)
 // share at the camera, its far share at the fade end.
 public float GroundNormalBlend(GrassLook look, float distance)
 {
-    return lerp(look.groundNormalNear, look.groundNormalFar, saturate(distance / look.fadeEnd));
+    return lerp(look.groundNormalNear, look.groundNormalFar, GroundShareAt(look, distance));
+}
+
+// How far along a blade at `distance` is from its near ground shares to its far ones: the far are
+// reached at the look's groundBy, or at the fade end where it names none.
+public float GroundShareAt(GrassLook look, float distance)
+{
+    let by = look.groundBy > 0.0 ? look.groundBy : look.fadeEnd;
+    return saturate(distance / by);
 }
 
 // How far a terrain's blade at `distance` takes the albedo of the ground under its root in place of
-// its own colour: the look's near share at the camera, its far share at the fade end.
+// its own colour: the look's near share at the camera, its far share by groundBy.
 public float GroundColorBlend(GrassLook look, float distance)
 {
-    return lerp(look.groundColorNear, look.groundColorFar, saturate(distance / look.fadeEnd));
+    return lerp(look.groundColorNear, look.groundColorFar, GroundShareAt(look, distance));
 }
 
 // The shading normal at a vertex of a blade: its face, already turned toward the camera, tilted toward

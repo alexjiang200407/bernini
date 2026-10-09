@@ -716,12 +716,13 @@ namespace assetlib
 
 		const GrassLightingParams& lighting = grass.lighting;
 		out += std::format(
-			"  lighting     root AO {}  rounding {}  ground normal {}..{}  translucency {} "
+			"  lighting     root AO {}  rounding {}  ground normal {}..{} by {}  translucency {} "
 			"({}, {}, {})\n",
 			lighting.rootOcclusion,
 			lighting.normalRounding,
 			lighting.groundNormalNear,
 			lighting.groundNormalFar,
+			lighting.groundBy,
 			lighting.translucency,
 			lighting.translucencyColor.x,
 			lighting.translucencyColor.y,

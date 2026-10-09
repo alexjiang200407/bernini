@@ -121,6 +121,7 @@ namespace assetlib
 			taker.Take("groundNormalFar", lighting.groundNormalFar);
 			taker.Take("translucencyColor", lighting.translucencyColor);
 			taker.Take("translucency", lighting.translucency);
+			taker.Take("groundBy", lighting.groundBy);
 		});
 
 		takeGroup(json, c_ColorKey, [&grass](const doc::Taker& taker) {
@@ -173,6 +174,7 @@ namespace assetlib
 		lighting["groundNormalFar"]   = doc::plainFloat(grass.lighting.groundNormalFar);
 		lighting["translucencyColor"] = doc::vecToJson(grass.lighting.translucencyColor);
 		lighting["translucency"]      = doc::plainFloat(grass.lighting.translucency);
+		lighting["groundBy"]          = doc::plainFloat(grass.lighting.groundBy);
 
 		nlohmann::json& color    = groupOf(json, c_ColorKey);
 		color["rootTint"]        = doc::vecToJson(grass.color.rootTint);

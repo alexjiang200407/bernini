@@ -149,6 +149,7 @@ namespace game
 			desc.lighting.groundNormalFar   = look.lighting.groundNormalFar;
 			desc.lighting.translucencyColor = look.lighting.translucencyColor;
 			desc.lighting.translucency      = look.lighting.translucency;
+			desc.lighting.groundBy          = look.lighting.groundBy;
 
 			desc.color.rootTint        = look.color.rootTint;
 			desc.color.tipTint         = look.color.tipTint;

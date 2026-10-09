@@ -231,6 +231,10 @@ namespace bgl
 				"lighting.rootOcclusion, normalRounding and both ground-normal blends must be "
 				"in [0, 1]");
 		}
+		if (!core::is_finite_non_negative(lighting.groundBy))
+		{
+			refuse("lighting.groundBy must be finite and non-negative");
+		}
 		if (!IsColor(lighting.translucencyColor) ||
 		    !core::is_finite_non_negative(lighting.translucency))
 		{
@@ -472,6 +476,7 @@ namespace bgl
 		look.normalRounding   = desc.lighting.normalRounding;
 		look.groundNormalNear = desc.lighting.groundNormalNear;
 		look.groundNormalFar  = desc.lighting.groundNormalFar;
+		look.groundBy         = desc.lighting.groundBy;
 
 		look.nearSegments   = desc.blade.nearSegments;
 		look.farSegments    = desc.blade.farSegments;

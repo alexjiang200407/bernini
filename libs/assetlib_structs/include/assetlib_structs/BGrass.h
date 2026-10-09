@@ -58,6 +58,7 @@ namespace assetlib
 		float     groundNormalFar   = 0.8f;
 		glm::vec3 translucencyColor = glm::vec3(1.0f);
 		float     translucency      = 0.0f;
+		float     groundBy          = 0.0f;
 
 		bool
 		operator==(const GrassLightingParams&) const = default;

@@ -203,8 +203,11 @@ geometry, which the mesh stage builds into the vertex it hands the pixel stage
   judged once at its middle, so both sides of a blade shade alike and the program always shades the
   front. The normal then tilts toward the edge a vertex sits on by `normalRounding`, which makes the
   flat strip read as rounded, and blends toward its clump's ground normal by a share that runs from
-  `groundNormalNear` at the camera to `groundNormalFar` at the fade end. At 1 and 1 every blade
-  shades as the ground under it: the usual stylized setup, and what hides a field's thin far blades.
+  `groundNormalNear` at the camera to `groundNormalFar` at the look's `groundBy` -- the fade end
+  where it names none (`GroundShareAt`). At 1 and 1 every blade shades as the ground under it: the
+  usual stylized setup, and what hides a field's thin far blades. A `groundBy` nearer than the fade
+  end lights a blade as its ground before it has shrunk away, so the field's edge is ground lit as
+  ground, not small blades lit as blades.
 - **Colour and occlusion.** The base colour is multiplied by the look's tints from root to tip, the
   clump's colour and the blade's variation, and the occlusion by `rootOcclusion` falling off to the
   tip. Occlusion scales the environment's light and not the sun's, as it does on every surface.
@@ -233,7 +236,7 @@ costs nothing where a flat attribute for it cost the pass a third more on Apple 
 A blade's colour is its look's, and a terrain's ground is whatever its surface paints there: a
 tiled albedo, varied by noise, banded by slope. Where a field fades or thins, the eye sees blades
 of one colour settling onto ground of another, and every blade that leaves shows. A look's
-`groundColorNear` and `groundColorFar` -- shares at the camera and at the fade end, as the
+`groundColorNear` and `groundColorFar` -- shares at the camera and at `groundBy`, as the
 normal's are -- say how far a terrain's blades take the albedo of the ground under their roots
 instead (`GroundColorBlend`). At 1 a far blade is the ground's colour and shades as the ground does,
 so a fading or thinning field settles into ground of its own colour. Both 0 by default.
