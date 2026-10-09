@@ -270,7 +270,7 @@ namespace
 		}
 
 		// The only light: with no environment map, a scene without a sun renders black.
-		view->SetPbrDirectionalLight(
+		view->SetDirectionalLight(
 			{ .direction = glm::vec3(-0.4f, -1.0f, -0.3f),
 		      .color     = glm::vec3(1.0f),
 		      .intensity = 3.0f });

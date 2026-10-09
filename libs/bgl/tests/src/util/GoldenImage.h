@@ -47,6 +47,15 @@ namespace bgl::test
 	[[nodiscard]] Rgba
 	MeanColor(const std::string& path, int x, int y, int w, int h);
 
+	/**
+	 * The share of the `w` x `h` box at (`x`, `y`) in the PNG at `path` whose channel is above that
+	 * channel of `threshold`, per channel, each in [0,1]. Alpha is not counted.
+	 *
+	 * @throws std::runtime_error if the image cannot be read, or the box is not wholly inside it.
+	 */
+	[[nodiscard]] Rgba
+	ChannelCoverage(const std::string& path, int x, int y, int w, int h, const Rgba& threshold);
+
 	/** What CoveredTones finds: the pixels lit above the floor, their mean and how far any strays. */
 	struct Tones
 	{
@@ -78,6 +87,16 @@ namespace bgl::test
 	 */
 	[[nodiscard]] float
 	AliasEnergy(const std::string& path, int x, int y, int w, int h);
+
+	/**
+	 * Variance of the gaps between a pixel's channels, red's and blue's from green, over a region:
+	 * how far its pixels part in hue, in squared [0,1] units. A region of one colour, grained or not
+	 * so long as the grain moves every channel together, scores near zero.
+	 *
+	 * @throws std::runtime_error if the image cannot be read, or the box is not wholly inside it.
+	 */
+	[[nodiscard]] float
+	ChromaEnergy(const std::string& path, int x, int y, int w, int h);
 
 	/**
 	 * Mean squared difference between the same region of two frames -- how much a pixel changed

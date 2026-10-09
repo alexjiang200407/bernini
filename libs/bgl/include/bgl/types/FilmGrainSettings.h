@@ -4,8 +4,8 @@
 namespace bgl
 {
 	/**
-	 * Film grain, under either post-process: monochrome noise scaled by the pixel's displayed value,
-	 * after the curve and the grade, so black stays black.
+	 * Film grain: monochrome noise scaled by the pixel's displayed value, after the curve and the
+	 * grade, so black stays black.
 	 */
 	struct FilmGrainSettings
 	{

@@ -22,8 +22,12 @@
 #include <bgl/glm.h>
 #include <bgl/types/BackdropGradient.h>
 #include <bgl/types/BlobShadowDesc.h>
+#include <bgl/types/BloomSettings.h>
 #include <bgl/types/Camera.h>
+#include <bgl/types/ColorSplitSettings.h>
 #include <bgl/types/DirectionalLightDesc.h>
+#include <bgl/types/DisplayCurve.h>
+#include <bgl/types/FilmGrainSettings.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/GrassHandle.h>
 #include <bgl/types/InstanceDesc.h>
@@ -32,6 +36,7 @@
 #include <bgl/types/MeshInstanceHandle.h>
 #include <bgl/types/PassTiming.h>
 #include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/PostProcess.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SkinnedMeshInstanceDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
@@ -98,11 +103,11 @@ namespace
 		bool filmGrain  = false;
 		bool colorSplit = false;
 
-		// The post-process, "filmic" or "toon".
-		std::string postProcessType = "filmic";
-
 		// What is drawn behind the scene: "sky", the environment's, or "gradient", the toon backdrop.
 		std::string backdrop = "sky";
+
+		// The display curve: "agx", or "granTurismo", the one toon content is authored under.
+		std::string curve = "agx";
 
 		// The camera frames the box every clip's poses fill unless asked for the playing clip's
 		// alone: a clip set with root motion walks that box far past any one pose.
@@ -799,18 +804,17 @@ try
 			opts.colorSplit,
 			"Render with the colour split at bgl's default settings");
 		app.add_option(
-			   "--post-process",
-			   opts.postProcessType,
-			   "The post-process: filmic (bgl's default, AgX) or toon, the exposed colour clamped, "
-			   "which a toon look is authored for and which screens bloom rather than adding it "
-			   "(bgl::FilmicPostProcess or bgl::ToonPostProcess)")
-			->check(CLI::IsMember({ "filmic", "toon" }));
-		app.add_option(
 			   "--backdrop",
 			   opts.backdrop,
 			   "What is drawn behind the scene: sky, the environment's, or gradient, the toon "
 			   "look-dev backdrop (ISceneView::SetBackdrop); the lighting is the same either way")
 			->check(CLI::IsMember({ "sky", "gradient" }));
+		app.add_option(
+			   "--curve",
+			   opts.curve,
+			   "The display curve: agx, or granTurismo, the one the editor shows toon content "
+			   "under")
+			->check(CLI::IsMember({ "agx", "granTurismo" }));
 		app.add_flag(
 			"--frame-clip",
 			opts.frameClip,
@@ -947,19 +951,16 @@ try
 		opts.height,
 		opts.taa,
 		opts.renderScale);
-	// The flags turn on each effect at bgl's defaults, in whichever type --post-process picks.
-	const auto withEffects = [&](auto postProcess) {
-		if (opts.bloom)
-			postProcess.bloom = bgl::BloomSettings();
-		if (opts.filmGrain)
-			postProcess.grain = bgl::FilmGrainSettings();
-		if (opts.colorSplit)
-			postProcess.split = bgl::ColorSplitSettings();
-		return bgl::PostProcess(postProcess);
-	};
-	target->SetPostProcess(
-		opts.postProcessType == "toon" ? withEffects(bgl::ToonPostProcess()) :
-										 withEffects(bgl::FilmicPostProcess()));
+	auto postProcess = bgl::PostProcess();
+	postProcess.curve =
+		opts.curve == "granTurismo" ? bgl::DisplayCurve::kGranTurismo : bgl::DisplayCurve::kAgX;
+	if (opts.bloom)
+		postProcess.bloom = bgl::BloomSettings();
+	if (opts.filmGrain)
+		postProcess.grain = bgl::FilmGrainSettings();
+	if (opts.colorSplit)
+		postProcess.split = bgl::ColorSplitSettings();
+	target->SetPostProcess(postProcess);
 
 	auto scene     = headless::CreateHeadlessScene(graphics);
 	auto view      = graphics->CreateSceneView(scene, std::max(128u, 64u * opts.crowd));
@@ -973,8 +974,7 @@ try
 		view->SetBackdrop(bgl::BackdropGradient());
 
 	// Additive on the environment above, which already integrates whatever sun its source HDR held
-	// -- so a model measured under both is measured under two suns. One sun on screen: the PBR
-	// sun and the toon character model's are set alike. See docs/ai_viewer.md.
+	// -- so a model measured under both is measured under two suns. See docs/ai_viewer.md.
 	if (opts.sunIntensity > 0.0f)
 	{
 		const auto sun = bgl::DirectionalLightDesc{
@@ -984,8 +984,7 @@ try
 			.color     = glm::vec3(opts.sunColor[0], opts.sunColor[1], opts.sunColor[2]),
 			.intensity = opts.sunIntensity,
 		};
-		view->SetPbrDirectionalLight(sun);
-		view->SetToonDirectionalLight(sun);
+		view->SetDirectionalLight(sun);
 	}
 
 	const bool lit = envLit || opts.sunIntensity > 0.0f;
@@ -1017,8 +1016,7 @@ try
 
 	std::cout << std::format(
 		"{} frames at {} fps, {}x{}, render scale {}, {}, TAA {}, bloom {}, film grain {}, colour "
-		"split {}, {} post-process, {} "
-		"warm-up frames held at t = 0\n\n",
+		"split {}, {} warm-up frames held at t = 0\n\n",
 		opts.frames,
 		opts.fps,
 		opts.width,
@@ -1031,7 +1029,6 @@ try
 		opts.bloom ? "on" : "off",
 		opts.filmGrain ? "on" : "off",
 		opts.colorSplit ? "on" : "off",
-		opts.postProcessType,
 		opts.warmup);
 
 	const std::filesystem::path outDir = std::filesystem::absolute(opts.outDir);

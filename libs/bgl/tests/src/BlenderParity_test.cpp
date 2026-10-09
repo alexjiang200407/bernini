@@ -1,9 +1,9 @@
-#include "util/AgxProbe.h"
 #include "util/GoldenImage.h"
 #include "util/SyntheticCube.h"
 #include "util/TestEnvironment.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
+#include "util/TonemapProbe.h"
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
@@ -174,7 +174,7 @@ TEST_CASE("A matte sphere under forest sits at Blender's level", "[pbr][ibl][par
 //
 // What it pins is the unit conversion. Blender's Sun strength is irradiance in W/m^2 on a surface
 // facing it. Bernini's intensity is what its irradiance map would hold, and that map carries E/pi.
-// So blender_probe.py sets a strength of pi times the number handed to SetPbrDirectionalLight, and both
+// So blender_probe.py sets a strength of pi times the number handed to SetDirectionalLight, and both
 // renderers should then put `albedo * intensity * NdotL` on screen. Either side losing the factor
 // moves this by a stop and nothing else in the suite would notice.
 //
@@ -230,7 +230,7 @@ TEST_CASE(
 	bgl::test::ApplyBlackEnvironment(scene.Get(), view.Get());
 
 	// Along +Z toward the camera, which is azimuth 0 elevation 0 in the probe's convention.
-	view->SetPbrDirectionalLight(
+	view->SetDirectionalLight(
 		{ .direction = glm::vec3(0.0f, 0.0f, -1.0f),
 	      .color     = glm::vec3(1.0f),
 	      .intensity = c_SunIntensity });

@@ -33,8 +33,8 @@ namespace
 	}
 }
 
-// A preview ends in the toon post-process when it shows the toon model's material, and only then.
-TEST_CASE("A material is toon when the toon model's surface draws it", "[toon][tonemap]")
+// A preview draws the toon backdrop when it shows the toon model's material, and only then.
+TEST_CASE("A material is toon when the toon model's surface draws it", "[toon][backdrop]")
 {
 	const auto surfaces = Surfaces();
 
@@ -47,7 +47,7 @@ TEST_CASE("A material is toon when the toon model's surface draws it", "[toon][t
 	CHECK_FALSE(editor::IsToonMaterial(std::span<const bgl::SurfaceType>(), Material(c_Character)));
 }
 
-TEST_CASE("Any toon material among a mesh's makes it toon", "[toon][tonemap]")
+TEST_CASE("Any toon material among a mesh's makes it toon", "[toon][backdrop]")
 {
 	const auto surfaces = Surfaces();
 

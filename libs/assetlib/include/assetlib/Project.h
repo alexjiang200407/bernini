@@ -2,7 +2,6 @@
 #include <assetlib/AssetKindRegistry.h>
 #include <assetlib/AssetStore.h>
 #include <core/err/util.h>
-#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -12,17 +11,6 @@
 
 namespace assetlib
 {
-	/**
-	 * The post-process pipeline a project's look is authored for, which its renders end in: filmic
-	 * (AgX), or toon (Blender's Standard view, no curve). `.bproj` key `postProcess`,
-	 * "filmic" or "toon".
-	 */
-	enum class PostProcessType : uint8_t
-	{
-		kFilmic,
-		kToon,
-	};
-
 	class Project
 	{
 	public:
@@ -96,20 +84,6 @@ namespace assetlib
 			return m_PluginIds;
 		}
 
-		/** The pipeline the project's renders end in; filmic for a `.bproj` that names none. */
-		[[nodiscard]] PostProcessType
-		GetPostProcessType() const noexcept
-		{
-			return m_PostProcessType;
-		}
-
-		/** Sets the pipeline for the next Save. */
-		void
-		SetPostProcessType(PostProcessType postProcessType) noexcept
-		{
-			m_PostProcessType = postProcessType;
-		}
-
 		std::filesystem::path
 		GetDataDirectory() const noexcept
 		{
@@ -172,7 +146,6 @@ namespace assetlib
 		std::string              m_Name;
 		std::vector<std::string> m_PluginIds;
 		std::filesystem::path    m_ProjectFile;
-		int                      m_FormatVersion   = c_FormatVersion;
-		PostProcessType          m_PostProcessType = PostProcessType::kFilmic;
+		int                      m_FormatVersion = c_FormatVersion;
 	};
 }

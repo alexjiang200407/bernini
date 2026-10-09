@@ -426,7 +426,7 @@ and portability.
   - [x] Bloom — engine pass with per-target settings; `docs/passes.md` § Bloom.
   - [ ] LUT
   - [x] Color Grading — white balance, ASC CDL, contrast and vignette per target, evaluated in the
-    post pass under either post-process type; `docs/passes.md` § The colour grade.
+    post pass ahead of either display curve; `docs/passes.md` § The colour grade.
   - [x] Colour split — a fixed channel misregistration and a radial, lens-style share per target;
     `docs/passes.md` § The colour split.
   - [x] Film grain — monochrome, a share of the displayed value, hashed per cell and held per

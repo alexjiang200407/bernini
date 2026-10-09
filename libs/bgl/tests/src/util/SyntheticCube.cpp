@@ -1,11 +1,13 @@
 #include "util/SyntheticCube.h"
 #include <algorithm>
+#include <array>
 #include <assetlib/envmap.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/VkFormat.h>
 #include <core/containers/fixed_buffer.h>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 
 namespace bgl::test
 {
@@ -37,6 +39,16 @@ namespace bgl::test
 	void
 	ApplyBlackEnvironment(bgl::IScene* scene, bgl::ISceneView* view)
 	{
+		ApplySkyEnvironment(scene, view, glm::vec3(0.0f), 0u);
+	}
+
+	void
+	ApplySkyEnvironment(
+		bgl::IScene*     scene,
+		bgl::ISceneView* view,
+		const glm::vec3& radiance,
+		const uint32_t   faces)
+	{
 		// EnvOrientation_test's cube shape: a 7-mip prefilter chain is MAX_REFLECTION_LOD + 1.
 		constexpr uint32_t c_SourceFace     = 64;
 		constexpr uint32_t c_IrradianceFace = 32;
@@ -47,15 +59,28 @@ namespace bgl::test
 		desc.mipLevels = c_PrefilterMips;
 		desc.samples   = 32;
 
-		const auto radiance = MakeBlackFloatCube(c_SourceFace);
+		auto sky = MakeBlackFloatCube(c_SourceFace);
+		for (uint32_t face = 0; face < 6; ++face)
+		{
+			if ((faces & (1u << face)) == 0u)
+			{
+				continue;
+			}
+			const auto texel = std::array<float, 4>{ { radiance.r, radiance.g, radiance.b, 1.0f } };
+			auto*      first = sky.pixels.data() + sky.subresources[face].offset;
+			for (uint32_t i = 0; i < c_SourceFace * c_SourceFace; ++i)
+			{
+				std::memcpy(first + i * sizeof(texel), texel.data(), sizeof(texel));
+			}
+		}
 
 		view->SetEnvironmentMap(
 			{ scene->AddTextureAsset(
-				  assetlib::irradianceSh(radiance, c_IrradianceFace),
-				  "black_irradiance"),
+				  assetlib::irradianceSh(sky, c_IrradianceFace),
+				  "sky_irradiance"),
 		      scene->AddTextureAsset(
-				  assetlib::prefilterRadiance(radiance, desc, nullptr),
-				  "black_prefilter") });
+				  assetlib::prefilterRadiance(sky, desc, nullptr),
+				  "sky_prefilter") });
 
 		view->SetExposure(1.0f);
 	}

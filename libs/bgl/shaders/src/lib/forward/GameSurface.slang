@@ -471,8 +471,8 @@ public extension MaterialData
         return output;
     }
 
-    // A toon character surface: the lit programs above, lit by the toon sun rather than the one every
-    // other model reads, and shaded with its placement's evaluated toon shading rig when `rigSlot`
+    // A toon character surface: the lit programs above, lit by the sun and environment every other
+    // model reads, and shaded with its placement's evaluated toon shading rig when `rigSlot`
     // names a block (ToonVSOut::toonShadingRigSlot; zero on a lane that carries none). The coverage
     // decisions are the lit surface's, since neither the light nor the rig changes them.
     public ForwardPSOut GameToonOpaqueProgram<G : IToonCharacterSurfaceSource>(ForwardVSOut input, uint rigSlot, bool isFrontFace)
@@ -521,10 +521,10 @@ public extension MaterialData
 
         if (rigSlot == 0u)
         {
-            return ShadeToonCharacter(surface, ToonSurfaceLight(), normal);
+            return ShadeToonCharacter(surface, MaterialSurfaceLight(), normal);
         }
         let rig = toonData.toonShadingRigBlocks[rigSlot - 1u];
-        return ShadeToonCharacterFace(surface, ToonSurfaceLight(), normal, reader.WorldPos(), rig);
+        return ShadeToonCharacterFace(surface, MaterialSurfaceLight(), normal, reader.WorldPos(), rig);
     }
 
     public float4 ShadeGameLit<G : ILitSurfaceSource>(ForwardVSOut input, bool isFrontFace)

@@ -32,7 +32,7 @@ Everything else is factory: AgX, look None, exposure 0, the world at strength 1.
 `--sun` adds an analytic sun of its own, which is a different measurement: Bernini has that term now
 and not the shadow one, so the sun a probe *places* is comparable where the sun Eevee *extracts*
 still is not. Pair it with `--no-world` to take the environment out and leave the sun alone in the
-frame. The strength it sets is pi times the number handed to `ISceneView::SetPbrDirectionalLight` --
+frame. The strength it sets is pi times the number handed to `ISceneView::SetDirectionalLight` --
 Blender's Sun strength is irradiance in W/m^2, Bernini's intensity is what its irradiance map would
 hold, and that map carries E/pi. Losing the factor on either side moves the result by a stop, and
 this is the only thing that checks it.

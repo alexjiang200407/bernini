@@ -3,7 +3,6 @@
 #include <QElapsedTimer>
 #include <QString>
 #include <QWidget>
-#include <assetlib/Project.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/types/BackdropGradient.h>
 #include <bgl/types/Camera.h>
@@ -32,7 +31,7 @@ namespace game
 
 #include "Render/Renderer.h"
 
-// The effects the Render menu switches, each in both post-process types at once.
+// The effects the Render menu switches.
 enum class ViewportEffect : uint8_t
 {
 	kBloom,
@@ -69,8 +68,7 @@ struct RenderTargetWindowDesc
 	float taaSharpness = 1.0f;
 
 	// Out-of-range settings are clamped and warned about, like the render scale.
-	editor::FilmicConfig filmic;
-	editor::ToonConfig   toon;
+	editor::PostProcessConfig postProcess;
 
 	// What the viewport draws behind toon content instead of its sky; clamped like the bloom.
 	bgl::BackdropGradient toonBackdrop;
@@ -124,13 +122,12 @@ public:
 	void
 	SetOutlineEnabled(bool enabled);
 
-	// Turns an effect on or off for this viewport, in both post-process types, with the settings
-	// config.json gave each. Unlike TAA nothing is allocated at creation -- bloom's chain appears at
-	// the first frame that blooms -- so any viewport can turn any effect on.
+	// Turns an effect on or off for this viewport, with the settings config.json gave it. Unlike
+	// TAA nothing is allocated at creation -- bloom's chain appears at the first frame that blooms
+	// -- so any viewport can turn any effect on.
 	void
 	SetEffectEnabled(ViewportEffect effect, bool enabled);
 
-	// Whether the effect is on in the post-process type the viewport ends in now.
 	[[nodiscard]] bool
 	IsEffectEnabled(ViewportEffect effect) const;
 
@@ -138,34 +135,16 @@ public:
 	[[nodiscard]] bgl::PostProcess
 	GetPostProcess() const;
 
-	// Each type's effects, on or off, after config.json's values were clamped.
-	[[nodiscard]] const editor::FilmicConfig&
-	GetFilmicConfig() const noexcept
+	// The effects, on or off, after config.json's values were clamped.
+	[[nodiscard]] const editor::PostProcessConfig&
+	GetPostProcessConfig() const noexcept
 	{
-		return m_Desc.filmic;
+		return m_Desc.postProcess;
 	}
 
-	[[nodiscard]] const editor::ToonConfig&
-	GetToonConfig() const noexcept
-	{
-		return m_Desc.toon;
-	}
-
-	// The post-process this viewport ends in is the user's pick if there is one, else toon for
-	// toon content, else the project's. Each setter re-derives it. Toon content also swaps the sky
-	// for the desc's toonBackdrop, whatever the pick.
-	void
-	SetProjectPostProcessType(assetlib::PostProcessType postProcessType);
-
-	// Empty is Auto: the project and the content decide.
-	void
-	SetChosenPostProcessType(std::optional<assetlib::PostProcessType> postProcessType);
-
+	// Toon content swaps the sky for the desc's toonBackdrop.
 	void
 	SetShowsToonContent(bool toon) override;
-
-	[[nodiscard]] assetlib::PostProcessType
-	GetPostProcessType() const noexcept;
 
 	// What the viewport draws in place of its sky: empty draws the sky.
 	[[nodiscard]] std::optional<bgl::BackdropGradient>
@@ -334,7 +313,7 @@ private:
 	// backbuffers.
 	QTimer* m_ResizeTimer = nullptr;
 
-	// The target's post-process from the type the viewport ends in and that type's config.
+	// The target's post-process from the desc's config.
 	[[nodiscard]] bgl::PostProcess
 	BuildPostProcess() const;
 
@@ -347,10 +326,8 @@ private:
 	RenderTargetWindowDesc m_Desc;
 	bgl::RenderTargetRef   m_RenderTarget;
 
-	assetlib::PostProcessType m_ProjectPostProcessType = assetlib::PostProcessType::kFilmic;
-	std::optional<assetlib::PostProcessType> m_ChosenPostProcessType;
-	bool                                     m_ShowsToonContent = false;
-	bgl::SceneViewRef                        m_SceneView;
+	bool              m_ShowsToonContent = false;
+	bgl::SceneViewRef m_SceneView;
 
 	// Non-zero only while this window is in the frame loop.
 	Renderer::ViewportId m_ViewportId = 0;

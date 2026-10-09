@@ -1,6 +1,7 @@
 #include "util/GoldenImage.h"
 #include "util/GpuValidation.h"
 #include "util/SkinnedSynth.h"
+#include "util/SyntheticCube.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <assetlib_structs/BMesh.h>
@@ -15,12 +16,14 @@
 #include <bgl/glm.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/DirectionalLightDesc.h>
+#include <bgl/types/DisplayCurve.h>
 #include <bgl/types/GrassDesc.h>
 #include <bgl/types/GrassHandle.h>
 #include <bgl/types/LayerType.h>
 #include <bgl/types/LodSelectionDesc.h>
 #include <bgl/types/MaterialHandle.h>
 #include <bgl/types/PbrMaterialDesc.h>
+#include <bgl/types/PostProcess.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/StaticMeshGeomDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
@@ -267,7 +270,7 @@ TEST_CASE(
 		REQUIRE(target != nullptr);
 
 		auto view = gfx->CreateSceneView(scene, 8);
-		view->SetToonDirectionalLight(
+		view->SetDirectionalLight(
 			{
 				.direction = -glm::normalize(toLight),
 				.color     = glm::vec3(1.0f),
@@ -422,16 +425,17 @@ TEST_CASE(
 	}
 }
 
-// The two suns are two: a toon character is lit by the toon sun alone and a PBR surface by the PBR
-// sun alone, neither falling back on the other.
-TEST_CASE("A toon character and a PBR surface each read their own sun", "[surface][render][toon]")
+// One sun: a toon character and a PBR surface are both lit by the view's sun, and its colour
+// reaches every tone of the character -- the lit one and the shades, each against Unlit drawing
+// base colour times tint times the sun's colour.
+TEST_CASE("A toon character is lit by the view's one sun", "[surface][render][toon]")
 {
 	auto gfx = bgl::test::CreateGraphics(ToonOptions());
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(ToonScene());
 
 	const auto shoot =
-		[&](MaterialHandle material, float pbrIntensity, float toonIntensity, const char* png) {
+		[&](MaterialHandle material, const bgl::DirectionalLightDesc& sun, const char* png) {
 			auto targetDesc     = bgl::RenderTargetDesc();
 			targetDesc.width    = 400;
 			targetDesc.height   = 300;
@@ -440,10 +444,7 @@ TEST_CASE("A toon character and a PBR surface each read their own sun", "[surfac
 			REQUIRE(target != nullptr);
 
 			auto view = gfx->CreateSceneView(scene, 8);
-			view->SetPbrDirectionalLight(
-				{ .direction = glm::vec3(0.0f, 0.0f, -1.0f), .intensity = pbrIntensity });
-			view->SetToonDirectionalLight(
-				{ .direction = glm::vec3(0.0f, 0.0f, -1.0f), .intensity = toonIntensity });
+			view->SetDirectionalLight(sun);
 			view->CreateStaticMeshInstance(
 				bgl::StaticMeshInstanceDesc().SetGeom(
 					scene->AddPlaneGeom(1, 1, 30.0f, 30.0f, material)));
@@ -456,33 +457,199 @@ TEST_CASE("A toon character and a PBR surface each read their own sun", "[surfac
 			gfx->ScreenshotPng(target, png);
 		};
 
-	const auto middle = [](const char* png) {
-		return bgl::test::MeanColor(png, 150, 100, 100, 100).Luma();
+	const auto middle = [](const char* a, const char* b) {
+		return bgl::test::FrameDelta(a, b, 150, 100, 100, 100);
+	};
+	constexpr float c_Same = 1e-5f;
+
+	const glm::vec3 warm   = glm::vec3(1.0f, 0.6f, 0.3f);
+	const glm::vec3 headOn = glm::vec3(0.0f, 0.0f, -1.0f);
+	// Toward the light 0.6, 0, -0.8 for the plane's +Z normal: half-Lambert 0.1, the second shade.
+	const glm::vec3 behind = glm::vec3(-0.6f, 0.0f, 0.8f);
+
+	const auto sun = [&](const glm::vec3& direction) {
+		return bgl::DirectionalLightDesc{ .direction = direction,
+			                              .color     = warm,
+			                              .intensity = 1.0f };
 	};
 
 	{
-		INFO("a toon character");
+		INFO("the sun's colour on the lit tone and the second shade");
 		const auto  character = scene->CreateSurfaceMaterial(Cel(c_Flat, {}));
-		const auto* toonOnly  = "assets/golden/toon_suns_character_toon.got.png";
-		const auto* pbrOnly   = "assets/golden/toon_suns_character_pbr.got.png";
-		shoot(character, 0.0f, 1.0f, toonOnly);
-		shoot(character, 1.0f, 0.0f, pbrOnly);
-		CHECK(middle(toonOnly) > 0.1f);
-		CHECK(middle(pbrOnly) < 1e-3f);
+		const auto* lit       = "assets/golden/toon_sun_warm_lit.got.png";
+		const auto* litRef    = "assets/golden/toon_sun_warm_lit_ref.got.png";
+		const auto* second    = "assets/golden/toon_sun_warm_second.got.png";
+		const auto* secondRef = "assets/golden/toon_sun_warm_second_ref.got.png";
+
+		shoot(character, sun(headOn), lit);
+		shoot(character, sun(behind), second);
+		shoot(
+			scene->CreateSurfaceMaterial(Unlit(glm::vec4(glm::vec3(c_Flat) * warm, 1.0f))),
+			sun(headOn),
+			litRef);
+		shoot(
+			scene->CreateSurfaceMaterial(Unlit(glm::vec4(glm::vec3(c_Flat) * 0.55f * warm, 1.0f))),
+			sun(headOn),
+			secondRef);
+		CHECK(middle(lit, litRef) < c_Same);
+		CHECK(middle(second, secondRef) < c_Same);
+		CHECK(middle(lit, second) > 1e-3f);
 	}
 
 	{
-		INFO("a PBR surface");
-		const auto  pbr      = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
-		const auto* neither  = "assets/golden/toon_suns_pbr_none.got.png";
-		const auto* toonOnly = "assets/golden/toon_suns_pbr_toon.got.png";
-		const auto* pbrOnly  = "assets/golden/toon_suns_pbr_pbr.got.png";
-		shoot(pbr, 0.0f, 0.0f, neither);
-		shoot(pbr, 0.0f, 1.0f, toonOnly);
-		shoot(pbr, 1.0f, 0.0f, pbrOnly);
-		CHECK(bgl::test::MaxChannelDelta(neither, toonOnly) == 0.0f);
-		CHECK(middle(pbrOnly) > middle(neither) + 0.05f);
+		INFO("a PBR surface reads the same sun");
+		const auto  pbr  = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
+		const auto* none = "assets/golden/toon_sun_pbr_none.got.png";
+		const auto* on   = "assets/golden/toon_sun_pbr_on.got.png";
+		shoot(pbr, { .direction = headOn, .intensity = 0.0f }, none);
+		shoot(pbr, { .direction = headOn, .intensity = 1.0f }, on);
+		CHECK(
+			bgl::test::MeanColor(on, 150, 100, 100, 100).Luma() >
+			bgl::test::MeanColor(none, 150, 100, 100, 100).Luma() + 0.05f);
 	}
+}
+
+// The sky's ambient: every tone takes 0.35 of the environment's irradiance from straight up, in the
+// convention the sun's radiance shares, and the same value whatever the pixel's normal, so a cel
+// band stays flat. A uniform sky's irradiance is its radiance. A sky lit only above is bright
+// straight up and dim toward the horizon, where an irradiance along the normal would dim the
+// plane facing the camera against one tilted up.
+TEST_CASE(
+	"A toon character's tones take the sky's irradiance from straight up",
+	"[surface][render][toon]")
+{
+	auto gfx = bgl::test::CreateGraphics(ToonOptions());
+	REQUIRE(gfx != nullptr);
+	auto scene = gfx->CreateScene(ToonScene());
+
+	const glm::vec3 sky = glm::vec3(0.2f, 0.3f, 0.5f);
+	// lib.math.ToonShading's c_ToonSkyShare.
+	constexpr float    c_SkyShare = 0.35f;
+	constexpr uint32_t c_All      = 0x3fu;
+	constexpr uint32_t c_Top      = 1u << 2u;
+
+	const auto shoot =
+		[&](MaterialHandle material, const uint32_t faces, const float tilt, const char* png) {
+			auto targetDesc     = bgl::RenderTargetDesc();
+			targetDesc.width    = 400;
+			targetDesc.height   = 300;
+			targetDesc.headless = true;
+			auto target         = gfx->CreateRenderTarget(targetDesc);
+			REQUIRE(target != nullptr);
+
+			auto view = gfx->CreateSceneView(scene, 8);
+			bgl::test::ApplySkyEnvironment(scene.Get(), view.Get(), sky, faces);
+			view->CreateStaticMeshInstance(
+				bgl::StaticMeshInstanceDesc()
+					.SetGeom(scene->AddPlaneGeom(1, 1, 30.0f, 30.0f, material))
+					.SetTransform(
+						glm::rotate(
+							glm::mat4(1.0f),
+							glm::radians(-tilt),
+							glm::vec3(1.0f, 0.0f, 0.0f))));
+
+			auto job     = bgl::RenderJob();
+			job.view     = view;
+			job.camera   = SphereCamera();
+			job.viewport = bgl::Viewport(400.0f, 300.0f);
+			for (int i = 0; i < 6; ++i) gfx->DrawFrame(target, job);
+			gfx->ScreenshotPng(target, png);
+		};
+
+	const auto middle = [](const char* a, const char* b) {
+		return bgl::test::FrameDelta(a, b, 150, 100, 100, 100);
+	};
+	constexpr float c_Same = 1e-5f;
+
+	// Steps of zero: every pixel in the lit tone, so the frame is the base colour times the light.
+	const auto lit =
+		scene->CreateSurfaceMaterial(Cel(c_Flat, { { "baseStep", 0.0f }, { "shadeStep", 0.0f } }));
+
+	{
+		INFO("a uniform sky lights the lit tone by its share of its radiance");
+		const auto* got = "assets/golden/toon_sky_uniform.got.png";
+		const auto* ref = "assets/golden/toon_sky_uniform_ref.got.png";
+		shoot(lit, c_All, 0.0f, got);
+		shoot(
+			scene->CreateSurfaceMaterial(
+				Unlit(glm::vec4(glm::vec3(c_Flat) * c_SkyShare * sky, 1.0f))),
+			c_All,
+			0.0f,
+			ref);
+		CHECK(middle(got, ref) < c_Same);
+	}
+
+	{
+		INFO("a sky lit above lights a facing and a tilted plane alike");
+		const auto* facing = "assets/golden/toon_sky_top_facing.got.png";
+		const auto* tilted = "assets/golden/toon_sky_top_tilted.got.png";
+		shoot(lit, c_Top, 0.0f, facing);
+		shoot(lit, c_Top, 60.0f, tilted);
+		CHECK(bgl::test::MeanColor(facing, 150, 100, 100, 100).Luma() > 0.05f);
+		CHECK(middle(facing, tilted) < c_Same);
+	}
+}
+
+// A cel-shaded sphere under a sun from the left and a uniform sky, on a target set to Gran
+// Turismo's curve, as the editor shows toon content: it is not AgX's frame, its lit side keeps the
+// painted orange's hue, and its lit and shaded sides are distinct tones. Measured rather than
+// compared with a golden image, whose pixels the curve's own cases (PostProcess_test,
+// GranTurismo_test) already pin.
+TEST_CASE("A toon character under Gran Turismo's curve", "[surface][render][toon][granturismo]")
+{
+	auto gfx = bgl::test::CreateGraphics(ToonOptions());
+	REQUIRE(gfx != nullptr);
+	auto scene = gfx->CreateScene(ToonScene());
+
+	const auto character = scene->CreateSurfaceMaterial(Cel(c_Flat, {}));
+
+	const auto shoot = [&](DisplayCurve curve, const char* png) {
+		auto targetDesc        = bgl::RenderTargetDesc();
+		targetDesc.width       = 400;
+		targetDesc.height      = 300;
+		targetDesc.headless    = true;
+		targetDesc.postProcess = bgl::PostProcess{ .curve = curve };
+		auto target            = gfx->CreateRenderTarget(targetDesc);
+		REQUIRE(target != nullptr);
+
+		auto view = gfx->CreateSceneView(scene, 8);
+		bgl::test::ApplySkyEnvironment(scene.Get(), view.Get(), glm::vec3(0.4f, 0.5f, 0.7f), 0x3fu);
+		view->SetDirectionalLight(
+			{ .direction = glm::normalize(glm::vec3(0.9f, -0.3f, -0.2f)),
+		      .color     = glm::vec3(1.0f, 0.95f, 0.9f),
+		      .intensity = 1.0f });
+		view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(scene->AddSphereGeom(32, 32, 4.0f, character)));
+
+		auto job     = bgl::RenderJob();
+		job.view     = view;
+		job.camera   = SphereCamera();
+		job.viewport = bgl::Viewport(400.0f, 300.0f);
+		for (int i = 0; i < 6; ++i) gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, png);
+	};
+
+	const auto* gt  = "assets/golden/toon_sphere_gt.got.png";
+	const auto* agx = "assets/golden/toon_sphere_agx.got.png";
+	shoot(DisplayCurve::kGranTurismo, gt);
+	shoot(DisplayCurve::kAgX, agx);
+
+	CHECK(bgl::test::MaxChannelDelta(gt, agx) > 0.05f);
+
+	// The sphere spans about 90 pixels either side of the frame's centre, its second shade a band
+	// along its right edge, the sun travelling toward +X.
+	const auto lit    = bgl::test::MeanColor(gt, 140, 140, 16, 16);
+	const auto shaded = bgl::test::MeanColor(gt, 274, 150, 8, 8);
+	INFO(
+		"lit " << lit.r << " " << lit.g << " " << lit.b << ", shaded " << shaded.r << " "
+			   << shaded.g << " " << shaded.b);
+	CHECK(lit.r > lit.g);
+	CHECK(lit.g > lit.b);
+	const float hue = 60.0f * (lit.g - lit.b) / (lit.r - lit.b);
+	CHECK(hue > 15.0f);
+	CHECK(hue < 45.0f);
+	CHECK(lit.Luma() > shaded.Luma() + 0.1f);
+	std::filesystem::remove(agx);
 }
 
 namespace
@@ -548,28 +715,17 @@ namespace
 		return mesh;
 	}
 
-	/** Which of the two suns a frame turns on. */
-	enum class Sun
-	{
-		kToon,
-		kPbr,
-	};
-
 	void
-	LightBy(bgl::ISceneView& view, const Sun sun, const glm::vec3& direction)
+	LightBy(bgl::ISceneView& view, const bool lit, const glm::vec3& direction)
 	{
-		const auto on  = bgl::DirectionalLightDesc{ .direction = direction, .intensity = 1.0f };
-		const auto off = bgl::DirectionalLightDesc{ .direction = direction, .intensity = 0.0f };
-		view.SetToonDirectionalLight(sun == Sun::kToon ? on : off);
-		view.SetPbrDirectionalLight(sun == Sun::kPbr ? on : off);
+		view.SetDirectionalLight({ .direction = direction, .intensity = lit ? 1.0f : 0.0f });
 	}
 }
 
-// The toon sun reaches every lane a toon character draws through, not the one at rest alone: a
-// level dissolving and the shared blend program each light the character by the toon sun and draw
-// it black by the PBR sun. A binding missed in one of them draws black as well,
-// so each is shown lit.
-TEST_CASE("A toon character's every lane reads the toon sun", "[surface][render][toon]")
+// The sun reaches every lane a toon character draws through, not the one at rest alone: a level
+// dissolving and the shared blend program each light the character by the sun and draw it black
+// without one. A binding missed in one of them draws black as well, so each is shown lit.
+TEST_CASE("A toon character's every lane reads the sun", "[surface][render][toon]")
 {
 	auto gfx = bgl::test::CreateGraphics(ToonOptions());
 	REQUIRE(gfx != nullptr);
@@ -587,7 +743,7 @@ TEST_CASE("A toon character's every lane reads the toon sun", "[surface][render]
 			bgl::StaticMeshGeomDesc().SetMesh(&levels).SetMaterials(materials));
 		REQUIRE(geom.IsValid());
 
-		const auto dissolve = [&](const Sun sun, const char* png) {
+		const auto dissolve = [&](const bool lit, const char* png) {
 			auto targetDesc       = bgl::RenderTargetDesc();
 			targetDesc.width      = 64;
 			targetDesc.height     = 64;
@@ -595,7 +751,7 @@ TEST_CASE("A toon character's every lane reads the toon sun", "[surface][render]
 			targetDesc.taaEnabled = false;
 			auto target           = gfx->CreateRenderTarget(targetDesc);
 			auto view             = gfx->CreateSceneView(scene, 4);
-			LightBy(*view, sun, glm::vec3(0.0f, 0.0f, -1.0f));
+			LightBy(*view, lit, glm::vec3(0.0f, 0.0f, -1.0f));
 			view->CreateStaticMeshInstance(
 				bgl::StaticMeshInstanceDesc().SetGeom(geom).SetTransform(
 					glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -2.0f))));
@@ -629,14 +785,14 @@ TEST_CASE("A toon character's every lane reads the toon sun", "[surface][render]
 				bgl::test::MeanColor(png, 36, 20, 10, 24).r);
 		};
 
-		const auto [toonNear, toonFar] =
-			dissolve(Sun::kToon, "assets/golden/toon_lanes_dissolve_toon.got.png");
-		const auto [pbrNear, pbrFar] =
-			dissolve(Sun::kPbr, "assets/golden/toon_lanes_dissolve_pbr.got.png");
-		CHECK(toonNear > 0.05f);
-		CHECK(toonFar > 0.05f);
-		CHECK(pbrNear < 1e-3f);
-		CHECK(pbrFar < 1e-3f);
+		const auto [litNear, litFar] =
+			dissolve(true, "assets/golden/toon_lanes_dissolve_lit.got.png");
+		const auto [darkNear, darkFar] =
+			dissolve(false, "assets/golden/toon_lanes_dissolve_dark.got.png");
+		CHECK(litNear > 0.05f);
+		CHECK(litFar > 0.05f);
+		CHECK(darkNear < 1e-3f);
+		CHECK(darkFar < 1e-3f);
 	}
 
 	{
@@ -644,14 +800,14 @@ TEST_CASE("A toon character's every lane reads the toon sun", "[surface][render]
 		const auto blended = scene->CreateSurfaceMaterial(Cel(c_Half, {}, LayerType::kBlend));
 		const auto plane   = scene->AddPlaneGeom(1, 1, 30.0f, 30.0f, blended);
 
-		const auto blend = [&](const Sun sun, const char* png) {
+		const auto blend = [&](const bool lit, const char* png) {
 			auto targetDesc     = bgl::RenderTargetDesc();
 			targetDesc.width    = 400;
 			targetDesc.height   = 300;
 			targetDesc.headless = true;
 			auto target         = gfx->CreateRenderTarget(targetDesc);
 			auto view           = gfx->CreateSceneView(scene, 4);
-			LightBy(*view, sun, glm::vec3(0.0f, 0.0f, -1.0f));
+			LightBy(*view, lit, glm::vec3(0.0f, 0.0f, -1.0f));
 			view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(plane));
 
 			auto job     = bgl::RenderJob();
@@ -663,8 +819,8 @@ TEST_CASE("A toon character's every lane reads the toon sun", "[surface][render]
 			return bgl::test::MeanColor(png, 150, 100, 100, 100).b;
 		};
 
-		CHECK(blend(Sun::kToon, "assets/golden/toon_lanes_blend_toon.got.png") > 0.05f);
-		CHECK(blend(Sun::kPbr, "assets/golden/toon_lanes_blend_pbr.got.png") < 1e-3f);
+		CHECK(blend(true, "assets/golden/toon_lanes_blend_lit.got.png") > 0.05f);
+		CHECK(blend(false, "assets/golden/toon_lanes_blend_dark.got.png") < 1e-3f);
 	}
 }
 

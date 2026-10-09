@@ -241,10 +241,7 @@ namespace bgl
 		SetEnvironmentMap(const EnvironmentMapDesc& desc) override;
 
 		void
-		SetPbrDirectionalLight(const DirectionalLightDesc& desc) override;
-
-		void
-		SetToonDirectionalLight(const DirectionalLightDesc& desc) override;
+		SetDirectionalLight(const DirectionalLightDesc& desc) override;
 
 		void
 		SetSkyBox(SkyboxDesc desc) override;
@@ -264,18 +261,11 @@ namespace bgl
 			return m_EnvironmentMap;
 		}
 
-		/// The sun as SetPbrDirectionalLight left it, with `direction` already normalized.
+		/// The sun as SetDirectionalLight left it, with `direction` already normalized.
 		[[nodiscard]] const DirectionalLightDesc&
-		GetPbrDirectionalLight() const noexcept
+		GetDirectionalLight() const noexcept
 		{
-			return m_PbrDirectionalLight;
-		}
-
-		/// The toon character model's sun as SetToonDirectionalLight left it, normalized likewise.
-		[[nodiscard]] const DirectionalLightDesc&
-		GetToonDirectionalLight() const noexcept
-		{
-			return m_ToonDirectionalLight;
+			return m_DirectionalLight;
 		}
 
 		[[nodiscard]] float
@@ -927,8 +917,7 @@ namespace bgl
 		EnvironmentMap                  m_EnvironmentMap;
 		std::optional<SkyboxDesc>       m_Skybox;
 		std::optional<BackdropGradient> m_Backdrop;
-		DirectionalLightDesc            m_PbrDirectionalLight;
-		DirectionalLightDesc            m_ToonDirectionalLight;
+		DirectionalLightDesc            m_DirectionalLight;
 		float                           m_Exposure = 1.0f;
 		WindDesc                        m_Wind;
 		LodSelectionDesc                m_LodSelection;

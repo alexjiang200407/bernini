@@ -2,6 +2,7 @@
 #include "util/TestEnvironment.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
+#include "util/TonemapProbe.h"
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
@@ -9,25 +10,23 @@
 #include <bgl/glm.h>
 #include <bgl/types/BackdropGradient.h>
 #include <bgl/types/Camera.h>
+#include <bgl/types/ColorGradeSettings.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
 #include <bgl/types/SkyboxDesc.h>
 #include <bgl/types/StaticMeshInstanceDesc.h>
-#include <bgl/types/ToonPostProcess.h>
 #include <bgl/types/Viewport.h>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
-#include <cmath>
 #include <filesystem>
 #include <limits>
 #include <optional>
 #include <string>
 
-// The backdrop gradient, drawn in the sky's place. Through the toon post-process a scene-linear value
-// lands on screen as its sRGB encoding and nothing else, so a frame of empty background is the
-// gradient's answer row by row.
+// The backdrop gradient, drawn in the sky's place. A frame of empty background is the gradient's
+// answer row by row, through AgX, which the suite's probe computes with the shader's own code.
 
 namespace
 {
@@ -36,21 +35,19 @@ namespace
 	// The rows a strip averages; thin, so the sRGB curve across it stays inside the margin.
 	constexpr int c_StripRows = 4;
 
-	float
-	SrgbEncode(float linear)
-	{
-		return linear <= 0.0031308f ? 12.92f * linear :
-		                              1.055f * std::pow(linear, 1.0f / 2.4f) - 0.055f;
-	}
-
-	// What the strip of rows starting at `y` should read: the gradient at its mean height, encoded.
+	// What the strip of rows starting at `y` should read: the gradient at its mean height, through
+	// AgX and encoded.
 	glm::vec3
-	ExpectedStrip(const bgl::BackdropGradient& gradient, int y)
+	ExpectedStrip(bgl::IGraphics& gfx, const bgl::BackdropGradient& gradient, int y)
 	{
 		const float     centre = static_cast<float>(y) + 0.5f * static_cast<float>(c_StripRows);
 		const float     height = 1.0f - centre / static_cast<float>(c_Size);
 		const glm::vec3 linear = glm::mix(gradient.bottom, gradient.top, height);
-		return { SrgbEncode(linear.r), SrgbEncode(linear.g), SrgbEncode(linear.b) };
+		const auto      shown  = glm::vec3(
+			bgl::test::RunGradedAgX(gfx, linear, glm::vec2(0.5f), bgl::ColorGradeSettings()));
+		return { bgl::test::EncodeSrgb(shown.r),
+			     bgl::test::EncodeSrgb(shown.g),
+			     bgl::test::EncodeSrgb(shown.b) };
 	}
 
 	struct Stage
@@ -75,12 +72,11 @@ namespace
 			scene = gfx->CreateScene(bgl::SceneDesc());
 			view  = gfx->CreateSceneView(scene, 4);
 
-			auto targetDesc        = bgl::RenderTargetDesc();
-			targetDesc.width       = c_Size;
-			targetDesc.height      = c_Size;
-			targetDesc.headless    = true;
-			targetDesc.postProcess = bgl::ToonPostProcess();
-			target                 = gfx->CreateRenderTarget(targetDesc);
+			auto targetDesc     = bgl::RenderTargetDesc();
+			targetDesc.width    = c_Size;
+			targetDesc.height   = c_Size;
+			targetDesc.headless = true;
+			target              = gfx->CreateRenderTarget(targetDesc);
 			REQUIRE(target != nullptr);
 
 			job.view     = view;
@@ -120,13 +116,17 @@ namespace
 	};
 
 	void
-	CheckStrip(const std::string& png, const bgl::BackdropGradient& gradient, int y)
+	CheckStrip(
+		bgl::IGraphics&              gfx,
+		const std::string&           png,
+		const bgl::BackdropGradient& gradient,
+		int                          y)
 	{
 		constexpr float c_Margin = 2.0f / 255.0f;
 
 		INFO("rows " << y << ".." << y + c_StripRows - 1);
 		const bgl::test::Rgba got      = bgl::test::MeanColor(png, 0, y, c_Size, c_StripRows);
-		const glm::vec3       expected = ExpectedStrip(gradient, y);
+		const glm::vec3       expected = ExpectedStrip(gfx, gradient, y);
 		CHECK(got.r == Catch::Approx(expected.r).margin(c_Margin));
 		CHECK(got.g == Catch::Approx(expected.g).margin(c_Margin));
 		CHECK(got.b == Catch::Approx(expected.b).margin(c_Margin));
@@ -144,9 +144,9 @@ TEST_CASE(
 	stage.view->SetBackdrop(gradient);
 	const std::string png = stage.Shoot("gradient");
 
-	CheckStrip(png, gradient, 0);
-	CheckStrip(png, gradient, c_Size / 2 - c_StripRows / 2);
-	CheckStrip(png, gradient, c_Size - c_StripRows);
+	CheckStrip(*stage.gfx, png, gradient, 0);
+	CheckStrip(*stage.gfx, png, gradient, c_Size / 2 - c_StripRows / 2);
+	CheckStrip(*stage.gfx, png, gradient, c_Size - c_StripRows);
 
 	std::filesystem::remove(png);
 }
@@ -175,8 +175,8 @@ TEST_CASE("A view with no sky draws a backdrop too", "[backdrop][render]")
 	stage.view->SetBackdrop(gradient);
 	const std::string png = stage.Shoot("skyless");
 
-	CheckStrip(png, gradient, 0);
-	CheckStrip(png, gradient, c_Size - c_StripRows);
+	CheckStrip(*stage.gfx, png, gradient, 0);
+	CheckStrip(*stage.gfx, png, gradient, c_Size - c_StripRows);
 
 	std::filesystem::remove(png);
 }

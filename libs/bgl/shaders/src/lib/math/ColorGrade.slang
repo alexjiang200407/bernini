@@ -1,10 +1,8 @@
 import idl.ITonemapLut;
-import lib.math.Srgb;
 import lib.math.Tonemap;
 
-// The two frame grades. Filmic's: white balance and a vignette in scene linear, then the ASC CDL and
-// contrast in the log coordinate AgX's formation reads. Toon's: the same linear steps, then
-// contrast, gamma, saturation and levels on the sRGB-encoded value. See docs/passes.md.
+// The frame grade, ahead of either display curve: white balance and a vignette in scene linear, then
+// the ASC CDL and contrast in the log coordinate AgX's formation reads. See docs/passes.md.
 public struct ColorGrade
 {
     // CAT02 LMS gains, derived from temperature and tint on the CPU.
@@ -59,51 +57,26 @@ public float3 ApplyContrast(float3 coord, float contrast, float pivot)
     return (coord - pivot) * contrast + pivot;
 }
 
-public float3 AgXGraded<L : ITonemapLut>(float3 color, float2 uv, ColorGrade grade, L lut)
+// The grade's controls ahead of either curve: white balance and the vignette in scene linear, then
+// the CDL and contrast in AgX's log coordinate, which is returned.
+float3 GradedLogCoord(float3 color, float2 uv, ColorGrade grade)
 {
     float3 sceneLinear = WhiteBalance(color, grade.whiteBalance);
     sceneLinear *= Vignette(uv, grade.vignetteIntensity, grade.vignetteSmoothness);
 
     float3 coord = AgXLogEncode(sceneLinear);
     coord = ApplyCdl(coord, grade.slope, grade.offset, grade.power, grade.saturation);
-    coord = ApplyContrast(coord, grade.contrast, AgXLogEncode(float3(0.18, 0.18, 0.18)).g);
-
-    return AgXFormation(coord, lut);
+    return ApplyContrast(coord, grade.contrast, AgXLogEncode(float3(0.18, 0.18, 0.18)).g);
 }
 
-// The toon grade, on the value the display shows. Every field's neutral value is the identity.
-public struct ToonGrade
+public float3 AgXGraded<L : ITonemapLut>(float3 color, float2 uv, ColorGrade grade, L lut)
 {
-    public float3 whiteBalance;
+    return AgXFormation(GradedLogCoord(color, uv, grade), lut);
+}
 
-    // The encoded black and white the display shows; [0, 1] maps onto [black, white].
-    public float3 black;
-    public float3 white;
-    public float3 gamma;
-
-    public float saturation;
-    public float contrast;
-
-    public float vignetteIntensity;
-    public float vignetteSmoothness;
-};
-
-// The grade with no curve to wrap. `color` is display-linear in [0, 1], which under toon is the
-// clamped scene, so the linear-light steps act on it directly. The levels come last, so black and
-// white are the ends the display shows whatever contrast, gamma and saturation did.
-public float3 ToonGraded(float3 color, float2 uv, ToonGrade grade)
+// The same grade decoded back to scene linear for Gran Turismo's curve. The decode is the encode's
+// inverse and unclamped, so a neutral grade is the curve alone and a highlight reaches its shoulder.
+public float3 GranTurismoGraded(float3 color, float2 uv, ColorGrade grade)
 {
-    float3 displayLinear = WhiteBalance(color, grade.whiteBalance);
-    displayLinear *= Vignette(uv, grade.vignetteIntensity, grade.vignetteSmoothness);
-
-    float3 coord = LinearToSrgb(saturate(displayLinear));
-    coord = saturate(ApplyContrast(coord, grade.contrast, LinearToSrgb(float3(0.18, 0.18, 0.18)).g));
-    coord = pow(coord, grade.gamma);
-
-    const float luma = dot(coord, c_Rec709Luma);
-    coord = saturate(luma + grade.saturation * (coord - luma));
-
-    coord = lerp(grade.black, grade.white, coord);
-
-    return SrgbToLinear(coord);
+    return GranTurismo(AgXLogDecode(GradedLogCoord(color, uv, grade)));
 }

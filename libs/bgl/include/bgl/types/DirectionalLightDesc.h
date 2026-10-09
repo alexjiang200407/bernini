@@ -4,9 +4,8 @@
 namespace bgl
 {
 	/**
-	 * An analytic light: a sun, infinitely far away, casting no shadow. A view has two, each read by
-	 * its own shading models -- ISceneView::SetPbrDirectionalLight and SetToonDirectionalLight say
-	 * which, what each costs and what each refuses.
+	 * An analytic light: a sun, infinitely far away, casting no shadow. A view has one, which every
+	 * shading model reads -- ISceneView::SetDirectionalLight says what it costs and what it refuses.
 	 */
 	struct DirectionalLightDesc
 	{

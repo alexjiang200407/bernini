@@ -1,10 +1,9 @@
 #include "Windows/RenderTarget/RenderTargetWindow.h"
 
 #include "Render/Renderer.h"
+#include "util/editor_sun.h"
 #include "util/toon_backdrop.h"
-#include "util/toon_light.h"
 #include <algorithm>
-#include <assetlib/Project.h>
 #include <cmath>
 #include <core/glm.h>
 #include <cstdint>
@@ -35,13 +34,11 @@
 #include <bgl/types/BloomSettings.h>
 #include <bgl/types/ColorGradeSettings.h>
 #include <bgl/types/ColorSplitSettings.h>
+#include <bgl/types/DisplayCurve.h>
 #include <bgl/types/FilmGrainSettings.h>
-#include <bgl/types/FilmicPostProcess.h>
 #include <bgl/types/PassTiming.h>
 #include <bgl/types/PostProcess.h>
 #include <bgl/types/RenderJob.h>
-#include <bgl/types/ToonGradeSettings.h>
-#include <bgl/types/ToonPostProcess.h>
 #include <bgl/types/Viewport.h>
 #include <bgl/types/VignetteSettings.h>
 #include <core/err/util.h>
@@ -176,7 +173,7 @@ namespace
 	}
 
 	// As ClampBloom. The upper bounds on slope, saturation and contrast are sanity only, and the
-	// floors on power and gamma stand in for bgl's "positive".
+	// floor on power stands in for bgl's "positive".
 	bgl::ColorGradeSettings
 	ClampGrade(std::string_view section, bgl::ColorGradeSettings s)
 	{
@@ -185,20 +182,6 @@ namespace
 		s.slope       = ClampSectionRgb(section, "slope", s.slope, 0.0f, 16.0f);
 		s.offset      = ClampSectionRgb(section, "offset", s.offset, -1.0f, 1.0f);
 		s.power       = ClampSectionRgb(section, "power", s.power, 0.01f, 16.0f);
-		s.saturation  = ClampSectionValue(section, "saturation", s.saturation, 0.0f, 16.0f);
-		s.contrast    = ClampSectionValue(section, "contrast", s.contrast, 0.0f, 16.0f);
-		s.vignette    = ClampVignette(section, s.vignette);
-		return s;
-	}
-
-	bgl::ToonGradeSettings
-	ClampToonGrade(std::string_view section, bgl::ToonGradeSettings s)
-	{
-		s.temperature = ClampSectionValue(section, "temperature", s.temperature, -100.0f, 100.0f);
-		s.tint        = ClampSectionValue(section, "tint", s.tint, -100.0f, 100.0f);
-		s.black       = ClampSectionRgb(section, "black", s.black, 0.0f, 1.0f);
-		s.white       = ClampSectionRgb(section, "white", s.white, 0.0f, 1.0f);
-		s.gamma       = ClampSectionRgb(section, "gamma", s.gamma, 0.01f, 16.0f);
 		s.saturation  = ClampSectionValue(section, "saturation", s.saturation, 0.0f, 16.0f);
 		s.contrast    = ClampSectionValue(section, "contrast", s.contrast, 0.0f, 16.0f);
 		s.vignette    = ClampVignette(section, s.vignette);
@@ -226,23 +209,13 @@ namespace
 		return s;
 	}
 
-	editor::FilmicConfig
-	Clamped(editor::FilmicConfig c)
+	editor::PostProcessConfig
+	Clamped(editor::PostProcessConfig c)
 	{
-		c.bloom.settings = ClampBloom("filmic.bloom", c.bloom.settings);
-		c.grade.settings = ClampGrade("filmic.grade", c.grade.settings);
-		c.grain.settings = ClampGrain("filmic.filmGrain", c.grain.settings);
-		c.split.settings = ClampSplit("filmic.colorSplit", c.split.settings);
-		return c;
-	}
-
-	editor::ToonConfig
-	Clamped(editor::ToonConfig c)
-	{
-		c.bloom.settings = ClampBloom("toon.bloom", c.bloom.settings);
-		c.grade.settings = ClampToonGrade("toon.grade", c.grade.settings);
-		c.grain.settings = ClampGrain("toon.filmGrain", c.grain.settings);
-		c.split.settings = ClampSplit("toon.colorSplit", c.split.settings);
+		c.bloom.settings = ClampBloom("postProcess.bloom", c.bloom.settings);
+		c.grade.settings = ClampGrade("postProcess.grade", c.grade.settings);
+		c.grain.settings = ClampGrain("postProcess.filmGrain", c.grain.settings);
+		c.split.settings = ClampSplit("postProcess.colorSplit", c.split.settings);
 		return c;
 	}
 
@@ -253,7 +226,6 @@ namespace
 		return effect.enabled ? std::optional<Settings>(effect.settings) : std::nullopt;
 	}
 
-	/** The `enabled` of `effect` in a type's config; both configs name their effects alike. */
 	template <typename Config>
 	[[nodiscard]] auto&
 	Enabled(Config& config, ViewportEffect effect) noexcept
@@ -326,8 +298,7 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 	// its way there, so it draws hashed alpha as the blend it converges to instead.
 	rtvDesc.taaEnabled = m_Desc.taaEnabled;
 
-	m_Desc.filmic                      = Clamped(m_Desc.filmic);
-	m_Desc.toon                        = Clamped(m_Desc.toon);
+	m_Desc.postProcess                 = Clamped(m_Desc.postProcess);
 	const bgl::PostProcess postProcess = BuildPostProcess();
 
 	m_RenderTarget = m_Desc.renderer->Invoke([&] {
@@ -339,7 +310,7 @@ RenderTargetWindow::RenderTargetWindow(QWidget* parent, RenderTargetWindowDesc d
 		auto view = m_Desc.renderer->GetGraphics()->CreateSceneView(
 			m_Desc.renderer->GetScene(),
 			m_Desc.initialInstances);
-		view->SetToonDirectionalLight(editor::DefaultToonLight());
+		view->SetDirectionalLight(editor::EditorSun(m_ShowsToonContent));
 		return view;
 	});
 
@@ -548,53 +519,24 @@ RenderTargetWindow::SetOutlineEnabled(bool enabled)
 }
 
 void
-RenderTargetWindow::SetProjectPostProcessType(assetlib::PostProcessType postProcessType)
-{
-	m_ProjectPostProcessType = postProcessType;
-	ApplyPostProcess();
-}
-
-void
-RenderTargetWindow::SetChosenPostProcessType(
-	std::optional<assetlib::PostProcessType> postProcessType)
-{
-	m_ChosenPostProcessType = postProcessType;
-	ApplyPostProcess();
-}
-
-void
 RenderTargetWindow::SetShowsToonContent(bool toon)
 {
 	m_ShowsToonContent = toon;
-	ApplyPostProcess();
 	ApplyBackdrop();
-}
-
-assetlib::PostProcessType
-RenderTargetWindow::GetPostProcessType() const noexcept
-{
-	if (m_ChosenPostProcessType.has_value())
-		return *m_ChosenPostProcessType;
-	return m_ShowsToonContent ? assetlib::PostProcessType::kToon : m_ProjectPostProcessType;
+	ApplyPostProcess();
 }
 
 bgl::PostProcess
 RenderTargetWindow::BuildPostProcess() const
 {
-	if (GetPostProcessType() == assetlib::PostProcessType::kToon)
-	{
-		const editor::ToonConfig& c = m_Desc.toon;
-		return bgl::ToonPostProcess{ .bloom = Resolved(c.bloom),
-			                         .grade = Resolved(c.grade),
-			                         .grain = Resolved(c.grain),
-			                         .split = Resolved(c.split) };
-	}
-
-	const editor::FilmicConfig& c = m_Desc.filmic;
-	return bgl::FilmicPostProcess{ .bloom = Resolved(c.bloom),
-		                           .grade = Resolved(c.grade),
-		                           .grain = Resolved(c.grain),
-		                           .split = Resolved(c.split) };
+	const editor::PostProcessConfig& c = m_Desc.postProcess;
+	// Toon content is authored under the stylized curve, so it is shown under it.
+	return bgl::PostProcess{ .curve = m_ShowsToonContent ? bgl::DisplayCurve::kGranTurismo :
+		                                                   bgl::DisplayCurve::kAgX,
+		                     .bloom = Resolved(c.bloom),
+		                     .grade = Resolved(c.grade),
+		                     .grain = Resolved(c.grain),
+		                     .split = Resolved(c.split) };
 }
 
 void
@@ -619,6 +561,7 @@ RenderTargetWindow::ApplyBackdrop()
 			m_SceneView->SetBackdrop(*backdrop);
 		else
 			m_SceneView->ClearBackdrop();
+		m_SceneView->SetDirectionalLight(editor::EditorSun(m_ShowsToonContent));
 	});
 }
 
@@ -633,24 +576,21 @@ RenderTargetWindow::GetBackdrop() const noexcept
 void
 RenderTargetWindow::SetEffectEnabled(ViewportEffect effect, bool enabled)
 {
-	Enabled(m_Desc.filmic, effect) = enabled;
-	Enabled(m_Desc.toon, effect)   = enabled;
+	Enabled(m_Desc.postProcess, effect) = enabled;
 	ApplyPostProcess();
 }
 
 bool
 RenderTargetWindow::IsEffectEnabled(ViewportEffect effect) const
 {
-	return GetPostProcessType() == assetlib::PostProcessType::kToon ?
-	           Enabled(m_Desc.toon, effect) :
-	           Enabled(m_Desc.filmic, effect);
+	return Enabled(m_Desc.postProcess, effect);
 }
 
 bgl::PostProcess
 RenderTargetWindow::GetPostProcess() const
 {
 	if (m_RenderTarget == nullptr || m_Desc.renderer == nullptr)
-		return bgl::FilmicPostProcess();
+		return bgl::PostProcess();
 
 	return m_Desc.renderer->Invoke([&] { return m_RenderTarget->GetPostProcess(); });
 }

@@ -34,14 +34,14 @@ Bare, it renders `assets/Data`'s apples — the one project `copy_assets` stages
 | `--fps` | 30 | frame `i` renders at clip time `i / fps` |
 | `--warmup` | 8 | frames rendered first, held at time 0 |
 | `--env`, `--env-root` | `forest.benv`, `--project` | the environment it is lit by, and the root that is keyed under |
-| `--sun` | 0, off | an analytic sun's intensity, in the irradiance map's units — **additive** on `--env`, which already integrates whatever sun its source HDR held. It sets both of the view's suns alike, the PBR one and the toon character model's, so a headless render has one sun on screen |
+| `--sun` | 0, off | an analytic sun's intensity, in the irradiance map's units — **additive** on `--env`, which already integrates whatever sun its source HDR held. The view's one sun, which the toon character model reads too |
 | `--sun-azimuth`, `--sun-elevation` | 35, 38 | where that sun sits, in degrees: azimuth about the up axis from +Z toward +X, elevation above the horizon |
 | `--sun-color` | `1 1 1` | its colour, as three floats |
 | `--backdrop` | `sky` | what is drawn behind the scene: `sky`, the environment's, or `gradient`, the toon look-dev backdrop the editor's toon previews draw, pale horizon to sky blue (`ISceneView::SetBackdrop`). Only the background changes; `--env` still lights the scene |
-| `--post-process` | `filmic` | the post-process: `filmic` (AgX), or `toon` -- the exposed colour clamped, no curve, which a toon look is authored for and which screens `--bloom` rather than adding it (`bgl::ToonPostProcess`; `--bloom`, `--film-grain` and `--color-split` fill whichever type this picks) |
 | `-w`, `-h`, `--taa` | 1280, 720, on | the output, as a viewport renders it |
 | `--render-scale` | 1 | the grid the geometry passes render on, relative to the output; below 1 the TAA resolve reconstructs the output ([Temporal Antialiasing](taa.md) § Render scale) |
-| `--bloom` | off | bloom at `bgl::BloomSettings`' defaults, in the post-process `--post-process` picks; its `BloomDown*`/`BloomUp*` passes join the timings |
+| `--curve` | `agx` | the display curve the target ends in: `agx`, or `granTurismo`, the stylized one the editor shows toon content under ([Passes](passes.md) § Scene colour). A flag rather than the content's rule, so a toon model can be judged under either |
+| `--bloom` | off | bloom at `bgl::BloomSettings`' defaults, added ahead of the curve; its `BloomDown*`/`BloomUp*` passes join the timings |
 | `--film-grain` | off | film grain at `bgl::FilmGrainSettings`' defaults. The pattern follows the target's frame count, so frame N carries the same grain every run and two screenshots of one run differ by it |
 | `--color-split` | off | the colour split at `bgl::ColorSplitSettings`' defaults: red two pixels left of green at 2160 lines and blue two right, scaled to `-h` |
 | `--frame-clip` | off | frame the camera on the playing clip's poses rather than every clip's |
@@ -130,9 +130,9 @@ just run bgl_ai_viewer -- --project "<the test project>/Data" --terrain hilly \
   `--sun-elevation` is how to look at it under a side, a front and an overhead sun.
 - **Know whether it was lit.** The test project has no environment of its own; without
   `--env-root "$PWD/assets/Data"` it renders unlit, which is a black image, and says `unlit`.
-- **One sun drives both lights.** A view has two -- the one PBR and every other model read, and
-  the toon character model's (`SetToonDirectionalLight`) -- and the `--sun` options set them alike.
-  Without `--sun` a toon character draws black: it reads no environment.
+- **A toon character needs `--sun` for its bands.** It reads the view's one sun and the
+  environment's irradiance from straight up; without `--sun` it is lit by that ambient alone, its
+  bands falling from an overhead sun of no intensity.
 - **The sun is off unless asked for, and it does not replace the environment.** `bgl`'s own default
   intensity is 0, so every render this tool made before there was a sun is the render it still
   makes. Switched on with `--sun`, it *adds* to `--env`, whose cubes already integrate whatever sun

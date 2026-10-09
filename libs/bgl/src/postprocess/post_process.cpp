@@ -3,16 +3,16 @@
 #include <bgl/types/BloomSettings.h>
 #include <bgl/types/ColorGradeSettings.h>
 #include <bgl/types/ColorSplitSettings.h>
+#include <bgl/types/DisplayCurve.h>
 #include <bgl/types/FilmGrainSettings.h>
 #include <bgl/types/PostProcess.h>
-#include <bgl/types/ToonGradeSettings.h>
 #include <bgl/types/VignetteSettings.h>
 #include <cmath>
 #include <core/glm.h>
+#include <cstdint>
 #include <format>
 #include <optional>
 #include <string_view>
-#include <variant>
 
 namespace bgl
 {
@@ -99,23 +99,6 @@ namespace bgl
 		}
 
 		void
-		Validate(const ToonGradeSettings& s)
-		{
-			const auto check = Fields("ToonGradeSettings");
-			check.Within("temperature", s.temperature, -100.0f, 100.0f);
-			check.Within("tint", s.tint, -100.0f, 100.0f);
-			for (int c = 0; c < 3; ++c)
-			{
-				check.Within("black", s.black[c], 0.0f, 1.0f);
-				check.Within("white", s.white[c], 0.0f, 1.0f);
-				check.Positive("gamma", s.gamma[c]);
-			}
-			check.NonNegative("saturation", s.saturation);
-			check.NonNegative("contrast", s.contrast);
-			check.Vignette(s.vignette);
-		}
-
-		void
 		Validate(const FilmGrainSettings& s)
 		{
 			const auto check = Fields("FilmGrainSettings");
@@ -144,37 +127,15 @@ namespace bgl
 	void
 	ValidatePostProcess(const PostProcess& postProcess)
 	{
-		std::visit(
-			[](const auto& p) {
-				ValidateIfSet(p.bloom);
-				ValidateIfSet(p.grade);
-				ValidateIfSet(p.grain);
-				ValidateIfSet(p.split);
-			},
-			postProcess);
-	}
+		if (postProcess.curve >= DisplayCurve::kCount)
+			throw GraphicsError(
+				std::format(
+					"PostProcess::curve must be a DisplayCurve, got {}",
+					static_cast<uint32_t>(postProcess.curve)));
 
-	const std::optional<BloomSettings>&
-	BloomOf(const PostProcess& postProcess) noexcept
-	{
-		return std::visit(
-			[](const auto& p) -> const std::optional<BloomSettings>& { return p.bloom; },
-			postProcess);
-	}
-
-	const std::optional<FilmGrainSettings>&
-	GrainOf(const PostProcess& postProcess) noexcept
-	{
-		return std::visit(
-			[](const auto& p) -> const std::optional<FilmGrainSettings>& { return p.grain; },
-			postProcess);
-	}
-
-	const std::optional<ColorSplitSettings>&
-	SplitOf(const PostProcess& postProcess) noexcept
-	{
-		return std::visit(
-			[](const auto& p) -> const std::optional<ColorSplitSettings>& { return p.split; },
-			postProcess);
+		ValidateIfSet(postProcess.bloom);
+		ValidateIfSet(postProcess.grade);
+		ValidateIfSet(postProcess.grain);
+		ValidateIfSet(postProcess.split);
 	}
 }

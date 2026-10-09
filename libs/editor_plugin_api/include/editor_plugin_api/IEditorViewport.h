@@ -11,7 +11,6 @@
 #include <bgl/types/ColorGradeSettings.h>
 #include <bgl/types/ColorSplitSettings.h>
 #include <bgl/types/FilmGrainSettings.h>
-#include <bgl/types/ToonGradeSettings.h>
 #include <cstdint>
 #include <functional>
 #include <gamelib/AssetManager.h>
@@ -52,33 +51,12 @@ namespace editor
 		return settings;
 	}
 
-	// The same mild grade for a toon viewport, in the toon grade's terms.
-	[[nodiscard]] inline bgl::ToonGradeSettings
-	DefaultViewportToonGrade() noexcept
-	{
-		auto settings               = bgl::ToonGradeSettings();
-		settings.temperature        = 10.0f;
-		settings.saturation         = 1.15f;
-		settings.contrast           = 1.1f;
-		settings.vignette.intensity = 0.25f;
-		return settings;
-	}
-
-	// What a viewport ends in under the filmic post-process; the editor reads it from a viewport's
-	// `filmic` section of config.json.
-	struct FilmicConfig
+	// What a viewport ends in; the editor reads it from a viewport's `postProcess` section of
+	// config.json.
+	struct PostProcessConfig
 	{
 		EffectConfig<bgl::BloomSettings>      bloom;
 		EffectConfig<bgl::ColorGradeSettings> grade{ false, DefaultViewportGrade() };
-		EffectConfig<bgl::FilmGrainSettings>  grain;
-		EffectConfig<bgl::ColorSplitSettings> split;
-	};
-
-	// What a viewport ends in under the toon post-process; config.json's `toon` section.
-	struct ToonConfig
-	{
-		EffectConfig<bgl::BloomSettings>      bloom;
-		EffectConfig<bgl::ToonGradeSettings>  grade{ false, DefaultViewportToonGrade() };
 		EffectConfig<bgl::FilmGrainSettings>  grain;
 		EffectConfig<bgl::ColorSplitSettings> split;
 	};
@@ -91,11 +69,8 @@ namespace editor
 		float    taaReconstructionWidth = 0.4f;
 		float    taaSharpness           = 1.0f;
 
-		// Which post-process type the viewport ends in is the host's (the project's, or toon for
-		// toon content, or the user's pick); these are what each type has. Every effect is off by
-		// default; the host clamps and warns like the render scale.
-		FilmicConfig filmic;
-		ToonConfig   toon;
+		// Every effect is off by default; the host clamps and warns like the render scale.
+		PostProcessConfig postProcess;
 
 		// Drawn in place of the sky while the viewport shows toon content (SetShowsToonContent).
 		bgl::BackdropGradient toonBackdrop;
@@ -142,17 +117,9 @@ namespace editor
 
 		template <typename Self>
 		Self&&
-		SetFilmic(this Self&& self, FilmicConfig value) noexcept
+		SetPostProcess(this Self&& self, PostProcessConfig value) noexcept
 		{
-			self.filmic = value;
-			return std::forward<Self>(self);
-		}
-
-		template <typename Self>
-		Self&&
-		SetToon(this Self&& self, ToonConfig value) noexcept
-		{
-			self.toon = value;
+			self.postProcess = value;
 			return std::forward<Self>(self);
 		}
 
@@ -196,11 +163,11 @@ namespace editor
 		GetRenderHeight() const noexcept = 0;
 
 		/**
-		 * Whether what the viewport shows is toon-shaded -- a mesh with a toon material, say. A toon
-		 * look is authored to be seen without a filmic curve, so such a viewport ends in the toon
-		 * post-process (bgl::ToonPostProcess, from ViewportDesc::toon) rather than the project's, until
-		 * the user picks one for the viewports; then the user's pick holds. Whatever the pick, it draws
-		 * ViewportDesc::toonBackdrop instead of its sky: the background follows what is shown.
+		 * Whether what the viewport shows is toon-shaded -- a mesh with a toon material, say. Such a
+		 * viewport draws ViewportDesc::toonBackdrop instead of its sky, is lit by the editor's sun, and
+		 * ends in bgl::DisplayCurve::kGranTurismo, the curve a toon look is authored under; any other
+		 * is lit by its environment alone and ends in AgX. The rest of its post-process is every
+		 * viewport's.
 		 */
 		virtual void
 		SetShowsToonContent(bool toon) = 0;

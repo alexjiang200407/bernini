@@ -78,8 +78,8 @@ namespace bgl
 			// ran below a render scale of 1, whose output is on the backbuffer's grid.
 			float taaSharpness = 0.0f;
 
-			// The target's, validated when it was set: the curve, and each effect's settings.
-			PostProcess postProcess = FilmicPostProcess();
+			// The target's, validated when it was set.
+			PostProcess postProcess;
 
 			// How many frames have begun on the target, which is what a grain pattern is held by.
 			uint64_t frameCount = 0;

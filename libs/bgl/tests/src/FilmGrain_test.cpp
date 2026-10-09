@@ -1,7 +1,7 @@
-#include "util/AgxProbe.h"
 #include "util/GoldenImage.h"
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
+#include "util/TonemapProbe.h"
 #include <bgl/IGraphics.h>
 #include <bgl/IRenderTarget.h>
 #include <bgl/IScene.h>
@@ -25,11 +25,10 @@
 #include <limits>
 #include <optional>
 #include <string>
-#include <variant>
 
 // Film grain: its settings are validated where every target setting is, and the grain on a frame
-// is what they say. A full-frame Unlit plane under toon puts one known value on every pixel, so
-// whatever varies across the frame is grain and nothing else. At 128 lines the default pitch is
+// is what they say. A full-frame Unlit plane puts one known value on every pixel, so whatever
+// varies across the frame is grain and nothing else. At 128 lines the default pitch is
 // under a pixel and floors at one, where the grain is white: neighbouring pixels are independent
 // and AliasEnergy, their mean squared difference, is twice its variance.
 
@@ -67,17 +66,16 @@ namespace
 		bgl::RenderTargetRef target;
 		bgl::RenderJob       job;
 
-		explicit Plane(bgl::PostProcess postProcess = bgl::ToonPostProcess())
+		Plane()
 		{
 			REQUIRE(gfx != nullptr);
 			scene = gfx->CreateScene(bgl::SceneDesc());
 
-			auto targetDesc        = bgl::RenderTargetDesc();
-			targetDesc.width       = c_Size;
-			targetDesc.height      = c_Size;
-			targetDesc.headless    = true;
-			targetDesc.postProcess = postProcess;
-			target                 = gfx->CreateRenderTarget(targetDesc);
+			auto targetDesc     = bgl::RenderTargetDesc();
+			targetDesc.width    = c_Size;
+			targetDesc.height   = c_Size;
+			targetDesc.headless = true;
+			target              = gfx->CreateRenderTarget(targetDesc);
 			REQUIRE(target != nullptr);
 
 			job.viewport = bgl::Viewport(static_cast<float>(c_Size), static_cast<float>(c_Size));
@@ -115,19 +113,19 @@ namespace
 			gfx->ScreenshotPng(target, path);
 		}
 
-		/** The target's post-process, whichever type it is, with `grain` in place of its own. */
+		/** The target's post-process with `grain` in place of its own. */
 		void
 		SetGrain(const std::optional<bgl::FilmGrainSettings>& grain)
 		{
 			bgl::PostProcess postProcess = target->GetPostProcess();
-			std::visit([&](auto& p) { p.grain = grain; }, postProcess);
+			postProcess.grain            = grain;
 			target->SetPostProcess(postProcess);
 		}
 
 		[[nodiscard]] std::optional<bgl::FilmGrainSettings>
 		GetGrain() const
 		{
-			return std::visit([](const auto& p) { return p.grain; }, target->GetPostProcess());
+			return target->GetPostProcess().grain;
 		}
 
 		void
@@ -145,6 +143,13 @@ namespace
 	Deviation(const std::string& path)
 	{
 		return std::sqrt(bgl::test::AliasEnergy(path, 0, 0, c_Size, c_Size) / 2.0f);
+	}
+
+	/** The display-linear value AgX put on a plain frame, read back off its encoding. */
+	float
+	Shown(const std::string& path)
+	{
+		return bgl::test::DecodeSrgb(bgl::test::MeanColor(path, 0, 0, c_Size, c_Size).g);
 	}
 
 	bool
@@ -173,9 +178,6 @@ TEST_CASE("Film grain settings outside their documented ranges are refused", "[f
 		auto bad = bgl::FilmGrainSettings();
 		mutate(bad);
 		CHECK_THROWS_AS(plane.SetGrain(bad), bgl::GraphicsError);
-		CHECK_THROWS_AS(
-			plane.target->SetPostProcess(bgl::FilmicPostProcess{ .grain = bad }),
-			bgl::GraphicsError);
 	};
 
 	refuses([](auto& s) { s.intensity = -0.01f; });
@@ -218,20 +220,24 @@ TEST_CASE(
 	// deviation this wide.
 	constexpr double c_Close = 0.15;
 
-	// Both low enough that twice the intensity still peaks under display white, where it clips.
-	for (const float value : { 0.2f, 0.6f })
+	// Both shown low enough that twice the intensity still peaks under display white, where it
+	// clips: AgX puts them near 0.2 and 0.5.
+	for (const float radiance : { 0.2f, 0.72f })
 	{
-		INFO("display-linear " << value);
+		INFO("scene-linear " << radiance);
 
 		plane.SetGrain(std::nullopt);
-		plane.Fill(value);
+		plane.Fill(radiance);
 		plane.Capture(plain);
 		REQUIRE(Deviation(plain) == 0.0f);
+
+		const float shown = Shown(plain);
+		REQUIRE(shown * (1.0f + 2.0f * c_Intensity) < 1.0f);
 
 		plane.Grain(c_Intensity);
 		plane.Capture(grain);
 
-		const float expected = c_Intensity * value * c_TriangularSigma * EncodeSlope(value);
+		const float expected = c_Intensity * shown * c_TriangularSigma * EncodeSlope(shown);
 		INFO("deviation " << Deviation(grain) * 255.0f << "/255, expected " << expected * 255.0f);
 		CHECK(Deviation(grain) == Catch::Approx(expected).epsilon(c_Close));
 
@@ -240,9 +246,11 @@ TEST_CASE(
 		const auto after  = bgl::test::MeanColor(grain, 0, 0, c_Size, c_Size);
 		CHECK(after.g == Catch::Approx(before.g).margin(2.0 / 255.0));
 
-		// Monochrome: a grey stays grey pixel by pixel, so the channel means cannot part.
-		CHECK(after.r == after.g);
-		CHECK(after.g == after.b);
+		// Monochrome: every channel of a pixel moves together, so its hue does not scatter. A
+		// grain per channel would part them by about the deviation itself.
+		const float chroma = std::sqrt(bgl::test::ChromaEnergy(grain, 0, 0, c_Size, c_Size));
+		INFO("hue scatter " << chroma * 255.0f << "/255");
+		CHECK(chroma < 0.25f * Deviation(grain));
 
 		// Twice the intensity is twice the grain.
 		plane.Grain(2.0f * c_Intensity);
@@ -251,8 +259,11 @@ TEST_CASE(
 	}
 
 	// At display white there is no headroom: the upward half clips, so the frame darkens by the
-	// mean of the half that is left, intensity / 6.
-	plane.Fill(1.0f);
+	// mean of the half that is left, intensity / 6. AgX reaches white at the top of its range.
+	plane.SetGrain(std::nullopt);
+	plane.Fill(10000.0f);
+	plane.Capture(plain);
+	REQUIRE(bgl::test::MeanColor(plain, 0, 0, c_Size, c_Size).g == 1.0f);
 	plane.Grain(c_Intensity);
 	plane.Capture(grain);
 	{
@@ -359,28 +370,4 @@ TEST_CASE("Film grain's pitch scales with the output and floors at a pixel", "[f
 	std::remove(fine.c_str());
 	std::remove(floor.c_str());
 	std::remove(coarse.c_str());
-}
-
-TEST_CASE("Film grain follows the curve under filmic too", "[filmgrain][render]")
-{
-	auto plane = Plane(bgl::FilmicPostProcess());
-	plane.Fill(0.5f);
-
-	const std::string plain = "assets/golden/filmgrain_filmic_plain.got.png";
-	const std::string grain = "assets/golden/filmgrain_filmic_on.got.png";
-
-	plane.Capture(plain);
-	plane.Grain(0.25f);
-	plane.Capture(grain);
-
-	// A share of what AgX displayed, so the expectation is read off the plain frame.
-	const float encoded  = bgl::test::MeanColor(plain, 0, 0, c_Size, c_Size).g;
-	const float shown    = bgl::test::DecodeSrgb(encoded);
-	const float expected = 0.25f * shown * c_TriangularSigma * EncodeSlope(shown);
-
-	INFO("deviation " << Deviation(grain) * 255.0f << "/255, expected " << expected * 255.0f);
-	CHECK(Deviation(grain) == Catch::Approx(expected).epsilon(0.15));
-
-	std::remove(plain.c_str());
-	std::remove(grain.c_str());
 }

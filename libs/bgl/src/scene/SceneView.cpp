@@ -1916,15 +1916,9 @@ namespace bgl
 	}
 
 	void
-	SceneView::SetPbrDirectionalLight(const DirectionalLightDesc& desc)
+	SceneView::SetDirectionalLight(const DirectionalLightDesc& desc)
 	{
-		m_PbrDirectionalLight = ValidatedLight(desc, "SetPbrDirectionalLight");
-	}
-
-	void
-	SceneView::SetToonDirectionalLight(const DirectionalLightDesc& desc)
-	{
-		m_ToonDirectionalLight = ValidatedLight(desc, "SetToonDirectionalLight");
+		m_DirectionalLight = ValidatedLight(desc, "SetDirectionalLight");
 	}
 
 	void

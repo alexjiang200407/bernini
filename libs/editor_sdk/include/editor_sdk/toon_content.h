@@ -9,7 +9,7 @@ namespace editor
 	/**
 	 * Whether `material` is drawn by the toon model -- a surface registered on
 	 * IToonCharacterSurfaceSource, looked up among `surfaces` (IGraphics::GetSurfaceTypes). What a
-	 * preview asks to decide it shows a toon look, which is authored for the toon post-process.
+	 * preview asks to decide it shows a toon look, which it draws against the toon backdrop.
 	 */
 	[[nodiscard]] inline bool
 	IsToonMaterial(

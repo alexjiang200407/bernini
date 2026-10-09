@@ -892,7 +892,7 @@ TEST_CASE("A lit surface draws its own lighting", "[surface][lit][render]")
 	auto scene = gfx->CreateScene(SphereScene());
 	auto view  = gfx->CreateSceneView(scene, 8);
 
-	view->SetPbrDirectionalLight(
+	view->SetDirectionalLight(
 		{
 			.direction = glm::normalize(glm::vec3(-1.0f, -0.4f, -1.0f)),
 			.color     = glm::vec3(1.0f),

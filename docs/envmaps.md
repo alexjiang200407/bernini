@@ -1,6 +1,6 @@
 # Environment Maps — authoring, baking and consuming an environment
 
-**An analytic sun double-counts the one already in here.** `ISceneView::SetPbrDirectionalLight` adds a
+**An analytic sun double-counts the one already in here.** `ISceneView::SetDirectionalLight` adds a
 directional light on top of whatever these maps hold, and the convolutions below integrate the
 source HDR whole -- including its sun. Set both to a sun that is in both and the scene is lit twice
 by it. Nothing detects this: the renderer cannot read a `.benv` (it links `assetlib_structs`, never

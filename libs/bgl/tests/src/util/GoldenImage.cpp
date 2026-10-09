@@ -184,6 +184,64 @@ namespace bgl::test
 			         static_cast<float>(sum[3] / texels) };
 	}
 
+	Rgba
+	ChannelCoverage(const std::string& path, int x, int y, int w, int h, const Rgba& threshold)
+	{
+		const auto box = LoadBox("ChannelCoverage", path, x, y, w, h);
+
+		const float limit[3] = { threshold.r * 255.0f, threshold.g * 255.0f, threshold.b * 255.0f };
+
+		int above[3] = { 0, 0, 0 };
+		for (int row = y; row < y + h; ++row)
+		{
+			for (int col = x; col < x + w; ++col)
+			{
+				const auto* texel = box.Texel(row, col);
+				for (int c = 0; c < 3; ++c)
+					above[c] += static_cast<float>(texel[c]) > limit[c] ? 1 : 0;
+			}
+		}
+
+		const auto texels = static_cast<float>(w) * static_cast<float>(h);
+
+		return Rgba{ static_cast<float>(above[0]) / texels,
+			         static_cast<float>(above[1]) / texels,
+			         static_cast<float>(above[2]) / texels,
+			         0.0f };
+	}
+
+	float
+	ChromaEnergy(const std::string& path, int x, int y, int w, int h)
+	{
+		const auto box = LoadBox("ChromaEnergy", path, x, y, w, h);
+
+		double sum[2]     = { 0.0, 0.0 };
+		double squares[2] = { 0.0, 0.0 };
+		for (int row = y; row < y + h; ++row)
+		{
+			for (int col = x; col < x + w; ++col)
+			{
+				const auto*  texel   = box.Texel(row, col);
+				const double gaps[2] = { (texel[0] - texel[1]) / 255.0,
+					                     (texel[2] - texel[1]) / 255.0 };
+				for (int c = 0; c < 2; ++c)
+				{
+					sum[c] += gaps[c];
+					squares[c] += gaps[c] * gaps[c];
+				}
+			}
+		}
+
+		const auto texels   = static_cast<double>(w) * h;
+		double     variance = 0.0;
+		for (int c = 0; c < 2; ++c)
+		{
+			const double mean = sum[c] / texels;
+			variance += squares[c] / texels - mean * mean;
+		}
+		return static_cast<float>(variance / 2.0);
+	}
+
 	Tones
 	CoveredTones(const std::string& path, int x, int y, int w, int h, float floor)
 	{

@@ -3,7 +3,6 @@
 #include <QHash>
 #include <QQueue>
 #include <QThreadPool>
-#include <assetlib/Project.h>
 #include <bgl/IRenderTarget.h>
 
 #include "Render/Renderer.h"
@@ -100,16 +99,6 @@ public:
 	/** Borrowed until replaced; drains old work before returning. Null closes the project. */
 	void
 	SetStore(const assetlib::AssetStore* store);
-
-	/**
-	 * The post-process a thumbnail ends in, the open project's; a thumbnail drawn with a toon
-	 * material ends in toon whatever this is, as its preview does. Takes effect from the next shot.
-	 */
-	void
-	SetProjectPostProcessType(assetlib::PostProcessType postProcessType) noexcept
-	{
-		m_ProjectPostProcessType = postProcessType;
-	}
 
 	/**
 	 * Drops the preview of the asset at mount key `key` after a write to it, and every preview drawn
@@ -376,10 +365,9 @@ private:
 	// The `.benv` bound and the slots it took, so nothing releases one the view still names.
 	editor::EnvironmentBinding m_Environment;
 
-	bgl::RenderTargetRef      m_RenderTarget;
-	assetlib::PostProcessType m_ProjectPostProcessType = assetlib::PostProcessType::kFilmic;
-	bgl::SceneViewRef         m_SceneView;
-	bgl::MaterialHandle       m_DefaultMaterial;
+	bgl::RenderTargetRef m_RenderTarget;
+	bgl::SceneViewRef    m_SceneView;
+	bgl::MaterialHandle  m_DefaultMaterial;
 
 	const assetlib::AssetStore* m_Store = nullptr;
 

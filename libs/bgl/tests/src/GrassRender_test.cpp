@@ -323,7 +323,7 @@ namespace
 	void
 	BackLight(const GrassScene& grass)
 	{
-		grass.view->SetPbrDirectionalLight(
+		grass.view->SetDirectionalLight(
 			{ .direction = glm::normalize(glm::vec3(0.0f, -0.3f, 1.0f)),
 		      .color     = glm::vec3(1.0f),
 		      .intensity = 3.0f });

@@ -203,13 +203,11 @@ struct FaceCharacter : IToonCharacterSurfaceSource
 			auto target         = gfx->CreateRenderTarget(targetDesc);
 			REQUIRE(target != nullptr);
 
-			auto view = gfx->CreateSceneView(scene, 4);
-			// Both suns alike: the toon character reads one and the PBR sphere the other.
-			const auto sun = bgl::DirectionalLightDesc{ .direction = -glm::normalize(toLight),
-				                                        .color     = glm::vec3(1.0f),
-				                                        .intensity = 1.0f };
-			view->SetToonDirectionalLight(sun);
-			view->SetPbrDirectionalLight(sun);
+			auto       view = gfx->CreateSceneView(scene, 4);
+			const auto sun  = bgl::DirectionalLightDesc{ .direction = -glm::normalize(toLight),
+				                                         .color     = glm::vec3(1.0f),
+				                                         .intensity = 1.0f };
+			view->SetDirectionalLight(sun);
 			const auto instance = view->CreateStaticMeshInstance(
 				bgl::StaticMeshInstanceDesc().SetGeom(
 					scene->AddSphereGeom(48, 48, c_HeadRadius, material)));

@@ -3,6 +3,7 @@
 #include <assetlib_structs/ImageData.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
+#include <bgl/glm.h>
 #include <cstdint>
 
 namespace bgl::test
@@ -30,4 +31,16 @@ namespace bgl::test
 	 */
 	void
 	ApplyBlackEnvironment(bgl::IScene* scene, bgl::ISceneView* view);
+
+	/**
+	 * Binds an environment whose sky is `radiance` on the faces `faces` names (a bit per face, +X,
+	 * -X, +Y, -Y, +Z, -Z from bit 0) and black on the rest, at exposure 1. Every face lit is a
+	 * uniform sky, whose irradiance in every direction is `radiance` in the map's 1/pi convention.
+	 */
+	void
+	ApplySkyEnvironment(
+		bgl::IScene*     scene,
+		bgl::ISceneView* view,
+		const glm::vec3& radiance,
+		uint32_t         faces = 0x3fu);
 }

@@ -137,8 +137,7 @@ TEST_CASE("A crowd drawn by its blocks steps past its ring", "[crowd_render][ren
 	orders.formation = { .frontage = 4, .spacing = 1.0f };
 	crowd->CreateGroup({ .agentType = 0, .agentCount = 16, .orders = orders });
 
-	f.view->SetPbrDirectionalLight(
-		{ .direction = glm::vec3(0.0f, -1.0f, 0.0f), .intensity = 3.0f });
+	f.view->SetDirectionalLight({ .direction = glm::vec3(0.0f, -1.0f, 0.0f), .intensity = 3.0f });
 
 	auto targetDesc     = bgl::RenderTargetDesc();
 	targetDesc.width    = 64;

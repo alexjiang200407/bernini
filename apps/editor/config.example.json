@@ -33,7 +33,7 @@
         "renderScale": 1.0,
         "taaReconstructionWidth": 0.4,
         "taaSharpness": 1.0,
-        "filmic": {
+        "postProcess": {
             "bloom": {
                 "enabled": false,
                 "intensity": 0.25,
@@ -48,40 +48,6 @@
                 "slope": { "r": 1.0, "g": 1.0, "b": 1.0 },
                 "offset": { "r": 0.0, "g": 0.0, "b": 0.0 },
                 "power": { "r": 1.0, "g": 1.0, "b": 1.0 },
-                "saturation": 1.15,
-                "contrast": 1.1,
-                "vignette": {
-                    "intensity": 0.25,
-                    "smoothness": 0.2
-                }
-            },
-            "filmGrain": {
-                "enabled": false,
-                "intensity": 0.12,
-                "size": 2.0,
-                "holdFrames": 1
-            },
-            "colorSplit": {
-                "enabled": false,
-                "offset": { "x": -2.0, "y": 0.0 },
-                "radial": 0.0
-            }
-        },
-        "toon": {
-            "bloom": {
-                "enabled": false,
-                "intensity": 0.25,
-                "threshold": 0.5,
-                "softKnee": 0.5,
-                "scatter": 0.7
-            },
-            "grade": {
-                "enabled": false,
-                "temperature": 10.0,
-                "tint": 0.0,
-                "black": { "r": 0.0, "g": 0.0, "b": 0.0 },
-                "white": { "r": 1.0, "g": 1.0, "b": 1.0 },
-                "gamma": { "r": 1.0, "g": 1.0, "b": 1.0 },
                 "saturation": 1.15,
                 "contrast": 1.1,
                 "vignette": {
@@ -118,7 +84,7 @@
         "renderScale": 1.0,
         "taaReconstructionWidth": 0.4,
         "taaSharpness": 1.0,
-        "filmic": {
+        "postProcess": {
             "bloom": {
                 "enabled": false,
                 "intensity": 0.25,
@@ -133,40 +99,6 @@
                 "slope": { "r": 1.0, "g": 1.0, "b": 1.0 },
                 "offset": { "r": 0.0, "g": 0.0, "b": 0.0 },
                 "power": { "r": 1.0, "g": 1.0, "b": 1.0 },
-                "saturation": 1.15,
-                "contrast": 1.1,
-                "vignette": {
-                    "intensity": 0.25,
-                    "smoothness": 0.2
-                }
-            },
-            "filmGrain": {
-                "enabled": false,
-                "intensity": 0.12,
-                "size": 2.0,
-                "holdFrames": 1
-            },
-            "colorSplit": {
-                "enabled": false,
-                "offset": { "x": -2.0, "y": 0.0 },
-                "radial": 0.0
-            }
-        },
-        "toon": {
-            "bloom": {
-                "enabled": false,
-                "intensity": 0.25,
-                "threshold": 0.5,
-                "softKnee": 0.5,
-                "scatter": 0.7
-            },
-            "grade": {
-                "enabled": false,
-                "temperature": 10.0,
-                "tint": 0.0,
-                "black": { "r": 0.0, "g": 0.0, "b": 0.0 },
-                "white": { "r": 1.0, "g": 1.0, "b": 1.0 },
-                "gamma": { "r": 1.0, "g": 1.0, "b": 1.0 },
                 "saturation": 1.15,
                 "contrast": 1.1,
                 "vignette": {

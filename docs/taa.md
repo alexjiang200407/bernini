@@ -363,7 +363,7 @@ flowchart TD
     HPREV["history[prev]"] --> RES
     RES --> HCUR["history[current]<br/>RGB accumulated, A view depth"]
 
-    HCUR --> PP["PostProcess<br/>(AgX)"]
+    HCUR --> PP["PostProcess<br/>(display curve)"]
     PP --> BB["backbuffer"]
 
     HCUR -. "AdvanceHistory at EndFrame" .-> HPREV

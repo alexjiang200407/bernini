@@ -14,7 +14,6 @@
 #include <bgl/types/PostProcess.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
-#include <bgl/types/SurfaceMaterialDesc.h>
 #include <bgl/types/Viewport.h>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -22,7 +21,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
-#include <variant>
 
 // Bloom end to end: enabling it spills a bright shape's light past its silhouette, intensity
 // scales the spill, a threshold above the scene kills it, and disabling restores the plain image.
@@ -160,7 +158,7 @@ TEST_CASE("Default bloom glows visibly on a scene lit at the engine's exposure",
 	const std::string onPath  = "assets/golden/bloom_default_on.got.png";
 
 	lit.Capture(offPath);
-	lit.target->SetPostProcess(bgl::FilmicPostProcess{ .bloom = bgl::BloomSettings() });
+	lit.target->SetPostProcess(bgl::PostProcess{ .bloom = bgl::BloomSettings() });
 	lit.Capture(onPath);
 
 	const float centerOff = CenterProbe(offPath, c_Size).Luma();
@@ -231,18 +229,15 @@ TEST_CASE("Bloom spills a bright silhouette and honours its settings", "[bloom][
 	};
 
 	const auto bloom = [&](const bgl::BloomSettings& settings) {
-		target->SetPostProcess(bgl::FilmicPostProcess{ .bloom = settings });
+		target->SetPostProcess(bgl::PostProcess{ .bloom = settings });
 	};
 
-	// Ill-formed settings are refused before any frame runs on them, under either post-process.
+	// Ill-formed settings are refused before any frame runs on them.
 	{
 		const auto refuses = [&](auto mutate) {
 			auto bad = bgl::BloomSettings();
 			mutate(bad);
 			REQUIRE_THROWS_AS(bloom(bad), bgl::GraphicsError);
-			REQUIRE_THROWS_AS(
-				target->SetPostProcess(bgl::ToonPostProcess{ .bloom = bad }),
-				bgl::GraphicsError);
 		};
 
 		refuses([](auto& s) { s.intensity = -0.1f; });
@@ -251,7 +246,7 @@ TEST_CASE("Bloom spills a bright silhouette and honours its settings", "[bloom][
 		refuses([](auto& s) { s.scatter = -0.5f; });
 
 		// A refused post-process leaves the one the target had: still no bloom.
-		CHECK(!std::get<bgl::FilmicPostProcess>(target->GetPostProcess()).bloom);
+		CHECK(!target->GetPostProcess().bloom);
 	}
 
 	const std::string offPath       = "assets/golden/bloom_off.got.png";
@@ -306,7 +301,7 @@ TEST_CASE("Bloom spills a bright silhouette and honours its settings", "[bloom][
 	// measures bloom being off and not the threshold that already killed the spill.
 	settings.threshold = 0.0f;
 	bloom(settings);
-	target->SetPostProcess(bgl::FilmicPostProcess());
+	target->SetPostProcess(bgl::PostProcess());
 	capture(disabledPath);
 
 	CHECK(SpillLuma(disabledPath, c_Size) < 0.01f);
@@ -359,7 +354,7 @@ TEST_CASE("An exhausted RTV pool skips bloom instead of failing the frame", "[bl
 	auto settings      = bgl::BloomSettings();
 	settings.threshold = 0.0f;
 	settings.intensity = 1.0f;
-	target->SetPostProcess(bgl::FilmicPostProcess{ .bloom = settings });
+	target->SetPostProcess(bgl::PostProcess{ .bloom = settings });
 
 	auto job     = bgl::RenderJob();
 	job.view     = view;
@@ -417,7 +412,7 @@ TEST_CASE("Bloom survives a resize, fed by the TAA resolve", "[bloom][render]")
 	auto settings      = bgl::BloomSettings();
 	settings.threshold = 0.0f;
 	settings.intensity = 1.0f;
-	target->SetPostProcess(bgl::FilmicPostProcess{ .bloom = settings });
+	target->SetPostProcess(bgl::PostProcess{ .bloom = settings });
 
 	auto job   = bgl::RenderJob();
 	job.view   = view;
@@ -444,74 +439,4 @@ TEST_CASE("Bloom survives a resize, fed by the TAA resolve", "[bloom][render]")
 	CHECK(spill > 0.01f);
 
 	std::remove(resizedPath.c_str());
-}
-
-// The chain is not clamped to the display's range under toon: an emissive above one is how a toon
-// surface asks for more glow, and what the screen combine keeps from clipping.
-TEST_CASE("Under toon an emissive above one glows further", "[bloom][tonemap][render]")
-{
-	auto opts                       = HeadlessOptions();
-	opts.gpuContext.clientShaderDir = "./shaders/tests/surfaces";
-
-	auto gfx = bgl::test::CreateGraphics(opts);
-	REQUIRE(gfx != nullptr);
-
-	auto targetDesc        = bgl::RenderTargetDesc();
-	targetDesc.width       = static_cast<int>(c_Size);
-	targetDesc.height      = static_cast<int>(c_Size);
-	targetDesc.headless    = true;
-	targetDesc.postProcess = bgl::ToonPostProcess{
-		.bloom = bgl::BloomSettings{ .intensity = 0.25f, .threshold = 0.0f },
-	};
-	auto target = gfx->CreateRenderTarget(targetDesc);
-	REQUIRE(target != nullptr);
-
-	auto scene = gfx->CreateScene(bgl::SceneDesc());
-
-	auto camera = bgl::Camera();
-	camera
-		.LookAt(
-			glm::vec3(0.0f, 0.0f, c_CameraDist),
-			glm::vec3(0.0f, 0.0f, 0.0f),
-			glm::vec3(0.0f, 1.0f, 0.0f))
-		.Perspective(glm::radians(60.0f), 1.0f, 0.5f, 500.0f);
-
-	const auto shoot = [&](float radiance, const std::string& path) {
-		const auto material = scene->CreateSurfaceMaterial(
-			bgl::SurfaceMaterialDesc{ .surfaceName = "Unlit",
-		                              .values = { { "color", glm::vec4(glm::vec3(radiance), 0.0f) },
-		                                          { "opacity", glm::vec4(1.0f) } } });
-
-		auto view = gfx->CreateSceneView(scene, 4);
-		view->CreateStaticMeshInstance(
-			bgl::StaticMeshInstanceDesc().SetGeom(scene->AddCubeGeom(material)));
-
-		auto job     = bgl::RenderJob();
-		job.view     = view;
-		job.camera   = camera;
-		job.viewport = bgl::Viewport(static_cast<float>(c_Size), static_cast<float>(c_Size));
-
-		gfx->DrawFrame(target, job);
-		gfx->DrawFrame(target, job);
-		gfx->ScreenshotPng(target, path);
-	};
-
-	const std::string onePath = "assets/golden/bloom_toon_one.got.png";
-	const std::string twoPath = "assets/golden/bloom_toon_two.got.png";
-
-	shoot(1.0f, onePath);
-	shoot(2.0f, twoPath);
-
-	// Both cubes are display white, so only the glow tells them apart.
-	CHECK(CenterProbe(onePath, c_Size).Luma() > 0.99f);
-	CHECK(CenterProbe(twoPath, c_Size).Luma() > 0.99f);
-
-	const float spillOne = SpillLuma(onePath, c_Size);
-	const float spillTwo = SpillLuma(twoPath, c_Size);
-	INFO("spill at radiance 1: " << spillOne << ", at 2: " << spillTwo);
-	CHECK(spillOne > 0.02f);
-	CHECK(spillTwo > spillOne + 0.02f);
-
-	std::remove(onePath.c_str());
-	std::remove(twoPath.c_str());
 }

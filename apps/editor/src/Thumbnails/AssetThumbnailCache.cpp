@@ -1,14 +1,11 @@
 #include "Thumbnails/AssetThumbnailCache.h"
 #include "util/editor_language.h"
+#include "util/editor_sun.h"
 #include "util/toon_backdrop.h"
-#include "util/toon_light.h"
 #include <QThread>
 #include <algorithm>
-#include <assetlib/Project.h>
 #include <assetlib/bmesh.h>
 #include <bgl/IRenderTarget.h>
-#include <bgl/types/FilmicPostProcess.h>
-#include <bgl/types/ToonPostProcess.h>
 #include <bit>
 #include <core/err/util.h>
 #include <editor_sdk/mesh_load.h>
@@ -19,7 +16,9 @@
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/PreparedStaticMesh.h>
+#include <bgl/types/DisplayCurve.h>
 #include <bgl/types/MeshInstanceHandle.h>
+#include <bgl/types/PostProcess.h>
 #include <cctype>
 #include <cstddef>
 #include <editor_plugin_api/IEditorRegistry.h>
@@ -314,7 +313,6 @@ AssetThumbnailCache::AssetThumbnailCache(AssetThumbnailDesc desc, QObject* paren
 			m_SceneView    = m_Desc.renderer->GetGraphics()->CreateSceneView(
 				m_Desc.renderer->GetScene(),
 				m_Desc.initialInstances);
-			m_SceneView->SetToonDirectionalLight(editor::DefaultToonLight());
 		}
 		catch (const std::exception& e)
 		{
@@ -1146,11 +1144,11 @@ AssetThumbnailCache::BuildShot(Shot& shot)
 {
 	const bool toon =
 		shot.item.type == ThumbnailType::kMesh ? BuildMesh(shot) : BuildMaterial(shot);
-	// A thumbnail is the asset as authored, so neither type takes an effect.
-	if (toon || m_ProjectPostProcessType == assetlib::PostProcessType::kToon)
-		m_RenderTarget->SetPostProcess(bgl::ToonPostProcess());
-	else
-		m_RenderTarget->SetPostProcess(bgl::FilmicPostProcess());
+	// The asset as authored: a toon one under the curve it is authored under, as its preview is.
+	m_RenderTarget->SetPostProcess(
+		bgl::PostProcess{ .curve =
+	                          toon ? bgl::DisplayCurve::kGranTurismo : bgl::DisplayCurve::kAgX });
+	m_SceneView->SetDirectionalLight(editor::EditorSun(toon));
 	if (toon)
 		m_SceneView->SetBackdrop(m_Desc.toonBackdrop);
 	else
