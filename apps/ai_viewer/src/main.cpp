@@ -973,8 +973,7 @@ try
 		view->SetBackdrop(bgl::BackdropGradient());
 
 	// Additive on the environment above, which already integrates whatever sun its source HDR held
-	// -- so a model measured under both is measured under two suns. One sun on screen: the PBR
-	// sun and the toon character model's are set alike. See docs/ai_viewer.md.
+	// -- so a model measured under both is measured under two suns. See docs/ai_viewer.md.
 	if (opts.sunIntensity > 0.0f)
 	{
 		const auto sun = bgl::DirectionalLightDesc{
@@ -984,8 +983,7 @@ try
 			.color     = glm::vec3(opts.sunColor[0], opts.sunColor[1], opts.sunColor[2]),
 			.intensity = opts.sunIntensity,
 		};
-		view->SetPbrDirectionalLight(sun);
-		view->SetToonDirectionalLight(sun);
+		view->SetDirectionalLight(sun);
 	}
 
 	const bool lit = envLit || opts.sunIntensity > 0.0f;

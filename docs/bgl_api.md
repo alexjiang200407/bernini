@@ -537,17 +537,13 @@ flowchart TD
 * **`SetEnvironmentMap(desc)`** — @pre irradiance and prefilter are cube maps. Takes
   `EnvironmentMapDesc` by const reference but the struct is move-only, so build it in place at the
   call site. Replaces any previous environment wholesale.
-* **`SetPbrDirectionalLight(desc)`** — @pre every component finite, `intensity` non-negative,
-  `direction` non-zero (it is normalized here). The sun every model but the toon character's reads:
-  PBR, the lit surfaces, grass. It **adds** to the
+* **`SetDirectionalLight(desc)`** — @pre every component finite, `intensity` non-negative,
+  `direction` non-zero (it is normalized here). The view's one sun, which every model reads: PBR,
+  the lit surfaces, grass, and the toon character model and its shading rigs. It **adds** to the
   environment map rather than replacing it, and the environment already integrates whatever sun its
   source HDR held, so a scene that sets both double-counts one; which to turn down is the caller's
   call, and nothing in bgl can tell. `intensity` defaults to 0, so a view that never calls this is
   lit by its environment alone.
-* **`SetToonDirectionalLight(desc)`** — the same bounds. The sun the toon character model is lit by
-  and its toon shading rigs are evaluated against, and nothing else reads: a view lights its
-  characters for their look apart from what lights its world. No fallback either way, so a view that
-  sets only the PBR sun draws its toon characters black.
 * **`SetBackdrop(gradient)` / `ClearBackdrop()`** — @pre every colour component finite and
   non-negative. A `BackdropGradient` drawn behind the scene in the sky's place, fixed to the screen:
   `bottom` at the frame's bottom edge to `top` at its top, scene-linear and unexposed. Only the draw

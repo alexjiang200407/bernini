@@ -224,7 +224,7 @@ GrassEditorWindow::GrassEditorWindow(
 			std::sin(elevation),
 			std::cos(elevation) * std::cos(azimuth));
 		const auto color = glm::vec3(1.0f, 0.96f, 0.88f);
-		view->SetPbrDirectionalLight(
+		view->SetDirectionalLight(
 			{ .direction = direction, .color = color, .intensity = c_SunIntensity });
 
 		m_Ground = context.scene.CreatePbrMaterial(

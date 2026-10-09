@@ -608,7 +608,7 @@ TEST_CASE("A toon surface material draws from its document", "[gamelib][surface]
 		targetDesc.headless = true;
 		auto target         = gfx->CreateRenderTarget(targetDesc);
 		auto view           = gfx->CreateSceneView(scene, 8);
-		view->SetToonDirectionalLight(
+		view->SetDirectionalLight(
 			{
 				.direction = glm::normalize(glm::vec3(-1.0f, 0.0f, -1.0f)),
 				.color     = glm::vec3(1.0f),

@@ -167,7 +167,7 @@ main(int argc, char** argv)
 			view->SetSkyBox({ env.skybox, env.skyMipLevel, 1.0f, env.skyRotationY });
 		}
 
-		view->SetPbrDirectionalLight(sun.Desc());
+		view->SetDirectionalLight(sun.Desc());
 
 		// The plane is authored in XY facing +Z, so it is laid flat by turning it onto its back.
 		const auto ground = scene->AddPlaneGeom(
@@ -235,7 +235,7 @@ main(int argc, char** argv)
 				if (sun.orbiting && frame > 0)
 				{
 					sun.azimuth += glm::two_pi<float>() * c_Step / c_OrbitSeconds;
-					view->SetPbrDirectionalLight(sun.Desc());
+					view->SetDirectionalLight(sun.Desc());
 				}
 
 				job.time = seconds;
@@ -310,7 +310,7 @@ main(int argc, char** argv)
 				Report(sun);
 			}
 
-			view->SetPbrDirectionalLight(sun.Desc());
+			view->SetDirectionalLight(sun.Desc());
 
 			job.time = elapsed;
 			graphics->DrawFrame(target, job);

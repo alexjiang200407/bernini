@@ -7,13 +7,12 @@
 namespace editor
 {
 	/**
-	 * The toon sun every editor view is lit by: from 30 degrees above, in front of a character
-	 * facing +Z -- where the viewports' cameras start -- in a warm white. The editor sets no PBR sun,
-	 * lighting PBR by its environment as Blender's viewport does, and the toon character model reads
-	 * no environment, so without this every toon character in the editor would draw black.
+	 * The sun every editor view is lit by: from 30 degrees above, in front of a character facing +Z
+	 * -- where the viewports' cameras start -- in a warm white. A toon character's cel bands need a
+	 * sun to fall from, and a view has one for every model, so PBR is lit by it too.
 	 */
 	[[nodiscard]] inline bgl::DirectionalLightDesc
-	DefaultToonLight() noexcept
+	DefaultSun() noexcept
 	{
 		constexpr float c_Elevation = std::numbers::pi_v<float> / 6.0f;
 		return bgl::DirectionalLightDesc{

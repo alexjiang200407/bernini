@@ -16,17 +16,26 @@ float4 ToonCel(ToonCharacterSurface surface, float halfLambert, float3 radiance)
     return float4(surface.baseColor.rgb * tone * radiance, surface.baseColor.a);
 }
 
+// What every tone is lit by: the sun, and the environment's irradiance from straight up -- one value
+// over the whole character, so a band stays flat where an irradiance along the normal would grade
+// it. In the convention PBR's Lambert lobe shares, so a lit tone in full sun reads as a PBR surface
+// of the same albedo facing it.
+float3 ToonRadiance<L : ISurfaceLight>(L light)
+{
+    return light.SunRadiance() + light.Irradiance(float3(0.0, 1.0, 0.0));
+}
+
 /**
  * The toon character model: three tones over the half-Lambert term, each the base colour times its
- * tint, times the sun's radiance. Steps of zero keep every pixel lit. Alpha is the base colour's,
- * the coverage the blended layer reads.
+ * tint, times the sun's radiance and the sky's ambient (ToonRadiance). Steps of zero keep every
+ * pixel lit. Alpha is the base colour's, the coverage the blended layer reads.
  *
  * @param normal World space, unit, facing the viewer.
  */
 public float4 ShadeToonCharacter<L : ISurfaceLight>(ToonCharacterSurface surface, L light, float3 normal)
 {
     let halfLambert = 0.5 * dot(normal, -light.SunDirection()) + 0.5 + surface.shadeOffset;
-    return ToonCel(surface, halfLambert, light.SunRadiance());
+    return ToonCel(surface, halfLambert, ToonRadiance(light));
 }
 
 // `normal` pulled `amount` of the way toward `target`, both unit; `normal` where the two cancel.
@@ -151,7 +160,7 @@ public float4 ShadeToonCharacterFace<
 
     let baseNormal = ToonFaceNormal(normal, headPos, headFromWorld, rig.faceEllipsoid, weight);
     let halfLambert = 0.5 * dot(baseNormal, toLight) + 0.5 + surface.shadeOffset + offset;
-    return ToonCel(surface, halfLambert, light.SunRadiance());
+    return ToonCel(surface, halfLambert, ToonRadiance(light));
 }
 
 /**

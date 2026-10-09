@@ -21,7 +21,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
-#include <functional>
 #include <limits>
 #include <string>
 
@@ -88,7 +87,7 @@ namespace
 	/**
 	 * A matte plane at the origin facing the camera, with no light on it at all: the environment is
 	 * black and the material reflects nothing specularly, so every photon in the frame comes from
-	 * whatever SetPbrDirectionalLight is handed next.
+	 * whatever SetDirectionalLight is handed next.
 	 */
 	Probe
 	MakeProbe(bool blackEnvironment)
@@ -216,7 +215,7 @@ TEST_CASE("A directional light lights a surface by the cosine of its angle", "[p
 	auto probe = MakeProbe(true);
 
 	const auto sunlit = [&probe](glm::vec3 direction, glm::vec3 color, float intensity) {
-		probe.view->SetPbrDirectionalLight(
+		probe.view->SetDirectionalLight(
 			{ .direction = direction, .color = color, .intensity = intensity });
 	};
 
@@ -297,13 +296,13 @@ TEST_CASE("A directional light adds to the environment beside it", "[pbr][light]
 	// view that never sets one is this, because the default intensity is 0.
 	const auto ibl = Shoot(probe, "ibl_only");
 
-	probe.view->SetPbrDirectionalLight(bgl::DirectionalLightDesc());
+	probe.view->SetDirectionalLight(bgl::DirectionalLightDesc());
 	const auto defaulted = Shoot(probe, "ibl_default_sun");
 
 	INFO("default sun " << defaulted.Luma() << " against no sun " << ibl.Luma());
 	CHECK(std::abs(defaulted.Luma() - ibl.Luma()) < c_LevelMargin);
 
-	probe.view->SetPbrDirectionalLight(
+	probe.view->SetDirectionalLight(
 		{ .direction = glm::vec3(0.0f, 0.0f, -1.0f),
 	      .color     = glm::vec3(1.0f),
 	      .intensity = c_Intensity });
@@ -313,39 +312,35 @@ TEST_CASE("A directional light adds to the environment beside it", "[pbr][light]
 	CHECK(lit.Luma() > ibl.Luma());
 }
 
-TEST_CASE("Both suns refuse a light that cannot be shaded", "[light]")
+TEST_CASE("The sun refuses a light that cannot be shaded", "[light]")
 {
 	auto probe = MakeProbe(true);
 
 	constexpr auto c_Nan = std::numeric_limits<float>::quiet_NaN();
 
-	const auto setters = std::array<std::function<void(const bgl::DirectionalLightDesc&)>, 2>{ {
-		[&](const bgl::DirectionalLightDesc& d) { probe.view->SetPbrDirectionalLight(d); },
-		[&](const bgl::DirectionalLightDesc& d) { probe.view->SetToonDirectionalLight(d); },
-	} };
+	const auto set = [&](const bgl::DirectionalLightDesc& d) {
+		probe.view->SetDirectionalLight(d);
+	};
 
-	for (const auto& set : setters)
-	{
-		// Normalizing this yields NaN, and there is no direction to fall back on -- a sun pointing
-		// nowhere is a caller that forgot to set one, not a sun that is switched off.
-		CHECK_THROWS_AS(set({ .direction = glm::vec3(0.0f) }), bgl::SceneError);
+	// Normalizing this yields NaN, and there is no direction to fall back on -- a sun pointing
+	// nowhere is a caller that forgot to set one, not a sun that is switched off.
+	CHECK_THROWS_AS(set({ .direction = glm::vec3(0.0f) }), bgl::SceneError);
 
-		CHECK_THROWS_AS(
-			set({ .direction = glm::vec3(0.0f, -1.0f, 0.0f), .intensity = -1.0f }),
-			bgl::SceneError);
+	CHECK_THROWS_AS(
+		set({ .direction = glm::vec3(0.0f, -1.0f, 0.0f), .intensity = -1.0f }),
+		bgl::SceneError);
 
-		CHECK_THROWS_AS(set({ .direction = glm::vec3(c_Nan, -1.0f, 0.0f) }), bgl::SceneError);
+	CHECK_THROWS_AS(set({ .direction = glm::vec3(c_Nan, -1.0f, 0.0f) }), bgl::SceneError);
 
-		CHECK_THROWS_AS(
-			set({ .direction = glm::vec3(0.0f, -1.0f, 0.0f), .color = glm::vec3(c_Nan) }),
-			bgl::SceneError);
+	CHECK_THROWS_AS(
+		set({ .direction = glm::vec3(0.0f, -1.0f, 0.0f), .color = glm::vec3(c_Nan) }),
+		bgl::SceneError);
 
-		CHECK_THROWS_AS(
-			set({ .direction = glm::vec3(0.0f, -1.0f, 0.0f), .intensity = c_Nan }),
-			bgl::SceneError);
+	CHECK_THROWS_AS(
+		set({ .direction = glm::vec3(0.0f, -1.0f, 0.0f), .intensity = c_Nan }),
+		bgl::SceneError);
 
-		CHECK_NOTHROW(set({ .direction = glm::vec3(0.0f, -2.0f, 0.0f), .intensity = 1.0f }));
-	}
+	CHECK_NOTHROW(set({ .direction = glm::vec3(0.0f, -2.0f, 0.0f), .intensity = 1.0f }));
 }
 
 // A plane's normal does not vary, so a head-on sun lights every point of it with the same diffuse
@@ -359,7 +354,7 @@ TEST_CASE(
 {
 	auto probe = MakeProbe(true);
 
-	probe.view->SetPbrDirectionalLight(
+	probe.view->SetDirectionalLight(
 		{ .direction = glm::vec3(0.0f, 0.0f, -1.0f),
 	      .color     = glm::vec3(1.0f),
 	      .intensity = c_Intensity });
@@ -432,10 +427,10 @@ TEST_CASE("A metal is lit by a directional light", "[pbr][light][render]")
 	      .roughnessFactor = 0.55f,
 	      .specularFactor  = 1.0f });
 
-	probe.view->SetPbrDirectionalLight(bgl::DirectionalLightDesc());
+	probe.view->SetDirectionalLight(bgl::DirectionalLightDesc());
 	const auto unlit = Shoot(probe, "metal_unlit");
 
-	probe.view->SetPbrDirectionalLight(
+	probe.view->SetDirectionalLight(
 		{ .direction = glm::vec3(0.0f, 0.0f, -1.0f),
 	      .color     = glm::vec3(1.0f),
 	      .intensity = c_Intensity });
