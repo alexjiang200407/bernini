@@ -110,12 +110,14 @@ that says nothing about it means.
 **The character is lit by the view's sun and the sky above it** (`ISceneView::SetDirectionalLight`,
 the light every model reads). `lib.math.ToonShading`'s `ShadeToonCharacter` takes the term from the
 reader's world normal and the sun's direction, picks the tone, and multiplies it by the sun's
-radiance plus the environment's irradiance from straight up: every tone, shades included, so a
-shade is the lit colour darkened by its tint and the sun's and sky's colour reach all three. The
-ambient is the irradiance *up*, not along the normal, so it is one value over the character and a
-cel band stays a flat painted tone. Both are in the convention PBR's Lambert lobe reads, so a lit
-tone in full sun is as bright as a PBR surface of the same albedo facing it, and one exposure suits
-both. There is no reflection term, no highlight and no rim. Steps of
+radiance plus 0.35 of the environment's irradiance from straight up: every tone, shades included,
+so a shade is the lit colour darkened by its tint and the sun's and sky's colour reach all three.
+The ambient is the irradiance *up*, not along the normal, so it is one value over the character and
+a cel band stays a flat painted tone. It is a share, not all of it: at the full irradiance a bright
+sky lit a character as strongly as the sun and washed its painted tones out, and at none its shade
+never took the sky's colour (judged on Marcille against the toon proof of concept).
+Both are in the convention PBR's Lambert lobe reads, so one exposure suits a character and the
+world it stands in. There is no reflection term, no highlight and no rim. Steps of
 zero keep every pixel lit, as an eye is authored. On a placement whose toon shading rig was
 evaluated this draw, a pixel that is `face` takes the rig instead, by as much as it is face: lit by
 the rig's face light rather than the sun, its base tone shaded on the rig's smoothed normal rather

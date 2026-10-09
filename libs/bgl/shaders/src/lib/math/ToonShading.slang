@@ -16,18 +16,22 @@ float4 ToonCel(ToonCharacterSurface surface, float halfLambert, float3 radiance)
     return float4(surface.baseColor.rgb * tone * radiance, surface.baseColor.a);
 }
 
-// What every tone is lit by: the sun, and the environment's irradiance from straight up -- one value
-// over the whole character, so a band stays flat where an irradiance along the normal would grade
-// it. In the convention PBR's Lambert lobe shares, so a lit tone in full sun reads as a PBR surface
-// of the same albedo facing it.
+// The share of the sky's irradiance a character takes: enough for its shade to carry the sky's
+// colour, little enough that a bright sky does not light it as strongly as the sun and wash its
+// painted tones out (docs/game_defined_surfaces.md).
+static const float c_ToonSkyShare = 0.35;
+
+// What every tone is lit by: the sun, and a share of the environment's irradiance from straight up
+// -- one value over the whole character, so a band stays flat where an irradiance along the normal
+// would grade it. In the convention PBR's Lambert lobe shares.
 float3 ToonRadiance<L : ISurfaceLight>(L light)
 {
-    return light.SunRadiance() + light.Irradiance(float3(0.0, 1.0, 0.0));
+    return light.SunRadiance() + c_ToonSkyShare * light.Irradiance(float3(0.0, 1.0, 0.0));
 }
 
 /**
  * The toon character model: three tones over the half-Lambert term, each the base colour times its
- * tint, times the sun's radiance and the sky's ambient (ToonRadiance). Steps of zero keep every
+ * tint, times the sun's radiance and a share of the sky's (ToonRadiance). Steps of zero keep every
  * pixel lit. Alpha is the base colour's, the coverage the blended layer reads.
  *
  * @param normal World space, unit, facing the viewer.

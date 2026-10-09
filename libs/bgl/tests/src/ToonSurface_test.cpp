@@ -507,7 +507,7 @@ TEST_CASE("A toon character is lit by the view's one sun", "[surface][render][to
 	}
 }
 
-// The sky's ambient: every tone takes the environment's irradiance from straight up, in the
+// The sky's ambient: every tone takes 0.35 of the environment's irradiance from straight up, in the
 // convention the sun's radiance shares, and the same value whatever the pixel's normal, so a cel
 // band stays flat. A uniform sky's irradiance is its radiance. A sky lit only above is bright
 // straight up and dim toward the horizon, where an irradiance along the normal would dim the
@@ -520,9 +520,11 @@ TEST_CASE(
 	REQUIRE(gfx != nullptr);
 	auto scene = gfx->CreateScene(ToonScene());
 
-	const glm::vec3    sky   = glm::vec3(0.2f, 0.3f, 0.5f);
-	constexpr uint32_t c_All = 0x3fu;
-	constexpr uint32_t c_Top = 1u << 2u;
+	const glm::vec3 sky = glm::vec3(0.2f, 0.3f, 0.5f);
+	// lib.math.ToonShading's c_ToonSkyShare.
+	constexpr float    c_SkyShare = 0.35f;
+	constexpr uint32_t c_All      = 0x3fu;
+	constexpr uint32_t c_Top      = 1u << 2u;
 
 	const auto shoot =
 		[&](MaterialHandle material, const uint32_t faces, const float tilt, const char* png) {
@@ -562,12 +564,13 @@ TEST_CASE(
 		scene->CreateSurfaceMaterial(Cel(c_Flat, { { "baseStep", 0.0f }, { "shadeStep", 0.0f } }));
 
 	{
-		INFO("a uniform sky lights the lit tone by its radiance");
+		INFO("a uniform sky lights the lit tone by its share of its radiance");
 		const auto* got = "assets/golden/toon_sky_uniform.got.png";
 		const auto* ref = "assets/golden/toon_sky_uniform_ref.got.png";
 		shoot(lit, c_All, 0.0f, got);
 		shoot(
-			scene->CreateSurfaceMaterial(Unlit(glm::vec4(glm::vec3(c_Flat) * sky, 1.0f))),
+			scene->CreateSurfaceMaterial(
+				Unlit(glm::vec4(glm::vec3(c_Flat) * c_SkyShare * sky, 1.0f))),
 			c_All,
 			0.0f,
 			ref);
