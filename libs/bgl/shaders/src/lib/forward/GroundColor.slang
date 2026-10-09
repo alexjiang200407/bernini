@@ -5,32 +5,49 @@ import lib.forward.common;
 import lib.forward.GameSurface;
 import lib.forward.MaterialData;
 
-// A terrain's albedo as the Ground Color pass writes it: the surface's base colour, unlit, in rgb,
-// and in alpha whether there is one. Terrain grass reads it under each blade's root
-// (docs/grass.md § Ground colour).
+// A terrain's ground as the Ground Color pass writes it: the surface's base colour, unlit, in the
+// colour target's rgb and in its alpha whether there is one, and in the cover target how much of
+// the ground the surface covers (PbrSurface::groundCover). Terrain grass reads the colour under
+// each blade's root and the cover under each clump (docs/grass.md § Ground colour, § Ground cover).
+
+public struct GroundColorOut
+{
+    public float4 color : SV_Target0;
+    public float cover : SV_Target1;
+};
 
 public extension MaterialData
 {
-    // An engine kind's base colour where the terrain patch stands.
-    public float4 GroundColorOf<M : IPbrMaterial>(ForwardVSOut input)
+    // An engine kind's base colour where the terrain patch stands, covering all of it.
+    public GroundColorOut GroundColorOf<M : IPbrMaterial>(ForwardVSOut input)
     {
         M material = M.Load(input.materialOffset);
-        return float4(material.GetBaseColor(input.uv).rgb, 1.0);
+        GroundColorOut ground;
+        ground.color = float4(material.GetBaseColor(input.uv).rgb, 1.0);
+        ground.cover = 1.0;
+        return ground;
     }
 
     // A registered surface's, evaluated with the vertex the top-down draw emits and the view's own
     // camera: an albedo that reads the view direction or the screen position is not the one the
     // colour pass shades.
-    public float4 GameGroundColorProgram<G : ISurfaceSource>(ForwardVSOut input)
+    public GroundColorOut GameGroundColorProgram<G : ISurfaceSource>(ForwardVSOut input)
     {
         let record = GameRecord<G>.Load(input.materialOffset);
-        return float4(record.Evaluate(input, true).baseColor.rgb, 1.0);
+        let surface = record.Evaluate(input, true);
+        GroundColorOut ground;
+        ground.color = float4(surface.baseColor.rgb, 1.0);
+        ground.cover = saturate(surface.groundCover);
+        return ground;
     }
 
     // A lit surface owns its lighting and has no albedo apart from it: no ground colour, so the
-    // blades over it keep their own.
-    public float4 GameLitGroundColorProgram<G : ILitSurfaceSource>(ForwardVSOut input)
+    // blades over it keep their own, and nothing said about the cover, so all of it.
+    public GroundColorOut GameLitGroundColorProgram<G : ILitSurfaceSource>(ForwardVSOut input)
     {
-        return float4(0.0, 0.0, 0.0, 0.0);
+        GroundColorOut ground;
+        ground.color = float4(0.0, 0.0, 0.0, 0.0);
+        ground.cover = 1.0;
+        return ground;
     }
 }

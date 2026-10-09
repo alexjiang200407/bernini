@@ -52,7 +52,7 @@ flowchart TD
         POSE --> TSR["Toon Shading Rigs (only when a placement holds a rig; one thread per rigged placement)"]
         TSR --> FTR["Forward Terrain (only when the scene has a terrain; one dispatch per terrain)"]
         FTR --> FWW["Forward World (indirect dispatch per static-tier bucket)"]
-        FWW --> GC["Ground Color (only when a terrain's grass takes its ground's colour; one dispatch per terrain)"]
+        FWW --> GC["Ground Color (only when a terrain's grass takes its ground's colour or follows its cover; one dispatch per terrain)"]
         GC --> GRS["Forward Grass (only when a drawn geom or a terrain has grass; one dispatch per grass bucket and terrain)"]
         GRS --> BLOB["Blob Shadows (only when the view has a disc; reads the depth as it stands)"]
         BLOB --> FWS["Forward Skinned (indirect dispatch per skinned-tier bucket)"]
@@ -872,10 +872,12 @@ no placement and moves only in the wind.
 
 #### Ground Color
 
-Draws every terrain of the scene into the view's ground-colour texture, from straight above, so
-that the grass a terrain grows can take the colour of the ground under each blade ([Grass § Ground
-colour](grass.md#ground-colour)). It is attached by `ForwardPhases::AttachGroundColor` rather than
-as a phase: its kernels have their own target, and it draws to no part of the screen.
+Draws every terrain of the scene into the view's ground-colour and ground-cover textures, from
+straight above, so that the grass a terrain grows can take the colour of the ground under each
+blade ([Grass § Ground colour](grass.md#ground-colour)) and grow by how much of it the surface
+covers ([Grass § Ground cover](grass.md#ground-cover)). It is attached by
+`ForwardPhases::AttachGroundColor` rather than as a phase: its kernels have their own targets, and
+it draws to no part of the screen.
 
 The texture is the view's (`SceneView::PrepareGroundColor`): `c_GroundColorTexels` square, sRGB
 RGBA8, centred on the camera and reaching the furthest fade end of the terrain looks that take
@@ -893,15 +895,19 @@ the view's own camera position, pixels per unit and level-of-detail terms, so th
 are chosen as the colour pass chooses them and the patches near the camera are as fine here.
 
 * **In:** the terrain stage's buffers and height texture, the material arena.
-* **Out:** the view's `groundColor` texture.
-* **Skipped** -- no pass attached -- when no terrain look takes its ground's colour.
+* **Out:** the view's `groundColor` texture, and the `groundCover` texture beside it (R8, the
+  surface's `PbrSurface::groundCover`, 1 where no terrain is drawn and under a lit surface).
+* **Skipped** -- no pass attached -- when no terrain look takes its ground's colour and no layer
+  follows its cover.
 
 ### Blob Shadows — [passes/BlobShadowPass.{h,cpp}](libs/bgl/src/passes/BlobShadowPass.cpp)
 
 Drawn between Forward's world and skinned phases, it dispatches one mesh-shader group
 per disc (`ISceneView::SetBlobShadow`), off the view's dense
 `scene.blobShadows` list — the pose list's shape. A placement's own disc is one entry, and
-`BlobShadowDesc::feet` adds one per leg; a disc of zero intensity has none. Each group emits a screen-space quad over the
+`BlobShadowDesc::feet` adds one per leg; a disc of zero intensity has none. A block that carries
+one (`MeshInstanceBlockDesc::blobShadow`) lists a disc per slot, and the group of a slot its writer
+hid this frame emits nothing, since the CPU never learns which it hid. Each group emits a screen-space quad over the
 projected bounds of the caster's shadow volume (its footprint swept `fadeHeight` down the ground
 normal) once that box is clipped to the near plane, so a volume reaching behind the camera is
 bounded by where its edges cross it; a volume wholly outside any

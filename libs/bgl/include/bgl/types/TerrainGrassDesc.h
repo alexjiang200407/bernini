@@ -17,9 +17,9 @@ namespace bgl
 	 * One layer of grass on a terrain -- see IScene::AttachTerrainGrass. Clumps of `look` stand
 	 * `spacing` apart over the whole field, each jittered within its cell and placed on the
 	 * heightfield, and the rules below decide how tall each grows: the product of a slope rule, a
-	 * height rule and a patch rule, each a share in [0, 1]. A clump scaled to nothing is not drawn,
-	 * and one near a rule's edge grows shorter, so grass thins out toward rock and snow rather
-	 * than ending on a line.
+	 * height rule and a patch rule, each a share in [0, 1], and of the ground's own cover where the
+	 * layer follows it. A clump scaled to nothing is not drawn, and one near a rule's edge grows
+	 * shorter, so grass thins out toward rock and snow rather than ending on a line.
 	 */
 	struct TerrainGrassDesc
 	{
@@ -52,6 +52,11 @@ namespace bgl
 		// threshold, in (0, 0.5]: across it a clump grows from nothing to full height, so a wider
 		// edge lets a field shorten into a bare patch rather than end on a line.
 		float patchEdge = 0.06f;
+
+		// Each clump also grows by the ground's cover under it, as the terrain's surface says it
+		// (PbrSurface::groundCover, read off the view's Ground Color pass, which the layer then
+		// makes the view draw). A surface that says nothing covers everything. Off by default.
+		bool groundCover = false;
 
 		template <typename Self>
 		Self&&
@@ -102,6 +107,14 @@ namespace bgl
 		SetPatchEdge(this Self&& self, float value) noexcept
 		{
 			self.patchEdge = value;
+			return std::forward<Self>(self);
+		}
+
+		template <typename Self>
+		Self&&
+		SetGroundCover(this Self&& self, bool value) noexcept
+		{
+			self.groundCover = value;
 			return std::forward<Self>(self);
 		}
 	};

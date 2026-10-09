@@ -1,11 +1,13 @@
 #pragma once
 #include "types/AutoRecord.h"
 #include <bgl/IMeshInstanceWriter.h>
+#include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/ToonShadingRigHandle.h>
 #include <bgpu/buffer/EntryBuffer.h>
 #include <bgpu/pipeline/ComputeKernel.h>
 #include <cstdint>
+#include <optional>
 
 namespace bgl
 {
@@ -41,5 +43,8 @@ namespace bgl
 
 		// Shared by every placement of the block, which holds one use of it until it is deleted.
 		ToonShadingRigHandle toonShadingRig;
+
+		// Cast by every placement of the block its writer shows, as MeshInstanceBlockDesc says.
+		std::optional<BlobShadowDesc> blobShadow;
 	};
 }

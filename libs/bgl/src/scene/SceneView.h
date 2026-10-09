@@ -598,20 +598,26 @@ namespace bgl
 			return m_TerrainBatches;
 		}
 
-		/** The view's ground-colour texture: what Ground Color draws, and terrain grass reads. */
+		/**
+		 * The view's ground-colour and ground-cover textures: what Ground Color draws, and terrain
+		 * grass reads. Both lie on `rect`.
+		 */
 		struct GroundColorTarget
 		{
 			bgpu::TextureHandle texture;
 			bgpu::RtvHandle     rtv;
 			bgpu::SrvHandle     srv;
+			bgpu::TextureHandle cover;
+			bgpu::RtvHandle     coverRtv;
+			bgpu::SrvHandle     coverSrv;
 			GroundColorRect     rect;
 		};
 
 		/**
-		 * Places the ground-colour texture around `camera` for this frame, creating it the first
-		 * time a terrain's grass takes its ground's colour, wide enough for the furthest fade end of
-		 * those looks. The rect's size is 0 when no terrain look takes it; a texture once made is
-		 * kept for the view's life.
+		 * Places the ground-colour and ground-cover textures around `camera` for this frame, creating
+		 * them the first time a terrain's grass takes its ground's colour or follows its cover, wide
+		 * enough for the furthest fade end of those looks. The rect's size is 0 when no terrain layer
+		 * asks for either; textures once made are kept for the view's life.
 		 *
 		 * @pre RefreshGrass has run this frame.
 		 */
@@ -657,8 +663,9 @@ namespace bgl
 		void
 		RebuildPosedList();
 
-		// Re-derives m_BlobShadows from the live placements. O(placements), and only after a blob
-		// shadow was set or cleared, or a placement carrying one was destroyed.
+		// Re-derives m_BlobShadows from the live placements and every slot of a block that carries
+		// one: O(placements + block capacity), and only after a disc was set or cleared, a placement
+		// carrying one was destroyed, or such a block was made or deleted.
 		void
 		RebuildBlobShadowList();
 
@@ -876,8 +883,8 @@ namespace bgl
 		bool                      m_TerrainDirty      = true;
 		uint64_t                  m_SceneTerrainEpoch = 0;
 
-		// The furthest fade end of the terrain looks taking their ground's colour, found by
-		// RefreshGrass; 0 when none does.
+		// The furthest fade end of the terrain looks taking their ground's colour or whose layer
+		// follows its cover, found by RefreshGrass; 0 when none does.
 		float             m_GroundColorReach = 0.0f;
 		GroundColorTarget m_GroundColor;
 

@@ -424,9 +424,11 @@ flowchart TD
   axis-aligned. The refusals are listed on `CreateTerrain`; `DeleteTerrain` refuses a null or
   deleted handle, leaves the material alone and releases the looks the terrain's grass held.
 * **`AttachTerrainGrass(terrain, layers)`** — grass on a terrain, one `TerrainGrassDesc` per layer:
-  a look, the spacing of its clumps, and the slope, height and patch rules that decide how tall each
-  grows where it stands. Nothing per clump is stored or uploaded; the grass stage builds the clumps
-  around the camera from the heightfield ([Grass § On a terrain](grass.md#on-a-terrain)).
+  a look, the spacing of its clumps, the slope, height and patch rules that decide how tall each
+  grows where it stands, and whether the ground's own cover scales it too (`groundCover`, what the
+  terrain's surface declares, [Grass § Ground cover](grass.md#ground-cover)). Nothing per clump is
+  stored or uploaded; the grass stage builds the clumps around the camera from the heightfield
+  ([Grass § On a terrain](grass.md#on-a-terrain)).
   Attaching again replaces the terrain's layers and releases the looks they held; an empty span
   takes its grass away. Every layer is checked before any is written, and the refusals are listed
   on the call.
@@ -462,6 +464,9 @@ flowchart TD
   the `Write Instance Blocks` pass runs every block's writer first (docs/passes.md).
   `desc.toonShadingRig` gives every placement of the block one toon shading rig, checked as
   `SetToonShadingRig` checks a placement's and held by the block until it is deleted.
+  `desc.blobShadow` gives every placement of the block a blob shadow, checked as `SetBlobShadow`
+  checks a placement's: one disc per slot, cast from wherever its writer placed it that frame, and
+  none from a slot it hid.
 * **`SetBlockWriter(block, writer)` / `GetBlockParams(block)`** — binds a writer compiled by
   the same `IGraphics`, for the block's kind of geom, and gives the block its own copy of the writer's `Params`, written by name
   like any constant buffer and kept across frames. Rebinding starts from zeros; null unbinds, and

@@ -80,7 +80,10 @@ A sibling contract for a surface that owns its lighting — `ILitSurfaceSource`,
 returns pre-exposure radiance through an `ISurfaceLight` of the sun and the environment — draws
 through lit programs of its own, and the engine's PBR never runs for it. Nothing reaches either
 contract's answer after it returns: geometry AO baked on a second UV set is the surface's to take,
-like any other map (below).
+like any other map (below). One field of a `PbrSurface` no lighting reads: `groundCover`, how much
+of the ground the pixel is covered, which the Ground Color pass writes off a terrain for the grass
+that follows its ground to grow by ([Grass § Ground cover](grass.md#ground-cover)). A surface that
+says nothing covers everything.
 
 ## Toon surfaces
 

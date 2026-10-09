@@ -3,11 +3,15 @@
 #include "util/TestGraphics.h"
 #include "util/TestOptions.h"
 #include <bgl/IGraphics.h>
+#include <bgl/IMeshInstanceWriter.h>
 #include <bgl/IScene.h>
 #include <bgl/ISceneView.h>
 #include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/Camera.h>
 #include <bgl/types/GroundPlaneDesc.h>
+#include <bgl/types/MeshInstanceBlockDesc.h>
+#include <bgl/types/MeshInstanceBlockHandle.h>
+#include <bgl/types/MeshInstanceWriterDesc.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <filesystem>
@@ -717,4 +721,236 @@ TEST_CASE(
 
 	std::filesystem::remove(basePath);
 	(void)groundInstance;
+}
+
+TEST_CASE(
+	"A block's slots cast blob shadows where their writer places them, and none where it hides "
+	"them",
+	"[blobshadow][instance_block][render]")
+{
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
+
+	auto gfx = bgl::test::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+	REQUIRE(target != nullptr);
+
+	auto sceneDesc                        = bgl::SceneDesc();
+	sceneDesc.initialGeom                 = 4;
+	sceneDesc.initialMeshlets             = 128;
+	sceneDesc.initialSubmeshes            = 4;
+	sceneDesc.initialVertexBufferByteSize = 100000;
+	sceneDesc.initialIndices              = 4000;
+	sceneDesc.initialPbrMaterials         = 8;
+
+	auto scene = gfx->CreateScene(sceneDesc);
+	auto view  = gfx->CreateSceneView(scene, 8);
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+	scene->SetGround(bgl::GroundPlaneDesc());
+
+	auto whiteDesc            = bgl::PbrMaterialDesc();
+	whiteDesc.baseColorFactor = glm::vec4(1.0f);
+	whiteDesc.metallicFactor  = 0.0f;
+	whiteDesc.roughnessFactor = 1.0f;
+	const auto white          = scene->CreatePbrMaterial(whiteDesc);
+
+	const auto groundGeom = scene->AddPlaneGeom(1, 1, 12.0f, 12.0f, white);
+	const auto casterGeom = scene->AddPlaneGeom(1, 1, 0.5f, 0.5f, white);
+	view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc().SetGeom(groundGeom).SetTransform(c_Flat));
+
+	// The block's writer stands its first `shown` slots in a row from its origin: the same small
+	// caster the placement case hovers, half a metre over the origin, or nothing.
+	const auto mover = gfx->CreateMeshInstanceWriter(
+		bgl::MeshInstanceWriterDesc()
+			.SetSlangModuleName("MeshInstanceWriterMover")
+			.SetSlangTypeName("MeshInstanceWriterMover"));
+	auto desc       = bgl::BlobShadowDesc();
+	desc.radius     = c_Radius;
+	desc.intensity  = c_Intensity;
+	desc.fadeHeight = c_FadeHeight;
+	// A first block whose writer shows nothing, so the block under test is the second listed: a
+	// disc's placement index is its block's run plus the slot, whichever block it is.
+	const auto empty = view->CreateMeshInstanceBlock(
+		bgl::MeshInstanceBlockDesc().SetGeom(casterGeom).SetCapacity(8192).SetBlobShadow(desc));
+	view->SetBlockWriter(empty, mover);
+	view->GetBlockParams(empty)["shown"] = 0u;
+	const auto block                     = view->CreateMeshInstanceBlock(
+		bgl::MeshInstanceBlockDesc().SetGeom(casterGeom).SetCapacity(4).SetBlobShadow(desc));
+	view->SetBlockWriter(block, mover);
+	const auto show = [&](const uint32_t shown) {
+		auto params       = view->GetBlockParams(block);
+		params["origin"]  = glm::vec3(0.0f, 0.5f, 0.0f);
+		params["spacing"] = 0.0f;
+		params["motion"]  = glm::vec3(0.0f);
+		params["shown"]   = shown;
+	};
+
+	auto camera = bgl::Camera();
+	camera
+		.LookAt(
+			glm::vec3(0.0f, 8.0f, 14.0f),
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(
+			glm::radians(60.0f),
+			static_cast<float>(c_Width) / static_cast<float>(c_Height),
+			0.5f,
+			500.0f);
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = camera;
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+
+	// The placement case's box: in the disc's dark core, below the caster.
+	const auto sample = [&](const char* name) {
+		const auto path =
+			(std::filesystem::temp_directory_path() / (std::string(name) + ".png")).string();
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, path);
+		const bgl::test::Rgba box =
+			bgl::test::MeanColor(path, c_SampleX, c_SampleY, c_SampleSize, c_SampleSize);
+		std::filesystem::remove(path);
+		return box.Luma();
+	};
+
+	show(0);
+	const float hidden = sample("bernini_blob_block_hidden");
+	REQUIRE(hidden > 0.05f);
+
+	show(1);
+	const float shown = sample("bernini_blob_block_shown");
+	CHECK(shown < hidden * 0.88f);
+
+	show(0);
+	const float hiddenAgain = sample("bernini_blob_block_hidden_again");
+	CHECK(hiddenAgain > hidden * 0.95f);
+
+	// The record is checked as a placement's is.
+	auto bad   = desc;
+	bad.radius = 0.0f;
+	CHECK_THROWS_AS(
+		view->CreateMeshInstanceBlock(
+			bgl::MeshInstanceBlockDesc().SetGeom(casterGeom).SetCapacity(1).SetBlobShadow(bad)),
+		bgl::SceneError);
+
+	view->DeleteMeshInstanceBlock(block);
+	const float deleted = sample("bernini_blob_block_deleted");
+	CHECK(deleted > hidden * 0.95f);
+}
+
+TEST_CASE("A blob shadow lands on a terrain as on a plane", "[blobshadow][terrain][render]")
+{
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
+	auto gfx                         = bgl::test::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = static_cast<int>(c_Width);
+	targetDesc.height   = static_cast<int>(c_Height);
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                = bgl::SceneDesc();
+	sceneDesc.initialPbrMaterials = 8;
+	auto scene                    = gfx->CreateScene(sceneDesc);
+	auto view                     = gfx->CreateSceneView(scene, 8);
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+
+	auto whiteDesc            = bgl::PbrMaterialDesc();
+	whiteDesc.metallicFactor  = 0.0f;
+	whiteDesc.roughnessFactor = 1.0f;
+	const auto white          = scene->CreatePbrMaterial(whiteDesc);
+
+	// A flat 63 m field at height 0, the caster hovering over its middle as the plane case hovers
+	// over the origin, the camera the same height and distance away.
+	auto field        = assetlib::Heightfield();
+	field.samplesX    = 64;
+	field.samplesZ    = 64;
+	field.cellSize    = 1.0f;
+	field.heightRange = 1.0f;
+	field.heights.assign(64 * 64, 0);
+	scene->CreateTerrain(bgl::TerrainDesc().SetHeightfield(&field).SetMaterial(white));
+
+	const auto casterGeom = scene->AddPlaneGeom(1, 1, 0.5f, 0.5f, white);
+	const auto caster     = view->CreateStaticMeshInstance(
+		bgl::StaticMeshInstanceDesc()
+			.SetGeom(casterGeom)
+			.SetTransform(glm::translate(glm::mat4(1.0f), glm::vec3(32.0f, 0.5f, 32.0f)) * c_Flat));
+
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
+	job.camera
+		.LookAt(
+			glm::vec3(32.0f, 8.0f, 46.0f),
+			glm::vec3(32.0f, 0.0f, 32.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(
+			glm::radians(60.0f),
+			static_cast<float>(c_Width) / static_cast<float>(c_Height),
+			0.5f,
+			500.0f);
+
+	const auto sample = [&](const char* name) {
+		const auto path =
+			(std::filesystem::temp_directory_path() / (std::string(name) + ".png")).string();
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, path);
+		const bgl::test::Rgba box =
+			bgl::test::MeanColor(path, c_SampleX, c_SampleY, c_SampleSize, c_SampleSize);
+		std::filesystem::remove(path);
+		return box.Luma();
+	};
+
+	const float base = sample("bernini_blob_terrain_base");
+	REQUIRE(base > 0.05f);
+
+	auto desc       = bgl::BlobShadowDesc();
+	desc.radius     = c_Radius;
+	desc.intensity  = c_Intensity;
+	desc.fadeHeight = c_FadeHeight;
+	view->SetBlobShadow(caster, desc);
+	const float shadowed = sample("bernini_blob_terrain_shadowed");
+	CHECK(shadowed < base * 0.88f);
+
+	// Seen from a spectator's height and distance, a few degrees above the ground, with a
+	// battlefield's far plane: the receiver is the same ground and the disc must still land. A
+	// flat disc foreshortens to a band a few pixels tall there and reads faintly, so what is
+	// pinned is that it lands at all; a caster meant to be seen this way wants a wider disc.
+	view->ClearBlobShadow(caster);
+	job.camera
+		.LookAt(
+			glm::vec3(32.0f, 6.0f, 72.0f),
+			glm::vec3(32.0f, 0.0f, 32.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(
+			glm::radians(50.0f),
+			static_cast<float>(c_Width) / static_cast<float>(c_Height),
+			0.5f,
+			4000.0f);
+	// Foreshortened to a band a few pixels tall just below the centre, so the box is that band.
+	const auto band = [&](const char* name) {
+		const auto path =
+			(std::filesystem::temp_directory_path() / (std::string(name) + ".png")).string();
+		gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, path);
+		const bgl::test::Rgba box = bgl::test::MeanColor(path, 370, 301, 60, 6);
+		std::filesystem::remove(path);
+		return box.Luma();
+	};
+	const float grazingBase = band("bernini_blob_terrain_grazing_base");
+	view->SetBlobShadow(caster, desc);
+	const float grazing = band("bernini_blob_terrain_grazing");
+	INFO("grazing: bare " << grazingBase << " shadowed " << grazing);
+	CHECK(grazing < grazingBase * 0.98f);
 }

@@ -169,7 +169,8 @@ namespace bgl
 	{
 		GrassHandle       look;
 		core::slot_handle entry;
-		float             tileSize = 0.0f;
+		float             tileSize    = 0.0f;
+		bool              groundCover = false;
 	};
 
 	/**

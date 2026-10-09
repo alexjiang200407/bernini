@@ -7,6 +7,7 @@
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "scene/scene_buffer_names.h"
+#include <algorithm>
 #include <array>
 #include <bgl/ISceneView.h>
 #include <bgl/types/GroundPlaneDesc.h>
@@ -44,12 +45,13 @@ namespace bgl
 
 		// Every member Draw writes, kept beside the code that writes them so BindingNameCheck catches
 		// a shader rename at startup.
-		constexpr std::array<std::string_view, 17> c_Fields = {
-			"instanceLod"sv,     "instancePose"sv,   "dominantFrames"sv, "boneAnimTables"sv,
-			"clipBuffer"sv,      "time"sv,           "blobBuffer"sv,     "meshBuffer"sv,
-			"palettes"sv,        "playbackBuffer"sv, "rigs"sv,           "worldDepth"sv,
-			"grassRootHeight"sv, "viewProj"sv,       "invViewProj"sv,    "groundNormal"sv,
-			"viewportRect"sv,
+		constexpr std::array<std::string_view, 18> c_Fields = {
+			"instanceLod"sv,    "instancePose"sv,    "dominantFrames"sv,
+			"boneAnimTables"sv, "clipBuffer"sv,      "time"sv,
+			"blobBuffer"sv,     "meshBuffer"sv,      "blobCount"sv,
+			"palettes"sv,       "playbackBuffer"sv,  "rigs"sv,
+			"worldDepth"sv,     "grassRootHeight"sv, "viewProj"sv,
+			"invViewProj"sv,    "groundNormal"sv,    "viewportRect"sv,
 		};
 	}
 
@@ -157,6 +159,7 @@ namespace bgl
 			uniforms["clipBuffer"]     = resources.GetBuffer("scene.clipBuffer");
 			uniforms["boneAnimTables"] = resources.GetBuffer("scene.boneAnimTables");
 			uniforms["time"]           = draw.clock.time;
+			uniforms["blobCount"]      = blobs;
 			uniforms["dominantFrames"] = resources.GetBuffer(c_DominantFramesName);
 			uniforms["instanceLod"]    = resources.GetBuffer(c_InstanceLodName);
 			uniforms["instancePose"]   = resources.GetBuffer(c_InstancePoseName);
@@ -188,6 +191,9 @@ namespace bgl
 
 		bgpu::ICommandList* cmd = resources.GetCommandList();
 		cmd->SetMeshletState(gfxState);
-		cmd->DispatchMesh(blobs, 1, 1);
+		// One group per disc, folded over two dimensions: a block lists a disc per slot, and a mesh
+		// dispatch takes 65535 groups along one.
+		constexpr uint32_t c_Width = 65535u;
+		cmd->DispatchMesh(std::min(blobs, c_Width), (blobs + c_Width - 1) / c_Width, 1);
 	}
 }

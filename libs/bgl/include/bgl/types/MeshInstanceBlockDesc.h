@@ -1,8 +1,10 @@
 #pragma once
+#include <bgl/types/BlobShadowDesc.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/InstanceDesc.h>
 #include <bgl/types/ToonShadingRigHandle.h>
 #include <cstdint>
+#include <optional>
 #include <utility>
 
 namespace bgl
@@ -38,6 +40,11 @@ namespace bgl
 		// See ToonShadingRigDesc.
 		ToonShadingRigHandle toonShadingRig;
 
+		// Every placement of the block casts this blob shadow, from wherever its writer placed it
+		// that frame and not from a slot it hid; checked as SetBlobShadow checks a placement's.
+		// Feet need a skinned geom whose rig authored legs.
+		std::optional<BlobShadowDesc> blobShadow;
+
 		template <typename Self>
 		Self&&
 		SetGeom(this Self&& self, GeomHandle geom) noexcept
@@ -67,6 +74,14 @@ namespace bgl
 		SetToonShadingRig(this Self&& self, ToonShadingRigHandle rig) noexcept
 		{
 			self.toonShadingRig = rig;
+			return std::forward<Self>(self);
+		}
+
+		template <typename Self>
+		Self&&
+		SetBlobShadow(this Self&& self, const BlobShadowDesc& desc) noexcept
+		{
+			self.blobShadow = desc;
 			return std::forward<Self>(self);
 		}
 	};

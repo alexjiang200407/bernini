@@ -30,10 +30,11 @@ public struct GrassData
     public Texture2D.Handle heights;
     public SamplerState.Handle heightSampler;
 
-    // The view's ground-colour texture (the Ground Color pass) and where it lies: the world xz of its
-    // corner, the inverse of its side, and in w 1 when there is one. Read by a terrain's blades alone,
-    // through the clamping sampler.
+    // The view's ground-colour and ground-cover textures (the Ground Color pass) and where both lie:
+    // the world xz of their corner, the inverse of their side, and in w 1 when there are any. Read
+    // by a terrain's blades alone, through the clamping sampler.
     public Texture2D.Handle groundColor;
+    public Texture2D.Handle groundCover;
     public float4 groundColorRect;
 
     public float3 cameraPos;

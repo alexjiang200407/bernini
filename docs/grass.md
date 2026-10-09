@@ -13,7 +13,7 @@ or in memory: a field costs its clumps.
 |---|---|---|
 | a look | `bgl::GrassDesc` ([GrassDesc.h](../libs/bgl/include/bgl/types/GrassDesc.h)), authored as a `.bgrass` | the material, the blade's shape, blades per clump, the fade and the thinning, the response to wind, the lighting terms, how far a terrain's blades take their ground's colour |
 | the fields | `assetlib::GrassGeometry` ([GrassGeometry.h](../libs/assetlib_structs/include/assetlib_structs/GrassGeometry.h)), embedded in `BMesh::grassFields` | named fields with a mesh index and look slot; chunks of at most `c_GrassClumpsPerChunk` (64) clumps with a bound each; the clumps |
-| a terrain's layers | `bgl::TerrainGrassDesc` ([TerrainGrassDesc.h](../libs/bgl/include/bgl/types/TerrainGrassDesc.h)), through `IScene::AttachTerrainGrass` | the look, the clumps' spacing, and the slope, height and patch rules that scale them -- nothing per clump ([On a terrain](#on-a-terrain)) |
+| a terrain's layers | `bgl::TerrainGrassDesc` ([TerrainGrassDesc.h](../libs/bgl/include/bgl/types/TerrainGrassDesc.h)), through `IScene::AttachTerrainGrass` | the look, the clumps' spacing, the slope, height and patch rules that scale them, and whether the ground's own cover scales them too -- nothing per clump ([On a terrain](#on-a-terrain)) |
 
 A clump is a point, a height scale, a ground normal and a colour. The cook sorts a field's clumps
 along a Morton curve before cutting chunks (`assetlib/src/grass/grass_chunks.cpp`), so a chunk is a
@@ -67,8 +67,11 @@ A stored clump list grows with the field's area; a layer costs the same on a fie
   value noise about `patchSize` across against `patchCoverage`, with a soft edge `patchEdge` of the
   noise wide either side of the threshold). A clump scaled
   to nothing is not drawn, and one near a rule's edge is shorter, so grass thins toward rock or
-  snow rather than ending on a line. Nothing is painted: the rules are set to agree with the
-  ground's surface by hand, since the engine cannot read a project surface's bands.
+  snow rather than ending on a line. A layer that follows its ground (`groundCover`) multiplies
+  in a fourth share: the cover the terrain's surface declares where the clump stands
+  ([Ground cover](#ground-cover)), so the ground decides where grass grows and a surface's bands
+  need not be matched by rules set by hand. Nothing is painted in the engine: a painted map is
+  the surface's to sample.
 
 The window is what a layer pays for whether or not a blade survives in it: one amplification group
 per tile, (2 * ceil(fadeEnd / tile) + 3)^2 of them, at most `c_MaxTerrainGrassWindowTiles` (255) a
@@ -263,6 +266,27 @@ Unreal's runtime virtual texture, used for grass the same way, is the standard t
 texture is redrawn whole every frame; an incremental, toroidal update is the next step if the pass
 ever costs.
 
+## Ground cover
+
+A terrain's surface knows what its ground *is* where a layer's rules only know how steep and how
+high it stands: a dirt patch, a road, a scorched field or a trampled camp are places the surface
+paints, by noise or by a map, and grass should thin there without a second copy of that decision in
+the layer. So a surface says how much of the ground a pixel is covered -- `PbrSurface::groundCover`,
+in [0, 1], 1 unless it says otherwise -- and the Ground Color pass writes it beside the albedo, into
+the view's ground-cover texture (R8, the same square and texels as the colour). A layer that
+**follows its ground** (`TerrainGrassDesc::groundCover`) reads it under each clump as the
+amplification stage builds the clump (`TerrainGroundCover`) and multiplies its growth by it, as the
+rules are multiplied: a clump on bare ground is not drawn, one on half-covered ground is half as
+tall. A layer that does not follow reads nothing and grows as its rules alone say; a look taking
+no colour and a layer following its cover still make the view draw the pass, which costs the same
+either way. A lit surface (`ILitSurfaceSource`) returns no `PbrSurface` and covers everything.
+
+The cover is sampled at the clump, not the blade, so a patch's edge is as fine as the clumps are
+spaced and the texture is, about 18 cm a texel at a 45 m fade; a surface's own soft edge does the
+rest. It is the painted density Unreal's Landscape Grass Type reads off its layer weights, with the
+surface in place of the weights: nothing is painted in the engine, and a map a game paints reaches
+the grass the moment its surface samples it.
+
 ## Cost
 
 `[.grasscost]` (`libs/bgl/tests/src/GrassCost_test.cpp`, run by hand) draws an 82,176-clump
@@ -328,8 +352,8 @@ A terrain's grass is paid for in the look's fade and the layer's spacing.
 
 ## Kept open
 
-Three things were left unbuilt on purpose, each with the seam it will arrive through, so none needs
-the pass rewritten.
+Two things were left unbuilt on purpose, each with the seam it will arrive through, so neither
+needs the pass rewritten.
 
 **Collision and trampling.** The standard is a few sphere or capsule displacers evaluated per blade
 (Ghost of Tsushima; Unreal's world-position offset) and a camera-following trample texture a splat
@@ -346,9 +370,7 @@ pass writes and that relaxes over time. The seams:
 
 The API itself is not designed: it faces gameplay and has no consumer yet.
 
-**A painted density.** A terrain layer's rules decide everywhere alike; a road, a scorched field or a
-trampled camp is a place, which a map painted over the field says and a rule does not. The seam is
-`TerrainGrassGrowth`, the one function a clump's scale comes from: a density texture sampled there
-multiplies the rules, and a layer that names none reads as one. Unreal's Landscape Grass Type reads
-its layer weights the same way.
+**A painted density** was the third, and arrived as the ground's cover ([Ground cover](#ground-cover)):
+a surface that samples a painted map and returns it as `groundCover` paints the grass with it, and
+the engine holds no map of its own.
 

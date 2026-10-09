@@ -1055,6 +1055,59 @@ namespace bgl
 		return desc;
 	}
 
+	namespace
+	{
+		// What a blob shadow desc must hold, a placement's own or a block's; `hasLegs` says whether
+		// its feet would have legs to stand on. Throws SceneError naming the field.
+		void
+		ValidateBlobShadowDesc(const BlobShadowDesc& desc, const bool hasLegs)
+		{
+			if (!std::isfinite(desc.radius) || desc.radius <= 0.0f)
+			{
+				throw SceneError("BlobShadowDesc::radius must be finite and positive");
+			}
+			if (!std::isfinite(desc.intensity) || desc.intensity < 0.0f || desc.intensity > 1.0f)
+			{
+				throw SceneError("BlobShadowDesc::intensity must be finite and in [0, 1]");
+			}
+			if (!std::isfinite(desc.fadeHeight) || desc.fadeHeight <= 0.0f)
+			{
+				throw SceneError("BlobShadowDesc::fadeHeight must be finite and positive");
+			}
+			if (!std::isfinite(desc.casterLift) || desc.casterLift < 0.0f)
+			{
+				throw SceneError("BlobShadowDesc::casterLift must be finite and non-negative");
+			}
+
+			if (desc.feet.has_value())
+			{
+				if (!hasLegs)
+				{
+					throw SceneError(
+						"BlobShadowDesc::feet needs a skinned placement whose rig authored legs");
+				}
+				if (!std::isfinite(desc.feet->radius) || desc.feet->radius <= 0.0f)
+				{
+					throw SceneError("FootShadowDesc::radius must be finite and positive");
+				}
+				if (!std::isfinite(desc.feet->intensity) || desc.feet->intensity < 0.0f ||
+				    desc.feet->intensity > 1.0f)
+				{
+					throw SceneError("FootShadowDesc::intensity must be finite and in [0, 1]");
+				}
+				if (!std::isfinite(desc.feet->fadeHeight) || desc.feet->fadeHeight <= 0.0f)
+				{
+					throw SceneError("FootShadowDesc::fadeHeight must be finite and positive");
+				}
+				if (!std::isfinite(desc.feet->maxReceiverRise) || desc.feet->maxReceiverRise < 0.0f)
+				{
+					throw SceneError(
+						"FootShadowDesc::maxReceiverRise must be finite and non-negative");
+				}
+			}
+		}
+	}
+
 	void
 	SceneView::SetBlobShadow(MeshInstanceHandle instance, const BlobShadowDesc& desc)
 	{
@@ -1063,48 +1116,7 @@ namespace bgl
 			throw SceneError(
 				"MeshInstanceHandle passed to SetBlobShadow is invalid or already removed");
 		}
-		if (!std::isfinite(desc.radius) || desc.radius <= 0.0f)
-		{
-			throw SceneError("BlobShadowDesc::radius must be finite and positive");
-		}
-		if (!std::isfinite(desc.intensity) || desc.intensity < 0.0f || desc.intensity > 1.0f)
-		{
-			throw SceneError("BlobShadowDesc::intensity must be finite and in [0, 1]");
-		}
-		if (!std::isfinite(desc.fadeHeight) || desc.fadeHeight <= 0.0f)
-		{
-			throw SceneError("BlobShadowDesc::fadeHeight must be finite and positive");
-		}
-		if (!std::isfinite(desc.casterLift) || desc.casterLift < 0.0f)
-		{
-			throw SceneError("BlobShadowDesc::casterLift must be finite and non-negative");
-		}
-
-		if (desc.feet.has_value())
-		{
-			if (!HasLegs(instance))
-			{
-				throw SceneError(
-					"BlobShadowDesc::feet needs a skinned placement whose rig authored legs");
-			}
-			if (!std::isfinite(desc.feet->radius) || desc.feet->radius <= 0.0f)
-			{
-				throw SceneError("FootShadowDesc::radius must be finite and positive");
-			}
-			if (!std::isfinite(desc.feet->intensity) || desc.feet->intensity < 0.0f ||
-			    desc.feet->intensity > 1.0f)
-			{
-				throw SceneError("FootShadowDesc::intensity must be finite and in [0, 1]");
-			}
-			if (!std::isfinite(desc.feet->fadeHeight) || desc.feet->fadeHeight <= 0.0f)
-			{
-				throw SceneError("FootShadowDesc::fadeHeight must be finite and positive");
-			}
-			if (!std::isfinite(desc.feet->maxReceiverRise) || desc.feet->maxReceiverRise < 0.0f)
-			{
-				throw SceneError("FootShadowDesc::maxReceiverRise must be finite and non-negative");
-			}
-		}
+		ValidateBlobShadowDesc(desc, HasLegs(instance));
 
 		m_MeshBuffer.MetaAt(instance.handle.index).blobShadow = desc;
 		m_BlobShadowsDirty                                    = true;
@@ -1564,7 +1576,7 @@ namespace bgl
 			for (const TerrainGrassRecord& layer : terrain.grass)
 			{
 				const Scene::GrassLookRef look = m_SceneRaw->GetGrassLook(layer.look);
-				if (look.takesGroundColor)
+				if (look.takesGroundColor || layer.groundCover)
 				{
 					m_GroundColorReach = std::max(m_GroundColorReach, look.fadeEnd);
 				}
@@ -1640,6 +1652,19 @@ namespace bgl
 		srvDesc.format    = c_GroundColorFormat;
 		srvDesc.debugName = std::format("{} Ground Color SRV", m_NamePrefix);
 		m_GroundColor.srv = m_ResourceManager->CreateSrv(m_GroundColor.texture, srvDesc);
+
+		desc.format    = c_GroundCoverFormat;
+		desc.debugName = std::format("{} Ground Cover", m_NamePrefix);
+		desc.clearValue.SetColor(bgpu::Color(1.0f, 1.0f, 1.0f, 1.0f));
+		m_GroundColor.cover = m_ResourceManager->CreateTexture(desc);
+
+		rtvDesc.format         = c_GroundCoverFormat;
+		rtvDesc.debugName      = std::format("{} Ground Cover RTV", m_NamePrefix);
+		m_GroundColor.coverRtv = m_ResourceManager->CreateRtv(m_GroundColor.cover, rtvDesc);
+
+		srvDesc.format         = c_GroundCoverFormat;
+		srvDesc.debugName      = std::format("{} Ground Cover SRV", m_NamePrefix);
+		m_GroundColor.coverSrv = m_ResourceManager->CreateSrv(m_GroundColor.cover, srvDesc);
 	}
 
 	void
@@ -1719,6 +1744,36 @@ namespace bgl
 	{
 		auto list = std::vector<idl::BlobShadow>();
 
+		// A disc of zero intensity darkens nothing, so it costs nothing either: that is how a
+		// caller asks for the feet alone.
+		const auto add =
+			[&](const uint32_t meshIndex, const BlobShadowDesc& desc, const uint32_t legs) {
+				if (desc.intensity > 0.0f)
+				{
+					auto& entry      = list.emplace_back();
+					entry.mesh       = meshIndex;
+					entry.radius     = desc.radius;
+					entry.intensity  = desc.intensity;
+					entry.fadeHeight = desc.fadeHeight;
+					entry.lift       = desc.casterLift;
+					entry.leg        = idl::cBodyDisc;
+				}
+
+				if (desc.feet.has_value() && desc.feet->intensity > 0.0f)
+				{
+					for (uint32_t leg = 0; leg < legs; ++leg)
+					{
+						auto& entry      = list.emplace_back();
+						entry.mesh       = meshIndex;
+						entry.radius     = desc.feet->radius;
+						entry.intensity  = desc.feet->intensity;
+						entry.fadeHeight = desc.feet->fadeHeight;
+						entry.lift       = desc.feet->maxReceiverRise;
+						entry.leg        = leg;
+					}
+				}
+			};
+
 		for (uint32_t meshIndex = 0; meshIndex < m_MeshBuffer.Capacity(); ++meshIndex)
 		{
 			if (!m_MeshBuffer.IsIndexValid(meshIndex))
@@ -1733,32 +1788,23 @@ namespace bgl
 				continue;
 			}
 
-			// A disc of zero intensity darkens nothing, so it costs nothing either: that is how a
-			// caller asks for the feet alone.
-			const BlobShadowDesc& desc = *meta.blobShadow;
-			if (desc.intensity > 0.0f)
-			{
-				auto& entry      = list.emplace_back();
-				entry.mesh       = meshIndex;
-				entry.radius     = desc.radius;
-				entry.intensity  = desc.intensity;
-				entry.fadeHeight = desc.fadeHeight;
-				entry.lift       = desc.casterLift;
-				entry.leg        = idl::cBodyDisc;
-			}
+			add(meshIndex, *meta.blobShadow, LegCountOf(meta));
+		}
 
-			if (desc.feet.has_value() && desc.feet->intensity > 0.0f)
+		// A block's slots cast as placements do, every one listed whether its writer showed it this
+		// frame or not: the CPU never learns which it hid, so the pass skips a hidden slot itself.
+		for (uint32_t index = 0; index < m_InstanceBlocks.capacity(); ++index)
+		{
+			if (!m_InstanceBlocks.allocated(index) ||
+			    !m_InstanceBlocks[index].blobShadow.has_value())
 			{
-				for (uint32_t leg = 0; leg < LegCountOf(meta); ++leg)
-				{
-					auto& entry      = list.emplace_back();
-					entry.mesh       = meshIndex;
-					entry.radius     = desc.feet->radius;
-					entry.intensity  = desc.feet->intensity;
-					entry.fadeHeight = desc.feet->fadeHeight;
-					entry.lift       = desc.feet->maxReceiverRise;
-					entry.leg        = leg;
-				}
+				continue;
+			}
+			const MeshInstanceBlock& block = m_InstanceBlocks[index];
+			const uint32_t           legs  = LegCountOf(m_MeshBuffer.MetaAt(block.range.first));
+			for (uint32_t slot = 0; slot < block.capacity; ++slot)
+			{
+				add(block.range.first + slot, *block.blobShadow, legs);
 			}
 		}
 
@@ -2025,6 +2071,10 @@ namespace bgl
 		{
 			RequireToonShadingRigFits(desc.toonShadingRig, desc.geom, "CreateMeshInstanceBlock");
 		}
+		if (desc.blobShadow.has_value())
+		{
+			ValidateBlobShadowDesc(*desc.blobShadow, skinned && rig.legCount > 0);
+		}
 
 		auto range  = std::optional<bgpu::EntryRange>();
 		auto shared = AutoRecord();
@@ -2095,7 +2145,12 @@ namespace bgl
 			block.capacity           = desc.capacity;
 			block.range              = *range;
 			block.toonShadingRig     = desc.toonShadingRig;
-			block.shared             = shared;
+			block.blobShadow         = desc.blobShadow;
+			if (desc.blobShadow.has_value())
+			{
+				m_BlobShadowsDirty = true;
+			}
+			block.shared = shared;
 			if (desc.toonShadingRig.IsValid())
 			{
 				m_SceneRaw->AcquireToonShadingRig(desc.toonShadingRig);
@@ -2162,6 +2217,10 @@ namespace bgl
 
 		MeshInstanceBlock& record = m_InstanceBlocks[block.handle.index];
 		ReleaseBlockRange(record.range, record.shared);
+		if (record.blobShadow.has_value())
+		{
+			m_BlobShadowsDirty = true;
+		}
 		if (record.toonShadingRig.IsValid())
 		{
 			m_SceneRaw->ReleaseToonShadingRig(record.toonShadingRig);
@@ -2465,6 +2524,7 @@ namespace bgl
 		if (!m_GroundColor.texture.IsNull())
 		{
 			fg.ImportTexture(c_GroundColorName, m_GroundColor.texture);
+			fg.ImportTexture(c_GroundCoverName, m_GroundColor.cover);
 		}
 
 		{

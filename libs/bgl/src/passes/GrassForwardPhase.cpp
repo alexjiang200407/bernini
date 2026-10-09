@@ -69,11 +69,11 @@ namespace bgl
 			    bgpu::BarrierSyncFlag::kVertexShader } }
 		};
 
-		constexpr std::array<std::string_view, 14> c_Fields = {
+		constexpr std::array<std::string_view, 15> c_Fields = {
 			"cameraPos"sv,     "pixelsPerUnit"sv,    "firstRef"sv,     "refCount"sv,
 			"dispatchWidth"sv, "windDirection"sv,    "windStrength"sv, "windGustScale"sv,
 			"windGustSpeed"sv, "windGustStrength"sv, "heights"sv,      "heightSampler"sv,
-			"groundColor"sv,   "groundColorRect"sv,
+			"groundColor"sv,   "groundColorRect"sv,  "groundCover"sv,
 		};
 
 		/** The wind's horizontal direction, unit; SetWind refused a direction without one. */
@@ -109,6 +109,7 @@ namespace bgl
 		if (ViewOf(draw).GetGroundColor().rect.size > 0.0f)
 		{
 			desc.AddTextureRead(c_GroundColorName, bgpu::BarrierSyncFlag::kVertexShader);
+			desc.AddTextureRead(c_GroundCoverName, bgpu::BarrierSyncFlag::kVertexShader);
 		}
 	}
 
@@ -174,6 +175,7 @@ namespace bgl
 			if (hasGround)
 			{
 				uniforms["groundColor"] = ground.srv;
+				uniforms["groundCover"] = ground.coverSrv;
 			}
 
 			uniforms["windDirection"]    = WindDirection(wind);
