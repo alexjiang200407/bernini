@@ -127,7 +127,11 @@ An Intel Mac is refused even when its GPU supports Metal 3: the engine is built 
 silicon only.
 On Windows that is NVIDIA Turing (GTX 1660, RTX 2060) and newer, AMD RDNA2 (Radeon RX 6000) and
 newer, and Intel Arc. A machine whose first adapter is an integrated GPU without mesh shaders is
-refused, even when a second GPU would pass, because the engine does not choose an adapter.
+refused, even when a second GPU would pass, because the engine does not choose an adapter. A hybrid
+laptop is the exception the drivers make for it: the editor, `bgl_ai_viewer` and a game link
+`bgpu_discrete_gpu`, whose `NvOptimusEnablement` and `AmdPowerXpressRequestHighPerformance` exports
+tell NVIDIA's and AMD's drivers to put the discrete GPU first. They must be the executable's own, as
+the Agility SDK's are, so an executable that renders links the OBJECT library itself.
 
 * **The error is for a player, and the data is for the client.** `what()` says that this computer
   does not meet the minimum requirements. It then names each thing to replace or update once, with

@@ -150,6 +150,10 @@ endif()
 if(RENDERER_BACKEND STREQUAL "DX12")
 	target_link_libraries(editor PRIVATE bgpu_d3d12_agility)
 endif()
+# The same for the exports that make a hybrid laptop draw on its discrete GPU.
+if(TARGET bgpu_discrete_gpu)
+	target_link_libraries(editor PRIVATE bgpu_discrete_gpu)
+endif()
 
 set_target_properties(editor PROPERTIES
 	WIN32_EXECUTABLE ON

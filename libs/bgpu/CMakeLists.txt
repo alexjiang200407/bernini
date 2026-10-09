@@ -6,7 +6,8 @@
 file(GLOB_RECURSE BGPU_SOURCES CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 )
-list(FILTER BGPU_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal|vulkan)/.*")
+# exe_exports/ is the executables' own, never this library's: bgpu_discrete_gpu below.
+list(FILTER BGPU_SOURCES EXCLUDE REGEX ".*/src/(d3d12|metal|vulkan|exe_exports)/.*")
 
 file(GLOB_RECURSE BGPU_HEADERS CONFIGURE_DEPENDS
 	${CMAKE_CURRENT_SOURCE_DIR}/include/bgpu/*.h
@@ -206,6 +207,14 @@ elseif(RENDERER_BACKEND STREQUAL "VULKAN")
 			"No Vulkan validation layer in ${BGPU_VULKAN_LAYER_DIR}: GpuContextDesc::enableDebugLayer "
 			"needs one installed on the machine")
 	endif()
+endif()
+
+# NvOptimusEnablement and AmdPowerXpressRequestHighPerformance, which a hybrid laptop's driver reads
+# from the executable to put the discrete GPU first: whatever the backend, so an OBJECT library each
+# executable that renders links itself, as it does bgpu_d3d12_agility.
+if(WIN32)
+	add_library(bgpu_discrete_gpu OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/src/exe_exports/discrete_gpu.cpp)
+	enable_strict_compiler(bgpu_discrete_gpu)
 endif()
 
 # The RHI's Slang half: the offset primitives (idl.Entry, idl.Range ...), the buffer family that reads
