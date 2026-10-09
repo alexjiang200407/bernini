@@ -6,7 +6,8 @@ namespace terrain
 {
 	/**
 	 * The world height of `field` at world `xz`, laid with sample (0, 0) at `origin` as
-	 * bgl::TerrainDesc lays it: bilinear between samples and clamped at the field's edge. The CPU
+	 * bgl::TerrainDesc lays it -- a sample of 0 at `origin.y + minHeight` -- bilinear between samples
+	 * and clamped at the field's edge. The CPU
 	 * twin of the shaders' `TerrainHeightAt`, so whatever the CPU stands on the ground stands where
 	 * the terrain is drawn.
 	 *

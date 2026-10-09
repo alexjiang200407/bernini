@@ -101,7 +101,7 @@ functions, so the ground a unit walks is the ground it sees. Nothing of that rea
 
 On the CPU, `terrain::HeightAt` ([terrainlib/height.h](../libs/terrainlib/include/terrainlib/height.h))
 is the same read: bilinear between samples, clamped at the edge, the heightfield laid at the
-origin `TerrainDesc` gives it. It is how a game stands a camera or a unit on the ground it drew
+origin `TerrainDesc` gives it, a sample of 0 at the origin's height plus the field's `minHeight`. It is how a game stands a camera or a unit on the ground it drew
 without a GPU readback.
 
 ## Looking at one
