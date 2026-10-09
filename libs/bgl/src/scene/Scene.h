@@ -606,7 +606,7 @@ namespace bgl
 			uint32_t       entry = 0;
 			MaterialHandle material;
 			float          fadeEnd          = 0.0f;
-			bool           takesGroundColor = false;  // either of its ground colour blends above 0
+			bool           takesGroundColor = false;
 		};
 
 		/** @pre IsGrassAlive(grass). */

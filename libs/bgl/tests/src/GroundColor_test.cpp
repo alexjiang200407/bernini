@@ -17,6 +17,7 @@
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/SurfaceMaterialDesc.h>
 #include <bgl/types/TerrainDesc.h>
 #include <bgl/types/TerrainGrassDesc.h>
 #include <bgl/types/TerrainHandle.h>
@@ -333,4 +334,74 @@ TEST_CASE(
 	CHECK(std::abs(taken.r - bare.r) < 0.02f);
 	CHECK(std::abs(taken.g - bare.g) < 0.02f);
 	CHECK(std::abs(taken.b - bare.b) < 0.02f);
+}
+
+TEST_CASE(
+	"A terrain drawn through a lit surface gives its grass no ground colour",
+	"[grass][groundcolor][render]")
+{
+	// A lit surface owns its lighting and has no albedo apart from it: its ground-colour program
+	// writes alpha 0, so the blades over it keep their own colour.
+	auto opts                        = bgl::test::GraphicsSetup();
+	opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
+	opts.gpuContext.enableDebugLayer = true;
+	opts.gpuContext.clientShaderDir  = "./shaders/tests/surfaces";
+	auto gfx                         = bgl::test::CreateGraphics(opts);
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 320;
+	targetDesc.height   = 240;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto sceneDesc                    = bgl::SceneDesc();
+	sceneDesc.initialPbrMaterials     = 4;
+	sceneDesc.initialSurfaceMaterials = 4;
+	auto scene                        = gfx->CreateScene(sceneDesc);
+	auto viewRef                      = gfx->CreateSceneView(scene, 8);
+
+	const auto unlit = scene->CreateSurfaceMaterial(
+		{ .surfaceName = "Unlit", .values = { { "color", glm::vec4(0.2f, 0.6f, 0.1f, 0.0f) } } });
+	const auto blade = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
+
+	const auto field = Flat(64);
+	const auto terrain =
+		scene->CreateTerrain(bgl::TerrainDesc().SetHeightfield(&field).SetMaterial(unlit));
+
+	auto lookDesc                 = bgl::GrassDesc();
+	lookDesc.material             = blade;
+	lookDesc.density.fadeEnd      = 20.0f;
+	lookDesc.color.groundColorFar = 1.0f;
+	const auto look               = scene->CreateGrass(lookDesc);
+	const auto layer              = bgl::TerrainGrassDesc().SetLook(look);
+	scene->AttachTerrainGrass(terrain, std::span<const bgl::TerrainGrassDesc>(&layer, 1));
+
+	auto job     = bgl::RenderJob();
+	job.view     = viewRef;
+	job.viewport = bgl::Viewport(320.0f, 240.0f);
+	job.camera
+		.LookAt(
+			glm::vec3(32.0f, 3.0f, 32.0f),
+			glm::vec3(40.0f, 0.0f, 40.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(glm::radians(60.0f), 320.0f / 240.0f, 0.1f, 300.0f);
+	gfx->DrawFrame(target, job);
+
+	const auto* view = viewRef->As<bgl::SceneView>();
+	REQUIRE(view != nullptr);
+	const bgl::SceneView::GroundColorTarget& colour = view->GetGroundColor();
+	REQUIRE_FALSE(colour.texture.IsNull());
+	const auto texels = bgl::test::ReadRgba8Texels(
+		gfx.Get(),
+		colour.texture,
+		bgl::c_GroundColorTexels,
+		bgl::c_GroundColorTexels,
+		bgpu::BarrierLayout::kShaderResource);
+
+	// The texel under the camera, on the field.
+	const glm::vec2 uv = (glm::vec2(32.0f, 32.0f) - colour.rect.origin) / colour.rect.size;
+	const auto      u  = static_cast<uint32_t>(uv.x * bgl::c_GroundColorTexels);
+	const auto      v  = static_cast<uint32_t>(uv.y * bgl::c_GroundColorTexels);
+	CHECK(texels[static_cast<size_t>(v) * bgl::c_GroundColorTexels + u].a == 0);
 }

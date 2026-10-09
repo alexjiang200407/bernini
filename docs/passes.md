@@ -866,7 +866,7 @@ A terrain bucket's ground-colour kernel pairs the terrain's own stages, `program
 with the material kind's albedo program, `programs.forward.GroundColor_<kind>` (generated for a
 registered surface, as its grass program is), which writes the surface's unlit base colour with
 alpha 1 -- or alpha 0 for a lit surface, which has no albedo apart from its lighting. It writes no
-depth and no velocity and culls nothing: a heightfield seen from above covers each texel once. The
+depth and no velocity and culls no faces: a heightfield seen from above covers each texel once. The
 draw is `RenderContext`'s `GroundColorDraw`: the view's draw with an orthographic projection over
 the square, world x across the texture and z down it, and the frustum planes of that square, but
 the view's own camera position, pixels per unit and level-of-detail terms, so the terrain's levels

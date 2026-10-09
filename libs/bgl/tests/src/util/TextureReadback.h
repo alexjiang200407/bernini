@@ -12,21 +12,24 @@
 #include <core/glm.h>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 namespace bgl::test
 {
 	/**
-	 * An 8-bit four-channel texture's texels, row-major and tightly packed, as bytes. `resident` is
+	 * A texture's texels as bytes, row-major and tightly packed at `bytesPerTexel`. `resident` is
 	 * the layout the last frame left the texture in, which the copy returns it to, so the next
-	 * frame's import resumes from it. Drains the renderer first: the copy rides its own queue.
+	 * frame's import resumes from it. Drains the renderer first: the copy rides its own queue,
+	 * which nothing orders against.
 	 */
-	inline std::vector<glm::u8vec4>
-	ReadRgba8Texels(
+	inline std::vector<uint8_t>
+	ReadTextureBytes(
 		IGraphics*                gfx,
 		const bgpu::TextureHandle texture,
 		const uint32_t            width,
 		const uint32_t            height,
+		const uint32_t            bytesPerTexel,
 		const bgpu::BarrierLayout resident)
 	{
 		auto*      gfxBase         = gfx->As<GraphicsBase>();
@@ -80,20 +83,39 @@ namespace bgl::test
 		cmdList->Close();
 		cmdQueue->WaitForFenceCPUBlocking(cmdQueue->ExecuteCommandList(cmdList));
 
-		const auto* base   = static_cast<const uint8_t*>(resourceManager->MapReadback(readback));
-		auto        texels = std::vector<glm::u8vec4>(static_cast<size_t>(width) * height);
+		const auto*  base     = static_cast<const uint8_t*>(resourceManager->MapReadback(readback));
+		const size_t rowBytes = static_cast<size_t>(width) * bytesPerTexel;
+		auto         bytes    = std::vector<uint8_t>(rowBytes * height);
 		for (uint32_t y = 0; y < height; ++y)
 		{
-			const uint8_t* row = base + layout.offset + y * layout.rowPitch;
-			for (uint32_t x = 0; x < width; ++x)
-			{
-				texels[static_cast<size_t>(y) * width + x] =
-					glm::u8vec4(row[x * 4], row[x * 4 + 1], row[x * 4 + 2], row[x * 4 + 3]);
-			}
+			std::memcpy(
+				bytes.data() + y * rowBytes,
+				base + layout.offset + y * layout.rowPitch,
+				rowBytes);
 		}
 
 		resourceManager->UnmapReadback(readback);
 		resourceManager->DestroyReadbackBuffer(readback, false);
+		return bytes;
+	}
+
+	/** An 8-bit four-channel texture's texels, as ReadTextureBytes reads them. */
+	inline std::vector<glm::u8vec4>
+	ReadRgba8Texels(
+		IGraphics*                gfx,
+		const bgpu::TextureHandle texture,
+		const uint32_t            width,
+		const uint32_t            height,
+		const bgpu::BarrierLayout resident)
+	{
+		const std::vector<uint8_t> bytes =
+			ReadTextureBytes(gfx, texture, width, height, 4, resident);
+		auto texels = std::vector<glm::u8vec4>(static_cast<size_t>(width) * height);
+		for (size_t i = 0; i < texels.size(); ++i)
+		{
+			texels[i] =
+				glm::u8vec4(bytes[i * 4], bytes[i * 4 + 1], bytes[i * 4 + 2], bytes[i * 4 + 3]);
+		}
 		return texels;
 	}
 }

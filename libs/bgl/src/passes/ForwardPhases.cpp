@@ -276,6 +276,8 @@ namespace bgl
 							ctx.device,
 							ConfigFor(desc, DrawLane::kDissolve, toon)));
 				}
+				// Built with the bucket whether or not a look ever asks for the ground's colour: one
+				// more pipeline per terrain material kind, against demand-building it a frame late.
 				if (desc.geom == GeometryStage::kTerrain)
 				{
 					ctx.pipelines->Add(

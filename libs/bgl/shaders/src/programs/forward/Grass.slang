@@ -140,7 +140,6 @@ struct GrassPayload
 
 groupshared GrassPayload gGrassPayload;
 
-// Kept clump `i` of a launch, from its parts.
 ClumpPoint LaunchedClump(float4 positionScale, float4 normal, uint2 colorSeed)
 {
     ClumpPoint clump;

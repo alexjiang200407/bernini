@@ -159,10 +159,6 @@ namespace bgl
 			const PassContext&  resources);
 
 		/**
-		 * The shared blend kernel, bound as BindDrawBucketKernel binds, with colour and depth alone:
-		 * a blended surface has no single depth to reproject, so its kernel declares no velocity.
-		 */
-		/**
 		 * The terrain bucket's albedo kernel, bound as BindDrawBucketKernel binds, with the view's
 		 * ground-colour texture as its one target. Null while it is unbuilt.
 		 */
@@ -173,6 +169,10 @@ namespace bgl
 			const DrawData&     draw,
 			const PassContext&  resources);
 
+		/**
+		 * The shared blend kernel, bound as BindDrawBucketKernel binds, with colour and depth alone:
+		 * a blended surface has no single depth to reproject, so its kernel declares no velocity.
+		 */
 		[[nodiscard]] bgpu::MeshletKernel*
 		BindTransparentKernel(
 			bgpu::MeshletState& state,

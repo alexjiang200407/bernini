@@ -38,16 +38,16 @@ public extension MaterialData
     // taking all of it shades as the ground under it.
     float4 ShadeGrassSurface(GrassVSOut input, PbrSurface evaluated)
     {
-        let ground = saturate(input.groundColor.a);
+        let groundShare = saturate(input.groundColor.a);
         var surface = evaluated;
-        surface.baseColor.rgb = lerp(surface.baseColor.rgb * input.tint.rgb, input.groundColor.rgb, ground);
-        surface.orm.r *= lerp(input.tint.a, 1.0, ground);
+        surface.baseColor.rgb = lerp(surface.baseColor.rgb * input.tint.rgb, input.groundColor.rgb, groundShare);
+        surface.orm.r *= lerp(input.tint.a, 1.0, groundShare);
 
         let lit = ShadeSurface(input.Surface(), surface, true);
         let look = grassData.looks.Get(uint(round(input.uv1.y)));
         let translucent = GrassTranslucency(surface, normalize(input.normal), GetShadingParams(), look.translucency);
 
-        return float4(lit + translucent * (1.0 - ground), 1.0);
+        return float4(lit + translucent * (1.0 - groundShare), 1.0);
     }
 
     // An engine kind on a blade, as Shade is on a mesh. Its geometry occlusion is read as white: uv1

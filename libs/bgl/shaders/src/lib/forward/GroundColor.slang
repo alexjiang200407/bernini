@@ -18,7 +18,9 @@ public extension MaterialData
         return float4(material.GetBaseColor(input.uv).rgb, 1.0);
     }
 
-    // A registered surface's, evaluated as it is when the terrain draws, from above.
+    // A registered surface's, evaluated with the vertex the top-down draw emits and the view's own
+    // camera: an albedo that reads the view direction or the screen position is not the one the
+    // colour pass shades.
     public float4 GameGroundColorProgram<G : ISurfaceSource>(ForwardVSOut input)
     {
         let record = GameRecord<G>.Load(input.materialOffset);
