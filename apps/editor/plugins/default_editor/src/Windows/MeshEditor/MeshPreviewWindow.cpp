@@ -467,33 +467,47 @@ MeshPreviewWindow::LoadMesh(const std::filesystem::path& path)
 void
 MeshPreviewWindow::SetSubmeshMaterial(uint32_t submeshIndex, bgl::MaterialHandle material)
 {
+	const auto one = SubmeshMaterial{ submeshIndex, material };
+	SetSubmeshMaterials({ &one, 1 });
+}
+
+void
+MeshPreviewWindow::SetSubmeshMaterials(std::span<const SubmeshMaterial> materials)
+{
 	m_Viewport->Invoke([&](editor::RenderContext& context, const bgl::SceneViewRef& view) {
 		m_SubmeshToon.resize(m_SubmeshRefs.size(), false);
-		if (submeshIndex < m_SubmeshToon.size())
-			m_SubmeshToon[submeshIndex] =
-				material.IsValid() && editor::IsToonMaterial(context.graphics, material);
 
-		if (!material.IsValid() || submeshIndex >= m_SubmeshRefs.size())
-			return;
-
-		const SubmeshRef& ref = m_SubmeshRefs[submeshIndex];
-		if (ref.geomIndex >= m_Geoms.size() || !m_Geoms[ref.geomIndex].IsValid())
-			return;
-
-		try
+		for (const auto& [submeshIndex, material] : materials)
 		{
-			// An override on the instances, not Scene::SetSubmeshMaterial on the geom. The geom's
-			// default is the *asset's* material: rewriting it here would edit the .bmesh's binding as
-			// a side effect of typing.
-			for (const SubmeshTarget& target :
-			     GetInstanceTargets(m_SubmeshRefs, m_Instances, submeshIndex))
+			if (submeshIndex < m_SubmeshToon.size())
+				m_SubmeshToon[submeshIndex] =
+					material.IsValid() && editor::IsToonMaterial(context.graphics, material);
+
+			if (!material.IsValid() || submeshIndex >= m_SubmeshRefs.size())
+				continue;
+
+			const SubmeshRef& ref = m_SubmeshRefs[submeshIndex];
+			if (ref.geomIndex >= m_Geoms.size() || !m_Geoms[ref.geomIndex].IsValid())
+				continue;
+
+			try
 			{
-				view->SetSubmeshMaterialOverride(target.instance, target.submeshIndex, material);
+				// An override on the instances, not Scene::SetSubmeshMaterial on the geom. The
+				// geom's default is the *asset's* material: rewriting it here would edit the .bmesh's
+				// binding as a side effect of typing.
+				for (const SubmeshTarget& target :
+				     GetInstanceTargets(m_SubmeshRefs, m_Instances, submeshIndex))
+				{
+					view->SetSubmeshMaterialOverride(
+						target.instance,
+						target.submeshIndex,
+						material);
+				}
 			}
-		}
-		catch (const std::exception& e)
-		{
-			qWarning("MeshPreview: SetSubmeshMaterial(%u) failed: %s", submeshIndex, e.what());
+			catch (const std::exception& e)
+			{
+				qWarning("MeshPreview: SetSubmeshMaterial(%u) failed: %s", submeshIndex, e.what());
+			}
 		}
 	});
 

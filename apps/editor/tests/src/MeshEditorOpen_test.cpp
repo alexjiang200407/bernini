@@ -2,6 +2,7 @@
 #include "Plugins/plugin_loader.h"
 #include "Windows/MeshEditor/MeshEditorWindow.h"
 #include "Windows/MeshEditor/MeshPreviewWindow.h"
+#include "Windows/MeshEditor/TextureUploads.h"
 #include "util/QtSupport.h"  // IWYU pragma: keep
 
 #include <QDockWidget>
@@ -18,7 +19,9 @@
 #include <core/file/file.h>
 #include <core/platform/util.h>
 #include <filesystem>
+#include <fstream>
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <optional>
 #include <qnamespace.h>
 #include <qobject.h>
@@ -104,6 +107,10 @@ namespace
 //
 //   BERNINI_TEST_PROJECT=<Data root> BERNINI_MESH_OPEN=<key> just run editor_tests -- "[.meshopen]"
 //
+// The preview reads the editor's deployed config.json, so it is lit and sized as the editor's is;
+// set BERNINI_MESH_OPEN_WINDOWED and pass `-platform cocoa` (or `windows`) to draw into real windows,
+// whose frames pace the render thread as a user's do.
+//
 // It opens the mesh twice, so the second open is the warm one a user sits in. A headless editor opens
 // the project the data root belongs to and may write to it as any editor would, so point it at a
 // copy.
@@ -127,7 +134,13 @@ TEST_CASE("Opening a mesh in the Mesh Editor, timed", "[.meshopen][render]")
 
 	const QTemporaryDir temp;
 	const auto          config = fs::path(temp.path().toStdString()) / "config.json";
-	core::file::write_atomic(config, std::string(R"({ "headless": true })"));
+	// The deployed config, so the preview is lit and drawn as the editor draws it; headless unless
+	// BERNINI_MESH_OPEN_WINDOWED is set, which wants `-platform cocoa` (or `windows`) beside it.
+	auto settings = nlohmann::json::parse(
+		std::ifstream(core::file::get_executable_path().parent_path() / "config.json"));
+	settings["headless"] = !core::env_var("BERNINI_MESH_OPEN_WINDOWED").has_value();
+	settings.erase("startupProject");
+	core::file::write_atomic(config, settings.dump(2));
 
 	auto plugins =
 		std::make_unique<editor::plugins::PluginSession>(editor::plugins::PluginSession::Load(
@@ -141,9 +154,11 @@ TEST_CASE("Opening a mesh in the Mesh Editor, timed", "[.meshopen][render]")
 	auto* dock    = window.findChild<QDockWidget*>("bernini.material");
 	auto* panel   = window.findChild<MeshEditorWindow*>();
 	auto* preview = window.findChild<MeshPreviewWindow*>();
+	auto* uploads = window.findChild<TextureUploads*>();
 	REQUIRE(dock != nullptr);
 	REQUIRE(panel != nullptr);
 	REQUIRE(preview != nullptr);
+	REQUIRE(uploads != nullptr);
 
 	dock->raise();
 	REQUIRE(editor::test::WaitFor([dock] { return dock->isVisible(); }));
@@ -158,12 +173,15 @@ TEST_CASE("Opening a mesh in the Mesh Editor, timed", "[.meshopen][render]")
 		const double shownMs = MsSince(start);
 		REQUIRE(preview->MeshPath() == mesh);
 
-		// Whatever arrives after the call returns -- the texture nodes' tiles -- lands within this.
-		QTest::qWait(3000);
+		REQUIRE(editor::test::WaitFor([uploads] { return uploads->IsIdle(); }, 300000));
+		const double mapsMs = MsSince(start);
+
+		// The texture nodes' tiles decode on a pool of their own, and land within this.
+		QTest::qWait(2000);
 		stalls.Stop();
 
 		WARN(
-			"mesh open (" << pass << "): shown " << shownMs
+			"mesh open (" << pass << "): shown " << shownMs << " ms, every map uploaded " << mapsMs
 						  << " ms; the GUI thread's longest stall " << stalls.LongestMs() << " ms, "
 						  << stalls.OverAFrame() << " stalls over a frame");
 

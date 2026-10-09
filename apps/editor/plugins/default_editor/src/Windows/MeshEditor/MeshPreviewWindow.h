@@ -90,6 +90,16 @@ public:
 	void
 	SetSubmeshMaterial(uint32_t submeshIndex, bgl::MaterialHandle material);
 
+	struct SubmeshMaterial
+	{
+		uint32_t            submeshIndex = 0;
+		bgl::MaterialHandle material;
+	};
+
+	/** SetSubmeshMaterial for each of `materials`, in one render-thread round trip. */
+	void
+	SetSubmeshMaterials(std::span<const SubmeshMaterial> materials);
+
 	struct SubmeshRef
 	{
 		uint32_t geomIndex     = 0;

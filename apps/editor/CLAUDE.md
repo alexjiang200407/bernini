@@ -167,15 +167,21 @@ lives beside it, and the split is by responsibility rather than by line count:
   what it runs) sit outside `Windows/` entirely, and the Content Explorer is one caller.
 - **A stateful job the window drives** becomes a collaborator type it owns —
   `AssetOperations` for the Content Explorer's on-disk actions, `MaterialGraphSet` for the Mesh
-  Editor's graphs-and-submeshes table. Where such a type moves the ground out from under a view, it
-  says so by signal rather than reaching for the view (`AssetOperations::DirectoryDeleted`); a
-  collaborator that touched a model would just be the window again under another name.
+  Editor's graphs-and-submeshes table, `TextureUploads` for the maps its Texture nodes share. Where
+  such a type moves the ground out from under a view, it says so by signal rather than reaching for
+  the view (`AssetOperations::DirectoryDeleted`); a collaborator that touched a model would just be
+  the window again under another name.
 - **A panel that writes by itself compares before it writes.** The Mesh Editor marks a board
   edited on anything that *might* have changed it — every model signal, and any click, key, wheel or
   focus loss on the board or the properties beside it — then skips a write whose compiled material
   matches what was last written (`MeshEditorWindow::MarkGraphEdited`). Deliberately over-eager,
   because the two failures are not symmetric: a missed trigger loses an edit with nothing on screen
   to say so, and an extra one costs a compile.
+
+  What is not an edit is kept from marking under the panel's load guard: seeding a board, and a
+  texture's upload arriving after it -- `TextureUploads::Settled` reaches the nodes through the
+  panel, which holds the guard while they take it. The upload changes what the preview draws, never
+  what the material says.
 
   The consequence worth knowing before you add to that panel: **a new texture type or material
   property needs no change to the save logic**, as long as its value lives in the graph — which is
@@ -315,8 +321,8 @@ writes each to `assets/golden/thumbnail_*.got.png` to be looked at. Tag such cas
 so they can be skipped.
 
 Material graph, rig playback and authoring-rule tests live in `plugins/default_editor/tests`, compiled into
-`editor_tests`. They need no device: `TextureNode` accepts a null host and preview cache for CPU
-graph operations. The panel itself requires a live host. Its viewport input, held assets, cache
+`editor_tests`. They need no device: `TextureNode` accepts null uploads and a null preview cache
+for CPU graph operations. The panel itself requires a live host. Its viewport input, held assets, cache
 notifications and project teardown are covered by `MainWindow_test` against the shipping plugin.
 
 Two things a test cannot drive, and why:

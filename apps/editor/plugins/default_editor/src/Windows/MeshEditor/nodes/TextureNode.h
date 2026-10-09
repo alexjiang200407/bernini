@@ -19,10 +19,7 @@
 
 class QLabel;
 class TexturePreviewCache;
-namespace editor
-{
-	class IEditorHost;
-}
+class TextureUploads;
 
 class TextureNode : public QtNodes::NodeDelegateModel
 {
@@ -36,12 +33,19 @@ public:
 	static constexpr unsigned int c_TexturePort  = c_BundleCount + c_ChannelCount;
 	static constexpr unsigned int c_PortCount    = c_TexturePort + 1;
 
-	// `previews` may be null when the editor runs without graphics; the node then shows no image.
-	// `language` must outlive the node.
+	// `uploads` and `previews` may be null when the editor runs without graphics; the node then
+	// uploads nothing and shows no image. Each that is not, and `language`, must outlive the node.
 	TextureNode(
 		const editor::ILanguageResolver& language,
-		editor::IEditorHost*             host,
+		TextureUploads*                  uploads,
 		TexturePreviewCache*             previews);
+
+	~TextureNode() override;
+
+	TextureNode(const TextureNode&) = delete;
+
+	TextureNode&
+	operator=(const TextureNode&) = delete;
 
 	QString
 	caption() const override
@@ -101,8 +105,27 @@ public:
 	void
 	load(const QJsonObject& json) override;
 
+	/**
+	 * Points the node at `path`. Its upload arrives later -- the ports carry the path at once, and
+	 * a null texture until then, which the surface reads as its default.
+	 */
 	void
 	SetTexturePath(const QString& path);
+
+	[[nodiscard]] const QString&
+	TexturePath() const noexcept
+	{
+		return m_Path;
+	}
+
+	/**
+	 * Takes the upload of its path as TextureUploads now has it, and tells the ports and the
+	 * caption. The panel calls it when the upload settles: an upload arriving changes what the
+	 * preview draws and never what the material says, which only the panel can keep from reading as
+	 * an edit.
+	 */
+	void
+	TakeUpload();
 
 private:
 	// Paints m_Preview into m_PreviewLabel, scaled to fit and centred. No-op before either exists.
@@ -110,7 +133,7 @@ private:
 	RefreshPreview();
 
 	const editor::ILanguageResolver& m_Language;
-	editor::IEditorHost*             m_Host     = nullptr;
+	TextureUploads*                  m_Uploads  = nullptr;
 	TexturePreviewCache*             m_Previews = nullptr;
 	QString                          m_Path;
 	QString                          m_Caption;
