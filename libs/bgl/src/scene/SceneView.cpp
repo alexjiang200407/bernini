@@ -289,6 +289,19 @@ namespace bgl
 				m_SceneRaw->ReleaseToonShadingRig(m_InstanceBlocks[index].toonShadingRig);
 			}
 		}
+
+		if (!m_GroundColor.srv.IsNull())
+		{
+			m_ResourceManager->DestroySrv(m_GroundColor.srv);
+		}
+		if (!m_GroundColor.rtv.IsNull())
+		{
+			m_ResourceManager->DestroyRtv(m_GroundColor.rtv);
+		}
+		if (!m_GroundColor.texture.IsNull())
+		{
+			m_ResourceManager->DestroyTexture(m_GroundColor.texture);
+		}
 	}
 
 	ViewMatrices
@@ -1546,10 +1559,15 @@ namespace bgl
 			}
 		}
 
+		m_GroundColorReach = 0.0f;
 		m_SceneRaw->ForEachTerrain([&](const uint32_t slot, const TerrainMeta& terrain) {
 			for (const TerrainGrassRecord& layer : terrain.grass)
 			{
 				const Scene::GrassLookRef look = m_SceneRaw->GetGrassLook(layer.look);
+				if (look.takesGroundColor)
+				{
+					m_GroundColorReach = std::max(m_GroundColorReach, look.fadeEnd);
+				}
 
 				// Clamped, since UpdateGrass may lengthen the fade past what the attach allowed:
 				// the field then ends short of the fade, rather than the dispatch growing unbounded.
@@ -1590,6 +1608,38 @@ namespace bgl
 		m_GrassChunkRefs.Assign(refs);
 		m_GrassDirty      = false;
 		m_SceneGrassEpoch = epoch;
+	}
+
+	void
+	SceneView::PrepareGroundColor(const glm::vec3& camera)
+	{
+		m_GroundColor.rect = GroundColorRectAround(camera, m_GroundColorReach, c_GroundColorTexels);
+		if (m_GroundColor.rect.size <= 0.0f || !m_GroundColor.texture.IsNull())
+		{
+			return;
+		}
+
+		auto desc          = bgpu::TextureDesc();
+		desc.format        = c_GroundColorFormat;
+		desc.width         = c_GroundColorTexels;
+		desc.height        = c_GroundColorTexels;
+		desc.dimension     = bgpu::TextureDimension::kTexture2D;
+		desc.debugName     = std::format("{} Ground Color", m_NamePrefix);
+		desc.usage         = bgpu::TextureUsage{ bgpu::TextureUsageFlag::kRenderTarget,
+			                                     bgpu::TextureUsageFlag::kSRV };
+		desc.initialLayout = bgpu::BarrierLayout::kRenderTarget;
+		desc.clearValue.SetColor(bgpu::Color(0.0f, 0.0f, 0.0f, 0.0f));
+		m_GroundColor.texture = m_ResourceManager->CreateTexture(desc);
+
+		auto rtvDesc      = bgpu::RtvDesc();
+		rtvDesc.format    = c_GroundColorFormat;
+		rtvDesc.debugName = std::format("{} Ground Color RTV", m_NamePrefix);
+		m_GroundColor.rtv = m_ResourceManager->CreateRtv(m_GroundColor.texture, rtvDesc);
+
+		auto srvDesc      = bgpu::SrvDesc();
+		srvDesc.format    = c_GroundColorFormat;
+		srvDesc.debugName = std::format("{} Ground Color SRV", m_NamePrefix);
+		m_GroundColor.srv = m_ResourceManager->CreateSrv(m_GroundColor.texture, srvDesc);
 	}
 
 	void
@@ -2417,6 +2467,11 @@ namespace bgl
 		});
 
 		m_TransparentSort.ImportResources(fg, resourceNames);
+
+		if (!m_GroundColor.texture.IsNull())
+		{
+			fg.ImportTexture(c_GroundColorName, m_GroundColor.texture);
+		}
 
 		{
 			auto flags = std::string(c_DrawBucketFlagsName);
