@@ -112,6 +112,19 @@ Texture2D.Handle HzbLevel(uint level)
     }
 }
 
+// Whether last frame's ladder hides `sphere` through `viewProj`.
+bool HzbHidesSphere(CullView view, float4x4 viewProj, float4 sphere)
+{
+    let query = PrepareHzbQuery(view, viewProj, sphere);
+    if (query.visible)
+    {
+        return false;
+    }
+    // The level differs from thread to thread, so the handle it picks is no uniform index.
+    let gathered = nonuniform(HzbLevel(query.level)).GatherRed(gUniforms.hzbSampler, query.uv);
+    return HzbHides(gathered, query.nearest);
+}
+
 [shader("compute")]
 [numthreads(cHistogramGroupSize, 1, 1)]
 void main(uint globalIdx: SV_DispatchThreadID)
@@ -185,32 +198,25 @@ void main(uint globalIdx: SV_DispatchThreadID)
     let bucket = instance.drawBucket;
     let occludee = (view.occlusion & cOcclusionTestBit) != 0u && bucket < cMaxDrawBuckets &&
                    (gUniforms.drawBucketFlags[bucket] & uint(DrawBucketFlag.kOccludee)) != 0u;
+    let ladderValid = (view.occlusion & cOcclusionHzbValidBit) != 0u;
+    let history = gUniforms.drawnHistory[globalIdx];
+    // Only a mesh that would draw is a candidate: one past its last level draws nothing to test.
+    let meshBits = VisibilityBits(word, geom, visible);
     bool candidate = false;
-    if (visible && occludee && (view.occlusion & cOcclusionHzbValidBit) != 0u)
+    if (meshBits != 0u && occludee && ladderValid)
     {
-        if ((gUniforms.drawnHistory[globalIdx] & cDrawnMeshBit) == 0u)
-        {
-            candidate = true;
-        }
-        else
-        {
-            let query = PrepareHzbQuery(view, view.prevViewProj, sphere);
-            if (!query.visible)
-            {
-                // The level differs from thread to thread, so the handle it picks is no uniform index.
-                let gathered = nonuniform(HzbLevel(query.level)).GatherRed(gUniforms.hzbSampler, query.uv);
-                candidate = HzbHides(gathered, query.nearest);
-            }
-        }
+        candidate = (history & cDrawnMeshBit) == 0u || HzbHidesSphere(view, view.prevViewProj, sphere);
     }
 
-    uint bits = candidate ? cVisibleCandidateBit : VisibilityBits(word, geom, visible);
+    uint bits = candidate ? cVisibleCandidateBit : meshBits;
     let meshDrawn = (bits & (cVisibleCurrentBit | cVisibleOutgoingBit)) != 0u;
 
     // Past the last level the placement draws its impostor, once, from its first submesh, tested
     // against the sphere over the whole of level 0 -- the impostor's quad spans it -- rather than
-    // that submesh's own. An impostor is no occludee: a candidate's draws now, and phase 2 never
-    // draws it again.
+    // that submesh's own, and decided apart from the mesh.
+    let impostorOccludee = (view.occlusion & cOcclusionTestBit) != 0u &&
+                           (gUniforms.drawBucketFlags[cImpostorDrawBucket] & uint(DrawBucketFlag.kOccludee)) != 0u;
+    bool impostorCandidate = false;
     if (writesLod && !automatic && !geom.impostor.Null())
     {
         let pastLast =
@@ -219,16 +225,25 @@ void main(uint globalIdx: SV_DispatchThreadID)
         if (pastLast && ProjectedDiameter(mesh, geom, view) >= geom.impostorMinPixels * view.lodPixelScale &&
             SphereInFrustum(view.frustumPlanes, whole.xyz, whole.w))
         {
-            bits |= cVisibleImpostorBit;
-            if (word.Fading())
+            impostorCandidate =
+                impostorOccludee && ladderValid && ((history & cDrawnImpostorBit) == 0u || HzbHidesSphere(view, view.prevViewProj, whole));
+            if (impostorCandidate)
             {
-                bits |= cVisibleDissolvingBit;
+                bits |= cVisibleImpostorCandidateBit;
+            }
+            else
+            {
+                bits |= cVisibleImpostorBit;
+                if (word.Fading())
+                {
+                    bits |= cVisibleDissolvingBit;
+                }
             }
         }
     }
 
     gUniforms.visibility[globalIdx].visible = bits;
-    gUniforms.drawnHistory[globalIdx] = meshDrawn ? cDrawnMeshBit : 0u;
+    gUniforms.drawnHistory[globalIdx] = (meshDrawn ? cDrawnMeshBit : 0u) | ((bits & cVisibleImpostorBit) != 0u ? cDrawnImpostorBit : 0u);
 
 #if defined(BERNINI_GPU_DEBUG)
     gUniforms.stats[0].tested.add(1u);
@@ -237,6 +252,10 @@ void main(uint globalIdx: SV_DispatchThreadID)
         gUniforms.stats[0].frustumCulled.add(1u);
     }
     if (candidate)
+    {
+        gUniforms.stats[0].occlusionCandidates.add(1u);
+    }
+    if (impostorCandidate)
     {
         gUniforms.stats[0].occlusionCandidates.add(1u);
     }

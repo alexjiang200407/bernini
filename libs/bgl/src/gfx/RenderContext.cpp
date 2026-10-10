@@ -1073,6 +1073,7 @@ namespace bgl
 			m_HzbBuild.AttachToFrameGraph(m_FrameGraph, draw, "Phase");
 			m_CompactInstances.AttachPhase2(m_FrameGraph, draw, cullScope);
 			m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kWorldPhase2);
+			m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kImpostorPhase2);
 			m_FrameGraph.SetResourceNamespace(cullScope);
 		}
 

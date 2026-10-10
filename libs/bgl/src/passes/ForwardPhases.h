@@ -46,10 +46,11 @@ namespace bgl
 		kWorld,     // the static tier's non-transparent buckets
 		kImpostor,  // every placement drawn past its last level, as its geom's impostor
 		kWorldPhase2,  // the static tier's buckets again: what the occlusion cull's phase 2 found visible
-		kGrass,        // the grass the view's geoms grow
-		kSkinned,      // the skinned tier's non-transparent buckets
-		kWater,        // the static tier's water buckets, over the depth the phases above wrote
-		kTransparent,  // the depth-sorted list, every tier
+		kImpostorPhase2,  // the impostors the occlusion cull's phase 2 found visible
+		kGrass,           // the grass the view's geoms grow
+		kSkinned,         // the skinned tier's non-transparent buckets
+		kWater,           // the static tier's water buckets, over the depth the phases above wrote
+		kTransparent,     // the depth-sorted list, every tier
 	};
 
 	/**
@@ -234,6 +235,7 @@ namespace bgl
 		BucketedForwardPhase    m_WorldPhase2{ GeometryStage::kStaticMesh, "World Phase 2" };
 		BucketedForwardPhase    m_Skinned{ GeometryStage::kSkinnedMesh, "Skinned" };
 		BucketedForwardPhase    m_Impostor{ GeometryStage::kImpostor, "Impostor" };
+		BucketedForwardPhase    m_ImpostorPhase2{ GeometryStage::kImpostor, "Impostor Phase 2" };
 		TerrainForwardPhase     m_Terrain;
 		GrassForwardPhase       m_Grass;
 		TransparentForwardPhase m_Transparent;

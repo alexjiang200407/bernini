@@ -55,7 +55,8 @@ flowchart TD
         FWW --> FIM["Forward Impostor (every placement past its last level, as its geom's impostor)"]
         FIM --> HZP["HZB Phase, Cull Occluded and its compaction (only when the view culls by occlusion and last draw's HZB is valid)"]
         HZP --> FW2["Forward World Phase 2 (what phase 2 of the cull found visible)"]
-        FW2 --> GC["Ground Color (only when a terrain's grass takes its ground's colour or follows its cover; one dispatch per terrain)"]
+        FW2 --> FI2["Forward Impostor Phase 2 (the impostors phase 2 found visible)"]
+        FI2 --> GC["Ground Color (only when a terrain's grass takes its ground's colour or follows its cover; one dispatch per terrain)"]
         GC --> GRS["Forward Grass (only when a drawn geom or a terrain has grass; one dispatch per grass bucket and terrain)"]
         GRS --> HZF["HZB Frame (only when the view culls by occlusion; for the next draw's cull)"]
         HZF --> BLOB["Blob Shadows (only when the view has a disc; reads the depth as it stands)"]
@@ -531,17 +532,23 @@ fifth ahead of the cull:
    level as `cull.hzb<n>`) does not hide it through last frame's view-projection: the sphere's
    world box is projected corner by corner, a corner at or past the near plane makes it visible,
    its screen box picks the level it spans at most one texel of, and a `GatherRed` there is
-   compared farthest-against-nearest. Anything else inside the frustum is a **candidate**
-   (`cVisibleCandidateBit`, which the histogram and the compaction skip) for phase 2. Without a
+   compared farthest-against-nearest. A placement's impostor is decided the same way and apart
+   from its mesh: by the sphere over all of level 0, which its quad spans, against its own drawn bit
+   (`cDrawnImpostorBit`, beside the mesh's `cDrawnMeshBit` in the slot's drawn-history word). A
+   mesh past its last level is no candidate, since it draws nothing to test. Anything else inside
+   the frustum is a **candidate**
+   (`cVisibleCandidateBit`, or `cVisibleImpostorCandidateBit` for an impostor, which the
+   histogram and the compaction skip) for phase 2. Without a
    valid ladder (`CullView::occlusion`: the first draw, a resize, the view's
    `SetOcclusionCulling(false)`) every occludee draws as before.
 
    **Phase 2** follows Forward World, when the ladder was valid. [HZB](#hzb) is built from the
    depth phase 1 left; `Cull Occluded` (`programs/culling/CullOccluded`) tests each candidate
-   against it through this draw's own view-projection and writes phase 2's visibility words, and
+   against it through this draw's own view-projection -- an impostor by its level-0 sphere -- and
+   writes phase 2's visibility words, and
    the counting sort and the compaction run again over them, all under the frustum's `p2:` scope
    (`c_Phase2Scope`), whose compaction scratch carries phase 1's names, so the kernels and
-   **Forward World Phase 2** run unchanged against it. Phase 1's words stay as written, and the
+   **Forward World Phase 2** and **Forward Impostor Phase 2** run unchanged against it. Phase 1's words stay as written, and the
    drawn-history word takes phase 2's draws. A wrong phase-1 guess -- a moved camera, a view drawn
    twice -- costs a phase-2 test, never a missing instance: whatever phase 1 hid is tested again
    against this frame's own depth.
@@ -562,7 +569,7 @@ fifth ahead of the cull:
    impostor arena) draws it rather than nothing: the placement's submesh 0 sets
    `cVisibleImpostorBit` while its word's current or outgoing level is the tier past the last,
    it is no smaller than `Geom.impostorMinPixels`, and the sphere over all of level 0 reaches the
-   frustum. That entry is counted and compacted into `idl::cImpostorDrawBucket`'s lanes -- the
+   frustum -- unless the occlusion cull holds it for phase 2 as an impostor candidate (above). That entry is counted and compacted into `idl::cImpostorDrawBucket`'s lanes -- the
    bucket `DrawBucketTable` reserves second, after the fallback -- rather than the instance's own,
    so a mesh and its impostor dissolve into each other through the same word and lanes two levels
    do. `LodSelectionDesc::forceImpostor` forces that tier (`cLodForceImpostor`). A geom with no
@@ -778,9 +785,9 @@ stands in for;
 phases before it wrote, as Blob Shadows does, discarding where the scene is nearer
 (`IForwardPhase::WritesDepth`), and refracts through the copy [Water Scene Copy](#water-scene-copy)
 took of scene colour just before it; **Forward Transparent** the depth-sorted list, every tier.
-Forward World draws in two phases when the view culls by occlusion: **Forward World Phase 2**,
-after Forward Impostor, draws what the occlusion cull's phase 2 found visible (Compact Instances,
-above). After the grass the depth holds the
+Forward World and Forward Impostor draw in two phases when the view culls by occlusion: **Forward
+World Phase 2** and **Forward Impostor Phase 2**, after Forward Impostor, draw what the occlusion
+cull's phase 2 found visible (Compact Instances, above). After the grass the depth holds the
 terrain, the world and its grass alone -- everything a blob shadow lands on, the seam
 [Blob Shadows](#blob-shadows) draws at, and where the [HZB](#hzb) the next draw's cull tests
 against is built. One object owns every phase's kernels, since a kernel is per bucket and a bucket is one

@@ -84,11 +84,27 @@ Texture2D.Handle HzbLevel(uint level)
     }
 }
 
+// Whether the ladder phase 1's depth built hides `sphere` through this draw's view-projection.
+bool HzbHidesSphere(CullView view, float4 sphere)
+{
+    let query = PrepareHzbQuery(view, view.viewProj, sphere);
+    if (query.visible)
+    {
+        return false;
+    }
+    // The level differs from thread to thread, so the handle it picks is no uniform index.
+    let gathered = nonuniform(HzbLevel(query.level)).GatherRed(gUniforms.hzbSampler, query.uv);
+    return HzbHides(gathered, query.nearest);
+}
+
 [shader("compute")]
 [numthreads(cHistogramGroupSize, 1, 1)]
 void main(uint globalIdx: SV_DispatchThreadID)
 {
-    if ((gUniforms.candidates[globalIdx].visible & cVisibleCandidateBit) == 0u)
+    let word = gUniforms.candidates[globalIdx].visible;
+    let meshCandidate = (word & cVisibleCandidateBit) != 0u;
+    let impostorCandidate = (word & cVisibleImpostorCandidateBit) != 0u;
+    if (!meshCandidate && !impostorCandidate)
     {
         gUniforms.visibility[globalIdx].visible = 0u;
         return;
@@ -97,31 +113,54 @@ void main(uint globalIdx: SV_DispatchThreadID)
     let instance = gUniforms.instanceBuffer[globalIdx];
     let mesh = gUniforms.meshBuffer.Get(instance.meshInstance);
     let geom = gUniforms.geomBuffer.Get(mesh.geom);
-    let submesh = gUniforms.submeshBuffer.Get(geom.submeshes, geom.submeshes.EntryLod0(instance.submeshIndex));
-    let sphere = mesh.TransformSphere(submesh.boundingSphere);
     let view = gUniforms.cullView[0];
+    let lod = gUniforms.lodCurrent[instance.meshInstance.GetOffset()];
 
-    bool hidden = false;
-    let query = PrepareHzbQuery(view, view.viewProj, sphere);
-    if (!query.visible)
+    uint bits = 0u;
+    uint drawn = 0u;
+    uint hidden = 0u;
+    if (meshCandidate)
     {
-        // The level differs from thread to thread, so the handle it picks is no uniform index.
-        let gathered = nonuniform(HzbLevel(query.level)).GatherRed(gUniforms.hzbSampler, query.uv);
-        hidden = HzbHides(gathered, query.nearest);
+        let submesh = gUniforms.submeshBuffer.Get(geom.submeshes, geom.submeshes.EntryLod0(instance.submeshIndex));
+        if (HzbHidesSphere(view, mesh.TransformSphere(submesh.boundingSphere)))
+        {
+            ++hidden;
+        }
+        else
+        {
+            bits |= VisibilityBits(lod, geom, true);
+            drawn |= (bits & (cVisibleCurrentBit | cVisibleOutgoingBit)) != 0u ? cDrawnMeshBit : 0u;
+        }
     }
 
-    let placement = instance.meshInstance.GetOffset();
-    let bits = hidden ? 0u : VisibilityBits(gUniforms.lodCurrent[placement], geom, true);
-    gUniforms.visibility[globalIdx].visible = bits;
-    if ((bits & (cVisibleCurrentBit | cVisibleOutgoingBit)) != 0u)
+    // The impostor by the sphere over the whole of level 0, as phase 1 tested it.
+    if (impostorCandidate)
     {
-        gUniforms.drawnHistory[globalIdx] |= cDrawnMeshBit;
+        if (HzbHidesSphere(view, mesh.TransformSphere(geom.boundingSphere)))
+        {
+            ++hidden;
+        }
+        else
+        {
+            bits |= cVisibleImpostorBit;
+            if (lod.Fading())
+            {
+                bits |= cVisibleDissolvingBit;
+            }
+            drawn |= cDrawnImpostorBit;
+        }
+    }
+
+    gUniforms.visibility[globalIdx].visible = bits;
+    if (drawn != 0u)
+    {
+        gUniforms.drawnHistory[globalIdx] |= drawn;
     }
 
 #if defined(BERNINI_GPU_DEBUG)
-    if (hidden)
+    if (hidden != 0u)
     {
-        gUniforms.stats[0].occlusionCulled.add(1u);
+        gUniforms.stats[0].occlusionCulled.add(hidden);
     }
 #endif
 }
