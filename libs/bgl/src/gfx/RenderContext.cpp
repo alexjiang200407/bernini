@@ -20,6 +20,7 @@
 #include "passes/DrawData.h"
 #include "passes/PassInitContext.h"
 #include "postprocess/BloomChain.h"
+#include "scene/HzbChain.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "scene/ground_color.h"
@@ -280,7 +281,7 @@ namespace bgl
 		m_Backdrop(startup.context), m_PostProcess(startup.context), m_BloomPass(startup.context),
 		m_OverlayPass(startup.context), m_OutlineMask(startup.context),
 		m_TaaResolve(startup.context), m_CompactInstances(startup.context),
-		m_RigFrames(startup.context), m_SkinnedPose(startup.context),
+		m_HzbBuild(startup.context), m_RigFrames(startup.context), m_SkinnedPose(startup.context),
 		m_ToonShadingRigs(startup.context), m_TransparentSort(startup.context),
 		m_WaterSceneCopy(startup.context)
 #if defined(BERNINI_GPU_DEBUG)
@@ -321,6 +322,7 @@ namespace bgl
 		m_OverlayPass.CheckBindings();
 		m_TaaResolve.CheckBindings();
 		m_WaterSceneCopy.CheckBindings();
+		m_HzbBuild.CheckBindings();
 
 		m_PointClampSampler = m_ResourceManager->CreateSampler(
 			bgpu::SamplerDesc().SetAllFilters(false).SetAllAddressModes(
@@ -894,8 +896,17 @@ namespace bgl
 
 		scene->AttachToFrameGraph(m_FrameGraph, drawIdx);
 		// Before the view imports its resources: the ground-colour texture is made the first time
-		// it is needed, and imported only once it exists.
+		// it is needed, and imported only once it exists, and so is the camera frustum's HZB.
 		view->PrepareGroundColor(glm::vec3(invView[3]));
+		HzbChain&  hzb       = view->GetCullState(c_CameraCullIdx).GetHzb();
+		const bool occlusion = view->GetOcclusionCulling();
+		if (occlusion)
+		{
+			hzb.Ensure(
+				m_ResourceManager,
+				m_ActiveTarget->GetRenderWidth(),
+				m_ActiveTarget->GetRenderHeight());
+		}
 		view->AttachToFrameGraph(m_FrameGraph, drawIdx);
 
 		auto draw                         = DrawData();
@@ -1013,8 +1024,17 @@ namespace bgl
 			GroundColorDraw(draw, view->GetGroundColor().rect),
 			m_ResourceManager.Get());
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kGrass);
-		// The depth holds the terrain, the world and its grass alone here: the seam an HZB build
-		// belongs at.
+		// The depth holds the terrain, the world and its grass alone here: everything that
+		// occludes, so the HZB the next draw's cull tests against is built from it.
+		if (occlusion && !hzb.GetLevels().empty())
+		{
+			m_HzbBuild.AttachToFrameGraph(m_FrameGraph, draw, "Frame");
+			hzb.MarkBuilt();
+		}
+		else
+		{
+			hzb.Invalidate();
+		}
 		m_BlobShadows.AttachToFrameGraph(m_FrameGraph, draw);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kSkinned);
 

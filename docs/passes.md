@@ -932,6 +932,26 @@ are chosen as the colour pass chooses them and the patches near the camera are a
 * **Skipped** -- no pass attached -- when no terrain look takes its ground's colour and no layer
   follows its cover.
 
+### HZB — [passes/HzbBuildPass.{h,cpp}](libs/bgl/src/passes/HzbBuildPass.cpp)
+
+Builds the camera frustum's hierarchical depth ladder (`scene/HzbChain`, owned by its `CullState`)
+from the depth as Forward Grass leaves it: the terrain, the world and its grass, everything that
+occludes. One `R32_FLOAT` texture per level, level 0 half the render size and each level half the
+one above **rounded up**, down to one texel or `cMaxHzbLevels`; each texel the farthest depth of
+the 2x2 it covers -- the minimum, under reversed-Z -- clamped at the source's edge, so the last
+texel of an odd axis keeps its one real source rather than dropping it
+(`programs.culling.HzbReduce`). One full-screen draw and one graph pass per level, so the graph
+sees each level read the one above. Separate textures rather than a mip chain: the graph tracks a
+texture whole, and the RHI has no texture UAVs for a single-dispatch reduce.
+
+The ladder is sized before the view imports its resources, made again on a resize, and valid only
+after a frame built it: the next draw's cull tests against it (`CullView::occlusion`).
+
+* **In:** `depth` as a shader resource, then each level the one above.
+* **Out:** `cull.hzb<n>`, under the camera frustum's cull scope.
+* **Skipped** when the view has occlusion culling off (`ISceneView::SetOcclusionCulling`) or a pool
+  refused the ladder; the ladder is then invalid for the next draw.
+
 ### Blob Shadows — [passes/BlobShadowPass.{h,cpp}](libs/bgl/src/passes/BlobShadowPass.cpp)
 
 Drawn between Forward's world and skinned phases, it dispatches one mesh-shader group

@@ -316,7 +316,9 @@ shard, then revert.
 
 **Expected, not bugs:** a shard's `rc=4` (every case skipped itself; `ShaderCache_test` does under
 validation), `GPU assertion(s) fired` from `DebugAssert_test`, `RTV pool exhausted` and `Bloom chain
-... could not be allocated` from `Bloom_test` and `QueueSync_test`, `Draw bucket ceiling (3)
+... could not be allocated` from `Bloom_test` and `QueueSync_test`, `HZB for a ... could not be
+allocated` from `Bloom_test` (its pool of eight RTVs is too small for the ladder, and the view
+culls by its frustum alone), `Draw bucket ceiling (3)
 reached` from `DrawBucketTable_test`, and the known `[hashedalpha]` failures and `Metal-tuned bound
 not met on D3D12` warnings.
 

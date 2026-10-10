@@ -1,4 +1,5 @@
 #pragma once
+#include "scene/HzbChain.h"
 #include <array>
 #include <bgl/idl/CullView.h>
 #include <bgpu/buffer/ComputeBuffer.h>
@@ -111,6 +112,23 @@ namespace bgl
 			return m_CullView;
 		}
 
+		/**
+		 * The depth ladder this frustum's occludees are tested against. Sized by the draw that
+		 * culls by occlusion (HzbChain::Ensure) and imported with the rest, level by level, when it
+		 * has levels.
+		 */
+		[[nodiscard]] HzbChain&
+		GetHzb() noexcept
+		{
+			return m_Hzb;
+		}
+
+		[[nodiscard]] const HzbChain&
+		GetHzb() const noexcept
+		{
+			return m_Hzb;
+		}
+
 		/** One idl::InstanceVisibility per instance slot, as this frustum's last cull wrote them. */
 		[[nodiscard]] const bgpu::ComputeBuffer&
 		GetInstanceVisibility() const noexcept
@@ -186,6 +204,7 @@ namespace bgl
 		// and AdvanceLodHistory swaps them. Indexed by the placement's MeshInstance entry, which
 		// holds still while the placement lives where the dense instance slot does not.
 		std::array<bgpu::ComputeBuffer, 2> m_InstanceLod;
+		HzbChain                           m_Hzb;
 		uint32_t                           m_LodCurrent    = 0;
 		bool                               m_LodNeedsClear = true;
 		std::vector<uint32_t>              m_FreshPlacements;

@@ -1,5 +1,6 @@
 #include "scene/CullState.h"
 #include "fg/FrameGraph.h"
+#include "scene/HzbChain.h"
 #include "scene/scene_buffer_names.h"
 #include <algorithm>
 #include <bgl/idl/CullView.h>
@@ -11,6 +12,7 @@
 #include <bgpu/resource/ResourceManager.h>
 #include <cstdint>
 #include <format>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -165,5 +167,11 @@ namespace bgl
 		fg.ImportBuffer(
 			c_InstanceLodPreviousName,
 			m_InstanceLod[m_LodCurrent ^ 1u].GetBufferHandle());
+
+		const std::span<const HzbChain::Level> levels = m_Hzb.GetLevels();
+		for (uint32_t i = 0; i < static_cast<uint32_t>(levels.size()); ++i)
+		{
+			fg.ImportTexture(HzbLevelName(i), levels[i].texture);
+		}
 	}
 }
