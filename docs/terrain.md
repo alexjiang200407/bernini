@@ -99,8 +99,9 @@ area of 0 cuts no river and a count of 0 digs no lake.
   A lake's shore is a circle pushed in and out by a noise; its level is the lowest point of its rim,
   where it would spill, and no higher than any river through it, which runs at that level inside it.
 - **The cut.** A channel is a bed `depth` per metre of width below the surface at its middle, rising
-  to the surface at its banks; a lake a bowl `depth` below its level at its middle. Beyond either,
-  the ground rises back to where it stood over `bank` metres. The field is requantised to the range
+  through the surface to 0.3 m above it at its banks; a lake a bowl `depth` below its level at its
+  middle, rising the same way at its shore. Beyond either, the ground rises back to where it stood
+  over `bank` metres. The shore is where a slope crosses the water, never ground level with it. The field is requantised to the range
   it holds after the cut.
 
 `TerrainWater` is five layers laid as the field is: the water's `surface` (the ground's own height

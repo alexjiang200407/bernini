@@ -33,6 +33,11 @@ namespace terrain
 		// Metres of water below which a sample counts as dry: a shore's last film is not a lake.
 		constexpr float c_Film = 1e-3f;
 
+		// Metres above the water a channel or a bowl is cut to before its bank begins: the shore is
+		// where a slope crosses the water, never ground level with it, where which of the two shows
+		// would be the rendering's guess.
+		constexpr float c_Freeboard = 0.3f;
+
 		// Square metres a river's width is measured against: `RiverRule::width` is its width here.
 		constexpr float c_WidthArea = 1.0e6f;
 
@@ -671,13 +676,16 @@ namespace terrain
 						const float deep =
 							std::clamp(rule.depth * 2.0f * half, rule.minDepth, rule.maxDepth);
 						const float share = distance / half;
-						ground[i] = std::min(ground[i], surface - deep * (1.0f - share * share));
+						ground[i]         = std::min(
+							ground[i],
+							surface + c_Freeboard - (deep + c_Freeboard) * (1.0f - share * share));
 						Stand(standing, i, surface, flow);
 					}
 					else if (distance < half + rule.bank)
 					{
 						const float rise = glm::smoothstep(half, half + rule.bank, distance);
-						ground[i]        = std::min(ground[i], glm::mix(surface, uncut[i], rise));
+						ground[i] =
+							std::min(ground[i], glm::mix(surface + c_Freeboard, uncut[i], rise));
 					}
 				});
 			}
@@ -698,15 +706,19 @@ namespace terrain
 					if (distance <= shore)
 					{
 						const float share = distance / shore;
-						ground[i] =
-							std::min(ground[i], basin.level - lakes.depth * (1.0f - share * share));
+						ground[i]         = std::min(
+							ground[i],
+							basin.level + c_Freeboard -
+								(lakes.depth + c_Freeboard) * (1.0f - share * share));
 						standing.surface[i] = std::max(standing.surface[i], basin.level);
 						standing.flow[i]    = glm::vec2(0.0f);
 					}
 					else if (distance < shore + lakes.bank)
 					{
 						const float rise = glm::smoothstep(shore, shore + lakes.bank, distance);
-						ground[i] = std::min(ground[i], glm::mix(basin.level, uncut[i], rise));
+						ground[i]        = std::min(
+							ground[i],
+							glm::mix(basin.level + c_Freeboard, uncut[i], rise));
 					}
 				});
 		}

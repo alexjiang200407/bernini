@@ -17,8 +17,8 @@ namespace terrain
 		float width     = 14.0f;   // metres, where a square kilometre drains through
 		float minWidth  = 5.0f;    // metres
 		float maxWidth  = 28.0f;   // metres
-		float depth     = 0.12f;   // metres of water at the middle, per metre of width
-		float minDepth  = 0.6f;    // metres
+		float depth     = 0.2f;    // metres of water at the middle, per metre of width
+		float minDepth  = 1.2f;    // metres
 		float maxDepth  = 3.0f;    // metres
 		float bank      = 8.0f;    // metres a bank takes to rise back to the ground beside it
 		float smoothing = 24.0f;   // metres
