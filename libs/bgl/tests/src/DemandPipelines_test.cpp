@@ -235,7 +235,7 @@ TEST_CASE("Every bucket's binder names survive a full build", "[pipeline][demand
 			auto handle         = bgl::MaterialHandle();
 			handle.materialType = material;
 			handle.layerType    = layer;
-			if (bgl::AcceptsMaterial(bgl::GeomType::kSkinnedMesh, handle))
+			if (bgl::AcceptsMaterial(bgl::GeomType::kSkinnedMesh, handle, {}))
 			{
 				(void)table.Resolve(bgl::GeometryStage::kSkinnedMesh, material, layer);
 			}

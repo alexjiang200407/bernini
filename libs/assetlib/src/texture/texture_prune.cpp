@@ -92,6 +92,7 @@ namespace assetlib
 					case ShadingModel::kPbrSurface:
 					case ShadingModel::kLitSurface:
 					case ShadingModel::kToonCharacterSurface:
+					case ShadingModel::kWaterSurface:
 						for (const SurfaceTextureBinding& texture : material.surface.textures)
 						{
 							markMap(live, texture.texturePath);

@@ -81,14 +81,16 @@ namespace bgl
 			return std::format("game.slot{}", slot);
 		}
 
-		// Every contract but ISurfaceSource draws through the lit programs: a toon surface does so
-		// as its model's adapter (lib.math.ToonShading), whose Shade is the engine's toon lighting.
+		// Every contract but ISurfaceSource and water draws through the lit programs: a toon surface
+		// does so as its model's adapter (lib.math.ToonShading), whose Shade is the engine's toon
+		// lighting. Water has programs of its own.
 		bool
 		DrawsLitPrograms(SurfaceShading shading) noexcept
 		{
 			switch (shading)
 			{
 			case SurfaceShading::kPbrSurface:
+			case SurfaceShading::kWater:
 				return false;
 			case SurfaceShading::kLit:
 			case SurfaceShading::kToonCharacter:
@@ -209,6 +211,11 @@ namespace bgl
 			std::string arms;
 			for (uint32_t slot = 0; slot < types.size(); ++slot)
 			{
+				// No water material reaches the sorted list.
+				if (types[slot].shading == SurfaceShading::kWater)
+				{
+					continue;
+				}
 				imports += std::format("import {};\n", BindingModuleName(slot));
 				const bool toon = types[slot].shading == SurfaceShading::kToonCharacter;
 				arms += std::format(
@@ -249,6 +256,11 @@ namespace bgl
 				return DrawBucketPixelSrc(
 					DrawBucketDesc{ GeometryStage::kStaticMesh, kind, layer });
 			};
+
+			if (shading == SurfaceShading::kWater)
+			{
+				return {};
+			}
 
 			if (shading == SurfaceShading::kToonCharacter)
 			{

@@ -1043,6 +1043,33 @@ TEST_CASE("a toon surface material round-trips its model", "[bmaterial][io][surf
 	CHECK(restored.surface.textures[0].name == "baseColor");
 }
 
+// Water is its own contract expectation too: a water material read back as another model would be
+// drawn by the opaque world instead of over the scene's depth.
+TEST_CASE("a water surface material round-trips its model", "[bmaterial][io][surface][water]")
+{
+	BMaterial mat;
+	mat.name                = "lake";
+	mat.shadingModel        = ShadingModel::kWaterSurface;
+	mat.surface.surfaceName = "ToonWater";
+	mat.surface.values      = { { "deepColor", { 0.0f, 0.2f, 0.4f, 1.0f } } };
+	mat.surface.textures    = { { "foamNoise", "Derived/BakedTextures/foam.ktx2" } };
+
+	const auto        bytes = AssetCodec<BMaterial>::Serialize(mat);
+	const std::string out(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+
+	CHECK(out.contains("\"shadingModel\": \"waterSurface\""));
+
+	const BMaterial restored = AssetCodec<BMaterial>::Deserialize(bytes);
+
+	REQUIRE(restored.shadingModel == ShadingModel::kWaterSurface);
+	CHECK(isSurfaceModel(restored.shadingModel));
+	CHECK(restored.surface.surfaceName == "ToonWater");
+	REQUIRE(restored.surface.values.size() == 1u);
+	CHECK(restored.surface.values[0].name == "deepColor");
+	REQUIRE(restored.surface.textures.size() == 1u);
+	CHECK(restored.surface.textures[0].name == "foamNoise");
+}
+
 // Environments are PBR, and no toon model draws them: a document naming a toon environment model is
 // refused rather than read as some other model.
 TEST_CASE("a material on a toon environment model is refused", "[bmaterial][io][toon]")

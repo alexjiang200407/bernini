@@ -1878,11 +1878,12 @@ namespace bgl
 
 		MeshMeta& meta = MetaFor(instance, submeshIndex, "SetSubmeshMaterialOverride");
 
-		if (!AcceptsMaterial(meta.geomType, material))
+		if (!AcceptsMaterial(meta.geomType, material, m_SceneRaw->GetSurfaces()))
 		{
 			throw SceneError(
 				"SetSubmeshMaterialOverride: an animated instance takes a baked PBR or a game "
-				"surface material -- neither animated pipeline has an unlit or loose variant");
+				"surface material other than water -- neither animated pipeline has an unlit, "
+				"loose or water variant");
 		}
 
 		meta.overrides[submeshIndex] = material;

@@ -422,11 +422,12 @@ namespace bgl
 			const uint32_t       index = submesh.material;
 			const MaterialHandle bound =
 				index < materials.size() ? materials[index] : MaterialHandle{};
-			if (!AcceptsMaterial(GeomType::kSkinnedMesh, bound))
+			if (!AcceptsMaterial(GeomType::kSkinnedMesh, bound, m_Surfaces))
 			{
 				throw SceneError(
 					"AddSkinnedMeshGeom: every submesh needs a baked PBR or a game surface "
-					"material -- the skinned pipeline has no unlit or loose variant");
+					"material other than water -- the skinned pipeline has no unlit, loose or "
+					"water variant");
 			}
 		}
 

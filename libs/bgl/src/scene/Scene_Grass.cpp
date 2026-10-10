@@ -163,6 +163,10 @@ namespace bgl
 		{
 			refuse("a toon character surface shades a placement's rig, which a blade has none of");
 		}
+		if (DrawsWater(kind, m_Surfaces))
+		{
+			refuse("a water surface draws only in the water phase, which no blade reaches");
+		}
 
 		const GrassBladeDesc& blade = desc.blade;
 		if (!core::is_finite_positive(blade.minHeight) ||
