@@ -92,6 +92,33 @@ Deterministic, and linear in the samples but for one sort by height and one heap
 1001 x 1001 in release. Lake depth and flow are what a water surface will stand on; nothing
 draws one yet.
 
+## Masks
+
+`terrain::GenerateMasks` ([terrainlib/TerrainMasks.h](../libs/terrainlib/include/terrainlib/TerrainMasks.h))
+turns a field and its fields into where each kind of thing stands, one hard layer per kind --
+every value 0 or 1 -- so a channel painted by hand later replaces one kind without touching the
+others:
+
+- **Water** first, from the fields alone: a lake at least `minLakeDepth` deep, or a channel that
+  `riverArea` drains through. Nothing else of the masks lies on it.
+- **Woods** in hollows and on gentle wet ground, never on a crest, past `maxSlope` or on water.
+  Each sample scores a low-frequency noise `patchSize` metres across plus its wetness and how deep
+  in a hollow it lies, each by a bias; hollow and crest are the topographic position index, a
+  sample's height against the mean within `positionRadius`, and wetness is averaged over the same
+  radius, so a wood follows a valley rather than every gully up its sides. The highest scorers
+  become woods; clearings smaller than `minClearing` are filled, woods smaller than `minArea`
+  dropped, and the share taken is corrected over a few rounds so the woods as they stand cover
+  `coverage` of the field. `forestDepth` is each wood sample's distance in metres to the nearest
+  sample outside it, by an exact Euclidean distance transform (Felzenszwalb and Huttenlocher
+  2012); the field's edge is not an edge of a wood.
+- **Rock** on steep ground and ridges, never in a wood or on water, scored by noise, steepness and
+  ridge, groups smaller than its `minArea` dropped.
+
+A wood or an outcrop is a group of samples joined along either axis or diagonally. Where a painted
+mask arrives it takes the noise's place and keeps the cleanup. Deterministic from the desc's seed;
+0.16 s for 1001 x 1001 in release. Generation, erosion, fields and masks together are about 2.4 s
+for the battlefield's field.
+
 ## The levels
 
 A terrain is a quadtree of **patches** of `cTerrainPatchQuads` (7) cells a side: level 0 at the
