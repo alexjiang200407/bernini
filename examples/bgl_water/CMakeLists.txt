@@ -21,6 +21,10 @@ if(RENDERER_BACKEND STREQUAL "DX12")
     target_link_libraries(bgl_water PRIVATE bgpu_d3d12_agility Shell32)
 endif()
 
+# The checkout's test project, linked at its top by the workspace: where the water surface lives.
+target_compile_definitions(bgl_water PRIVATE
+    BGL_WATER_DEFAULT_PROJECT="${BERNINI_ROOT}/test-project/Data")
+
 enable_strict_compiler(bgl_water)
 
 target_precompile_headers(bgl_water

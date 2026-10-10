@@ -66,23 +66,26 @@ main(int argc, char** argv)
 
 	try
 	{
-		uint32_t    width  = 1280;
-		uint32_t    height = 720;
-		uint32_t    frames = 90;
-		uint32_t    seed   = 7;
-		std::string project;
-		std::string water = "Authored/Materials/Water/Lake.bmaterial";
-		std::string shot  = "bgl_water.png";
-		float       size  = 2000.0f;
-		float       share = 0.55f;
-		float       sun   = 2.0f;
+		uint32_t    width   = 1280;
+		uint32_t    height  = 720;
+		uint32_t    frames  = 90;
+		uint32_t    seed    = 7;
+		std::string project = BGL_WATER_DEFAULT_PROJECT;
+		std::string water   = "Authored/Materials/Water/Lake.bmaterial";
+		std::string shot    = "bgl_water.png";
+		float       size    = 2000.0f;
+		float       share   = 0.55f;
+		float       sun     = 2.0f;
 
 		{
 			CLI::App app{ "A sea of a project's water surface over generated hills" };
 			app.set_help_flag("--help", "Print this help message and exit");
 			app.add_option("-w,--width", width, "Width in pixels")->check(CLI::PositiveNumber);
 			app.add_option("-h,--height", height, "Height in pixels")->check(CLI::PositiveNumber);
-			app.add_option("--project", project, "The project's Data directory")->required();
+			app.add_option(
+				"--project",
+				project,
+				"The project's Data directory; the checkout's test-project by default");
 			app.add_option(
 				"--water",
 				water,
@@ -106,7 +109,8 @@ main(int argc, char** argv)
 		if (!std::filesystem::is_directory(surfaceDir))
 		{
 			core::throw_runtime_error(
-				"--project {} has no Authored/Shaders, so no water surface to draw",
+				"--project {} has no Authored/Shaders, so no water surface to draw; name a "
+				"project's Data directory with --project",
 				std::filesystem::absolute(project).string());
 		}
 
