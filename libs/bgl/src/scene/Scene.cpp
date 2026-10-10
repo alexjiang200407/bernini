@@ -180,6 +180,14 @@ namespace bgl
 				.SetInitialCount(AtLeastOne(m_Desc.initialIndices))
 				.SetDebugName("Index Buffer")),
 		m_Materials(resourceManager, MaterialArenaDesc(m_Desc, m_Surfaces)),
+		m_Impostors(
+			resourceManager,
+			bgpu::RawBufferDesc()
+				.SetInitialBytes(256)
+				.SetDebugName("Impostor Arena")
+				.SetHandleStride(sizeof(bgpu::DescriptorHandle))
+				.SetNullRecordBytes(
+					bgpu::idl::cRawPayloadOffset + static_cast<uint32_t>(sizeof(idl::Impostor)))),
 		m_Clips(
 			resourceManager,
 			bgpu::RangeBufferDesc().SetInitialCount(1).SetDebugName("Clip Buffer")),
@@ -239,7 +247,9 @@ namespace bgl
 		geom.boundingSphere = record.boundingSphere;
 		geom.submeshes      = record.submeshes;
 		std::ranges::copy(record.lodMinPixels, geom.lodMinPixels);
-		placed.entry = m_GeomBuffer.Add(geom);
+		geom.impostor          = record.impostor;
+		geom.impostorMinPixels = record.impostorMinPixels;
+		placed.entry           = m_GeomBuffer.Add(geom);
 
 		try
 		{

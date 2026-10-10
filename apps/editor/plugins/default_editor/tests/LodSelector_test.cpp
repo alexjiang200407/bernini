@@ -99,6 +99,28 @@ TEST_CASE("The Level of Detail selector lists Auto and then every level", "[lods
 		CHECK_FALSE(reported[2].has_value());
 	}
 
+	SECTION("A mesh with an impostor lists it last, and pins it")
+	{
+		auto withImpostor     = ThreeLevels();
+		withImpostor.impostor = true;
+		selector.Refresh(&withImpostor, std::nullopt);
+		REQUIRE(selector.count() == 5);
+		CHECK(selector.itemText(4) == QStringLiteral("Impostor"));
+
+		// Past the last level Auto names it, where a mesh without one draws nothing.
+		selector.ShowAuto(Drawing(3));
+		CHECK(selector.itemText(0) == QStringLiteral("Auto: Impostor"));
+
+		selector.setCurrentIndex(4);
+		CHECK(selector.GetForcedLevel() == editor::c_ForceImpostor);
+
+		// A refresh keeps it pinned, and a mesh with none starts from Auto.
+		selector.Refresh(&withImpostor, editor::c_ForceImpostor);
+		CHECK(selector.currentIndex() == 4);
+		selector.Refresh(&lods, editor::c_ForceImpostor);
+		CHECK(selector.currentIndex() == 0);
+	}
+
 	SECTION("A mesh with no levels disables the selector again")
 	{
 		selector.Refresh(nullptr, std::nullopt);

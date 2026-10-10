@@ -33,6 +33,7 @@ set(IDL_CPP_SOURCES
     VertexLayout.slang
     Submesh.slang
     Geom.slang
+    Impostor.slang
     CullView.slang
     CullStats.slang
     InstanceVisibility.slang

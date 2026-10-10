@@ -110,6 +110,65 @@ TEST_CASE("serialize/deserialize round-trips every pool", "[bmesh][io]")
 	REQUIRE(AssetCodec<BMesh>::Serialize(restored) == bytes);
 }
 
+TEST_CASE("a mesh's impostor round-trips with its atlases", "[bmesh][io][impostor]")
+{
+	auto mesh = MakeSampleMesh();
+	mesh.impostors.texels.resize(2 * c_ImpostorAtlasBytes);
+	for (size_t i = 0; i < mesh.impostors.texels.size(); ++i)
+		mesh.impostors.texels[i] = static_cast<uint8_t>(i * 31u);
+	mesh.impostors.records = { MeshImpostor{ .mesh              = 0,
+		                                     .albedoOffset      = 0,
+		                                     .normalDepthOffset = c_ImpostorAtlasBytes,
+		                                     .minPixels         = 2.0f,
+		                                     .center            = glm::vec3(0.5f, 0.5f, 0.0f),
+		                                     .radius            = 0.75f } };
+
+	const auto bytes    = AssetCodec<BMesh>::Serialize(mesh);
+	const auto restored = AssetCodec<BMesh>::Deserialize(bytes);
+
+	REQUIRE(restored.impostors.records.size() == 1);
+	CHECK(restored.impostors.records[0].mesh == 0);
+	CHECK(restored.impostors.records[0].normalDepthOffset == c_ImpostorAtlasBytes);
+	CHECK(restored.impostors.records[0].minPixels == 2.0f);
+	CHECK(restored.impostors.records[0].center == glm::vec3(0.5f, 0.5f, 0.0f));
+	CHECK(restored.impostors.records[0].radius == 0.75f);
+	CHECK(restored.impostors.texels == mesh.impostors.texels);
+	CHECK(AssetCodec<BMesh>::Serialize(restored) == bytes);
+
+	SECTION("a mesh with none reads as none")
+	{
+		const auto plain =
+			AssetCodec<BMesh>::Deserialize(AssetCodec<BMesh>::Serialize(MakeSampleMesh()));
+		CHECK(plain.impostors.records.empty());
+		CHECK(plain.impostors.texels.empty());
+	}
+
+	// What the renderer would sample past the end of, or hand to a mesh that is not there.
+	SECTION("one that names no mesh is refused")
+	{
+		mesh.impostors.records[0].mesh = 1;
+		CHECK_THROWS_AS(AssetCodec<BMesh>::Serialize(mesh), std::runtime_error);
+	}
+
+	SECTION("one whose atlas runs past the texels is refused")
+	{
+		mesh.impostors.texels.resize(2 * c_ImpostorAtlasBytes - 1);
+		CHECK_THROWS_AS(AssetCodec<BMesh>::Serialize(mesh), std::runtime_error);
+	}
+
+	SECTION("one with no extent is refused")
+	{
+		mesh.impostors.records[0].radius = 0.0f;
+		CHECK_THROWS_AS(AssetCodec<BMesh>::Serialize(mesh), std::runtime_error);
+	}
+
+	SECTION("two for one mesh are refused")
+	{
+		mesh.impostors.records.push_back(mesh.impostors.records[0]);
+		CHECK_THROWS_AS(AssetCodec<BMesh>::Serialize(mesh), std::runtime_error);
+	}
+}
+
 TEST_CASE("a mesh's levels of detail round-trip with their table", "[bmesh][io][lod]")
 {
 	auto mesh = MakeSampleMesh();

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <assetlib/bmesh_gltf.h>
 #include <assetlib/codecs.h>
 #include <assetlib/reimport.h>
 #include <assetlib_structs/BGrassFields.h>
@@ -407,8 +408,12 @@ namespace assetlib
 							// Parsed once per kind rather than held across all of them: a source's
 							// meshes are the largest thing in this library, and every one of them
 							// would otherwise stay resident until the last clip set was baked.
-							const RegeneratedGroup group =
-								importGroup(*this, source.key, ImportDocument(source.document));
+							const RegeneratedGroup group = importGroup(
+								*this,
+								source.key,
+								ImportDocument(source.document),
+								type == AssetType::kMesh ? GltfImpostors::kBake :
+														   GltfImpostors::kSkip);
 
 							for (const std::string& output : item.outputs)
 							{

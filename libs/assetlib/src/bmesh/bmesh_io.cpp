@@ -123,6 +123,8 @@ namespace assetlib
 			kGrassNames,
 			kGrassChunks,
 			kGrassClumps,
+			kImpostors,       // the meshes' baked impostors, see MeshImpostor
+			kImpostorTexels,  // their atlases
 		};
 
 		bool
@@ -158,12 +160,38 @@ namespace assetlib
 					core::throw_runtime_error("bmesh: invalid grass chunk range");
 		}
 
+		void
+		validateImpostors(const BMesh& mesh)
+		{
+			const uint64_t texels = mesh.impostors.texels.size();
+			for (size_t i = 0; i < mesh.impostors.records.size(); ++i)
+			{
+				const MeshImpostor& impostor = mesh.impostors.records[i];
+				if (impostor.mesh >= mesh.meshes.size() ||
+				    (i > 0 && impostor.mesh <= mesh.impostors.records[i - 1].mesh))
+					core::throw_runtime_error(
+						"bmesh: impostor {} names no mesh, or not in mesh order",
+						i);
+				if (static_cast<uint64_t>(impostor.albedoOffset) + c_ImpostorAtlasBytes > texels ||
+				    static_cast<uint64_t>(impostor.normalDepthOffset) + c_ImpostorAtlasBytes >
+				        texels)
+					core::throw_runtime_error(
+						"bmesh: impostor {}'s atlases run past its texels",
+						i);
+				if (!(impostor.radius > 0.0f) || !(impostor.minPixels >= 0.0f))
+					core::throw_runtime_error(
+						"bmesh: impostor {} has no extent or a negative floor",
+						i);
+			}
+		}
+
 	}
 
 	std::vector<std::byte>
 	AssetCodec<BMesh>::Serialize(const BMesh& mesh)
 	{
 		validateGrassGeometry(mesh);
+		validateImpostors(mesh);
 
 		cache::Writer writer;
 		writer.Add(ChunkId::kNodes, mesh.nodes);
@@ -195,6 +223,8 @@ namespace assetlib
 		writer.Add(ChunkId::kGrassNames, cache::packStrings(fieldNames));
 		writer.Add(ChunkId::kGrassChunks, mesh.grassFields.chunks);
 		writer.Add(ChunkId::kGrassClumps, mesh.grassFields.clumps);
+		writer.Add(ChunkId::kImpostors, mesh.impostors.records);
+		writer.Add(ChunkId::kImpostorTexels, mesh.impostors.texels);
 
 		// Computed here rather than taken from the struct, so a producer that rewrote the blob and
 		// forgot the field cannot write a file that disagrees with its own geometry.
@@ -239,6 +269,10 @@ namespace assetlib
 		mesh.grassFields.clumps = reader.Read<GrassClump>(ChunkId::kGrassClumps);
 		validateGrassGeometry(mesh);
 
+		mesh.impostors.records = reader.Read<MeshImpostor>(ChunkId::kImpostors);
+		mesh.impostors.texels  = reader.Read<uint8_t>(ChunkId::kImpostorTexels);
+		validateImpostors(mesh);
+
 		const auto geometry    = reader.Read<uint64_t>(ChunkId::kGeometrySignature);
 		mesh.geometrySignature = geometry.empty() ? 0 : geometry.front();
 
@@ -254,6 +288,7 @@ namespace assetlib
 		out.meshes           = mesh.meshes;
 		out.submeshes        = mesh.submeshes;
 		out.lods             = mesh.lods;
+		out.impostors        = mesh.impostors;
 		out.meshlets         = mesh.meshlets;
 		out.meshletGroups    = mesh.meshletGroups;
 		out.meshletVertices  = mesh.meshletVertices;

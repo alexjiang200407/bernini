@@ -46,6 +46,10 @@ public uint LevelBySize(Geom geom, float size, float floorScale)
 // that level's floor by cLodHysteresis, so a placement resting on a threshold stays where it is.
 public uint ChooseLevel(Geom geom, CullView view, float size, InstanceLod previous)
 {
+    if (view.lodForcedLevel == cLodForceImpostor)
+    {
+        return geom.submeshes.lodCount;
+    }
     if (view.lodForcedLevel != cLodForceNone)
     {
         return min(view.lodForcedLevel, geom.submeshes.lodCount - 1u);

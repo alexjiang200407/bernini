@@ -573,10 +573,12 @@ flowchart TD
   clumps inflated by the tallest blade -- holds whatever bends it. **Not** an epoch change:
   grass evaluates the wind at this frame's time and the last one's, so a new wind arrives as motion.
 * **`SetLodSelection(desc)` / `GetLodSelection()`** — @pre `pixelScale` finite and positive,
-  `fadeSeconds` finite and non-negative, `forceLevel` below `LodLevel::kCount`, `posePixels`
-  finite and positive, `forcePoseSource` not `kAuto`. How the view chooses each placement's level
-  of detail: every authored threshold scaled by `pixelScale`, one level forced on every placement
-  that has it, and how long a change dissolves over (0 is a hard swap). Its pose fields choose
+  `fadeSeconds` finite and non-negative, `forceLevel` below `LodLevel::kCount` and not given with
+  `forceImpostor`, `posePixels` finite and positive, `forcePoseSource` not `kAuto`. How the view
+  chooses each placement's level of detail: every authored threshold scaled by `pixelScale`, one
+  level forced on every placement that has it -- or, with `forceImpostor`, the tier past every
+  placement's last level, its geom's baked impostor or nothing -- and how long a change dissolves
+  over (0 is a hard swap). Its pose fields choose
   between the two sources of each `PoseSource::kAuto` placement: at most `poseBudget` posed per
   instance at once, those as large on screen as level 0 -- or `posePixels`, on a mesh with one level
   -- and `forcePoseSource` overruling the size ([Skinned Meshes](skinning.md)). Per view, and

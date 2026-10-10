@@ -40,8 +40,9 @@ void main(uint globalIdx: SV_DispatchThreadID)
         return;
     }
 
-    // A frustum-culled instance is drawn by nothing, so it must not take a slot in the sorted list.
-    if (gUniforms.visibility[globalIdx].visible == 0u)
+    // A frustum-culled instance is drawn by nothing, so it must not take a slot in the sorted list;
+    // nor one drawn only as its impostor, which is opaque.
+    if ((gUniforms.visibility[globalIdx].visible & (cVisibleCurrentBit | cVisibleOutgoingBit)) == 0u)
     {
         return;
     }

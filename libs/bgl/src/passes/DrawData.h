@@ -167,5 +167,8 @@ namespace bgl
 		// here rather than from the graph, which tracks resource state -- a view is not a resource.
 		// The arena re-issues the view inside its own growth, so this is read per draw, never cached.
 		bgpu::RawArenaBinding materialArena;
+
+		// The impostor arena and its typed view, on the same terms.
+		bgpu::RawArenaBinding impostorArena;
 	};
 }

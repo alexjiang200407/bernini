@@ -144,9 +144,11 @@ TEST_CASE("every drawable key has a bucket of its own", "[drawbucket]")
 		}
 	}
 
-	// Dense: the ids are exactly 0..count-1, the unlit seed among them.
-	CHECK(table.Count() == keys);
-	CHECK(*seen.rbegin() == keys - 1);
+	// Dense: the ids are exactly 0..count-1, the unlit seed among them, and the impostor stage's
+	// bucket, which no material key resolves to, the one id not seen.
+	CHECK(table.Count() == keys + 1);
+	CHECK(*seen.rbegin() == keys);
+	CHECK_FALSE(seen.contains(bgl::idl::cImpostorDrawBucket));
 }
 
 // A draw bucket's dispatch args are also its command count: the geometry passes point the count verb

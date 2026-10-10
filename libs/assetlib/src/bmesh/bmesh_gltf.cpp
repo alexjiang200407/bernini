@@ -18,6 +18,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -54,8 +55,11 @@
 
 #include "bmesh/gltf_skin.h"
 #include "bmesh/gltf_util.h"
+#include "bmesh/impostor_bake.h"
 
 #include <core/err/util.h>
+#include <core/file/file.h>
+#include <core/glm.h>
 #include <core/math.h>
 #include <core/type_traits.h>
 
@@ -1718,11 +1722,12 @@ namespace assetlib
 		 *
 		 * `<base>_LOD0` is `<base>` itself, for a source following that naming throughout.
 		 *
+		 * @return each glTF mesh's entry now, c_InvalidIndex for a level folded into its base.
 		 * @throws std::runtime_error for a level with no base, two meshes naming one level, a gap
 		 *         in the levels, more than c_MaxMeshLods of them, a level whose triangle primitives
 		 *         or skinning differ from the base's, or a level carrying grass.
 		 */
-		void
+		[[nodiscard]] std::vector<uint32_t>
 		foldLodLevels(
 			BMeshImport&                 mesh,
 			const tinygltf::Model&       model,
@@ -1885,6 +1890,232 @@ namespace assetlib
 			mesh.meshes    = std::move(meshes);
 			mesh.submeshes = std::move(submeshes);
 			writeLodTables(mesh, authored);
+			return remap;
+		}
+
+		constexpr std::string_view c_ImpostorKey = "bernini_impostor";
+
+		/**
+		 * Whether `extras` opt their mesh into an impostor. Blender writes a boolean Custom Property
+		 * as a bool, and an integer one as a number, so a number is read as its truth; anything
+		 * else of that key is dropped with a warning naming `owner`.
+		 */
+		[[nodiscard]] bool
+		extrasWantImpostor(const tinygltf::Value& extras, const std::string_view owner)
+		{
+			if (!extras.IsObject() || !extras.Has(std::string(c_ImpostorKey)))
+				return false;
+			const tinygltf::Value& value = extras.Get(std::string(c_ImpostorKey));
+			if (value.IsBool())
+				return value.Get<bool>();
+			if (value.IsNumber())
+				return value.GetNumberAsDouble() != 0.0;
+			spdlog::warn("{}: {} dropped, it is true or false", owner, c_ImpostorKey);
+			return false;
+		}
+
+		/** Per glTF mesh: whether its extras, or those of a node placing it, ask for an impostor. */
+		[[nodiscard]] std::vector<bool>
+		meshesWantingImpostors(const tinygltf::Model& model)
+		{
+			auto wants = std::vector<bool>(model.meshes.size());
+			for (size_t m = 0; m < model.meshes.size(); ++m)
+				wants[m] = extrasWantImpostor(
+					model.meshes[m].extras,
+					std::format("mesh '{}'", model.meshes[m].name));
+			for (const tinygltf::Node& node : model.nodes)
+				if (node.mesh >= 0 && static_cast<size_t>(node.mesh) < wants.size() &&
+				    extrasWantImpostor(node.extras, std::format("node '{}'", node.name)))
+					wants[static_cast<size_t>(node.mesh)] = true;
+			return wants;
+		}
+
+		struct DecodedImage
+		{
+			uint32_t             width  = 0;
+			uint32_t             height = 0;
+			std::vector<uint8_t> rgba;
+		};
+
+		/**
+		 * A glTF image as RGBA8, decoded here rather than by the load, which regeneration runs with
+		 * no image decode. Empty, with a warning, for one that cannot be read.
+		 */
+		[[nodiscard]] std::optional<DecodedImage>
+		decodeImage(
+			const tinygltf::Model&       model,
+			const std::filesystem::path& path,
+			const size_t                 index)
+		{
+			ZoneScopedN("assetlib impostor image decode");
+			const tinygltf::Image& image = model.images[index];
+			if (!image.image.empty() && image.component == 4 && image.bits == 8)
+				return DecodedImage{ static_cast<uint32_t>(image.width),
+					                 static_cast<uint32_t>(image.height),
+					                 image.image };
+
+			auto bytes = std::vector<unsigned char>();
+			if (image.bufferView >= 0)
+			{
+				const tinygltf::BufferView& view =
+					model.bufferViews[static_cast<size_t>(image.bufferView)];
+				const tinygltf::Buffer& buffer = model.buffers[static_cast<size_t>(view.buffer)];
+				if (view.byteOffset + view.byteLength > buffer.data.size())
+					return std::nullopt;
+				const auto first =
+					buffer.data.begin() + static_cast<std::ptrdiff_t>(view.byteOffset);
+				bytes.assign(first, first + static_cast<std::ptrdiff_t>(view.byteLength));
+			}
+			else if (!image.uri.empty() && !image.uri.starts_with("data:"))
+			{
+				std::error_code error;
+				const auto      file = path.parent_path() / image.uri;
+				if (!std::filesystem::exists(file, error))
+					return std::nullopt;
+				const std::vector<std::byte> read = core::file::read_file_bytes(file);
+				bytes.resize(read.size());
+				std::memcpy(bytes.data(), read.data(), read.size());
+			}
+
+			int            width = 0, height = 0, channels = 0;
+			unsigned char* pixels = bytes.empty() ? nullptr :
+			                                        stbi_load_from_memory(
+														bytes.data(),
+														static_cast<int>(bytes.size()),
+														&width,
+														&height,
+														&channels,
+														4);
+			if (pixels == nullptr)
+			{
+				spdlog::warn(
+					"image '{}': not decodable for an impostor, so its base colour bakes "
+					"untextured",
+					image.name);
+				return std::nullopt;
+			}
+			ZoneTextF("%d x %d", width, height);
+			auto decoded = DecodedImage{
+				static_cast<uint32_t>(width),
+				static_cast<uint32_t>(height),
+				std::vector<uint8_t>(pixels, pixels + static_cast<size_t>(width) * height * 4)
+			};
+			stbi_image_free(pixels);
+			return decoded;
+		}
+
+		/**
+		 * Bakes an impostor for every mesh entry `wants` names, from the glTF's own base colour, into
+		 * `mesh.impostors.records` and `mesh.impostors.texels`. A skinned mesh is skipped with a warning: its
+		 * impostor would need a frame set per pose.
+		 */
+		void
+		bakeImpostors(
+			BMeshImport&                 mesh,
+			const tinygltf::Model&       model,
+			const std::filesystem::path& path,
+			const std::vector<bool>&     wants,
+			const std::vector<uint32_t>& remap,
+			const CancelToken&           cancel)
+		{
+			auto wanted = std::vector<std::pair<uint32_t, size_t>>();
+			for (size_t m = 0; m < wants.size(); ++m)
+				if (wants[m] && remap[m] != c_InvalidIndex)
+					wanted.emplace_back(remap[m], m);
+			std::ranges::sort(wanted);
+
+			auto images = std::unordered_map<size_t, std::optional<DecodedImage>>();
+			for (const auto& [entryIndex, gltfIndex] : wanted)
+			{
+				throwIfCancelled(cancel);
+
+				const Mesh&                    entry = mesh.meshes[entryIndex];
+				const std::span<const Submesh> level0(
+					mesh.submeshes.data() + entry.firstSubmesh,
+					entry.submeshCount);
+				if (std::ranges::any_of(level0, submeshCarriesJoints))
+				{
+					spdlog::warn(
+						"mesh '{}': {} dropped, a skinned mesh has no impostor",
+						model.meshes[gltfIndex].name,
+						c_ImpostorKey);
+					continue;
+				}
+
+				// Three images a submesh at most, held where their surface's pointers stay put.
+				auto       views    = std::vector<ImpostorImage>(3 * level0.size());
+				auto       surfaces = std::vector<ImpostorSurface>(level0.size());
+				const auto imageOf  = [&](const int    texture,
+				                          const size_t slot) -> const ImpostorImage* {
+					if (texture < 0 || static_cast<size_t>(texture) >= model.textures.size() ||
+					    model.textures[static_cast<size_t>(texture)].source < 0)
+						return nullptr;
+					const auto source =
+						static_cast<size_t>(model.textures[static_cast<size_t>(texture)].source);
+					auto [it, inserted] = images.try_emplace(source);
+					if (inserted)
+						it->second = decodeImage(model, path, source);
+					if (!it->second.has_value())
+						return nullptr;
+					views[slot] =
+						ImpostorImage{ it->second->width, it->second->height, it->second->rgba };
+					return &views[slot];
+				};
+				for (size_t s = 0; s < level0.size(); ++s)
+				{
+					if (level0[s].material >= model.materials.size())
+						continue;
+					const tinygltf::Material& material = model.materials[level0[s].material];
+					const auto&               pbr      = material.pbrMetallicRoughness;
+					ImpostorSurface&          surface  = surfaces[s];
+					if (pbr.baseColorFactor.size() == 4)
+						surface.baseColorFactor = glm::vec4(
+							static_cast<float>(pbr.baseColorFactor[0]),
+							static_cast<float>(pbr.baseColorFactor[1]),
+							static_cast<float>(pbr.baseColorFactor[2]),
+							static_cast<float>(pbr.baseColorFactor[3]));
+					surface.roughnessFactor = static_cast<float>(pbr.roughnessFactor);
+					surface.metallicFactor  = static_cast<float>(pbr.metallicFactor);
+					surface.doubleSided     = material.doubleSided;
+					// An impostor is a cutout, so a blended material is cut at half coverage: a leaf card's
+					// clear texels would otherwise bake as its colour.
+					surface.alphaTest =
+						material.alphaMode == "MASK" || material.alphaMode == "BLEND";
+					surface.alphaCutoff = material.alphaMode == "MASK" ?
+					                          static_cast<float>(material.alphaCutoff) :
+					                          0.5f;
+
+					if (pbr.baseColorTexture.texCoord == 0)
+						surface.baseColor = imageOf(pbr.baseColorTexture.index, 3 * s);
+					if (pbr.metallicRoughnessTexture.texCoord == 0)
+						surface.metallicRoughness =
+							imageOf(pbr.metallicRoughnessTexture.index, 3 * s + 1);
+					if (material.occlusionTexture.texCoord == 0 ||
+					    material.occlusionTexture.texCoord == 1)
+					{
+						surface.occlusion = imageOf(material.occlusionTexture.index, 3 * s + 2);
+						surface.occlusionTexCoord =
+							static_cast<uint32_t>(material.occlusionTexture.texCoord);
+						surface.occlusionStrength =
+							static_cast<float>(material.occlusionTexture.strength);
+					}
+				}
+
+				BakedImpostor baked = bakeImpostor(
+					ImpostorSource{ .submeshes  = level0,
+				                    .surfaces   = surfaces,
+				                    .vertexData = mesh.vertexData,
+				                    .indexData  = mesh.indexData });
+				baked.record.mesh = entryIndex;
+				baked.record.albedoOffset += static_cast<uint32_t>(mesh.impostors.texels.size());
+				baked.record.normalDepthOffset +=
+					static_cast<uint32_t>(mesh.impostors.texels.size());
+				mesh.impostors.records.push_back(baked.record);
+				mesh.impostors.texels.insert(
+					mesh.impostors.texels.end(),
+					baked.texels.begin(),
+					baked.texels.end());
+			}
 		}
 	}
 
@@ -1986,7 +2217,10 @@ namespace assetlib
 			mesh.meshes.push_back(entry);
 		}
 
-		foldLodLevels(mesh, model, options.lodMinPixels);
+		const std::vector<bool>     wantsImpostor = meshesWantingImpostors(model);
+		const std::vector<uint32_t> remap = foldLodLevels(mesh, model, options.lodMinPixels);
+		if (options.impostors == GltfImpostors::kBake)
+			bakeImpostors(mesh, model, path, wantsImpostor, remap, options.cancel);
 
 		if (options.textures == GltfTextures::kDecode)
 		{

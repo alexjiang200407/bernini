@@ -129,6 +129,10 @@ public static const uint cPoseGroupSize = 64;
 // CullView.lodForcedLevel when no level is forced and every placement is chosen by its size.
 public static const uint cLodForceNone = uint32_t(-1);
 
+// CullView.lodForcedLevel when every placement is forced past its last level: its impostor, or
+// nothing where its geom has none.
+public static const uint cLodForceImpostor = uint32_t(-2);
+
 // CullView.poseForced: every automatic placement chosen by its size and the budget, or every one
 // drawn per instance (still within the budget), or every one from its rig's table.
 public static const uint cPoseForceNone = uint32_t(-1);

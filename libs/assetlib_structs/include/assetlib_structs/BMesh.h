@@ -1,6 +1,7 @@
 #pragma once
 #include <assetlib_structs/GrassGeometry.h>
 #include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/MeshImpostors.h>
 #include <assetlib_structs/Node.h>
 #include <core/str/string_pool.h>
 
@@ -20,6 +21,8 @@ namespace assetlib
 		std::vector<Mesh>     meshes;
 		std::vector<Submesh>  submeshes;
 		std::vector<MeshLod>  lods;  // each mesh's levels, see Mesh::firstLod
+
+		MeshImpostors impostors;
 
 		std::vector<Meshlet>      meshlets;
 		std::vector<MeshletGroup> meshletGroups;     // one bound per c_MeshletsPerGroup meshlets

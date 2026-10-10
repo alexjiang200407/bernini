@@ -771,6 +771,15 @@ namespace bgl
 		// Over level 0 alone, and each level's threshold; see idl::Geom.
 		glm::vec4                       boundingSphere = glm::vec4(0.0f);
 		std::array<float, cMaxMeshLods> lodMinPixels{};
+
+		// The mesh's baked impostor, copied out of the BMesh with its two atlases.
+		struct Impostor
+		{
+			assetlib::MeshImpostor record;
+			std::vector<std::byte> albedo;
+			std::vector<std::byte> normalDepth;
+		};
+		std::optional<Impostor> impostor;
 	};
 
 	PreparedStaticMesh::PreparedStaticMesh() noexcept                     = default;
@@ -842,6 +851,62 @@ namespace bgl
 			}
 
 			return meshEntry;
+		}
+
+		// Mesh `meshIndex`'s impostor and its atlases, or none. The ranges are checked here as the
+		// cook checks a submesh's: they are the file's claim about its texels.
+		std::optional<PreparedStaticMesh::Impl::Impostor>
+		ImpostorOf(const assetlib::BMesh& mesh, const uint32_t meshIndex)
+		{
+			const auto found =
+				std::ranges::find(mesh.impostors.records, meshIndex, &assetlib::MeshImpostor::mesh);
+			if (found == mesh.impostors.records.end())
+			{
+				return std::nullopt;
+			}
+			const auto atlas = [&](const uint32_t offset) {
+				if (static_cast<uint64_t>(offset) + assetlib::c_ImpostorAtlasBytes >
+				    mesh.impostors.texels.size())
+				{
+					throw SceneError(
+						std::format(
+							"CookStaticMesh: mesh {}'s impostor atlas runs past the mesh's texels",
+							meshIndex));
+				}
+				const auto first = mesh.impostors.texels.begin() + offset;
+				return std::as_bytes(std::span(first, first + assetlib::c_ImpostorAtlasBytes));
+			};
+			const auto albedo      = atlas(found->albedoOffset);
+			const auto normalDepth = atlas(found->normalDepthOffset);
+			return PreparedStaticMesh::Impl::Impostor{
+				*found,
+				std::vector<std::byte>(albedo.begin(), albedo.end()),
+				std::vector<std::byte>(normalDepth.begin(), normalDepth.end())
+			};
+		}
+
+		// One atlas as an image of every mip, RGBA8 and linear.
+		assetlib::ImageData
+		AtlasImage(const std::span<const std::byte> texels)
+		{
+			auto image      = assetlib::ImageData();
+			image.width     = assetlib::c_ImpostorAtlasTexels;
+			image.height    = assetlib::c_ImpostorAtlasTexels;
+			image.mipLevels = assetlib::c_ImpostorAtlasMips;
+			image.vkFormat  = assetlib::VkFormat::R8G8B8A8_UNORM;
+			image.pixels    = core::fixed_buffer<std::byte>(texels.size());
+			std::memcpy(image.pixels.data(), texels.data(), texels.size());
+			size_t offset = 0;
+			for (uint32_t mip = 0; mip < assetlib::c_ImpostorAtlasMips; ++mip)
+			{
+				const uint64_t side = assetlib::c_ImpostorAtlasTexels >> mip;
+				image.subresources.push_back(
+					assetlib::ImageSubresource{ .offset     = offset,
+				                                .rowPitch   = side * 4,
+				                                .slicePitch = side * side * 4 });
+				offset += side * side * 4;
+			}
+			return image;
 		}
 
 		// Each level's threshold, zero past the levels; all zero for a mesh with no table.
@@ -1055,6 +1120,7 @@ namespace bgl
 			meshEntry.submeshCount,
 			meshEntry.lodCount,
 			ThresholdsOf(mesh, meshEntry));
+		prepared.m_Impl->impostor = ImpostorOf(mesh, meshIndex);
 		return prepared;
 	}
 
@@ -1081,6 +1147,53 @@ namespace bgl
 			1u,
 			{});
 		return prepared;
+	}
+
+	void
+	Scene::AddImpostor(
+		GeomRecord&                      record,
+		const assetlib::MeshImpostor&    impostor,
+		const std::span<const std::byte> albedo,
+		const std::span<const std::byte> normalDepth)
+	{
+		record.impostorAlbedo = m_Textures.Add(AtlasImage(albedo), "Impostor Albedo");
+		record.impostorNormalDepth =
+			m_Textures.Add(AtlasImage(normalDepth), "Impostor Normal Depth");
+		if (!record.impostorAlbedo.textureSlot || !record.impostorNormalDepth.textureSlot)
+		{
+			ReleaseImpostor(record);
+			throw SceneError("AddStaticMeshGeom: the impostor's atlases could not be created");
+		}
+
+		auto payload          = idl::Impostor();
+		payload.albedo        = ResolveTexture(record.impostorAlbedo, {});
+		payload.normalDepth   = ResolveTexture(record.impostorNormalDepth, {});
+		payload.sphere        = glm::vec4(impostor.center, impostor.radius);
+		payload.framesPerSide = assetlib::c_ImpostorFramesPerSide;
+		payload.roughness     = impostor.roughness;
+		payload.metallic      = impostor.metallic;
+		record.impostor       = m_Impostors.AddRecord(
+			ImpostorKind::kHemiOctahedral,
+			std::as_bytes(std::span(&payload, 1)));
+		record.impostorMinPixels = impostor.minPixels;
+	}
+
+	void
+	Scene::ReleaseImpostor(GeomRecord& record)
+	{
+		if (!record.impostor.Null())
+		{
+			m_Impostors.Erase(record.impostor.byteOffset);
+			record.impostor = {};
+		}
+		for (TextureAssetHandle* atlas : { &record.impostorAlbedo, &record.impostorNormalDepth })
+		{
+			if (atlas->textureSlot)
+			{
+				m_Textures.Delete(*atlas);
+				*atlas = {};
+			}
+		}
 	}
 
 	GeomHandle
@@ -1165,9 +1278,22 @@ namespace bgl
 			record.submeshes.lodCount     = mesh.m_Impl->lodCount;
 			record.boundingSphere         = sphereOverride.value_or(mesh.m_Impl->boundingSphere);
 			record.lodMinPixels           = mesh.m_Impl->lodMinPixels;
+			if (mesh.m_Impl->impostor.has_value())
+			{
+				const auto& impostor = *mesh.m_Impl->impostor;
+				AddImpostor(record, impostor.record, impostor.albedo, impostor.normalDepth);
+			}
 
-			auto retVal     = GeomHandle();
-			retVal.handle   = AllocateGeomSlot(record);
+			auto retVal = GeomHandle();
+			try
+			{
+				retVal.handle = AllocateGeomSlot(record);
+			}
+			catch (...)
+			{
+				ReleaseImpostor(record);
+				throw;
+			}
 			retVal.geomType = GeomType::kStaticMesh;
 
 			// The geom owns its ranges now, and DeleteGeom is what gives them back.
@@ -1210,6 +1336,7 @@ namespace bgl
 		}
 
 		ReleaseGrass(m_Geoms[geom.handle.index].grass);
+		ReleaseImpostor(m_Geoms[geom.handle.index]);
 
 		const auto& submeshes = record.submeshes;
 

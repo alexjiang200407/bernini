@@ -171,6 +171,9 @@ namespace
 
 		// The level every placement draws (LodSelectionDesc::forceLevel). Empty selects by size.
 		std::optional<uint32_t> lod;
+
+		// Every placement past its last level (LodSelectionDesc::forceImpostor).
+		bool impostor = false;
 	};
 
 	/** @throws std::runtime_error naming the three spellings when `name` is none of them. */
@@ -960,6 +963,12 @@ try
 			   "The level every placement draws, whatever its size; a mesh with fewer draws its "
 			   "coarsest (LodSelectionDesc::forceLevel)")
 			->check(CLI::Range(0u, bgl::cMaxMeshLods - 1u));
+		app.add_flag(
+			   "--impostor",
+			   opts.impostor,
+			   "Every placement drawn past its last level: its baked impostor, or nothing where it "
+			   "has none (LodSelectionDesc::forceImpostor)")
+			->excludes("--lod");
 
 		CLI11_PARSE(app, argc, argv);
 		opts.standOnGrass = import->count() > 0 && !opts.grass.empty();
@@ -1024,7 +1033,7 @@ try
 
 	const bool lit = envLit || opts.sunIntensity > 0.0f;
 
-	if (opts.poseBudget || opts.posePixels || opts.lod)
+	if (opts.poseBudget || opts.posePixels || opts.lod || opts.impostor)
 	{
 		auto selection = view->GetLodSelection();
 		if (opts.poseBudget)
@@ -1033,6 +1042,7 @@ try
 			selection.posePixels = *opts.posePixels;
 		if (opts.lod)
 			selection.forceLevel = static_cast<bgl::LodLevel>(*opts.lod);
+		selection.forceImpostor = opts.impostor;
 		view->SetLodSelection(selection);
 	}
 

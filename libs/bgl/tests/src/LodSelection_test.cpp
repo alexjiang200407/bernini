@@ -48,6 +48,7 @@ TEST_CASE("a view starts drawing every mesh as authored", "[lod][contract]")
 	CHECK(selection.poseBudget == bgl::LodSelectionDesc().poseBudget);
 	CHECK(selection.posePixels == bgl::LodSelectionDesc().posePixels);
 	CHECK_FALSE(selection.forcePoseSource.has_value());
+	CHECK_FALSE(selection.forceImpostor);
 }
 
 TEST_CASE("a view keeps the selection it was given", "[lod][contract]")
@@ -126,6 +127,16 @@ TEST_CASE("a selection no cull could act on is refused, and the old one kept", "
 	{
 		auto desc       = bgl::LodSelectionDesc();
 		desc.forceLevel = bgl::LodLevel::kCount;
+		CHECK_THROWS_AS(view->SetLodSelection(desc), bgl::SceneError);
+	}
+
+	SECTION("forcing the impostor tier and a level at once")
+	{
+		auto desc          = bgl::LodSelectionDesc();
+		desc.forceImpostor = true;
+		CHECK_NOTHROW(view->SetLodSelection(desc));
+		view->SetLodSelection(kept);
+		desc.forceLevel = bgl::LodLevel::kLod0;
 		CHECK_THROWS_AS(view->SetLodSelection(desc), bgl::SceneError);
 	}
 

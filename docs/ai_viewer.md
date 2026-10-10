@@ -62,6 +62,7 @@ Bare, it renders `assets/Data`'s apples — the one project `copy_assets` stages
 | `--source` | `per-instance`, or `auto` for a crowd | the pose source a skinned mesh is spawned on: `per-instance`, `table` or `auto` |
 | `--pose-budget`, `--pose-pixels` | `LodSelectionDesc`'s | the view's choice for `auto`: units posed per instance at once, and the size on screen below which a one-level mesh draws from its table |
 | `--lod` | by size | the level every placement draws whatever its size (`LodSelectionDesc::forceLevel`); a mesh with fewer draws its coarsest |
+| `--impostor` | off | every placement drawn past its last level -- its baked impostor, or nothing where its mesh has none (`LodSelectionDesc::forceImpostor`); refused with `--lod` |
 
 What it prints, in order: the mesh and whether it is skinned; for a skinned mesh the clip table with
 `>` on the one playing — run once without `--clip` to learn the names; `lit` or `unlit`; one line

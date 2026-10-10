@@ -15,6 +15,12 @@ public static const uint32_t cMaxDrawBuckets = 256;
 public static const uint32_t cDissolveLane = cMaxDrawBuckets;
 public static const uint32_t cMaxDrawLanes = 2 * cMaxDrawBuckets;
 
+// The impostor stage's one bucket, which DrawBucketTable allocates second, after the fallback: an
+// impostor shades from its own atlases whatever its mesh's materials are, so every placement drawn
+// past its last level draws here. Fixed rather than allocated on demand because the cull chain
+// routes a placement's impostor entry to it with no table to ask.
+public static const uint32_t cImpostorDrawBucket = 1;
+
 // The draw bucket of an instance that resolved none; no pass counts or draws it.
 public static const uint32_t cInvalidDrawBucket = uint32_t(-1);
 

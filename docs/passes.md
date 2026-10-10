@@ -528,6 +528,16 @@ fifth ahead of the cull:
    `cVisibleCurrentBit` for the level it draws, `cVisibleOutgoingBit` for the one a dissolve is
    leaving and `cVisibleDissolvingBit` while either dissolves; a placement no one sees, and a forced
    level, change at once.
+
+   **Past the last level** a geom with an impostor (`Geom.impostor`, a record in the scene's
+   impostor arena) draws it rather than nothing: the placement's submesh 0 sets
+   `cVisibleImpostorBit` while its word's current or outgoing level is the tier past the last,
+   it is no smaller than `Geom.impostorMinPixels`, and the sphere over all of level 0 reaches the
+   frustum. That entry is counted and compacted into `idl::cImpostorDrawBucket`'s lanes -- the
+   bucket `DrawBucketTable` reserves second, after the fallback -- rather than the instance's own,
+   so a mesh and its impostor dissolve into each other through the same word and lanes two levels
+   do. `LodSelectionDesc::forceImpostor` forces that tier (`cLodForceImpostor`). A geom with no
+   impostor sets no bit, and past its last level draws nothing, as before.
 3. **Histogram and Prefix Sum** — the histogram dispatch counts the **visible** entries per draw
    **lane** -- two a bucket, its id for placements at rest and its id plus `cDissolveLane` for those
    dissolving (`InstanceVisibility::Lane`); one entry per set level bit, so a dissolving placement
@@ -722,6 +732,16 @@ nothing, the terrain when the scene has none, the grass when no drawn geom or te
 with no placement still draws its ground. **Forward
 Terrain** draws the scene's terrains first, the ground being the largest occluder; **Forward
 World** the non-transparent buckets of the static tier -- the world, moving placements included;
+**Forward Impostor** every placement past its last level as its geom's impostor
+(`programs/forward/Impostor.slang`): one quad a placement facing the camera across the bake sphere,
+its pixel the three hemi-octahedral frames nearest the view blended by their barycentric weights
+(the atlas layout is `assetlib::MeshImpostor`'s), cut at half coverage, sampled at the mip whose frames are as many texels as the quad is
+pixels, and pushed back from the quad -- which stands on the sphere's near side -- by the baked depth
+it writes as `SV_DepthGreaterEqual`, so an impostor behind what is drawn is still rejected before
+it shades; and lit through `ShadeSurface` from the baked base colour and occlusion, and the
+roughness, metallic and specular of the material the placement's first submesh draws with -- the
+bake's averages where it is no PBR kind -- so the sun and the environment light it as they light the mesh it
+stands in for;
 **Forward Grass** the grass those placements and the terrains grow; **Forward Skinned** the skinned tier's;
 **Forward Water** the static tier's water buckets, which attaches no depth: it reads the depth the
 phases before it wrote, as Blob Shadows does, discarding where the scene is nearer

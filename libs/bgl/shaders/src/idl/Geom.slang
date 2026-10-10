@@ -1,5 +1,7 @@
+import Impostor;
 import LodLevel;
 import LodSubmeshRange;
+import RawEntry;
 
 // What a geometry-creating method produced and every placement from it shares. A placement names one
 // by Entry<Geom> rather than holding a copy, so two placements of one mesh cannot disagree about
@@ -17,4 +19,13 @@ public struct Geom
     // walked from 0; below every entry nothing is drawn, so entry submeshes.lodCount - 1 is the
     // draw-nothing size and 0 there means never dropped. Entries past the level count are unread.
     public float lodMinPixels[cMaxMeshLods];
+
+    // Drawn past the last level, below that level's floor; null where the mesh has none, so a
+    // placement there draws nothing as before. A record in the impostor arena, whose typed view is
+    // what samples the atlases its handles name.
+    public RawEntry<Impostor> impostor;
+
+    // The impostor is drawn while the placement's projected diameter is at least this; 0 never
+    // drops it. Here rather than in the record so the cull reads no arena.
+    public float impostorMinPixels;
 };

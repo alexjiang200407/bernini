@@ -126,6 +126,22 @@ void main(uint globalIdx: SV_DispatchThreadID)
     {
         bits |= cVisibleOutgoingBit;
     }
+
+    // Past the last level the placement draws its impostor, once, from its first submesh, tested
+    // against the sphere over the whole of level 0 -- the impostor's quad spans it -- rather than
+    // that submesh's own.
+    if (writesLod && !automatic && !geom.impostor.Null())
+    {
+        let pastLast =
+            uint(word.Level()) >= geom.submeshes.lodCount || (word.Fading() && uint(word.OutgoingLevel()) >= geom.submeshes.lodCount);
+        let whole = mesh.TransformSphere(geom.boundingSphere);
+        if (pastLast && ProjectedDiameter(mesh, geom, view) >= geom.impostorMinPixels * view.lodPixelScale &&
+            SphereInFrustum(view.frustumPlanes, whole.xyz, whole.w))
+        {
+            bits |= cVisibleImpostorBit;
+        }
+    }
+
     if (bits != 0u && word.Fading())
     {
         bits |= cVisibleDissolvingBit;

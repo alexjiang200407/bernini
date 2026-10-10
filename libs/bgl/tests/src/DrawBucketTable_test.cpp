@@ -18,15 +18,22 @@ TEST_CASE("a bucket id names one (geom, material, layer) and nothing else", "[dr
 
 	// The unlit fallback exists before anything resolves: it is what a demand past the ceiling
 	// clamps to, so it can never itself be past the ceiling.
-	REQUIRE(table.Count() == 1);
+	REQUIRE(table.Count() == 2);
 	CHECK(table.Desc(0).geom == GeometryStage::kStaticMesh);
 	CHECK(table.Desc(0).material == MaterialType::kNull);
 	CHECK(table.Desc(0).layer == LayerType::kOpaque);
 	CHECK_FALSE(table.Transparent(0));
 
-	// Re-resolving the seed's own key allocates nothing.
+	// So does the impostor stage's one bucket, at the id the cull chain routes impostors to.
+	CHECK(table.Desc(bgl::idl::cImpostorDrawBucket).geom == GeometryStage::kImpostor);
+	CHECK_FALSE(table.Transparent(bgl::idl::cImpostorDrawBucket));
+
+	// Re-resolving either seed's own key allocates nothing.
 	CHECK(table.Resolve(GeometryStage::kStaticMesh, MaterialType::kNull, LayerType::kOpaque) == 0);
-	CHECK(table.Count() == 1);
+	CHECK(
+		table.Resolve(GeometryStage::kImpostor, MaterialType::kPBR, LayerType::kOpaque) ==
+		bgl::idl::cImpostorDrawBucket);
+	CHECK(table.Count() == 2);
 
 	// Ids are dense, in first-use order, and stable on re-resolve.
 	const auto opaquePbr =
@@ -36,14 +43,14 @@ TEST_CASE("a bucket id names one (geom, material, layer) and nothing else", "[dr
 	const auto skinnedPbr =
 		table.Resolve(GeometryStage::kSkinnedMesh, MaterialType::kPBR, LayerType::kOpaque);
 
-	CHECK(opaquePbr == 1);
-	CHECK(cutoutPbr == 2);
-	CHECK(skinnedPbr == 3);
-	CHECK(table.Count() == 4);
+	CHECK(opaquePbr == 2);
+	CHECK(cutoutPbr == 3);
+	CHECK(skinnedPbr == 4);
+	CHECK(table.Count() == 5);
 	CHECK(
 		table.Resolve(GeometryStage::kStaticMesh, MaterialType::kPBR, LayerType::kOpaque) ==
 		opaquePbr);
-	CHECK(table.Count() == 4);
+	CHECK(table.Count() == 5);
 
 	// The desc reads back exactly the key the id was allocated for.
 	CHECK(table.Desc(skinnedPbr).geom == GeometryStage::kSkinnedMesh);
@@ -110,31 +117,31 @@ TEST_CASE("an unshaded material has one bucket whatever its layer", "[drawbucket
 			table.Resolve(GeometryStage::kStaticMesh, MaterialType::kAssert, LayerType::kOpaque));
 		CHECK_FALSE(table.Transparent(assert));
 	}
-	CHECK(table.Count() == 2);
+	CHECK(table.Count() == 3);
 }
 
 TEST_CASE("a demand past the ceiling clamps to the unlit fallback", "[drawbucket]")
 {
-	// Ceiling 3: the seed plus two. Small so the clamp is reached in three resolves -- the clamp
-	// logic is what is under test, not the ceiling's value.
-	DrawBucketTable table(3);
+	// Ceiling 4: the two seeds plus two. Small so the clamp is reached in three resolves -- the
+	// clamp logic is what is under test, not the ceiling's value.
+	DrawBucketTable table(4);
 
 	const auto a =
 		table.Resolve(GeometryStage::kStaticMesh, MaterialType::kPBR, LayerType::kOpaque);
 	const auto b = table.Resolve(GeometryStage::kStaticMesh, MaterialType::kPBR, LayerType::kMask);
-	CHECK(a == 1);
-	CHECK(b == 2);
+	CHECK(a == 2);
+	CHECK(b == 3);
 
 	// The fourth distinct key is refused: reported, clamped to bucket 0, and never allocated.
 	const auto over =
 		table.Resolve(GeometryStage::kStaticMesh, MaterialType::kPBR, LayerType::kHashed);
 	CHECK(over == 0);
-	CHECK(table.Count() == 3);
+	CHECK(table.Count() == 4);
 
 	// A key allocated before the ceiling keeps resolving to its own bucket.
 	CHECK(table.Resolve(GeometryStage::kStaticMesh, MaterialType::kPBR, LayerType::kMask) == b);
 
 	// Refused again, still unallocated: a refusal never claims a slot.
 	(void)table.Resolve(GeometryStage::kStaticMesh, MaterialType::kPBR, LayerType::kHashed);
-	CHECK(table.Count() == 3);
+	CHECK(table.Count() == 4);
 }

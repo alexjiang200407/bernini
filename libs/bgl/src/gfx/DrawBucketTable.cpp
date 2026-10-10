@@ -37,10 +37,16 @@ namespace bgl
 	DrawBucketTable::DrawBucketTable(const uint32_t ceiling) : m_Ceiling(ceiling)
 	{
 		core::ensure(
-			ceiling >= 1 && ceiling <= idl::cMaxDrawBuckets,
-			"The bucket ceiling holds the fallback and fits the cull chain's sizing");
+			ceiling >= 2 && ceiling <= idl::cMaxDrawBuckets,
+			"The bucket ceiling holds the fallback and the impostor bucket, and fits the cull "
+			"chain's sizing");
 		m_Flags.assign(ceiling, 0u);
 		(void)Resolve(GeometryStage::kStaticMesh, MaterialType::kNull, LayerType::kOpaque);
+		const uint32_t impostor =
+			Resolve(GeometryStage::kImpostor, MaterialType::kPBR, LayerType::kOpaque);
+		core::ensure(
+			impostor == idl::cImpostorDrawBucket,
+			"The impostor bucket is the second allocated");
 	}
 
 	uint32_t
@@ -67,6 +73,11 @@ namespace bgl
 		if (geom == GeometryStage::kTerrain && layer != LayerType::kOpaque)
 		{
 			core::fatal("A terrain takes an opaque material; CreateTerrain refuses the rest");
+		}
+		if (geom == GeometryStage::kImpostor &&
+		    (material != MaterialType::kPBR || layer != LayerType::kOpaque))
+		{
+			core::fatal("The impostor stage has one bucket, opaque and lit through PBR");
 		}
 		if (geom == GeometryStage::kSkinnedMesh && material != MaterialType::kPBR &&
 		    !GameSlot(material).has_value())

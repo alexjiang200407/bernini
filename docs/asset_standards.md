@@ -547,6 +547,9 @@ A re-import preserves authored grass bindings. No standalone grass container is 
   `lodMinPixels` parameter, one per level from 0, the last level's being the draw-nothing size.
   One level of one mesh, and its thresholds, are `meshLodSubmeshes` and `meshLodMinPixels` in
   [bmesh.h](libs/assetlib/include/assetlib/bmesh.h), so no reader restates the layout.
+  A mesh may also carry a baked **impostor** (`MeshImpostor`, at most one a mesh, in mesh order):
+  the tier past its last level, two hemi-octahedral RGBA8 atlases with their mips in
+  `impostors.texels` (`MeshImpostors`). A file with no impostor chunk holds none.
   Struct: [libs/assetlib_structs/include/assetlib_structs/BMesh.h](libs/assetlib_structs/include/assetlib_structs/BMesh.h);
   container I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
 * **`.bmaterial`** — **a shading-model tag plus that model's parameters**, as an authored text
@@ -1081,6 +1084,34 @@ from what glTF calls colour (`baseColorTexture`, a specular-glossiness diffuse).
 runs in `assetlib_cli` and in texture refresh, and neither holds a surface's slot types. So a colour
 map reaches a surface through the glTF's own base colour: in Blender, wire it into a Principled
 BSDF's Base Color for the export.
+
+### An impostor asked for in a mesh's extras
+
+A mesh that is seen far away more than near -- a tree in a wood -- can carry a baked **impostor**:
+the tier past its last level of detail, drawn as one quad a placement. It is asked for in the
+source, as a Blender **Custom Property** exported with **Include → Custom Properties**:
+
+| Where | Key | Value |
+|---|---|---|
+| the mesh data (glTF `meshes[i].extras`), or the object placing it (`nodes[j].extras`) | `bernini_impostor` | `true`, or a non-zero number |
+
+`loadFromGltf` reads it on every import and regeneration, as it reads `_LOD<n>` names, so the
+`.glb` is the one place it is said: there is no `.bimport` field. A value of another kind is dropped
+with a warning naming the mesh or node, and the mesh imports without one. A skinned mesh is skipped
+with a warning.
+
+The bake (`src/bmesh/impostor_bake.cpp`) is CPU code: level 0 of every submesh, rasterised from
+the 8 × 8 hemi-octahedral grid of directions (`MeshImpostor`) over the mesh's bounding sphere,
+from the glTF's own material -- `baseColorFactor` times `baseColorTexture` through `TEXCOORD_0`
+per texel, with the occlusion map through the UV set it names, at its strength; the roughness and
+metallic factors times the metallic-roughness texture averaged over the whole impostor -- since
+that is what a regeneration has with no material import. Textures are sampled bilinearly and
+repeating, whatever the glTF's sampler says, and `KHR_texture_transform` is not applied: a mesh
+that clamps or transforms its UVs bakes differently from how it draws. A single-sided material is
+culled from behind, so an inverted-hull outline stays an outline; `MASK` is cut at its cutoff, and
+`BLEND` at half coverage, since an impostor is a cutout and a leaf card's clear texels would
+otherwise bake as its colour. The
+images it needs are the only ones a regeneration decodes, and only for a mesh that asks.
 
 ## Pruning unused baked maps
 

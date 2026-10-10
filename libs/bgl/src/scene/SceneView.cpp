@@ -1299,6 +1299,10 @@ namespace bgl
 
 				meta.submeshInstances.emplace_back(m_InstanceBuffer.Add(std::move(instance)));
 			}
+			if (m_SceneRaw->GeomHasImpostor(geom.handle.index))
+			{
+				m_DemandedDrawBuckets.set(idl::cImpostorDrawBucket);
+			}
 
 			SyncInstanceScratch();
 
@@ -2037,6 +2041,11 @@ namespace bgl
 					static_cast<uint32_t>(*desc.forceLevel),
 					cMaxMeshLods));
 		}
+		if (desc.forceImpostor && desc.forceLevel.has_value())
+		{
+			throw SceneError(
+				"SetLodSelection: forceImpostor and forceLevel each force a tier; give one");
+		}
 
 		if (desc.poseBudget != m_LodSelection.poseBudget)
 		{
@@ -2131,6 +2140,10 @@ namespace bgl
 						desc.geom.geomType);
 					meta.submeshInstances.emplace_back(m_InstanceBuffer.Add(std::move(instance)));
 				}
+			}
+			if (m_SceneRaw->GeomHasImpostor(desc.geom.handle.index))
+			{
+				m_DemandedDrawBuckets.set(idl::cImpostorDrawBucket);
 			}
 			SyncInstanceScratch();
 

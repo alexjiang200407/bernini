@@ -15,6 +15,13 @@ namespace assetlib
 		kSkip  // no image decode, and no materials either -- they exist to route the textures
 	};
 
+	/** Whether loadFromGltf bakes the impostors the file's meshes ask for, a CPU render of each. */
+	enum class GltfImpostors
+	{
+		kBake,
+		kSkip  // for a caller after anything but the meshes: a rig, its clips, the textures
+	};
+
 	/** loadFromGltf's knobs, defaulted to an import's. */
 	struct GltfLoadOptions
 	{
@@ -29,6 +36,8 @@ namespace assetlib
 		/** kSkip for a caller after the geometry and rig alone -- the regeneration seam, which
 		    never re-extracts and must not pay an import's image decode on a load. */
 		GltfTextures textures = GltfTextures::kDecode;
+
+		GltfImpostors impostors = GltfImpostors::kBake;
 
 		/** The import document's `lodMinPixels`: each level's threshold, the cook's default past
 		    the list. */

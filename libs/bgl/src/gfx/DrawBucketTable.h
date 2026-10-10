@@ -22,6 +22,7 @@ namespace bgl
 		kSkinnedMesh,
 		kGrass,  // blades built from a static geom's clumps, drawn opaque whatever the layer
 		kTerrain,  // patches built from a terrain's heightfield, opaque, through the mesh's pixel program
+		kImpostor,  // one quad a placement past its last level, shaded from its geom's atlases
 	};
 
 	/** The stage a geom's instances draw through. @pre geom is kStaticMesh or kSkinnedMesh. */
@@ -51,13 +52,16 @@ namespace bgl
 	 * reported once. Skinned geometry has no unlit bucket, so a refused skinned key draws through
 	 * the static fallback, unposed.
 	 *
+	 * Bucket 1 is always (kImpostor, kPBR, kOpaque), idl::cImpostorDrawBucket: the one bucket the
+	 * impostor stage draws, which no other key resolves to.
+	 *
 	 * Not synchronized: bgl is thread-affine (docs/bgl_api.md), and both the resolvers and Draw
 	 * run on the one driving thread.
 	 */
 	class DrawBucketTable final
 	{
 	public:
-		/** @pre ceiling >= 1 and <= idl::cMaxDrawBuckets. Tests shrink it to reach the clamp. */
+		/** @pre ceiling >= 2 and <= idl::cMaxDrawBuckets. Tests shrink it to reach the clamp. */
 		explicit DrawBucketTable(uint32_t ceiling = idl::cMaxDrawBuckets);
 
 		DrawBucketTable(const DrawBucketTable&) = delete;

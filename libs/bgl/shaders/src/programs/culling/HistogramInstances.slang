@@ -43,6 +43,10 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
             gLocalHistogram[visibility.Lane(bucket)].add(entries);
         }
     }
+    if (!instance.meshInstance.Null() && (visibility.visible & cVisibleImpostorBit) != 0u)
+    {
+        gLocalHistogram[visibility.Lane(cImpostorDrawBucket)].add(1u);
+    }
 
     GroupMemoryBarrierWithGroupSync();
 

@@ -77,6 +77,15 @@ namespace bgl
 		    bgpu::BarrierSyncFlag::kPixelShader } }
 	};
 
+	// The impostor arena, which the impostor stage reads its records out of in the mesh stage and
+	// samples its atlases through in the pixel stage; bound off the draw, as the material arena is.
+	constexpr std::array<SceneBuffer, 1> c_ImpostorBuffers = {
+		{ { c_ImpostorArenaBufferName,
+		    "impostors",
+		    bgpu::BarrierAccessFlag::kShaderResource,
+		    bgpu::BarrierSyncFlag::kVertexShader | bgpu::BarrierSyncFlag::kPixelShader } }
+	};
+
 	// The rig tables the skinned vertex evaluation reads, whichever pose source a placement draws
 	// from. They live here beside the geometry tables because every pass built on the tier-branching
 	// geometry stage declares and binds both sets. The last two are an automatic placement's this

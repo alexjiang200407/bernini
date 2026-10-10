@@ -18,7 +18,8 @@ namespace editor
 
 	/**
 	 * The Level of Detail selector the Mesh, Animation and Blend Space editors share. Entry 0 is
-	 * Auto, which names the level the preview draws; the rest pin one. It knows no preview: a window
+	 * Auto, which names the level the preview draws; the rest pin one, and the last the mesh's
+	 * impostor where it has one (c_ForceImpostor). It knows no preview: a window
 	 * feeds it the shown mesh's levels and the readouts, and acts on the pin it reports.
 	 */
 	class LodSelector final : public QComboBox
@@ -58,6 +59,7 @@ namespace editor
 	private:
 		const ILanguageResolver& m_Language;
 		uint32_t                 m_LevelCount = 0;
+		bool                     m_Impostor   = false;
 	};
 
 	/**

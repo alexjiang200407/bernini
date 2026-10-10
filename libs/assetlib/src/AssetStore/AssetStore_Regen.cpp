@@ -184,7 +184,11 @@ namespace assetlib
 		}
 
 		RegeneratedGroup
-		regenerate(const AssetStore& store, CheckedKey&& checked, std::string_view what)
+		regenerate(
+			const AssetStore&   store,
+			CheckedKey&&        checked,
+			std::string_view    what,
+			const GltfImpostors impostors)
 		{
 			const SourceRef& source = checked.key.source;
 			if (source.key.empty())
@@ -213,13 +217,17 @@ namespace assetlib
 					source.key);
 			}
 
-			return importGroup(store, source.key, std::move(*checked.document));
+			return importGroup(store, source.key, std::move(*checked.document), impostors);
 		}
 
 	}
 
 	RegeneratedGroup
-	importGroup(const AssetStore& store, std::string_view sourceKey, ImportDocument&& document)
+	importGroup(
+		const AssetStore&   store,
+		std::string_view    sourceKey,
+		ImportDocument&&    document,
+		const GltfImpostors impostors)
 	{
 		// The copied source lives only on the loose layer -- pack excludes it -- and the glTF
 		// parser reads a file, so this is a read that must address the host. Textures are skipped:
@@ -230,6 +238,7 @@ namespace assetlib
 				store.ResolveWritePath(sourceKey),
 				{ .sampleRate   = document.sampleRate,
 			      .textures     = GltfTextures::kSkip,
+			      .impostors    = impostors,
 			      .lodMinPixels = document.lodMinPixels }),
 			SourceRef(),
 			std::move(document),
@@ -433,7 +442,8 @@ namespace assetlib
 			return current;
 		}
 
-		RegeneratedGroup group = regenerate(*this, std::move(checked), "bmesh");
+		RegeneratedGroup group =
+			regenerate(*this, std::move(checked), "bmesh", GltfImpostors::kBake);
 		if (group.import.meshes.empty())
 		{
 			core::throw_runtime_error(
@@ -485,7 +495,8 @@ namespace assetlib
 		if (!checked.stale)
 			return load<Skeleton>(*m_Files, path);
 
-		RegeneratedGroup group = regenerate(*this, std::move(checked), "bskel");
+		RegeneratedGroup group =
+			regenerate(*this, std::move(checked), "bskel", GltfImpostors::kSkip);
 		if (group.import.skeleton.bones.empty())
 		{
 			core::throw_runtime_error(
@@ -521,7 +532,8 @@ namespace assetlib
 		if (!checked.stale)
 			return load<AnimationSet>(*m_Files, path);
 
-		RegeneratedGroup group = regenerate(*this, std::move(checked), "banim");
+		RegeneratedGroup group =
+			regenerate(*this, std::move(checked), "banim", GltfImpostors::kSkip);
 		if (group.import.animations.clips.empty())
 		{
 			core::throw_runtime_error(

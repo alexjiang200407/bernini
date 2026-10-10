@@ -258,7 +258,7 @@ namespace assetlib
 			{
 				const imp::BMeshImport imported = loadFromGltf(
 					store.ResolveWritePath(document.source),
-					{ .sampleRate = document.sampleRate });
+					{ .sampleRate = document.sampleRate, .impostors = GltfImpostors::kSkip });
 
 				auto keys = std::vector<std::string>();
 				for (const std::string& name : importedTextureFileNames(imported))

@@ -132,3 +132,19 @@ TEST_CASE("Auto reads the level the size on screen earns", "[mesheditor][lod]")
 		CHECK(Read(lods, 55.0f, 7u).level == 2);
 	}
 }
+
+TEST_CASE(
+	"A mesh with a baked impostor lists it, and pinning it reads the tier past the last",
+	"[mesheditor][lod][impostor]")
+{
+	CHECK_FALSE(editor::LodsOf(ThreeLevels(), 0).impostor);
+
+	auto mesh                   = ThreeLevels();
+	mesh.impostors.records      = { assetlib::MeshImpostor{ .mesh = 0, .radius = 1.0f } };
+	const editor::MeshLods lods = editor::LodsOf(mesh, 0);
+	CHECK(lods.impostor);
+
+	// However near: the pin is the tier, as a forced level is the level.
+	CHECK(Read(lods, 500.0f, editor::c_ForceImpostor).level == 3u);
+	CHECK(Read(lods, 1.0f).level == 3u);  // below the last floor, by size
+}
