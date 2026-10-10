@@ -48,7 +48,7 @@ namespace assetlib
 	 * Two halves with different duties: the `parameters` object changes what the importer computes,
 	 * so its serialized subtree is what the cache key hashes; `source`, `bindings`, `materialOverrides`,
 	 * `skeleton`, `toonShadingRig`,
-	 * `outputs`, `textureDir`, the two stamp-and-token pairs and the per-part hashes an environment
+	 * `outputs`, `textureDir`, `textures`, the two stamp-and-token pairs and the per-part hashes an environment
 	 * was written with never key -- none of them changes what the importer computes. Keys a reader
 	 * does not know stay in the half they arrived in
 	 * (`extraParametersJson` / `extraJson`) and are written back on serialize, so a newer branch's
@@ -81,6 +81,10 @@ namespace assetlib
 		std::string textureDir;
 		SourceStamp textureStamp;
 		uint64_t    textureBakeToken = 0;
+
+		// The files that extract wrote, as mount keys; unset before the field existed, while empty
+		// is an answer -- a source with no images.
+		std::optional<std::vector<std::string>> textures;
 
 		// Overrules what the cook measures for a named clip; see assetlib::groundClips. A parameter
 		// rather than a binding: it changes the samples the importer writes, so it has to key.

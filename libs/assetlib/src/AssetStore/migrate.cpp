@@ -10,6 +10,7 @@
 #include <assetlib/asset_import.h>
 #include <assetlib/asset_refs.h>
 #include <assetlib/bmesh.h>
+#include <assetlib/bmesh_gltf.h>
 #include <assetlib/import_document.h>
 #include <assetlib/project_layout.h>
 #include <assetlib/reimport.h>
@@ -21,6 +22,7 @@
 #include <assetlib_structs/BGrass.h>
 #include <assetlib_structs/BMaterial.h>
 #include <assetlib_structs/BMesh.h>
+#include <assetlib_structs/BMeshImport.h>
 #include <assetlib_structs/BToonShadingRig.h>
 #include <assetlib_structs/Skeleton.h>
 
@@ -236,6 +238,39 @@ namespace assetlib
 			return std::nullopt;
 		}
 
+		/**
+		 * The textures an extract from `document`'s source writes, for a document from before it
+		 * listed them, or nullopt when there is no source to read the names from. The names follow
+		 * the images' content, so this is an import's decode without its encode.
+		 *
+		 * A source that will not parse -- an LFS pointer, a truncated export -- leaves the list
+		 * unset rather than failing the document, whose other backfills need no readable source.
+		 */
+		std::optional<std::vector<std::string>>
+		extractedTexturesFromSource(const AssetStore& store, const ImportDocument& document)
+		{
+			ZoneScopedN("assetlib migrate texture names");
+
+			if (document.textureDir.empty() || document.textures || !store.Exists(document.source))
+				return std::nullopt;
+
+			try
+			{
+				const imp::BMeshImport imported = loadFromGltf(
+					store.ResolveWritePath(document.source),
+					{ .sampleRate = document.sampleRate });
+
+				auto keys = std::vector<std::string>();
+				for (const std::string& name : importedTextureFileNames(imported))
+					keys.push_back(document.textureDir + "/" + name);
+				return keys;
+			}
+			catch (const std::exception&)
+			{
+				return std::nullopt;
+			}
+		}
+
 		/** What one source produced, and the rig its containers name. */
 		struct SourceFacts
 		{
@@ -366,6 +401,9 @@ namespace assetlib
 					if (document.outputs.empty())
 						document.outputs = found->second.outputs;
 				}
+
+				if (auto textures = extractedTexturesFromSource(*this, document))
+					document.textures = std::move(textures);
 
 				// A source with no rig has no skeleton to record, so "still empty" is settled
 				// rather than pending; only a real change may report one.

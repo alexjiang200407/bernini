@@ -279,6 +279,7 @@ namespace assetlib
 		document.textureDir = target.textureDir;
 		document.skeleton   = target.skeleton;
 		document.outputs    = target.outputs;
+		document.textures   = document.textureDir.empty() ? std::nullopt : target.textures;
 
 		// From the copy, not the caller's reference: the document cannot then disagree with the
 		// source standing beside it.

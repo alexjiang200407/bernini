@@ -75,6 +75,9 @@ namespace assetlib
 		std::string              skeleton{};
 		std::vector<std::string> outputs{};
 
+		// What WriteTextures returned; unset leaves a missing file to the absent-or-empty folder rule.
+		std::optional<std::vector<std::string>> textures{};
+
 		/** Minted before destinations are chosen; an existing document's identity cannot change. */
 		ImportIdentity identity{};
 

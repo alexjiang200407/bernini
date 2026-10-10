@@ -36,7 +36,8 @@ result, while a read-only store trusts its keys because `pack` made them true. F
 the re-bake is deliberate (`pack`, `migrate`, the editor) rather than at load, and `migrate`
 re-cooks a part whose `.bimport` has moved on: a baked map has no header, so its key lives there. The textures an
 import extracted are the third case: keyed by the `textureDir`, `textureStamp` and
-`textureBakeToken` their `.bimport` carries, because a `.ktx2` has no header of its own, and refreshed by
+`textureBakeToken` their `.bimport` carries, because a `.ktx2` has no header of its own, with
+`textures` listing the files so a missing one is a miss too, and refreshed by
 `AssetStore::RefreshImportedTextures` rather than at load — `LoadRegen*` runs on every mesh load and
 every deletion's reference scan, and an import's worth of Basis encoding cannot go there. A change
 to what a container stores — layout or meaning — is one edit: bump `AssetCodec<T>::c_BakeToken`

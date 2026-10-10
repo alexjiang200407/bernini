@@ -174,7 +174,13 @@ A `.ktx2` is Foreign: it has nowhere to carry a header, so it cannot hold a key 
 extracted textures of a mesh import are keyed by the two fields their `.bimport` carries instead --
 `textureDir`, the folder they went into, and `textureStamp`, the source as it stood when they were
 written. Together those are the pair `AssetStore::GetStaleImportedTextureSources` compares, and they
-sit outside the document's `parameters`, so neither keys the geometry beside them.
+sit outside the document's `parameters`, so neither keys the geometry beside them. Beside them,
+`textures` lists the files that extract wrote, as mount keys: a stamp says nothing about whether
+the files are on disk, so a folder missing one of them is stale as well. A document from before the
+list has none, and `migrate` backfills it from the source -- an import's decode, not its encode --
+so a folder that lost a file before the list existed is found too. The list is a claim like
+`outputs`: deleting an extracted texture through the project drops it, so `Reimport` and `migrate`
+leave it deleted until the next re-extract, which writes every image the source holds.
 
 The miss is **not** taken at load. `LoadRegen*` passes `GltfTextures::kSkip`, deliberately: it is
 called on every mesh load, on every deletion's reference scan, and by `pack`, and
@@ -305,11 +311,10 @@ the one the import runs (`src/env_produce.h`), which is what makes the result by
 import's. None of it depends on the thread count; the suite checks that by importing on one thread
 and re-producing on all of them.
 
-A source's extracted textures are covered too, but asked differently: a `.ktx2` carries no header,
-so no `outputs` entry can name one and the only signal available is the texture folder being absent
-or empty. That is exactly the fresh-checkout case, and it is why `Derived/BakedTextures/` can be ignored at all —
-`GetStaleImportedTextureSources` compares the source's *stamp*, which says nothing about whether the
-files are there.
+A source's extracted textures are covered too, through the document's `textures` list: a file it
+names that is absent is re-extracted, which covers both the fresh checkout and a folder that lost one
+file. A document from before the list falls back to the folder being absent or empty, the only
+signal it carries, until `migrate` backfills the list.
 
 Deleting a derived container **through the project** -- `DeleteAsset`, whether the caller named it
 or a cascade freed it -- drops the claim from the `.bimport` that produced it, so it stays deleted.
@@ -323,7 +328,7 @@ being reported twice when `migrate` runs both.
 ## Rewriting a whole project
 
 `assetlib_cli migrate -p <project>` backfills any import document written before it recorded its
-source, its rig and its outputs -- the source from the document's own key, so that one is backfilled
+source, its rig, its outputs and its extracted textures -- the source from the document's own key, so that one is backfilled
 whether or not the file is there to be read --
 discards every stale `.bmesh`, `.bskel` and `.banim` that no import document owns (an output a
 re-import renamed away, say: nothing records the parameters to regenerate it, so no `LoadRegen*`
@@ -332,7 +337,7 @@ re-cooks the parts of every environment whose document no longer matches them
 (`GetStaleEnvironmentSources` / `RefreshEnvironmentSource`; first, so a part both absent and stale
 is convolved once rather than by `Reimport` and then again),
 produces whatever those documents name that is absent, re-extracts the textures of
-every source that has moved since its import, then reads every
+every source that has moved since its import or is missing one of the files it extracted, then reads every
 container and re-saves whatever is not byte-identical to the current
 form — geometry through the regeneration seam
 (meshes before rigs before clips, so a regenerated `.banim` measures its posed boxes against

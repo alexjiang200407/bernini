@@ -243,6 +243,9 @@ namespace assetlib
 				document.toonShadingRig = mapTarget(plan, document.toonShadingRig);
 				document.textureDir     = mapTarget(plan, document.textureDir);
 				for (std::string& output : document.outputs) output = mapTarget(plan, output);
+				if (document.textures)
+					for (std::string& texture : *document.textures)
+						texture = mapTarget(plan, texture);
 				return AssetCodec<ImportDocument>::Serialize(document);
 			}
 

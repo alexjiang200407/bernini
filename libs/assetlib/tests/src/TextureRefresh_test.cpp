@@ -3,6 +3,7 @@
 #include <assetlib/AssetStore.h>
 
 #include <assetlib/asset_import.h>
+#include <assetlib/asset_refs.h>
 #include <assetlib/image_io.h>
 #include <assetlib/import_document.h>
 #include <assetlib/migrate.h>
@@ -16,6 +17,7 @@
 #include <cstddef>
 #include <cstring>
 #include <filesystem>
+#include <optional>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -321,4 +323,149 @@ TEST_CASE("migrate re-extracts a moved source's textures", "[refresh][textures][
 		CHECK(again.supersededTextures.empty());
 		CHECK(again.movedTextures.empty());
 	}
+}
+
+TEST_CASE(
+	"A folder missing one of the textures it was extracted with is stale",
+	"[refresh][textures][migrate]")
+{
+	// The stamp still matches and the folder is not empty, so neither the source-moved check nor
+	// Reimport's empty-folder rule sees it: only the document's list of what was written does.
+	Project project("assetlib_texture_refresh_partial_test");
+	test::ImportUnitGroup(
+		project.root,
+		test::TexturedGltfPath(),
+		"Authored/Materials/red.bmaterial",
+		30.0f,
+		c_TextureDir);
+
+	REQUIRE(
+		project.Document().textures ==
+		std::vector<std::string>{ "Derived/SourceTextures/unit/Apple1_u1_v1_diffuse.ktx2",
+	                              "Derived/SourceTextures/unit/Apple2_u1_v1_diffuse.ktx2" });
+	fs::remove(project.root / c_TextureDir / "Apple1_u1_v1_diffuse.ktx2");
+
+	CHECK(
+		project.Store().GetStaleImportedTextureSources() ==
+		std::vector<std::string>{ "Authored/Meshes/unit.glb" });
+
+	SECTION("and migrate puts it back, then settles")
+	{
+		const MigrateReport report = project.Store().Migrate(false);
+
+		CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
+		CHECK(
+			project.Textures() ==
+			std::vector<std::string>{ "Apple1_u1_v1_diffuse.ktx2", "Apple2_u1_v1_diffuse.ktx2" });
+		CHECK(project.Store().GetStaleImportedTextureSources().empty());
+		CHECK(project.Store().Migrate(false).Count(MigratedFile::Outcome::kRewritten) == 0);
+	}
+
+	SECTION("unless the source is gone, which stales nothing")
+	{
+		fs::remove(project.root / "Authored/Meshes" / "unit.glb");
+		CHECK(project.Store().GetStaleImportedTextureSources().empty());
+	}
+}
+
+TEST_CASE(
+	"migrate backfills the texture list of a document from before it",
+	"[refresh][textures][migrate]")
+{
+	Project project("assetlib_texture_refresh_backfill_test");
+	test::ImportUnitGroup(
+		project.root,
+		test::TexturedGltfPath(),
+		"Authored/Materials/red.bmaterial",
+		30.0f,
+		c_TextureDir);
+
+	ImportDocument old = project.Document();
+	old.textures       = std::nullopt;
+	project.Store().Save(old, "Authored/Meshes/unit.bimport");
+	fs::remove(project.root / c_TextureDir / "Apple1_u1_v1_diffuse.ktx2");
+
+	// With no list, a folder that still holds a file is all a scan can see.
+	REQUIRE(project.Store().GetStaleImportedTextureSources().empty());
+
+	SECTION("a dry run writes neither the list nor the texture")
+	{
+		(void)project.Store().Migrate(true);
+
+		CHECK_FALSE(project.Document().textures.has_value());
+		CHECK(project.Textures() == std::vector<std::string>{ "Apple2_u1_v1_diffuse.ktx2" });
+	}
+
+	SECTION("the real run records the list from the source and restores what it names")
+	{
+		const MigrateReport report = project.Store().Migrate(false);
+
+		CHECK(report.Count(MigratedFile::Outcome::kFailed) == 0);
+		// The same run gives the import its generated folder, and the list moves with it.
+		const ImportDocument document = project.Document();
+		CHECK(
+			document.textures ==
+			std::vector<std::string>{ document.textureDir + "/Apple1_u1_v1_diffuse.ktx2",
+		                              document.textureDir + "/Apple2_u1_v1_diffuse.ktx2" });
+		CHECK(
+			project.Textures() ==
+			std::vector<std::string>{ "Apple1_u1_v1_diffuse.ktx2", "Apple2_u1_v1_diffuse.ktx2" });
+	}
+}
+
+TEST_CASE("A texture deleted through the project is not put back", "[refresh][textures][migrate]")
+{
+	// A file removed behind the project's back is absent and comes back; one the user deleted is
+	// dropped from the document, as a deleted container is from `outputs`.
+	Project project("assetlib_texture_refresh_deleted_test");
+	test::ImportUnitGroup(
+		project.root,
+		test::TexturedGltfPath(),
+		"Authored/Materials/red.bmaterial",
+		30.0f,
+		c_TextureDir);
+
+	const AssetStore   store = project.Store();
+	const DeletionPlan plan  = planDeletion(
+		AssetRefGraph::Scan(store),
+		std::string(c_TextureDir) + "/Apple1_u1_v1_diffuse.ktx2");
+	REQUIRE(plan.Allowed());
+	REQUIRE(store.DeleteAsset(plan).status == DeletionStatus::kDeleted);
+
+	CHECK(
+		project.Document().textures ==
+		std::vector<std::string>{ "Derived/SourceTextures/unit/Apple2_u1_v1_diffuse.ktx2" });
+	CHECK(store.GetStaleImportedTextureSources().empty());
+
+	(void)store.Migrate(false);
+	CHECK(project.Textures() == std::vector<std::string>{ "Apple2_u1_v1_diffuse.ktx2" });
+}
+
+TEST_CASE(
+	"A source that will not parse does not fail the rest of its document's backfill",
+	"[refresh][textures][migrate]")
+{
+	// An LFS pointer checked out in place of the `.glb` is the usual case: the file exists, so the
+	// list is attempted, and the `source` backfill beside it needs only the document's own key.
+	Project project("assetlib_texture_refresh_unparseable_test");
+	test::ImportUnitGroup(
+		project.root,
+		test::TexturedGltfPath(),
+		"Authored/Materials/red.bmaterial",
+		30.0f,
+		c_TextureDir);
+
+	ImportDocument old = project.Document();
+	old.textures       = std::nullopt;
+	old.source.clear();
+	project.Store().Save(old, "Authored/Meshes/unit.bimport");
+
+	core::file::write_atomic(
+		project.root / "Authored/Meshes/unit.glb",
+		std::string_view("version https://git-lfs.github.com/spec/v1\n"));
+
+	(void)project.Store().Migrate(false);
+
+	CHECK(project.Document().source == "Authored/Meshes/unit.glb");
+	CHECK_FALSE(project.Document().textures.has_value());
 }

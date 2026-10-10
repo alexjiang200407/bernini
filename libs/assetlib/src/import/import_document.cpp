@@ -41,6 +41,7 @@ namespace assetlib
 		constexpr std::string_view c_BindingsKey          = "bindings";
 		constexpr std::string_view c_MaterialOverridesKey = "materialOverrides";
 		constexpr std::string_view c_TextureDirKey        = "textureDir";
+		constexpr std::string_view c_TexturesKey          = "textures";
 		constexpr std::string_view c_TextureStampSizeKey  = "textureStampSize";
 		constexpr std::string_view c_TextureStampHashKey  = "textureStampHash";
 		constexpr std::string_view c_PackedSourceSizeKey  = "packedSourceSize";
@@ -373,6 +374,26 @@ namespace assetlib
 			json.erase(it);
 		}
 
+		if (auto it = json.find(c_TexturesKey); it != json.end())
+		{
+			if (!it->is_array())
+			{
+				core::throw_runtime_error("import document: '{}' is not an array", c_TexturesKey);
+			}
+			auto& textures = document.textures.emplace();
+			for (const auto& texture : *it)
+			{
+				if (!texture.is_string())
+				{
+					core::throw_runtime_error(
+						"import document: '{}' holds a non-string entry",
+						c_TexturesKey);
+				}
+				textures.push_back(texture.get<std::string>());
+			}
+			json.erase(it);
+		}
+
 		if (auto it = json.find(c_BindingsKey); it != json.end())
 		{
 			if (!it->is_object())
@@ -460,6 +481,13 @@ namespace assetlib
 		// is byte-identical to one written before this key existed.
 		if (!document.textureDir.empty())
 			json[c_TextureDirKey] = document.textureDir;
+
+		if (document.textures)
+		{
+			auto textures = std::vector<std::string>(*document.textures);
+			std::ranges::sort(textures);
+			json[c_TexturesKey] = std::move(textures);
+		}
 
 		if (document.textureStamp != SourceStamp())
 		{

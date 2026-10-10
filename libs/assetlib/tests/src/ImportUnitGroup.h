@@ -56,7 +56,7 @@ namespace assetlib::test
 		mesh.source            = source;
 
 		if (!textureDir.empty())
-			store.WriteTextures(imported, textureDir);
+			target.textures = store.WriteTextures(imported, textureDir);
 
 		auto rig = store.WriteImportedRig(
 			imported.skeleton,

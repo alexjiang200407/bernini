@@ -144,8 +144,9 @@ acquisition with no source files present and no source reads.
 
 * **A `.ktx2` cannot hold a key, so its source's document holds one for it.** The textures a mesh
   import extracts are derived from the `.glb` like the rest of its group, but a KTX2 has nowhere
-  to carry a header -- so the `.bimport` records `textureDir`, `textureStamp` and
-  `textureBakeToken` (the revision of the chain the bake writes, `c_TextureBakeToken`), and
+  to carry a header -- so the `.bimport` records `textureDir`, `textureStamp`,
+  `textureBakeToken` (the revision of the chain the bake writes, `c_TextureBakeToken`) and
+  `textures`, the files the extract wrote, so one missing is a miss too; and
   `AssetStore::RefreshImportedTextures` is what takes the miss. Not `LoadRegen*`: that runs on
   every mesh load and every deletion's reference scan, where an import's worth of Basis encoding
   cannot go. An extracted texture is named after the image it came from, which is what lets a

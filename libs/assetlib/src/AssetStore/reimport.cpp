@@ -21,6 +21,7 @@
 #include "animation/plant_bake.h"
 #include "environment/env_produce.h"
 #include "references/ref_paths.h"
+#include "texture/extracted_textures.h"
 #include "util/cook_threads.h"
 #include "util/progress_report.h"
 #include <assetlib/progress.h>
@@ -287,13 +288,13 @@ namespace assetlib
 		}
 		std::ranges::sort(environments, {}, &PendingSource::key);
 
-		// The extracted textures are the one output no `outputs` entry names -- a `.ktx2` carries
-		// no header, so the document's textureDir and textureStamp are their whole key, and that
-		// key says nothing about whether the files are on disk. An empty or absent folder is the
-		// only signal there is, and it is exactly the fresh-checkout case.
+		// The extracted textures are the one output no `outputs` entry names: `textures` lists
+		// them, and a document from before it leaves an absent or empty folder as the only signal.
 		const auto textureWanted = [this](const PendingSource& source) {
 			if (source.document.textureDir.empty())
 				return false;
+			if (source.document.textures)
+				return missesExtractedTexture(*this, source.document);
 
 			const std::filesystem::path folder = GetDataRoot() / source.document.textureDir;
 			return !std::filesystem::exists(folder) || std::filesystem::is_empty(folder);
