@@ -48,6 +48,15 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
     {
         groupSlot = gGroupCount[lane].add(entries);
     }
+
+    // The placement's impostor, one entry in the impostor bucket's lane, beside its submesh's.
+    let impostor = !instance.meshInstance.Null() && (visibility.visible & cVisibleImpostorBit) != 0u;
+    let impostorLane = visibility.Lane(cImpostorDrawBucket);
+    uint impostorSlot = 0u;
+    if (impostor)
+    {
+        impostorSlot = gGroupCount[impostorLane].add(1u);
+    }
     GroupMemoryBarrierWithGroupSync();
 
     // One reservation per lane per group, and none at all for a lane this group did not fill.
@@ -73,5 +82,10 @@ void main(uint globalIdx: SV_DispatchThreadID, uint localIdx: SV_GroupIndex)
         {
             gUniforms.compactedInstances[slot] = globalIdx | cOutgoingDrawBit;
         }
+    }
+    if (impostor)
+    {
+        let base = (impostorLane == 0u) ? 0u : gUniforms.drawBucketPrefixSum[impostorLane - 1u];
+        gUniforms.compactedInstances[base + gGroupBase[impostorLane] + impostorSlot] = globalIdx;
     }
 }

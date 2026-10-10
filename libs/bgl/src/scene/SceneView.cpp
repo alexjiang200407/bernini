@@ -1299,6 +1299,10 @@ namespace bgl
 
 				meta.submeshInstances.emplace_back(m_InstanceBuffer.Add(std::move(instance)));
 			}
+			if (m_SceneRaw->GeomHasImpostor(geom.handle.index))
+			{
+				m_DemandedDrawBuckets.set(idl::cImpostorDrawBucket);
+			}
 
 			SyncInstanceScratch();
 
@@ -2136,6 +2140,10 @@ namespace bgl
 						desc.geom.geomType);
 					meta.submeshInstances.emplace_back(m_InstanceBuffer.Add(std::move(instance)));
 				}
+			}
+			if (m_SceneRaw->GeomHasImpostor(desc.geom.handle.index))
+			{
+				m_DemandedDrawBuckets.set(idl::cImpostorDrawBucket);
 			}
 			SyncInstanceScratch();
 

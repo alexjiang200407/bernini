@@ -26,6 +26,7 @@
 #include <bgl/idl/GrassChunk.h>
 #include <bgl/idl/GrassClump.h>
 #include <bgl/idl/GrassLook.h>
+#include <bgl/idl/Impostor.h>
 #include <bgl/idl/LodSubmeshRange.h>
 #include <bgl/idl/LoosePbrMaterial.h>
 #include <bgl/idl/Meshlet.h>
@@ -142,6 +143,19 @@ namespace bgl
 		// Every bound grass field, each holding a use of its look (see GrassMeta::useCount) and the
 		// chunk and clump ranges it was uploaded into. Released by AttachGrass and DeleteGeom.
 		std::vector<GrassFieldRecord> grass;
+
+		// The geom's baked impostor, or a null entry: its record in the impostor arena and the two
+		// atlases the record names, all freed with the geom; and the floor idl::Geom carries.
+		bgpu::idl::RawEntry impostor;
+		TextureAssetHandle  impostorAlbedo;
+		TextureAssetHandle  impostorNormalDepth;
+		float               impostorMinPixels = 0.0f;
+	};
+
+	/** The kinds of record the impostor arena holds: one, until a skinned impostor brings another. */
+	enum class ImpostorKind : uint32_t
+	{
+		kHemiOctahedral = 1,
 	};
 
 	/**
@@ -327,6 +341,14 @@ namespace bgl
 				                          m_Materials.GetHandleView() };
 		}
 
+		// The impostor arena and its typed view, as one binding; see GetMaterialBinding.
+		[[nodiscard]] bgpu::RawArenaBinding
+		GetImpostorBinding() const noexcept
+		{
+			return bgpu::RawArenaBinding{ m_Impostors.GetBufferHandle(),
+				                          m_Impostors.GetHandleView() };
+		}
+
 		[[nodiscard]] auto&
 		GetClipBuffer() noexcept
 		{
@@ -470,6 +492,13 @@ namespace bgl
 			// Legs the rig authored, which is what sizes an instance's foot-IK record.
 			uint32_t legCount = 0;
 		};
+
+		/** Whether the geom draws an impostor past its last level, which its placements then demand. */
+		[[nodiscard]] bool
+		GeomHasImpostor(uint32_t index) const noexcept
+		{
+			return !m_Geoms[index].impostor.Null();
+		}
 
 		[[nodiscard]] AnimGeomInfo
 		GetGeomSkinnedInfo(uint32_t index) const noexcept
@@ -839,6 +868,18 @@ namespace bgl
 		void
 		ReleaseGrass(std::vector<GrassFieldRecord>& fields) noexcept;
 
+		/** Uploads an impostor's two atlases and adds its arena record, both into `record`. */
+		void
+		AddImpostor(
+			GeomRecord&                   record,
+			const assetlib::MeshImpostor& impostor,
+			std::span<const std::byte>    albedo,
+			std::span<const std::byte>    normalDepth);
+
+		/** Frees whatever of an impostor `record` holds, and clears it. */
+		void
+		ReleaseImpostor(GeomRecord& record);
+
 		/**
 		 * Gives back what each of `layers` holds -- its look's use and its TerrainGrass record --
 		 * and empties it.
@@ -985,6 +1026,10 @@ namespace bgl
 		// a binding and a uniform key.
 		bgpu::RawBuffer<MaterialType> m_Materials;
 
+		// Every geom's impostor record, whose payload leads with its atlases' handles, so the arena
+		// carries the typed view that samples them, as the material arena does.
+		bgpu::RawBuffer<ImpostorKind> m_Impostors;
+
 		// One clip table for every animated tier: a Clip means the same thing to both, so a second
 		// buffer of the same element type would only be two things to grow.
 		bgpu::RangeBuffer<idl::Clip> m_Clips;
@@ -1032,6 +1077,7 @@ namespace bgl
 			NamedBuffer{ c_VertexDataBufferName, &Scene::m_VertexDataBuffer },
 			NamedBuffer{ c_IndexBufferName, &Scene::m_IndexBuffer },
 			NamedBuffer{ c_MaterialArenaBufferName, &Scene::m_Materials },
+			NamedBuffer{ c_ImpostorArenaBufferName, &Scene::m_Impostors },
 			NamedBuffer{ c_ClipBufferName, &Scene::m_Clips },
 			NamedBuffer{ c_RigBufferName, &Scene::m_Rigs },
 			NamedBuffer{ c_SkinnedBoneBufferName, &Scene::m_SkinnedBones },

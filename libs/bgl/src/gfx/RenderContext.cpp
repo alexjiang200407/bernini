@@ -920,6 +920,7 @@ namespace bgl
 		draw.targets.grassRootHeightSrv   = m_ActiveTarget->GetGrassRootHeightSrv();
 
 		draw.materialArena            = scene->GetMaterialBinding();
+		draw.impostorArena            = scene->GetImpostorBinding();
 		draw.samplers.anisoLinearWrap = scene->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
 		draw.samplers.linearClamp     = scene->GetSampler(Scene::StandardSampler::kLinearClamp);
 
@@ -1005,6 +1006,7 @@ namespace bgl
 
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kTerrain);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kWorld);
+		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kImpostor);
 		m_Forward.AttachGroundColor(
 			m_FrameGraph,
 			GroundColorDraw(draw, view->GetGroundColor().rect),

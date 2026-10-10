@@ -18,6 +18,7 @@ namespace bgl
 	constexpr std::string_view c_IndexBufferName        = "scene.indexBuffer"sv;
 
 	constexpr std::string_view c_MaterialArenaBufferName = "scene.materialArenaBuffer"sv;
+	constexpr std::string_view c_ImpostorArenaBufferName = "scene.impostorArenaBuffer"sv;
 
 	// Not rig-prefixed: it is the rig's clip table, but both pose sources index it and the pose pass
 	// reads it too (see docs/skinning.md).

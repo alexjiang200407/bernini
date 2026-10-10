@@ -44,6 +44,7 @@ namespace bgl
 	{
 		kTerrain,      // the scene's terrains: the ground goes down first, the largest occluder
 		kWorld,        // the static tier's non-transparent buckets
+		kImpostor,     // every placement drawn past its last level, as its geom's impostor
 		kGrass,        // the grass the view's geoms grow
 		kSkinned,      // the skinned tier's non-transparent buckets
 		kWater,        // the static tier's water buckets, over the depth the phases above wrote
@@ -230,6 +231,7 @@ namespace bgl
 
 		BucketedForwardPhase    m_World{ GeometryStage::kStaticMesh, "World" };
 		BucketedForwardPhase    m_Skinned{ GeometryStage::kSkinnedMesh, "Skinned" };
+		BucketedForwardPhase    m_Impostor{ GeometryStage::kImpostor, "Impostor" };
 		TerrainForwardPhase     m_Terrain;
 		GrassForwardPhase       m_Grass;
 		TransparentForwardPhase m_Transparent;

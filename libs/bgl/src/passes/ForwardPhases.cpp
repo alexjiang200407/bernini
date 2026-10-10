@@ -411,7 +411,8 @@ namespace bgl
 			.Check("materialData"sv, GetUniformKeys(c_MaterialBuffers))
 			.Check("materialData"sv, c_MaterialDataFields)
 			.Check("toonData"sv, c_ToonDataFields)
-			.Check("skinnedData"sv, GetUniformKeys(c_SkinnedBuffers));
+			.Check("skinnedData"sv, GetUniformKeys(c_SkinnedBuffers))
+			.Check("impostorData"sv, GetUniformKeys(c_ImpostorBuffers));
 		GrassForwardPhase::CheckBindings(check);
 		TerrainForwardPhase::CheckBindings(check);
 		WaterForwardPhase::CheckBindings(check);
@@ -426,6 +427,8 @@ namespace bgl
 			return m_Terrain;
 		case ForwardPhase::kWorld:
 			return m_World;
+		case ForwardPhase::kImpostor:
+			return m_Impostor;
 		case ForwardPhase::kGrass:
 			return m_Grass;
 		case ForwardPhase::kSkinned:
@@ -662,6 +665,11 @@ namespace bgl
 		}
 
 		WaterForwardPhase::Bind(kernel, draw, resources);
+
+		if (auto foundImpostorData = kernel.FindUniforms("impostorData"))
+		{
+			(*foundImpostorData)["impostors"] = draw.impostorArena;
+		}
 
 		if (auto foundToonData = kernel.FindUniforms("toonData"))
 		{

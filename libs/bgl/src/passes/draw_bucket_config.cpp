@@ -74,6 +74,11 @@ namespace bgl
 		{
 			return std::format("programs.forward.Grass_{}", ProgramStem(desc.material));
 		}
+		// An impostor shades from its atlases, which no material names.
+		if (desc.geom == GeometryStage::kImpostor)
+		{
+			return std::string(DrawBucketGeometrySrc(desc));
+		}
 
 		return std::format(
 			"programs.forward.{}{}",
@@ -106,6 +111,8 @@ namespace bgl
 			return "programs.forward.Grass"sv;
 		case GeometryStage::kTerrain:
 			return "programs.forward.Terrain"sv;
+		case GeometryStage::kImpostor:
+			return "programs.forward.Impostor"sv;
 		}
 		core::fatal("An unknown geometry stage");
 	}
@@ -119,8 +126,9 @@ namespace bgl
 	bgpu::RasterCullMode
 	DrawBucketCullMode(const DrawBucketDesc& desc) noexcept
 	{
-		// A blade is seen from either side, and a material's doubleSided flag is a mesh's question.
-		if (desc.geom == GeometryStage::kGrass)
+		// A blade is seen from either side, and a material's doubleSided flag is a mesh's question;
+		// an impostor's quad always faces the camera.
+		if (desc.geom == GeometryStage::kGrass || desc.geom == GeometryStage::kImpostor)
 		{
 			return bgpu::RasterCullMode::kNone;
 		}

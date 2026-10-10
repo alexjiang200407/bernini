@@ -12,7 +12,7 @@ namespace bgl
 	 * The colour-pass pixel program a bucket draws with: `programs.forward.<kind><layer>`, or
 	 * `programs.forward.Grass_<kind>` for a grass bucket, which is always opaque. A terrain bucket
 	 * draws with the mesh's: its stage emits the same vertex, and a terrain carries nothing a mesh
-	 * does not.
+	 * does not. The impostor bucket draws with its stage's own, `programs.forward.Impostor`.
 	 * @pre the bucket is not transparent -- the depth-sorted list draws through the one shared
 	 * blend program, which no bucket owns.
 	 */

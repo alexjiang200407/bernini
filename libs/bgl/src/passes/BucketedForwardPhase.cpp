@@ -39,10 +39,17 @@ namespace bgl
 	{
 		desc.AddRenderTarget(c_MotionVectorsName).AddIndirectArgs(c_CompactDispatchArgsName);
 
-		// The static stage reads no skinned tables.
+		// The static stage reads no skinned tables, and only the impostor stage its arena.
 		if (m_Stage == GeometryStage::kSkinnedMesh)
 		{
 			for (const auto& binding : c_SkinnedBuffers)
+			{
+				desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
+			}
+		}
+		if (m_Stage == GeometryStage::kImpostor)
+		{
+			for (const auto& binding : c_ImpostorBuffers)
 			{
 				desc.AddBufferArg(binding.graphName, binding.sync, binding.access);
 			}
