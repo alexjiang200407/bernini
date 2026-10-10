@@ -42,9 +42,10 @@ namespace bgl
 	 */
 	enum class ForwardPhase : uint8_t
 	{
-		kTerrain,      // the scene's terrains: the ground goes down first, the largest occluder
-		kWorld,        // the static tier's non-transparent buckets
-		kImpostor,     // every placement drawn past its last level, as its geom's impostor
+		kTerrain,   // the scene's terrains: the ground goes down first, the largest occluder
+		kWorld,     // the static tier's non-transparent buckets
+		kImpostor,  // every placement drawn past its last level, as its geom's impostor
+		kWorldPhase2,  // the static tier's buckets again: what the occlusion cull's phase 2 found visible
 		kGrass,        // the grass the view's geoms grow
 		kSkinned,      // the skinned tier's non-transparent buckets
 		kWater,        // the static tier's water buckets, over the depth the phases above wrote
@@ -230,6 +231,7 @@ namespace bgl
 		std::vector<SurfaceShading> m_SurfaceShading;
 
 		BucketedForwardPhase    m_World{ GeometryStage::kStaticMesh, "World" };
+		BucketedForwardPhase    m_WorldPhase2{ GeometryStage::kStaticMesh, "World Phase 2" };
 		BucketedForwardPhase    m_Skinned{ GeometryStage::kSkinnedMesh, "Skinned" };
 		BucketedForwardPhase    m_Impostor{ GeometryStage::kImpostor, "Impostor" };
 		TerrainForwardPhase     m_Terrain;

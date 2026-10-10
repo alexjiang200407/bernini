@@ -1,6 +1,7 @@
 import idl.Constants;
 import idl.CullStats;
 import idl.CullView;
+import idl.DrawBucket;
 import idl.Geom;
 import idl.MeshInstanceFlag;
 import idl.InstanceLod;
@@ -9,6 +10,8 @@ import idl.MeshInstance;
 import idl.PlaybackType;
 import idl.Submesh;
 import lib.culling.lod_select;
+import lib.culling.occlusion;
+import lib.culling.visibility_bits;
 import lib.debug.dbg;
 import lib.types.ComputeBuffer;
 import lib.types.EntryBuffer;
@@ -24,6 +27,11 @@ import lib.math.frustum;
 // detail (lib.culling.lod_select) -- which level draws, and whether a dissolve out of the last one
 // draws beside it. CullView travels as buffer data, not
 // cbuffer scalars: a compute cbuffer that also holds bindless handles drops its plain fields.
+//
+// This is phase 1 of the occlusion cull as well: an occludee (DrawBucketFlag.kOccludee) drawn
+// last frame is tested against the HZB that frame left, through that frame's view-projection, and
+// one it hides -- or one not drawn last frame -- is left as a candidate for CullOccluded, which
+// tests it against the HZB phase 1's depth builds.
 
 struct Uniforms
 {
@@ -43,12 +51,66 @@ struct Uniforms
     // which also chose its sources, and is read here rather than chosen again.
     RawBuffer playbackBuffer;
 
+    // One DrawBucketFlag word per bucket: which buckets are occludees.
+    UploadBuffer<uint> drawBucketFlags;
+
+    // One word per instance slot, kept across frames: whether the slot drew last frame, in either
+    // phase. Read here, written here for phase 1's verdict and by CullOccluded for phase 2's.
+    ComputeBuffer<uint> drawnHistory;
+
+    // The HZB ladder of this frustum's previous draw, one handle per level (cMaxHzbLevels), and
+    // the clamping sampler its 2x2 is gathered through.
+    SamplerState.Handle hzbSampler;
+    Texture2D.Handle hzb0;
+    Texture2D.Handle hzb1;
+    Texture2D.Handle hzb2;
+    Texture2D.Handle hzb3;
+    Texture2D.Handle hzb4;
+    Texture2D.Handle hzb5;
+    Texture2D.Handle hzb6;
+    Texture2D.Handle hzb7;
+    Texture2D.Handle hzb8;
+    Texture2D.Handle hzb9;
+    Texture2D.Handle hzb10;
+    Texture2D.Handle hzb11;
+
     // Profiling counters for the C5 overlay and the cull tests; the per-instance atomics are the only
     // real cost, so they are gated to BERNINI_GPU_DEBUG below.
     ComputeBuffer<CullStats> stats;
 };
 
 ConstantBuffer<Uniforms> gUniforms;
+
+Texture2D.Handle HzbLevel(uint level)
+{
+    switch (level)
+    {
+    case 0u:
+        return gUniforms.hzb0;
+    case 1u:
+        return gUniforms.hzb1;
+    case 2u:
+        return gUniforms.hzb2;
+    case 3u:
+        return gUniforms.hzb3;
+    case 4u:
+        return gUniforms.hzb4;
+    case 5u:
+        return gUniforms.hzb5;
+    case 6u:
+        return gUniforms.hzb6;
+    case 7u:
+        return gUniforms.hzb7;
+    case 8u:
+        return gUniforms.hzb8;
+    case 9u:
+        return gUniforms.hzb9;
+    case 10u:
+        return gUniforms.hzb10;
+    default:
+        return gUniforms.hzb11;
+    }
+}
 
 [shader("compute")]
 [numthreads(cHistogramGroupSize, 1, 1)]
@@ -78,6 +140,7 @@ void main(uint globalIdx: SV_DispatchThreadID)
             gUniforms.lodCurrent[placement] = previous;
         }
         gUniforms.visibility[globalIdx].visible = 0u;
+        gUniforms.drawnHistory[globalIdx] = 0u;
         return;
     }
 
@@ -117,19 +180,37 @@ void main(uint globalIdx: SV_DispatchThreadID)
         }
     }
 
-    uint bits = 0u;
-    if (visible && uint(word.Level()) < geom.submeshes.lodCount)
+    // An occludee inside the frustum draws now only if it drew last frame and that frame's HZB
+    // does not hide it; otherwise phase 2 decides. Without a valid ladder every occludee draws.
+    let bucket = instance.drawBucket;
+    let occludee = (view.occlusion & cOcclusionTestBit) != 0u && bucket < cMaxDrawBuckets &&
+                   (gUniforms.drawBucketFlags[bucket] & uint(DrawBucketFlag.kOccludee)) != 0u;
+    bool candidate = false;
+    if (visible && occludee && (view.occlusion & cOcclusionHzbValidBit) != 0u)
     {
-        bits |= cVisibleCurrentBit;
+        if (gUniforms.drawnHistory[globalIdx] == 0u)
+        {
+            candidate = true;
+        }
+        else
+        {
+            let query = PrepareHzbQuery(view, view.prevViewProj, sphere);
+            if (!query.visible)
+            {
+                // The level differs from thread to thread, so the handle it picks is no uniform index.
+                let gathered = nonuniform(HzbLevel(query.level)).GatherRed(gUniforms.hzbSampler, query.uv);
+                candidate = HzbHides(gathered, query.nearest);
+            }
+        }
     }
-    if (visible && word.Fading() && uint(word.OutgoingLevel()) < geom.submeshes.lodCount)
-    {
-        bits |= cVisibleOutgoingBit;
-    }
+
+    uint bits = candidate ? cVisibleCandidateBit : VisibilityBits(word, geom, visible);
+    let meshDrawn = (bits & (cVisibleCurrentBit | cVisibleOutgoingBit)) != 0u;
 
     // Past the last level the placement draws its impostor, once, from its first submesh, tested
     // against the sphere over the whole of level 0 -- the impostor's quad spans it -- rather than
-    // that submesh's own.
+    // that submesh's own. An impostor is no occludee: a candidate's draws now, and phase 2 never
+    // draws it again.
     if (writesLod && !automatic && !geom.impostor.Null())
     {
         let pastLast =
@@ -139,20 +220,25 @@ void main(uint globalIdx: SV_DispatchThreadID)
             SphereInFrustum(view.frustumPlanes, whole.xyz, whole.w))
         {
             bits |= cVisibleImpostorBit;
+            if (word.Fading())
+            {
+                bits |= cVisibleDissolvingBit;
+            }
         }
     }
 
-    if (bits != 0u && word.Fading())
-    {
-        bits |= cVisibleDissolvingBit;
-    }
     gUniforms.visibility[globalIdx].visible = bits;
+    gUniforms.drawnHistory[globalIdx] = meshDrawn ? 1u : 0u;
 
 #if defined(BERNINI_GPU_DEBUG)
     gUniforms.stats[0].tested.add(1u);
     if (!visible)
     {
         gUniforms.stats[0].frustumCulled.add(1u);
+    }
+    if (candidate)
+    {
+        gUniforms.stats[0].occlusionCandidates.add(1u);
     }
 #endif
 }

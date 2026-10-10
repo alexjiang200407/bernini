@@ -6,6 +6,7 @@
 #include <bgpu/uniforms/Uniforms.h>
 #include <core/ref/SharedRef.h>
 #include <spdlog/spdlog.h>
+#include <string_view>
 
 namespace bgpu
 {
@@ -38,6 +39,15 @@ namespace bgl
 		void
 		AttachToFrameGraph(FrameGraph& fg, const DrawData& draw);
 
+		/**
+		 * Phase 2 of the occlusion cull: tests phase 1's candidates against the HZB built from
+		 * phase 1's depth, writing phase 2's visibility words, then compacts them. @pre the graph's
+		 * namespace is the frustum's cull scope, where phase 1 recorded; it is the phase-2 scope on
+		 * return, where Forward World Phase 2 records, and the caller sets it back.
+		 */
+		void
+		AttachPhase2(FrameGraph& fg, const DrawData& draw, std::string_view cullScope);
+
 	private:
 		void
 		ExecuteClear(const PassContext& ctx, const DrawData& draw);
@@ -54,6 +64,13 @@ namespace bgl
 		void
 		AttachCull(FrameGraph& fg, const DrawData& draw);
 
+		/** The counting sort and the compaction over the visibility words the namespace names. */
+		void
+		AttachCompaction(FrameGraph& fg, const DrawData& draw, std::string_view phase);
+
+		void
+		ExecuteCullOccluded(const PassContext& ctx, const DrawData& draw);
+
 		void
 		ExecuteHistogramAndPrefixSum(const PassContext& ctx, const DrawData& draw);
 
@@ -64,6 +81,7 @@ namespace bgl
 		bgpu::ComputeKernel m_ChoosePoses;
 		bgpu::ComputeKernel m_GrantPoses;
 		bgpu::ComputeKernel m_CullInstances;
+		bgpu::ComputeKernel m_CullOccluded;
 		bgpu::ComputeKernel m_Histogram;
 		bgpu::ComputeKernel m_PrefixSum;
 		bgpu::ComputeKernel m_CompactInstances;

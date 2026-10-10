@@ -79,7 +79,8 @@ namespace bgl
 		Update(bgpu::ICommandList* cmdList);
 
 		/**
-		 * Imports every buffer under `scope`, which it makes the graph's current namespace.
+		 * Imports every buffer under `scope`, which it makes the graph's current namespace, and
+		 * phase 2's compaction under `scope` + c_Phase2Scope.
 		 *
 		 * `updateArgs` receives the names the owning view's update pass declares copy-dest, prefixed
 		 * with `scope`: that pass is recorded one scope out, and resolution only ever falls outward.
@@ -106,6 +107,19 @@ namespace bgl
 			return m_CompactedDispatchArgs;
 		}
 
+		/** Phase 2's prefix sums and dispatch args, under c_Phase2Scope; seeded as phase 1's are. */
+		[[nodiscard]] bgpu::ComputeBuffer&
+		GetPhase2PrefixSum() noexcept
+		{
+			return m_Phase2PrefixSum;
+		}
+
+		[[nodiscard]] bgpu::ComputeBuffer&
+		GetPhase2DispatchArgs() noexcept
+		{
+			return m_Phase2DispatchArgs;
+		}
+
 		[[nodiscard]] bgpu::UploadBuffer<idl::CullView>&
 		GetCullView() noexcept
 		{
@@ -127,6 +141,17 @@ namespace bgl
 		GetHzb() const noexcept
 		{
 			return m_Hzb;
+		}
+
+		/**
+		 * One word per instance slot: whether the slot drew last frame, which phase 1 of the
+		 * occlusion cull reads. Never cleared: a stale word costs one conservative draw or one
+		 * phase-2 test, never a missing instance.
+		 */
+		[[nodiscard]] const bgpu::ComputeBuffer&
+		GetDrawnHistory() const noexcept
+		{
+			return m_DrawnHistory;
 		}
 
 		/** One idl::InstanceVisibility per instance slot, as this frustum's last cull wrote them. */
@@ -191,6 +216,16 @@ namespace bgl
 		// One word per instance slot, written by the cull pass and read by the counting sort and the
 		// transparent depth-key pass.
 		bgpu::ComputeBuffer m_InstanceVisibility;
+
+		// One word per instance slot, read and rewritten in place by both phases of the cull.
+		bgpu::ComputeBuffer m_DrawnHistory;
+
+		// Phase 2 of the occlusion cull's own compaction, imported under c_Phase2Scope by the names
+		// phase 1's carry: sized and resized as theirs are.
+		bgpu::ComputeBuffer m_Phase2Visibility;
+		bgpu::ComputeBuffer m_Phase2Compacted;
+		bgpu::ComputeBuffer m_Phase2PrefixSum;
+		bgpu::ComputeBuffer m_Phase2DispatchArgs;
 
 		// Sized by the bucket ceiling rather than the instance count, so Resize does not reach
 		// them: one running total per bucket, and the indirect args the forward pass dispatches on.

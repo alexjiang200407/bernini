@@ -428,6 +428,8 @@ namespace bgl
 			return m_World;
 		case ForwardPhase::kImpostor:
 			return m_Impostor;
+		case ForwardPhase::kWorldPhase2:
+			return m_WorldPhase2;
 		case ForwardPhase::kGrass:
 			return m_Grass;
 		case ForwardPhase::kSkinned:

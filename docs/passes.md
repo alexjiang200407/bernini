@@ -52,13 +52,17 @@ flowchart TD
         POSE --> TSR["Toon Shading Rigs (only when a placement holds a rig; one thread per rigged placement)"]
         TSR --> FTR["Forward Terrain (only when the scene has a terrain; one dispatch per terrain)"]
         FTR --> FWW["Forward World (indirect dispatch per static-tier bucket)"]
-        FWW --> GC["Ground Color (only when a terrain's grass takes its ground's colour or follows its cover; one dispatch per terrain)"]
+        FWW --> FIM["Forward Impostor (every placement past its last level, as its geom's impostor)"]
+        FIM --> HZP["HZB Phase, Cull Occluded and its compaction (only when the view culls by occlusion and last draw's HZB is valid)"]
+        HZP --> FW2["Forward World Phase 2 (what phase 2 of the cull found visible)"]
+        FW2 --> GC["Ground Color (only when a terrain's grass takes its ground's colour or follows its cover; one dispatch per terrain)"]
         GC --> GRS["Forward Grass (only when a drawn geom or a terrain has grass; one dispatch per grass bucket and terrain)"]
-        GRS --> BLOB["Blob Shadows (only when the view has a disc; reads the depth as it stands)"]
+        GRS --> HZF["HZB Frame (only when the view culls by occlusion; for the next draw's cull)"]
+        HZF --> BLOB["Blob Shadows (only when the view has a disc; reads the depth as it stands)"]
         BLOB --> FWS["Forward Skinned (indirect dispatch per skinned-tier bucket)"]
         FWS --> WSC["Water Scene Copy (only when the view places water; scene colour into the target's copy)"]
-        WSC --> FWW["Forward Water (only when the view places water; indirect dispatch per water bucket; reads the depth and the copy)"]
-        FWW --> FWT["Forward Transparent (one dispatch for the sorted list)"]
+        WSC --> FWA["Forward Water (only when the view places water; indirect dispatch per water bucket; reads the depth and the copy)"]
+        FWA --> FWT["Forward Transparent (one dispatch for the sorted list)"]
         FWT --> SM["Outline Mask (only when the view has a selection)"]
     end
     D --> TAA["TaaResolve (only when the target has TAA)"]
@@ -520,6 +524,28 @@ fifth ahead of the cull:
    `MeshInstance.flags` carries `MeshInstanceFlag::kHidden` is written 0 before any frustum test and
    counted neither tested nor culled. Skipped when the instance count is 0.
 
+   It is also **phase 1 of the occlusion cull** (`lib/culling/occlusion.slang`). An instance of
+   an occludee bucket (`DrawBucketFlag::kOccludee`) inside the frustum draws now only if its slot
+   drew last frame (`cull.drawnHistory`, one word per slot that both phases rewrite in place and
+   nothing clears) and the frustum's HZB from last frame (`CullState::GetHzb`, imported level by
+   level as `cull.hzb<n>`) does not hide it through last frame's view-projection: the sphere's
+   world box is projected corner by corner, a corner at or past the near plane makes it visible,
+   its screen box picks the level it spans at most one texel of, and a `GatherRed` there is
+   compared farthest-against-nearest. Anything else inside the frustum is a **candidate**
+   (`cVisibleCandidateBit`, which the histogram and the compaction skip) for phase 2. Without a
+   valid ladder (`CullView::occlusion`: the first draw, a resize, the view's
+   `SetOcclusionCulling(false)`) every occludee draws as before.
+
+   **Phase 2** follows Forward World, when the ladder was valid. [HZB](#hzb) is built from the
+   depth phase 1 left; `Cull Occluded` (`programs/culling/CullOccluded`) tests each candidate
+   against it through this draw's own view-projection and writes phase 2's visibility words, and
+   the counting sort and the compaction run again over them, all under the frustum's `p2:` scope
+   (`c_Phase2Scope`), whose compaction scratch carries phase 1's names, so the kernels and
+   **Forward World Phase 2** run unchanged against it. Phase 1's words stay as written, and the
+   drawn-history word takes phase 2's draws. A wrong phase-1 guess -- a moved camera, a view drawn
+   twice -- costs a phase-2 test, never a missing instance: whatever phase 1 hid is tested again
+   against this frame's own depth.
+
    It also chooses the placement's **level of detail** (`lib/culling/lod_select.slang`): the
    diameter the geom's level-0 sphere spans on screen at its true distance, the finest level whose
    `lodMinPixels` floor that meets -- or none, below the last -- held by `cLodHysteresis` against
@@ -751,10 +777,13 @@ stands in for;
 **Forward Water** the static tier's water buckets, which attaches no depth: it reads the depth the
 phases before it wrote, as Blob Shadows does, discarding where the scene is nearer
 (`IForwardPhase::WritesDepth`), and refracts through the copy [Water Scene Copy](#water-scene-copy)
-took of scene colour just before it; **Forward Transparent** the depth-sorted list, every tier. After the grass the depth holds the
+took of scene colour just before it; **Forward Transparent** the depth-sorted list, every tier.
+Forward World draws in two phases when the view culls by occlusion: **Forward World Phase 2**,
+after Forward Impostor, draws what the occlusion cull's phase 2 found visible (Compact Instances,
+above). After the grass the depth holds the
 terrain, the world and its grass alone -- everything a blob shadow lands on, the seam
-[Blob Shadows](#blob-shadows) draws at, and where the HZB of two-phase occlusion culling will be
-built (ROADMAP.md § Culling). One object owns every phase's kernels, since a kernel is per bucket and a bucket is one
+[Blob Shadows](#blob-shadows) draws at, and where the [HZB](#hzb) the next draw's cull tests
+against is built. One object owns every phase's kernels, since a kernel is per bucket and a bucket is one
 tier. It holds one
 `MeshletKernel` per draw bucket, indexed by draw bucket id and grown with the renderer's `DrawBucketTable`, each
 configured from the draw bucket's desc by the functions in
@@ -949,8 +978,9 @@ after a frame built it: the next draw's cull tests against it (`CullView::occlus
 
 * **In:** `depth` as a shader resource, then each level the one above.
 * **Out:** `cull.hzb<n>`, under the camera frustum's cull scope.
-* **Skipped** when the view has occlusion culling off (`ISceneView::SetOcclusionCulling`) or a pool
-  refused the ladder; the ladder is then invalid for the next draw.
+* **Skipped** when the view has occlusion culling off (`ISceneView::SetOcclusionCulling`), places no
+  occludee, or a pool refused the ladder; the ladder is then invalid for the next draw, and a view
+  that never culls by occlusion never allocates one.
 
 ### Blob Shadows — [passes/BlobShadowPass.{h,cpp}](libs/bgl/src/passes/BlobShadowPass.cpp)
 

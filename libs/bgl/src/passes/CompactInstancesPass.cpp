@@ -3,6 +3,7 @@
 #include "passes/DrawData.h"
 #include "scene/AutoPoseState.h"
 #include "scene/CullState.h"
+#include "scene/HzbChain.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "scene/scene_buffer_names.h"
@@ -18,15 +19,33 @@
 #include <bgpu/pipeline/PipelineBatch.h>
 #include <bgpu/resource/ResourceManager.h>
 #include <bgpu/types/Barrier.h>
+#include <bgpu/types/ComputeState.h>
 #include <bgpu/uniforms/Uniforms.h>
 #include <core/err/util.h>
 #include <core/math.h>
 #include <core/ref/SharedRef.h>
+#include <format>
 #include <span>
 #include <spdlog/spdlog.h>
+#include <string>
+#include <string_view>
 
 namespace bgl
 {
+	namespace
+	{
+		// Every lane's dispatch args before a compaction counts into them: a group count of 0,
+		// with Y = Z = 1.
+		constexpr std::array<idl::DispatchArgs, idl::cMaxDrawLanes> c_DispatchSeed = [] {
+			std::array<idl::DispatchArgs, idl::cMaxDrawLanes> seed{};
+			for (idl::DispatchArgs& args : seed)
+			{
+				args = { 0u, 1u, 1u };
+			}
+			return seed;
+		}();
+	}
+
 	CompactInstancesPass::CompactInstancesPass(const PassInitContext& ctx) :
 		m_CullStats(
 			ctx.resourceManager,
@@ -52,6 +71,12 @@ namespace bgl
 			bgpu::ComputePipelineDesc()
 				.SetShader(ctx.device->CreateShader("programs.culling.CullInstances"))
 				.SetDebugName("Cull Instances"));
+
+		ctx.pipelines->Add(
+			m_CullOccluded,
+			bgpu::ComputePipelineDesc()
+				.SetShader(ctx.device->CreateShader("programs.culling.CullOccluded"))
+				.SetDebugName("Cull Occluded"));
 
 		ctx.pipelines->Add(
 			m_Histogram,
@@ -130,38 +155,61 @@ namespace bgl
 	void
 	CompactInstancesPass::AttachCull(FrameGraph& fg, const DrawData& draw)
 	{
+		core::ensure(draw.cullState != nullptr, "The cull reads the draw's cull state");
+
+		auto cull = PassDesc();
+		cull.SetName("Cull Instances {}.{}", draw.drawIdx, draw.cullIdx)
+			.AddBufferRead(c_InstanceBufferName, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead(c_MeshInstanceBufferName, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead(c_GeomBufferName, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead(c_SubmeshBufferName, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead(c_CullViewName, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead(c_InstanceLodPreviousName, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead(c_PlaybackArenaBufferName, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead(c_DrawBucketFlagsName, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite(c_InstanceLodName, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite(c_InstanceVisibilityName, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite(c_CullDrawnHistoryName, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite(c_CullStatsName, bgpu::BarrierSyncFlag::kComputeShader)
+			.SetExec([draw, this](const PassContext& ctx) { ExecuteCull(ctx, draw); });
+		// The ladder is read only while the view says it is valid, but it is declared whenever it
+		// exists: the graph then holds it in the shader-resource state the gather needs.
+		const std::span<const HzbChain::Level> levels = draw.cullState->GetHzb().GetLevels();
+		for (uint32_t i = 0; i < static_cast<uint32_t>(levels.size()); ++i)
+		{
+			cull.AddTextureRead(HzbLevelName(i), bgpu::BarrierSyncFlag::kComputeShader);
+		}
+
+		fg.AddPass(std::move(cull));
+		AttachCompaction(fg, draw, "");
+	}
+
+	void
+	CompactInstancesPass::AttachCompaction(
+		FrameGraph&            fg,
+		const DrawData&        draw,
+		const std::string_view phase)
+	{
 		fg.AddPass(
 			  PassDesc()
-				  .SetName("Cull Instances {}.{}", draw.drawIdx, draw.cullIdx)
+				  .SetName(
+					  "Histogram and Prefix Sum Instances{} {}.{}",
+					  phase,
+					  draw.drawIdx,
+					  draw.cullIdx)
 				  .AddBufferRead(c_InstanceBufferName, bgpu::BarrierSyncFlag::kComputeShader)
-				  .AddBufferRead(c_MeshInstanceBufferName, bgpu::BarrierSyncFlag::kComputeShader)
-				  .AddBufferRead(c_GeomBufferName, bgpu::BarrierSyncFlag::kComputeShader)
-				  .AddBufferRead(c_SubmeshBufferName, bgpu::BarrierSyncFlag::kComputeShader)
-				  .AddBufferRead(c_CullViewName, bgpu::BarrierSyncFlag::kComputeShader)
-				  .AddBufferRead(c_InstanceLodPreviousName, bgpu::BarrierSyncFlag::kComputeShader)
-				  .AddBufferRead(c_PlaybackArenaBufferName, bgpu::BarrierSyncFlag::kComputeShader)
-				  .AddBufferReadWrite(c_InstanceLodName, bgpu::BarrierSyncFlag::kComputeShader)
 				  .AddBufferReadWrite(
 					  c_InstanceVisibilityName,
 					  bgpu::BarrierSyncFlag::kComputeShader)
-				  .AddBufferReadWrite(c_CullStatsName, bgpu::BarrierSyncFlag::kComputeShader)
-				  .SetExec([draw, this](const PassContext& ctx) { ExecuteCull(ctx, draw); }))
+				  .AddBufferReadWrite(
+					  c_DrawBucketPrefixSumName,
+					  bgpu::BarrierSyncFlag::kComputeShader)
+				  .SetExec([draw, this](const PassContext& ctx) {
+					  ExecuteHistogramAndPrefixSum(ctx, draw);
+				  }))
 			.AddPass(
 				PassDesc()
-					.SetName("Histogram and Prefix Sum Instances {}.{}", draw.drawIdx, draw.cullIdx)
-					.AddBufferRead(c_InstanceBufferName, bgpu::BarrierSyncFlag::kComputeShader)
-					.AddBufferReadWrite(
-						c_InstanceVisibilityName,
-						bgpu::BarrierSyncFlag::kComputeShader)
-					.AddBufferReadWrite(
-						c_DrawBucketPrefixSumName,
-						bgpu::BarrierSyncFlag::kComputeShader)
-					.SetExec([draw, this](const PassContext& ctx) {
-						ExecuteHistogramAndPrefixSum(ctx, draw);
-					}))
-			.AddPass(
-				PassDesc()
-					.SetName("Compact Instances {}.{}", draw.drawIdx, draw.cullIdx)
+					.SetName("Compact Instances{} {}.{}", phase, draw.drawIdx, draw.cullIdx)
 					.AddBufferRead(c_InstanceBufferName, bgpu::BarrierSyncFlag::kComputeShader)
 					.AddBufferReadWrite(
 						c_InstanceVisibilityName,
@@ -180,6 +228,89 @@ namespace bgl
 					.SetExec([draw, this](const PassContext& ctx) {
 						ExecuteGenerateInstanceDispatchArgs(ctx, draw);
 					}));
+	}
+
+	void
+	CompactInstancesPass::AttachPhase2(
+		FrameGraph&            fg,
+		const DrawData&        draw,
+		const std::string_view cullScope)
+	{
+		const auto phase2Visibility = std::format("{}{}", c_Phase2Scope, c_InstanceVisibilityName);
+
+		auto cull = PassDesc();
+		cull.SetName("Cull Occluded {}.{}", draw.drawIdx, draw.cullIdx)
+			.AddBufferRead(c_InstanceBufferName, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead(c_MeshInstanceBufferName, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead(c_GeomBufferName, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead(c_SubmeshBufferName, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead(c_CullViewName, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead(c_InstanceLodName, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead(c_InstanceVisibilityName, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite(phase2Visibility, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite(c_CullDrawnHistoryName, bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite(c_CullStatsName, bgpu::BarrierSyncFlag::kComputeShader)
+			.SetExec([draw, this](const PassContext& ctx) { ExecuteCullOccluded(ctx, draw); });
+		const std::span<const HzbChain::Level> levels = draw.cullState->GetHzb().GetLevels();
+		for (uint32_t i = 0; i < static_cast<uint32_t>(levels.size()); ++i)
+		{
+			cull.AddTextureRead(HzbLevelName(i), bgpu::BarrierSyncFlag::kComputeShader);
+		}
+		fg.AddPass(std::move(cull));
+
+		fg.SetResourceNamespace(std::format("{}{}", cullScope, c_Phase2Scope));
+		fg.AddPass(
+			PassDesc()
+				.SetName("Compact Instances Update Phase 2 {}.{}", draw.drawIdx, draw.cullIdx)
+				.AddCopyDest(c_DrawBucketPrefixSumName)
+				.AddCopyDest(c_CompactDispatchArgsName)
+				.SetExec([draw](const PassContext& ctx) {
+					auto* cmd = ctx.GetCommandList();
+					draw.cullState->GetPhase2PrefixSum().Clear(cmd);
+					cmd->WriteBuffer(
+						draw.cullState->GetPhase2DispatchArgs().GetBufferHandle(),
+						c_DispatchSeed.data(),
+						sizeof(c_DispatchSeed));
+				}));
+		AttachCompaction(fg, draw, " Phase 2");
+	}
+
+	void
+	CompactInstancesPass::ExecuteCullOccluded(const PassContext& ctx, const DrawData& draw)
+	{
+		if (draw.view->GetInstanceCount() == 0)
+		{
+			return;
+		}
+
+		bgpu::Uniforms& uniforms   = m_CullOccluded["gUniforms"];
+		uniforms["cullView"]       = ctx.GetBuffer(c_CullViewName);
+		uniforms["instanceBuffer"] = ctx.GetBuffer(c_InstanceBufferName);
+		uniforms["meshBuffer"]     = ctx.GetBuffer(c_MeshInstanceBufferName);
+		uniforms["geomBuffer"]     = ctx.GetBuffer(c_GeomBufferName);
+		uniforms["submeshBuffer"]  = ctx.GetBuffer(c_SubmeshBufferName);
+		uniforms["lodCurrent"]     = ctx.GetBuffer(c_InstanceLodName);
+		uniforms["candidates"]     = ctx.GetBuffer(c_InstanceVisibilityName);
+		uniforms["visibility"] =
+			ctx.GetBuffer(std::format("{}{}", c_Phase2Scope, c_InstanceVisibilityName));
+		uniforms["drawnHistory"] = ctx.GetBuffer(c_CullDrawnHistoryName);
+		uniforms["hzbSampler"]   = draw.samplers.linearClamp;
+
+		const std::span<const HzbChain::Level> levels = draw.cullState->GetHzb().GetLevels();
+		for (uint32_t i = 0; i < static_cast<uint32_t>(levels.size()); ++i)
+		{
+			uniforms[std::format("hzb{}", i)].SetIfValid(levels[i].srv);
+		}
+		uniforms["stats"].SetIfValid(ctx.GetBuffer(c_CullStatsName));
+
+		auto cmdList        = ctx.GetCommandList();
+		auto computeState   = bgpu::ComputeState();
+		computeState.kernel = &m_CullOccluded;
+		cmdList->SetComputeState(computeState);
+		cmdList->Dispatch(
+			core::div_ceil(draw.view->GetInstanceCount(), idl::cHistogramGroupSize),
+			1,
+			1);
 	}
 
 	void
@@ -204,19 +335,10 @@ namespace bgl
 		draw.cullState->GetCullView().Assign(std::span(&draw.viewState.cullView, 1));
 		draw.cullState->GetCullView().Update(cmd);
 
-		static constexpr std::array<idl::DispatchArgs, idl::cMaxDrawLanes> c_Seed = [] {
-			std::array<idl::DispatchArgs, idl::cMaxDrawLanes> seed{};
-			for (idl::DispatchArgs& args : seed)
-			{
-				args = { 0u, 1u, 1u };
-			}
-			return seed;
-		}();
-
 		cmd->WriteBuffer(
 			draw.cullState->GetCompactedDispatchArgs().GetBufferHandle(),
-			c_Seed.data(),
-			sizeof(c_Seed));
+			c_DispatchSeed.data(),
+			sizeof(c_DispatchSeed));
 	}
 
 	void
@@ -290,16 +412,25 @@ namespace bgl
 			return;
 		}
 
-		bgpu::Uniforms& uniforms   = m_CullInstances["gUniforms"];
-		uniforms["cullView"]       = ctx.GetBuffer(c_CullViewName);
-		uniforms["instanceBuffer"] = ctx.GetBuffer(c_InstanceBufferName);
-		uniforms["meshBuffer"]     = ctx.GetBuffer(c_MeshInstanceBufferName);
-		uniforms["geomBuffer"]     = ctx.GetBuffer(c_GeomBufferName);
-		uniforms["submeshBuffer"]  = ctx.GetBuffer(c_SubmeshBufferName);
-		uniforms["visibility"]     = ctx.GetBuffer(c_InstanceVisibilityName);
-		uniforms["lodPrevious"]    = ctx.GetBuffer(c_InstanceLodPreviousName);
-		uniforms["lodCurrent"]     = ctx.GetBuffer(c_InstanceLodName);
-		uniforms["playbackBuffer"] = ctx.GetBuffer(c_PlaybackArenaBufferName);
+		bgpu::Uniforms& uniforms    = m_CullInstances["gUniforms"];
+		uniforms["cullView"]        = ctx.GetBuffer(c_CullViewName);
+		uniforms["instanceBuffer"]  = ctx.GetBuffer(c_InstanceBufferName);
+		uniforms["meshBuffer"]      = ctx.GetBuffer(c_MeshInstanceBufferName);
+		uniforms["geomBuffer"]      = ctx.GetBuffer(c_GeomBufferName);
+		uniforms["submeshBuffer"]   = ctx.GetBuffer(c_SubmeshBufferName);
+		uniforms["visibility"]      = ctx.GetBuffer(c_InstanceVisibilityName);
+		uniforms["lodPrevious"]     = ctx.GetBuffer(c_InstanceLodPreviousName);
+		uniforms["lodCurrent"]      = ctx.GetBuffer(c_InstanceLodName);
+		uniforms["playbackBuffer"]  = ctx.GetBuffer(c_PlaybackArenaBufferName);
+		uniforms["drawBucketFlags"] = ctx.GetBuffer(c_DrawBucketFlagsName);
+		uniforms["drawnHistory"]    = ctx.GetBuffer(c_CullDrawnHistoryName);
+		uniforms["hzbSampler"]      = draw.samplers.linearClamp;
+
+		const std::span<const HzbChain::Level> levels = draw.cullState->GetHzb().GetLevels();
+		for (uint32_t i = 0; i < static_cast<uint32_t>(levels.size()); ++i)
+		{
+			uniforms[std::format("hzb{}", i)].SetIfValid(levels[i].srv);
+		}
 
 		// The stats writes are gated to BERNINI_GPU_DEBUG, so a release build drops the handle from
 		// the kernel's reflection; bind it only when it survived.

@@ -91,11 +91,12 @@ and portability.
     `GLM_FORCE_DEPTH_ZERO_TO_ONE`, a `D32` depth cleared to 0 and `kGreater` tests; the sky at 0,
     TAA's sky test, the blob decal's and water's cleared-texel tests and gamelib's picking ray
     moved with it. The far plane stays finite: the infinite one is terrain's item below.
-  - [ ] HZB build (FidelityFX SPD) — single dispatch; reduce to the **farthest** depth (min under
-    reversed-Z), and handle non-power-of-two mips explicitly or the odd row/column drops the far
-    sample.
-  - [ ] HZB occlusion test — screen AABB, mip where it spans ≤2 texels, `GatherRed` 2×2, take farthest.
-  - [ ] Two-phase occlusion culling (Haar & Aaltonen 2015; UE5 Nanite's main and post pass). There
+  - [x] HZB build — each texel the **farthest** depth (min under reversed-Z) of the 2×2 it covers,
+    levels rounded up so an odd row or column keeps its far sample. A ladder of per-level textures,
+    one full-screen reduce each, rather than FidelityFX SPD's single dispatch: the RHI has no
+    texture UAVs.
+  - [x] HZB occlusion test — screen AABB, mip where it spans ≤2 texels, `GatherRed` 2×2, take farthest.
+  - [x] Two-phase occlusion culling, for the static tier; the skinned phase is not an occludee yet (Haar & Aaltonen 2015; UE5 Nanite's main and post pass). There
     is no depth prepass: the world is drawn once, in Forward World, which becomes two phases.
     Phase 1 draws the world instances visible last frame, tested against last frame's HZB; an HZB
     is built from the depth they leave; phase 2 re-tests what phase 1 rejected against it and draws
