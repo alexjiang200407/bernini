@@ -1947,6 +1947,7 @@ namespace assetlib
 			const std::filesystem::path& path,
 			const size_t                 index)
 		{
+			ZoneScopedN("assetlib impostor image decode");
 			const tinygltf::Image& image = model.images[index];
 			if (!image.image.empty() && image.component == 4 && image.bits == 8)
 				return DecodedImage{ static_cast<uint32_t>(image.width),
@@ -1993,6 +1994,7 @@ namespace assetlib
 					image.name);
 				return std::nullopt;
 			}
+			ZoneTextF("%d x %d", width, height);
 			auto decoded = DecodedImage{
 				static_cast<uint32_t>(width),
 				static_cast<uint32_t>(height),
@@ -2200,7 +2202,8 @@ namespace assetlib
 
 		const std::vector<bool>     wantsImpostor = meshesWantingImpostors(model);
 		const std::vector<uint32_t> remap = foldLodLevels(mesh, model, options.lodMinPixels);
-		bakeImpostors(mesh, model, path, wantsImpostor, remap, options.cancel);
+		if (options.impostors == GltfImpostors::kBake)
+			bakeImpostors(mesh, model, path, wantsImpostor, remap, options.cancel);
 
 		if (options.textures == GltfTextures::kDecode)
 		{

@@ -1,4 +1,5 @@
 #pragma once
+#include <assetlib/bmesh_gltf.h>
 #include <assetlib/import_document.h>
 #include <assetlib_structs/BMeshImport.h>
 #include <assetlib_structs/Skeleton.h>
@@ -29,7 +30,11 @@ namespace assetlib
 	 * @throws what `loadFromGltf` throws, and whatever reading the copied source throws.
 	 */
 	[[nodiscard]] RegeneratedGroup
-	importGroup(const AssetStore& store, std::string_view sourceKey, ImportDocument&& document);
+	importGroup(
+		const AssetStore& store,
+		std::string_view  sourceKey,
+		ImportDocument&&  document,
+		GltfImpostors     impostors);
 
 	/**
 	 * Whether `key` is a `.bmesh`, `.bskel` or `.banim` on a writable store that is stale and that

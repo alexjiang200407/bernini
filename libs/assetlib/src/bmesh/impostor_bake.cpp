@@ -458,6 +458,7 @@ namespace assetlib
 	BakedImpostor
 	bakeImpostor(const ImpostorSource& source)
 	{
+		ZoneScopedN("assetlib impostor bake");
 		if (source.surfaces.size() != source.submeshes.size())
 			core::throw_runtime_error(
 				"impostor bake: {} surfaces for {} submeshes",
@@ -481,7 +482,6 @@ namespace assetlib
 		if (triangles == 0)
 			core::throw_runtime_error("impostor bake: the mesh has no triangle to bake");
 
-		ZoneScopedN("assetlib impostor bake");
 		ZoneTextF(
 			"%zu triangles, %u frames",
 			triangles,

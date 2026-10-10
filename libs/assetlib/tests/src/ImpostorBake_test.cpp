@@ -280,6 +280,16 @@ TEST_CASE(
 		         (c_FrontX * c_ImpostorFrameTexels + 64) * 4 + 1] == 128);
 	}
 
+	SECTION("a load after anything but the meshes bakes none")
+	{
+		const Glb glb =
+			SquareGlb("bernini_impostor_skip.glb", { { "bernini_impostor", true } }, nullptr);
+		const imp::BMeshImport mesh =
+			loadFromGltf(glb.Path(), { .impostors = GltfImpostors::kSkip });
+		CHECK(mesh.impostors.empty());
+		CHECK(mesh.impostorTexels.empty());
+	}
+
 	SECTION("the object's, which Blender writes on the node")
 	{
 		const Glb glb =

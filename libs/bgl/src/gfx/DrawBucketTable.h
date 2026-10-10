@@ -49,9 +49,11 @@ namespace bgl
 	 *
 	 * Bucket 0 is always (kStaticMesh, kNull, kOpaque): the fallback a demand past the ceiling
 	 * clamps to -- visibly unlit, never a crash and never silently absent. A refused key is
-	 * reported once. Bucket 1 is always (kImpostor, kPBR, kOpaque), idl::cImpostorDrawBucket, the
-	 * one bucket the impostor stage draws, which no other key resolves to. Skinned geometry has no unlit bucket, so a refused skinned key draws through
+	 * reported once. Skinned geometry has no unlit bucket, so a refused skinned key draws through
 	 * the static fallback, unposed.
+	 *
+	 * Bucket 1 is always (kImpostor, kPBR, kOpaque), idl::cImpostorDrawBucket: the one bucket the
+	 * impostor stage draws, which no other key resolves to.
 	 *
 	 * Not synchronized: bgl is thread-affine (docs/bgl_api.md), and both the resolvers and Draw
 	 * run on the one driving thread.

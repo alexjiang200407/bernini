@@ -151,6 +151,18 @@ namespace bgl
 		return state;
 	}
 
+	namespace
+	{
+		[[nodiscard]] uint32_t
+		ForcedLevelOf(const LodSelectionDesc& selection) noexcept
+		{
+			if (selection.forceImpostor)
+				return idl::cLodForceImpostor;
+			return selection.forceLevel.has_value() ? static_cast<uint32_t>(*selection.forceLevel) :
+			                                          idl::cLodForceNone;
+		}
+	}
+
 	void
 	ResolveLodSelection(
 		idl::CullView&          cullView,
@@ -161,18 +173,15 @@ namespace bgl
 	{
 		cullView.cameraPosAndPixelsPerUnit = glm::vec4(cameraPos, pixelsPerUnit);
 		cullView.lodPixelScale             = selection.pixelScale;
-		cullView.lodForcedLevel =
-			selection.forceImpostor          ? idl::cLodForceImpostor :
-			selection.forceLevel.has_value() ? static_cast<uint32_t>(*selection.forceLevel) :
-											   idl::cLodForceNone;
-		cullView.lodFadeStep = selection.fadeSeconds > 0.0f && frameSeconds > 0.0f ?
-		                           frameSeconds / selection.fadeSeconds :
-		                           1.0f;
-		cullView.posePixels  = selection.posePixels;
-		cullView.poseBudget  = selection.poseBudget;
-		cullView.poseForced  = !selection.forcePoseSource.has_value() ? idl::cPoseForceNone :
-		                       *selection.forcePoseSource == PoseSource::kBoneAnimTable ?
-		                                                                idl::cPoseForceTable :
-		                                                                idl::cPoseForcePerInstance;
+		cullView.lodForcedLevel            = ForcedLevelOf(selection);
+		cullView.lodFadeStep               = selection.fadeSeconds > 0.0f && frameSeconds > 0.0f ?
+		                                         frameSeconds / selection.fadeSeconds :
+		                                         1.0f;
+		cullView.posePixels                = selection.posePixels;
+		cullView.poseBudget                = selection.poseBudget;
+		cullView.poseForced = !selection.forcePoseSource.has_value() ? idl::cPoseForceNone :
+		                      *selection.forcePoseSource == PoseSource::kBoneAnimTable ?
+		                                                               idl::cPoseForceTable :
+		                                                               idl::cPoseForcePerInstance;
 	}
 }

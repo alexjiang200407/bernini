@@ -1103,7 +1103,9 @@ with a warning.
 The bake (`src/bmesh/impostor_bake.cpp`) is CPU code: level 0 of every submesh, rasterised from
 the 8 × 8 hemi-octahedral grid of directions (`MeshImpostor`) over the mesh's bounding sphere,
 from the glTF's own base colour -- `baseColorFactor` times `baseColorTexture` through `TEXCOORD_0`
--- since that is what a regeneration has with no material import. A single-sided material is
+-- since that is what a regeneration has with no material import. The texture is sampled
+bilinearly and repeating, whatever the glTF's sampler says, and `KHR_texture_transform` is not
+applied: a mesh that clamps or transforms its base colour UVs bakes differently from how it draws. A single-sided material is
 culled from behind, so an inverted-hull outline stays an outline; `MASK` is cut at its cutoff, and
 `BLEND` at half coverage, since an impostor is a cutout and a leaf card's clear texels would
 otherwise bake as its colour. The

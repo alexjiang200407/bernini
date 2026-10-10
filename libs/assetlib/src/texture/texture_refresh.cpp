@@ -250,7 +250,9 @@ namespace assetlib
 		// The glTF parser reads a file, and the copied source is only on the loose layer.
 		const imp::BMeshImport imported = loadFromGltf(
 			ResolveWritePath(sourceKey),
-			{ .cancel = cancel, .sampleRate = document.sampleRate });
+			{ .cancel     = cancel,
+		      .sampleRate = document.sampleRate,
+		      .impostors  = GltfImpostors::kSkip });
 
 		refresh.written = WriteTextures(imported, document.textureDir, onProgress, cancel);
 		std::ranges::sort(refresh.written);
