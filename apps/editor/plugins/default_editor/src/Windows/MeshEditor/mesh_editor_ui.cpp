@@ -188,11 +188,16 @@ namespace editor
 			widgets.doubleSided->setChecked(sink->GetDoubleSided());
 		}
 
+		// Water has no alpha layer: the renderer takes it opaque-moded alone and blends it in its own
+		// phase, so the board offers no layer to pick. Double-sidedness is still the material's.
+		const bool water = sink->Surface().shading == bgl::SurfaceShading::kWater;
+		widgets.layerForm->setRowVisible(widgets.layerSelector, !water);
+
 		// The cutoff is read on a mask layer alone -- hashed replaces it with stochastic
 		// coverage.
 		widgets.layerForm->setRowVisible(
 			widgets.alphaCutoff,
-			sink->GetAlphaMode() == assetlib::AlphaMode::kMask);
+			!water && sink->GetAlphaMode() == assetlib::AlphaMode::kMask);
 	}
 
 	MeshEditorWidgets
