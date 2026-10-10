@@ -2095,6 +2095,44 @@ namespace game
 	}
 
 	void
+	AssetManager::BindSurfaceTexture(
+		bgl::MaterialHandle           material,
+		const std::string_view        slot,
+		const bgl::TextureAssetHandle texture)
+	{
+		const auto it = m_Materials.find(MaterialKey(material));
+		if (it == m_Materials.end())
+			throw bgl::SceneError(
+				"MaterialHandle passed to BindSurfaceTexture is not owned by this AssetManager");
+
+		MaterialRecord& record = it->second;
+		if (!assetlib::isSurfaceModel(record.source.shadingModel))
+			throw bgl::SceneError("BindSurfaceTexture expects a surface material");
+
+		const std::vector<bgl::SurfaceTextureBinding> previous = record.bound;
+		std::erase_if(record.bound, [&](const bgl::SurfaceTextureBinding& b) {
+			return b.name == slot;
+		});
+		if (!texture.textureSlot.is_null())
+		{
+			auto binding    = bgl::SurfaceTextureBinding();
+			binding.name    = std::string(slot);
+			binding.texture = texture;
+			record.bound.push_back(std::move(binding));
+		}
+
+		try
+		{
+			m_Scene->UpdateSurfaceMaterial(record.handle, SurfaceDesc(record));
+		}
+		catch (...)
+		{
+			record.bound = previous;
+			throw;
+		}
+	}
+
+	void
 	AssetManager::RebuildMaterial(MaterialRecord& record)
 	{
 		const std::vector<std::string> paths =
@@ -2201,6 +2239,16 @@ namespace game
 			}
 
 			desc.textures.push_back(std::move(binding));
+		}
+
+		for (const bgl::SurfaceTextureBinding& bound : record.bound)
+		{
+			const auto it =
+				std::ranges::find(desc.textures, bound.name, &bgl::SurfaceTextureBinding::name);
+			if (it == desc.textures.end())
+				desc.textures.push_back(bound);
+			else
+				*it = bound;
 		}
 
 		return desc;

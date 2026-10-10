@@ -17,8 +17,10 @@
 #include <bgl/types/Camera.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/MaterialHandle.h>
+#include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/RenderJob.h>
 #include <bgl/types/SceneDesc.h>
+#include <bgl/types/TextureAssetHandle.h>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_exception.hpp>
@@ -317,6 +319,91 @@ namespace
 		image.subresources.push_back({ 0, static_cast<uint64_t>(size) * 4, bytes });
 		return image;
 	}
+}
+
+// A map made at run time -- a terrain's mask, say -- bound to a surface's slot in place of the one
+// the document names, and given back to the document by binding nothing. The texture is the
+// caller's, added to the scene directly rather than read off disk.
+TEST_CASE(
+	"A surface material takes a texture bound at run time, and gives it back",
+	"[gamelib][surface]")
+{
+	using Catch::Matchers::ContainsSubstring;
+	using Catch::Matchers::MessageMatches;
+
+	ProjectRoot root("bernini_gamelib_surface_bind");
+	auto        material         = assetlib::BMaterial();
+	material.name                = "plain";
+	material.shadingModel        = assetlib::ShadingModel::kPbrSurface;
+	material.surface.surfaceName = "Rim";
+	material.surface.values      = { { "rimColor", { 0.0f, 0.0f, 0.0f } },
+		                             { "baseColorFactor", { 1.0f, 1.0f, 1.0f, 1.0f } } };
+	SaveAt(material, root.path / assetlib::c_MaterialsDirectoryName / "plain.bmaterial");
+
+	auto gfx = bgl::test::CreateGraphics(SurfaceOptions(root.Shaders()));
+	REQUIRE(gfx != nullptr);
+
+	auto targetDesc     = bgl::RenderTargetDesc();
+	targetDesc.width    = 128;
+	targetDesc.height   = 128;
+	targetDesc.headless = true;
+	auto target         = gfx->CreateRenderTarget(targetDesc);
+
+	auto scene = gfx->CreateScene(SurfaceSceneDesc());
+	auto view  = gfx->CreateSceneView(scene, 8);
+	bgl::test::ApplyEnvironment(scene.Get(), view.Get());
+	auto assets = game::AssetManager(scene, root.path);
+
+	const bgl::MaterialHandle plain = assets.AcquireMaterial("Authored/Materials/plain.bmaterial");
+	REQUIRE(plain.IsValid());
+
+	auto camera = bgl::Camera();
+	camera
+		.LookAt(
+			glm::vec3(0.0f, 0.0f, 10.0f),
+			glm::vec3(0.0f, 0.0f, 9.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f))
+		.Perspective(glm::radians(60.0f), 1.0f, 0.5f, 100.0f);
+	auto job     = bgl::RenderJob();
+	job.view     = view;
+	job.camera   = camera;
+	job.viewport = bgl::Viewport(128.0f, 128.0f);
+
+	const bgl::GeomHandle geom = scene->AddSphereGeom(24, 24, 3.0f, plain);
+	const auto            instance =
+		view->CreateStaticMeshInstance(bgl::StaticMeshInstanceDesc().SetGeom(geom));
+	const auto shoot = [&](const char* png) {
+		for (int i = 0; i < 4; ++i) gfx->DrawFrame(target, job);
+		gfx->ScreenshotPng(target, png);
+	};
+
+	const auto* documentPng = "assets/golden/gamelib_surface_bind_document.got.png";
+	shoot(documentPng);
+
+	const bgl::TextureAssetHandle red =
+		scene->AddTextureAsset(FlatImage(16, { { 255, 0, 0, 255 } }), "red");
+	assets.BindSurfaceTexture(plain, "baseColor", red);
+	const auto* boundPng = "assets/golden/gamelib_surface_bind_bound.got.png";
+	shoot(boundPng);
+	CHECK(bgl::test::FrameDelta(documentPng, boundPng, 0, 0, 128, 128) > 1e-2f);
+
+	// A name the surface never declared is refused, and the binding before it stands.
+	CHECK_THROWS_AS(assets.BindSurfaceTexture(plain, "noSuchSlot", red), bgl::SceneError);
+	const auto* stillPng = "assets/golden/gamelib_surface_bind_still.got.png";
+	shoot(stillPng);
+	CHECK(bgl::test::FrameDelta(boundPng, stillPng, 0, 0, 128, 128) < 1e-3f);
+
+	assets.BindSurfaceTexture(plain, "baseColor", bgl::TextureAssetHandle());
+	const auto* backPng = "assets/golden/gamelib_surface_bind_back.got.png";
+	shoot(backPng);
+	CHECK(bgl::test::FrameDelta(documentPng, backPng, 0, 0, 128, 128) < 1e-3f);
+
+	// Not a surface material: there is no slot to bind by name.
+	const bgl::MaterialHandle pbr = scene->CreatePbrMaterial(bgl::PbrMaterialDesc());
+	CHECK_THROWS_AS(assets.BindSurfaceTexture(pbr, "baseColor", red), bgl::SceneError);
+
+	view->DeleteMeshInstance(instance);
+	scene->DeleteGeom(geom);
 }
 
 // A routed slot whose bake never ran draws each channel from its own source: the routes ride
