@@ -415,7 +415,7 @@ TEST_CASE(
 	CHECK(owner.rm->GetTextureDesc(target->GetSceneColorTexture()).width == 20);
 	CHECK(owner.rm->GetTextureDesc(target->GetDepthTexture()).height == 10);
 }
-#endif
+
 TEST_CASE(
 	"A swapchain target hands each change of vsync to its swapchain, and a headless one keeps it",
 	"[render][swapchain]")
@@ -460,3 +460,4 @@ TEST_CASE(
 	offscreen->SetVsyncEnabled(true);
 	CHECK(offscreen->IsVsyncEnabled());
 }
+#endif
