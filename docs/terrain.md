@@ -33,6 +33,47 @@ slope is measured on the ground as it will stand. It is deterministic by seed an
 samples. The offline
 container a terrain is stored as later is this struct serialised; nothing stores one yet.
 
+## Erosion
+
+Noise is a plain with no history: its hollows drain nowhere and its slopes carry no mark of the
+water that would have run down them. `TerrainGenerateDesc::erosion`
+([terrainlib/ErosionDesc.h](../libs/terrainlib/include/terrainlib/ErosionDesc.h)) wears the
+generated heights down, on the CPU, once, before they are quantised. The default erodes nothing.
+Every length in it is in world units, so one desc erodes a battlefield and a mountain range alike.
+It runs in rounds, `passes` of them, each three steps
+([src/erode.cpp](../libs/terrainlib/src/erode.cpp)):
+
+- **Breaching.** A priority flood from the field's edge (Barnes, Lehman and Mulla 2014) that,
+  entering a hollow lower than the way it came, cuts that way down below the hollow's floor, as
+  least-cost breaching does (Lindsay 2016). Each cut is a V with gentle banks, tapering into the
+  ground around it, so a basin drains through a valley rather than a gorge; on ground steeper than
+  the banks the slope is lowered rather than faceted. A hollow that would need a cut deeper than
+  `breachDepth` keeps its water. It runs before every pass and once after the last, since what
+  droplets lay down can dam a channel again. Without it, a hilly field's noise holds closed
+  basins hundreds of metres across, and droplets pool there instead of joining into valleys.
+- **Droplets.** Particle hydraulic erosion after SimpleHydrology (McDonald) and Lague's write-up of
+  Olsen 2004. A droplet moves a cell a step down the gradient with some inertia, carrying sediment
+  toward an equilibrium proportional to the height it drops; below it, it lays the difference
+  down where it stands, above it it wears ground from a brush `erosionRadius` across, so it cuts a
+  channel rather than a pit; it lays down everything it holds where it stops. Each pass also
+  remembers where water ran: a later droplet carries more down a worn channel and is steered along
+  it (SimpleHydrology's discharge and momentum maps), which is what joins gullies into valleys.
+- **Thermal erosion.** A Jacobi relaxation that slides what stands steeper than the talus angle
+  above a neighbour down to it, split by how far each neighbour is exceeded.
+
+The droplets and the thermal step keep the field's volume to rounding; breaching takes ground away.
+The result depends on the desc and the seed alone, never on how the work is scheduled: the droplets run in
+tiles wider than two droplets' reach, in four phases of every other tile along each axis, each
+tile's droplets in order from a key of the seed, the pass and the tile, so no two droplets
+running at once touch one sample. The thermal step reads only the heights before it.
+
+**Cost**, measured in a release build with 12 hardware threads on a 1001 x 1001 field at the
+defaults (one droplet per sample over four passes, four thermal iterations a pass): **1.9 s** for
+the battlefield's hilly shape at 2 m cells, **1.7 s** for the mountainous shape at 4 m; the noise
+itself is 0.04 s. It is linear in the samples at a fixed droplet density (`Erosion_test`'s
+`[perf]` case). Longer droplet paths (`maxSteps`) widen the tiles and starve the phases of
+parallel work: 160 steps at three droplets a sample took 17 s.
+
 ## The levels
 
 A terrain is a quadtree of **patches** of `cTerrainPatchQuads` (7) cells a side: level 0 at the

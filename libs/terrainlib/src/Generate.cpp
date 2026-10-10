@@ -1,4 +1,6 @@
+#include "erode.h"
 #include <algorithm>
+
 #include <assetlib_structs/Heightfield.h>
 #include <cmath>
 #include <core/err/util.h>
@@ -113,6 +115,7 @@ namespace terrain
 			{
 				core::throw_runtime_error("terrain::Generate: relief must be finite and positive");
 			}
+			ValidateErosion(desc.erosion);
 		}
 	}
 
@@ -137,6 +140,11 @@ namespace terrain
 				row[x] = HeightAt(xz, params, desc.seed);
 			}
 		});
+
+		if (desc.erosion.Erodes())
+		{
+			Erode(heights, desc.samplesX, desc.samplesZ, desc.cellSize, desc.erosion, desc.seed);
+		}
 
 		const auto [lowest, highest] = std::ranges::minmax(heights);
 		// A field with no relief still spans something, so a sample decodes to one height.
