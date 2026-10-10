@@ -37,6 +37,7 @@ namespace bgl
 			desc.renderScale);
 		SetTaaReconstructionWidth(desc.taaReconstructionWidth);
 		SetTaaSharpness(desc.taaSharpness);
+		SetVsyncEnabled(desc.vsync);
 		SetPostProcess(desc.postProcess);
 
 		for (uint32_t i = 0; i < c_SwapchainImageCount; i++)

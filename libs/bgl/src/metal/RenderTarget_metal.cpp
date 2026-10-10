@@ -1,5 +1,8 @@
 #include "RenderTarget_metal.h"
+
 #include "gfx/frame_constants.h"
+#include <objc/message.h>
+#include <objc/runtime.h>
 
 #include <CoreFoundation/CFCGTypes.h>
 #include <bgl/IRenderTarget.h>
@@ -85,6 +88,7 @@ namespace bgl
 			m_Layer->setDrawableSize(
 				CGSize{ static_cast<CGFloat>(GetWidth()), static_cast<CGFloat>(GetHeight()) });
 		}
+		SetVsyncEnabled(desc.vsync);
 
 		for (bgpu::CommandAllocatorRef& allocator : m_FrameAllocators)
 		{
@@ -491,5 +495,17 @@ namespace bgl
 			std::move(device),
 			std::move(queue),
 			std::move(resourceManager));
+	}
+
+	void
+	RenderTarget::ApplyVsync(const bool enabled)
+	{
+		if (m_Layer == nullptr)
+			return;
+		// CAMetalLayer.displaySyncEnabled, macOS only: sent by selector, as metal-cpp sends every
+		// message, since not every metal-cpp release declares the property.
+		using SetBool = void (*)(void*, SEL, BOOL);
+		reinterpret_cast<SetBool>(
+			objc_msgSend)(m_Layer, sel_registerName("setDisplaySyncEnabled:"), enabled ? YES : NO);
 	}
 }

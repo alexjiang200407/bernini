@@ -28,8 +28,97 @@ terrain epoch moves, each with the bucket its material resolves to.
 The generator fills the same struct: `terrain::Generate` turns a seed and a shape -- flat, hilly,
 mountainous -- into a `Heightfield` from fractal gradient noise over a warped domain, ridged for
 the mountains, each shape's features sized in world units so a finer cell resolves the same land
-rather than smaller land. It is deterministic by seed and linear in the samples. The offline
+rather than smaller land, and scaled by the desc's `relief` before anything reads it, so every
+slope is measured on the ground as it will stand. It is deterministic by seed and linear in the
+samples. The offline
 container a terrain is stored as later is this struct serialised; nothing stores one yet.
+
+## Erosion
+
+Noise is a plain with no history: its hollows drain nowhere and its slopes carry no mark of the
+water that would have run down them. `TerrainGenerateDesc::erosion`
+([terrainlib/types/ErosionDesc.h](../libs/terrainlib/include/terrainlib/types/ErosionDesc.h)) wears the
+generated heights down, on the CPU, once, before they are quantised. The default erodes nothing.
+Every length in it is in world units, so one desc erodes a battlefield and a mountain range alike.
+It runs in rounds, `passes` of them, each three steps
+([src/erode.cpp](../libs/terrainlib/src/erode.cpp)):
+
+- **Breaching.** A priority flood from the field's edge (Barnes, Lehman and Mulla 2014) that,
+  entering a hollow lower than the way it came, cuts that way down below the hollow's floor, as
+  least-cost breaching does (Lindsay 2016). Each cut is a V with gentle banks, tapering into the
+  ground around it, so a basin drains through a valley rather than a gorge; on ground steeper than
+  the banks the slope is lowered rather than faceted. A hollow that would need a cut deeper than
+  `breachDepth` keeps its water. It runs before every pass and once after the last, since what
+  droplets lay down can dam a channel again. Without it, a hilly field's noise holds closed
+  basins hundreds of metres across, and droplets pool there instead of joining into valleys.
+- **Droplets.** Particle hydraulic erosion after SimpleHydrology (McDonald) and Lague's write-up of
+  Olsen 2004. A droplet moves a cell a step down the gradient with some inertia, carrying sediment
+  toward an equilibrium proportional to the height it drops; below it, it lays the difference
+  down where it stands, above it it wears ground from a brush `erosionRadius` across, so it cuts a
+  channel rather than a pit; it lays down everything it holds where it stops. Each pass also
+  remembers where water ran: a later droplet carries more down a worn channel and is steered along
+  it (SimpleHydrology's discharge and momentum maps), which is what joins gullies into valleys.
+- **Thermal erosion.** A Jacobi relaxation that slides what stands steeper than the talus angle
+  above a neighbour down to it, split by how far each neighbour is exceeded.
+
+The droplets and the thermal step keep the field's volume to rounding; breaching takes ground away.
+The result depends on the desc and the seed alone, never on how the work is scheduled: the droplets run in
+tiles wider than two droplets' reach, in four phases of every other tile along each axis, each
+tile's droplets in order from a key of the seed, the pass and the tile, so no two droplets
+running at once touch one sample. The thermal step reads only the heights before it.
+
+**Cost**, measured in a release build with 12 hardware threads on a 1001 x 1001 field at the
+defaults (one droplet per sample over four passes, four thermal iterations a pass): **1.9 s** for
+the battlefield's hilly shape at 2 m cells, **1.7 s** for the mountainous shape at 4 m; the noise
+itself is 0.04 s. It is linear in the samples at a fixed droplet density (`Erosion_test`'s
+`[perf]` case). Longer droplet paths (`maxSteps`) widen the tiles and starve the phases of
+parallel work: 160 steps at three droplets a sample took 17 s.
+
+## Fields
+
+`terrain::DeriveFields` ([terrainlib/fields.h](../libs/terrainlib/include/terrainlib/fields.h))
+reads any heightfield -- generated, eroded, or later painted or loaded -- and says what its ground
+is like at each sample, as layers laid like it:
+
+| field | what | how |
+|---|---|---|
+| `slope` | rise over run | central differences; past the edge a sample repeats the edge's |
+| `curvature` | per metre: positive in a hollow, negative on a crest, 0 on any plane | the five-point Laplacian |
+| `flow` | square metres draining through the sample, its own cell included | multiple flow directions (Quinn et al. 1991): each sample, highest first, passes what reaches it to its lower neighbours by slope |
+| `wetness` | [0, 1] | `flow` on a log scale between fixed areas, 100 m² and 1 km², so it reads alike on any field |
+| `lakeDepth` | metres of standing water, were each hollow filled to where it spills | a priority flood from the edge, where water leaves |
+
+Deterministic, and linear in the samples but for one sort by height and one heap: 0.3 s for
+1001 x 1001 in release. Lake depth and flow are what a water surface will stand on; nothing
+draws one yet.
+
+## Masks
+
+`terrain::GenerateMasks` ([terrainlib/masks.h](../libs/terrainlib/include/terrainlib/masks.h))
+turns a field and its fields into where each kind of thing stands, one hard layer per kind --
+every value 0 or 1 -- so a channel painted by hand later replaces one kind without touching the
+others:
+
+- **Water** first, from the fields alone: a lake at least `minLakeDepth` deep, or a channel that
+  `riverArea` drains through. Nothing else of the masks lies on it.
+- **Woods** in hollows and on gentle wet ground, never on a crest, past `maxSlope` or on water.
+  Each sample scores a low-frequency noise `patchSize` metres across plus its wetness and how deep
+  in a hollow it lies, each by a bias; hollow and crest are the topographic position index, a
+  sample's height against the mean within `positionRadius`, and wetness is averaged over the same
+  radius, so a wood follows a valley rather than every gully up its sides. The highest scorers
+  become woods; clearings smaller than `minClearing` are filled, woods smaller than `minArea`
+  dropped, and the share taken is corrected over a few rounds so the woods as they stand cover
+  `coverage` of the field. `forestEdge` is each sample's distance in metres to the nearest sample on
+  the other side of a wood's edge, positive inside and negative outside, by exact Euclidean
+  distance transforms (Felzenszwalb and Huttenlocher 2012): how deep in its wood a tree stands, and
+  how far past the edge one is. The field's edge is not an edge of a wood.
+- **Rock** on steep ground and ridges, never in a wood or on water, scored by noise, steepness and
+  ridge, groups smaller than its `minArea` dropped.
+
+A wood or an outcrop is a group of samples joined along either axis or diagonally. Where a painted
+mask arrives it takes the noise's place and keeps the cleanup. Deterministic from the desc's seed;
+0.16 s for 1001 x 1001 in release. Generation, erosion, fields and masks together are about 2.4 s
+for the battlefield's field.
 
 ## The levels
 
@@ -103,6 +192,11 @@ On the CPU, `terrain::HeightAt` ([terrainlib/height.h](../libs/terrainlib/includ
 is the same read: bilinear between samples, clamped at the edge, the heightfield laid at the
 origin `TerrainDesc` gives it, a sample of 0 at the origin's height plus the field's `minHeight`. It is how a game stands a camera or a unit on the ground it drew
 without a GPU readback.
+`terrain::LayerAt` ([terrainlib/layer.h](../libs/terrainlib/include/terrainlib/layer.h))
+reads a `TerrainLayer` -- one float per sample, laid exactly as the heightfield is -- the same
+way, and the fields of the ground and the masks over it (`TerrainFields`, `TerrainMasks`) are
+layers, so a game asks what the ground is like where something stands by the position it stood
+it at.
 
 ## Looking at one
 

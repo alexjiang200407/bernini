@@ -77,6 +77,14 @@ namespace bgl
 		 */
 		virtual void
 		Resize(uint32_t width, uint32_t height) = 0;
+
+		/**
+		 * Whether to wait for the vertical blank to present, from the next present on. A swapchain
+		 * that must be remade to change it does so at that present and reports it as Present's
+		 * remake. The swapchain is made with RenderTargetDesc::vsync.
+		 */
+		virtual void
+		SetVsync(bool enabled) noexcept = 0;
 	};
 
 	/**

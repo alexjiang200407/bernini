@@ -324,6 +324,14 @@ namespace bgl
 		void
 		SetRenderScale(float scale) override;
 
+	protected:
+		void
+		ApplyVsync(bool enabled) override
+		{
+			if (m_Swapchain)
+				m_Swapchain->SetVsync(enabled);
+		}
+
 	private:
 		// Rebuilds every backbuffer handle and attachment against the sizes now recorded, and
 		// resets the frame ring -- the half a resize and a scale change have in common.

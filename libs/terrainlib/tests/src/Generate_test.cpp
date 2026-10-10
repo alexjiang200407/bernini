@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <assetlib_structs/Heightfield.h>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
@@ -7,6 +8,7 @@
 #include <core/glm.h>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <terrainlib/Generate.h>
 #include <vector>
@@ -117,6 +119,17 @@ TEST_CASE("a finer cell resolves the same land rather than smaller land", "[terr
 	CHECK(largest < 2.0f * std::max(coarse.heightRange, fine.heightRange) / 65535.0f + 1e-3f);
 }
 
+TEST_CASE("relief scales the shape's heights, and every height with them", "[terrain]")
+{
+	const assetlib::Heightfield whole = terrain::Generate(Small(terrain::TerrainShape::kHilly));
+	const assetlib::Heightfield half =
+		terrain::Generate(Small(terrain::TerrainShape::kHilly).SetRelief(0.5f));
+
+	CHECK(half.heightRange == Catch::Approx(whole.heightRange * 0.5f).epsilon(1e-4));
+	CHECK(half.minHeight == Catch::Approx(whole.minHeight * 0.5f).epsilon(1e-4));
+	CHECK(MeanSlope(half) == Catch::Approx(MeanSlope(whole) * 0.5f).epsilon(1e-3));
+}
+
 TEST_CASE("Generate refuses a field it cannot make", "[terrain]")
 {
 	CHECK_THROWS_AS(
@@ -134,6 +147,13 @@ TEST_CASE("Generate refuses a field it cannot make", "[terrain]")
 		std::runtime_error);
 	CHECK_THROWS_AS(
 		terrain::Generate(Small(terrain::TerrainShape::kFlat).SetCellSize(-1.0f)),
+		std::runtime_error);
+	CHECK_THROWS_AS(
+		terrain::Generate(Small(terrain::TerrainShape::kFlat).SetRelief(0.0f)),
+		std::runtime_error);
+	CHECK_THROWS_AS(
+		terrain::Generate(
+			Small(terrain::TerrainShape::kFlat).SetRelief(std::numeric_limits<float>::infinity())),
 		std::runtime_error);
 }
 

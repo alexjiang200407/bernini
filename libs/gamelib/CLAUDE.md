@@ -99,7 +99,11 @@ The manager owns instances for that last one: an instance holding a reference on
 **Swapping.** `SetSubmeshMaterial` rebinds a submesh (acquiring the new material, releasing the old).
 `SetMaterialTexture` / `SetMaterialRoute` swap a map on a live material: the scene rewrites the entry
 in place (`IScene::UpdatePbrMaterial`), so the handle stays valid and every submesh bound to it follows
-without being rebound. The material is shared by path, so the change is seen by everything using it.
+without being rebound. The material is shared by path, so the change is seen by everything using it. A surface
+material's maps are its surface's own slots, so they are swapped by slot name instead:
+`BindSurfaceTexture` puts a texture the caller added to the scene in place of the one the document
+names -- a map made at run time, like a terrain's mask -- and binding nothing gives the slot back.
+That texture is not counted here; the caller keeps it alive while it is bound.
 
 **Prefetching.** Loading a texture is two steps with opposite constraints: `assetlib::loadKTX2`
 transcodes a whole Basis mip chain — expensive, and pure CPU, so it can run on any thread — and then

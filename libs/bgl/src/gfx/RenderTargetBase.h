@@ -96,6 +96,21 @@ namespace bgl
 		}
 
 		[[nodiscard]] bool
+		IsVsyncEnabled() const noexcept final
+		{
+			return m_Vsync;
+		}
+
+		void
+		SetVsyncEnabled(bool enabled) final
+		{
+			if (enabled == m_Vsync)
+				return;
+			m_Vsync = enabled;
+			ApplyVsync(enabled);
+		}
+
+		[[nodiscard]] bool
 		IsGpuTimingEnabled() const noexcept final
 		{
 			return m_GpuTimingEnabled;
@@ -448,6 +463,13 @@ namespace bgl
 		ResizeBackbuffers(uint32_t width, uint32_t height) = 0;
 
 	protected:
+		/** Hands a changed vsync setting to whatever presents; a headless target has nothing to. */
+		virtual void
+		ApplyVsync(bool enabled)
+		{
+			(void)enabled;
+		}
+
 		RenderTargetBase() noexcept = default;
 
 		/**
@@ -495,6 +517,7 @@ namespace bgl
 
 		// Not backend state: nothing is allocated from it, so it needs neither an override nor a
 		// GPU idle to change.
+		bool  m_Vsync                  = RenderTargetDesc().vsync;
 		float m_TaaReconstructionWidth = RenderTargetDesc().taaReconstructionWidth;
 		float m_TaaSharpness           = RenderTargetDesc().taaSharpness;
 

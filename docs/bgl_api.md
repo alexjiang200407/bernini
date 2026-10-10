@@ -318,6 +318,13 @@ flowchart TD
 
 ### IRenderTarget
 
+* **`SetVsyncEnabled(enabled)` / `IsVsyncEnabled()`** — whether a windowed target presents on the
+  display's vertical blank, from the next present; `RenderTargetDesc::vsync` (on) starts it. Off,
+  D3D12 presents with an interval of 0 and tearing allowed where DXGI reports support (the swapchain
+  is made with the tearing flag whenever it does), Vulkan switches to the immediate present mode, or
+  mailbox where the surface does not offer immediate, by remaking its swapchain at the next present
+  as a resize does, and Metal turns the layer's display sync off. A headless target presents nothing
+  and only keeps the setting.
 * **`SetPostProcess(postProcess)` / `GetPostProcess()`** — what the output ends in, one
   `bgl::PostProcess` (`types/PostProcess.h`): `curve`, a `bgl::DisplayCurve`
   (`types/DisplayCurve.h`) -- `kAgX`, the default and the curve for realistic assets, or

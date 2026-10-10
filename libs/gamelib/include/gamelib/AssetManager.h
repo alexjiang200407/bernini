@@ -595,6 +595,27 @@ namespace game
 			std::string_view    relPath,
 			uint16_t            sourceChannel);
 
+		/**
+		 * Binds `texture` to the slot `slot` names on a *surface* material, in place of the one its
+		 * document names there: a map the game makes at run time rather than one on disk -- a
+		 * terrain's mask, say. The material is rewritten in place and shared by path, like
+		 * SetMaterialTexture's, and the binding outlives any later rebuild of it. A null texture
+		 * gives the slot back to the document.
+		 *
+		 * The texture is the caller's: it was added to this manager's scene and is not counted
+		 * here, so it must outlive the binding -- rebind the slot, or release the material, before
+		 * deleting it (IScene::DeleteTextureAsset).
+		 *
+		 * @throws bgl::SceneError if the material is not a surface material this manager owns, or
+		 *         what IScene::UpdateSurfaceMaterial throws -- a slot the surface never declared,
+		 *         among others -- in which case the material is left as it was.
+		 */
+		void
+		BindSurfaceTexture(
+			bgl::MaterialHandle     material,
+			std::string_view        slot,
+			bgl::TextureAssetHandle texture);
+
 		// 0 if not owned
 		[[nodiscard]] uint32_t
 		TextureRefCount(bgl::TextureAssetHandle texture) const noexcept;
@@ -639,6 +660,10 @@ namespace game
 			// Whether the last texture is the baked occlusion map rather than the authored one
 			// (AssetStore::DrawsBakedGeometryOcclusion), decided at the same moment.
 			bool bakedOcclusion = false;
+
+			// Caller-owned textures BindSurfaceTexture put in place of the document's, by slot name.
+			// Not counted: the caller keeps them alive.
+			std::vector<bgl::SurfaceTextureBinding> bound;
 
 			uint32_t refCount = 0;
 		};
