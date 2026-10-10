@@ -49,6 +49,16 @@ namespace bgl
 		}
 
 		/**
+		 * Whether the pass attaches the depth and tests against it. A phase that does not reads it
+		 * instead, and declares that read itself.
+		 */
+		[[nodiscard]] virtual bool
+		WritesDepth() const noexcept
+		{
+			return true;
+		}
+
+		/**
 		 * Declares what its dispatches for `draw` read. Naming a resource the shared set already declares is
 		 * harmless -- one pass's accesses to a resource merge into one state -- so a phase declares
 		 * everything it reads and needs no knowledge of what the others do.

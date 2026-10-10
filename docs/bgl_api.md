@@ -237,8 +237,9 @@ flowchart TD
 * **`GetSurfaceTypes()`** — the surfaces read out of the GPU context's `clientShaderDir` at
   construction, in slot order. A `.slang` directly in that directory that **imports the contract** is
   one surface: its name is the file's stem, its shading is the one struct in it conforming to
-  a surface contract — `ISurfaceSource`, `ILitSurfaceSource`, or either toon model's
-  ([Game-defined surfaces](game_defined_surfaces.md) § Toon surfaces), and `SurfaceType::shading`
+  a surface contract — `ISurfaceSource`, `ILitSurfaceSource`, either toon model's
+  ([Game-defined surfaces](game_defined_surfaces.md) § Toon surfaces) or `IWaterSurfaceSource`
+  ([Water](water.md)), and `SurfaceType::shading`
   says which — and its slot is its position in filename order — so nothing outside the directory
   names a file, and a file added later does not renumber the ones before it. Anything else there is
   the game's own code: the same directory is its module search path, so a shared header beside the
@@ -390,7 +391,8 @@ flowchart TD
   routed instead of bound: the binding's `routes` gather component c from the named channel of its
   own texture, drawn in the shader with no composite anywhere — a whole binding is the identity
   routing, a route left null samples white for its component. Routes on any other slot kind, or a
-  binding carrying both a texture and routes, throw. `kHashed` needs one
+  binding carrying both a texture and routes, throw. A water surface takes `kOpaque` alone: it is
+  blended by Forward Water from its `Shade`, and skinned geometry, a terrain and a grass look refuse it. `kHashed` needs one
   texture to measure minification against and takes the surface's `CoverageSlot`, or its first
   `ColorSlot` where alpha rides in the colour; a surface declaring neither throws for that layer
   alone (see [Game-Defined Surfaces § Hashed alpha](game_defined_surfaces.md#hashed-alpha)). An

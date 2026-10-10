@@ -1,0 +1,101 @@
+# Water
+
+A water body is a static mesh drawn through a water surface: a plane for a lake or a sea, a ribbon
+for a river, placed like any other instance. The game writes the look, as it writes a terrain's;
+the engine draws it over the scene in a phase of its own, and hands the surface the three things
+of the frame a stylised water is made of: how far the scene behind it is, how deep the ground under
+it is, and the clock. This page is the map: the contract, the pass, what the reader measures, and
+what is deliberately not here.
+
+## The contract
+
+[bgl/WaterSurfaceSource.slang](../libs/bgl/shaders/include/bgl/WaterSurfaceSource.slang) is the
+fourth surface contract beside those in [Game-Defined Surfaces](game_defined_surfaces.md):
+
+| Contract | Reader | Returns | Document model |
+|---|---|---|---|
+| `IWaterSurfaceSource` | `IWaterMaterialReader` | `float4`: pre-exposure radiance, and how much of the scene behind it hides | `waterSurface` |
+
+The parameter struct keeps every rule a surface's does: values and slots, `[Default]`, `[Color]`,
+registration by file stem in `Authored/Shaders/`. There is no `Coverage`: water has no alpha
+layer, so a water material is opaque-moded and `CreateSurfaceMaterial` refuses it `mask`, `hashed`
+or `blend` -- the blend is the pass's, from `Shade`'s alpha. `doubleSided` reads as for any surface:
+off for a plane seen from above, on for a river ribbon seen from the bank. It is lit through the
+same `ISurfaceLight` as a lit surface: the sun, the irradiance, the blurred environment.
+
+`IWaterMaterialReader` is `IMaterialReader` and three methods more:
+
+| | measures | from |
+|---|---|---|
+| `ViewDepth()` | metres from the water to the opaque scene behind it, along the view ray | the depth buffer, reconstructed through the view's jittered `invViewProj` |
+| `GroundDepth()` | metres from the water straight down to the terrain | `TerrainHeightAt` ([Terrain § Reading the ground](terrain.md#reading-the-ground)) |
+| `Time()` | the view's clock, in seconds | the draw's clock |
+
+Where there is nothing to measure to -- the sky behind the water, or no terrain under it -- both
+depths return 1e6. `GroundDepth` gives a shore band one width in the world from any angle; a band
+by `ViewDepth` thins as the view grazes the water, but it is the one that sees what is not ground:
+the ring around a unit wading, the foot of a rock. That ring is widest on the side facing the
+camera, because its reach is measured along the ray. `GroundDepth` reads the first of up to four of
+the view's terrains whose footprint holds the pixel; a fifth terrain is not read.
+
+Which surfaces may not draw water: a terrain, a grass look and skinned geometry all refuse a water
+surface by name, and the shared blend program has no arm for one.
+
+## The pass
+
+**Forward Water** ([passes/WaterForwardPhase.cpp](../libs/bgl/src/passes/WaterForwardPhase.cpp))
+draws between Forward Skinned and Forward Transparent ([Passes](passes.md)), when the view has
+placed water at all. By then the depth holds the terrain, the world, the grass and the characters.
+
+```mermaid
+flowchart LR
+    FWS["Forward Skinned (writes depth)"] --> FWW["Forward Water"]
+    FWW --> FWT["Forward Transparent"]
+    D[("depth")] -- "pixel-shader read" --> FWW
+    FWW -- "premultiplied RGB" --> C[("scene colour")]
+    FWW -- "the water's own motion" --> V[("velocity")]
+```
+
+* **No depth is attached.** The transparent pipeline attaches depth for its test, bgpu has no
+  read-only depth view, and Metal cannot sample the attachment being drawn to, so the water pass
+  does what Blob Shadows does: it reads `depth` as a texture and discards where the scene is
+  nearer than the water. Nothing is copied -- no depth copy, no scene-colour copy.
+* **Its buckets are the static tier's,** keyed like any surface's, `(kStaticMesh, slot, kOpaque)`:
+  what marks one as water is its slot's contract (`ForwardPhases::IsWaterBucket`), and Forward World
+  skips those. Culling, compaction, levels of detail and the dissolve lane are the world's; each
+  bucket is one indirect dispatch per lane over the compaction's output.
+* **Colour blends premultiplied, alpha masked out.** `GameWaterProgram` weights `Shade`'s rgb by
+  its alpha; scene colour's alpha is the TAA marker its ground wrote, and since the depth it
+  vouches for is still the ground's, the marker is left as it was.
+* **Velocity is the water surface's own,** unblended: a still lake under a still camera writes
+  zero motion, and under a moving one reprojects as any static surface does.
+* **`waterData`** is the one constant buffer only water programs carry
+  ([lib/forward/WaterData.slang](../libs/bgl/shaders/src/lib/forward/WaterData.slang)): the depth,
+  its reconstruction, the clock and the view's terrains. `ForwardPhases::BindKernel` binds it into
+  every kernel that declares it.
+
+`WaterRender_test` proves it at the pixel: the depth bands where the ground puts them, dry ground
+hiding the water, foam at the shore and around a sunk ball, zero motion, the TAA marker left as the
+ground's, and a second view's water reading the scene's terrain.
+
+## Not here
+
+Each is a decision, not an omission:
+
+* **No refraction**: it needs a copy of scene colour, and a mid-frame blit was measured at
+  0.10-0.32 ms on Metal for Blob Shadows, which did without.
+* **No screen-space or planar reflections.** The sky tint is the environment, blurred.
+* **No vertex displacement, simulation, splashes or caustics.**
+* **Water writes no depth**, so a transparent drawn below the surface composites over it.
+* **A blob shadow lands on the lake bed** and shows through the water, tinted by it.
+* **No received sun shadow**: the engine has no shadow maps, and `ISurfaceLight` carries none.
+
+## Where the next pieces go
+
+* **Simulation**: a displacement texture and a water mesh stage building patches from it, as
+  `programs/forward/Terrain.slang` builds them from the height texture, drawing through the same
+  pixel contract.
+* **Splashes**: the GPU particle system on the roadmap, composited in the transparent phase, which
+  already runs after water.
+* **A simulated foam mask** replacing the depth band, through a slot.
+* **Buoyancy**: the simulation's height read on the CPU, as `terrain::HeightAt` reads the ground.

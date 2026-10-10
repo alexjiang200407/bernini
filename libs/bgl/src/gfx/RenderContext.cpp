@@ -287,13 +287,11 @@ namespace bgl
 #endif
 	{
 		m_GameSurfaceShading.reserve(surfaceTypes.size());
-		auto toonCharacterSlots = std::vector<bool>();
 		for (const SurfaceType& type : surfaceTypes)
 		{
 			m_GameSurfaceShading.emplace_back(type.shading);
-			toonCharacterSlots.push_back(type.shading == SurfaceShading::kToonCharacter);
 		}
-		m_Forward.SetToonCharacterSlots(std::move(toonCharacterSlots));
+		m_Forward.SetSurfaceShading(m_GameSurfaceShading);
 
 		// Registered so a deferred destroy cannot reclaim a slot this queue may still be reading.
 		m_CommandQueue = m_Device->CreateGraphicsCommandQueue();
@@ -1013,6 +1011,7 @@ namespace bgl
 		// belongs at.
 		m_BlobShadows.AttachToFrameGraph(m_FrameGraph, draw);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kSkinned);
+		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kWater);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kTransparent);
 
 		if (const auto selected = view->GetSelectedInstances();

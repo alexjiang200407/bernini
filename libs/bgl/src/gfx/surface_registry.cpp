@@ -127,10 +127,13 @@ namespace bgl
 		// A registered surface's programs, generated rather than shipped because a program has to
 		// name the surface's type: PSMain, and PSDissolve for the bucket's dissolve lane.
 		std::string
-		ColorProgramSource(uint32_t slot, std::string_view program)
+		ColorProgramSource(
+			uint32_t         slot,
+			std::string_view program,
+			std::string_view module = "lib.forward.GameSurface")
 		{
 			return std::format(
-				"import {0};\nimport lib.forward.GameSurface;\nimport lib.forward.MaterialData;\n"
+				"import {0};\nimport {3};\nimport lib.forward.MaterialData;\n"
 				"import lib.forward.common;\nimport "
 				"lib.forward.lod_dissolve;\n\n[shader(\"pixel\")]\n"
 				"ForwardPSOut PSMain(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace)\n{{\n"
@@ -143,7 +146,8 @@ namespace bgl
 				"isFrontFace));\n}}\n",
 				BindingModuleName(slot),
 				program,
-				slot);
+				slot,
+				module);
 		}
 
 		// A toon character surface's programs, named on the game's type so they light it with the toon
@@ -257,9 +261,14 @@ namespace bgl
 					DrawBucketDesc{ GeometryStage::kStaticMesh, kind, layer });
 			};
 
+			// One colour program: a water material is opaque-moded, and draws no grass or ground.
 			if (shading == SurfaceShading::kWater)
 			{
-				return {};
+				return {
+					{ colour(LayerType::kOpaque),
+					  ColorProgramSource(slot, "GameWaterProgram", "lib.forward.WaterSurface"),
+					  false },
+				};
 			}
 
 			if (shading == SurfaceShading::kToonCharacter)

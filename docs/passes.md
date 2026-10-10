@@ -56,7 +56,8 @@ flowchart TD
         GC --> GRS["Forward Grass (only when a drawn geom or a terrain has grass; one dispatch per grass bucket and terrain)"]
         GRS --> BLOB["Blob Shadows (only when the view has a disc; reads the depth as it stands)"]
         BLOB --> FWS["Forward Skinned (indirect dispatch per skinned-tier bucket)"]
-        FWS --> FWT["Forward Transparent (one dispatch for the sorted list)"]
+        FWS --> FWW["Forward Water (only when the view places water; indirect dispatch per water bucket; reads the depth)"]
+        FWW --> FWT["Forward Transparent (one dispatch for the sorted list)"]
         FWT --> SM["Outline Mask (only when the view has a selection)"]
     end
     D --> TAA["TaaResolve (only when the target has TAA)"]
@@ -707,10 +708,12 @@ the rest: which draws it records, what its dispatch reads beyond the shared set,
 `BucketedForwardPhase` is World and Skinned, one per `GeometryStage`, indirect over the compaction's
 output; `TerrainForwardPhase` is the scene's terrains, a direct dispatch per terrain over its
 quadtree's nodes ([Terrain](terrain.md)); `GrassForwardPhase` is the grass, a direct dispatch per
-grass bucket and terrain over the view's chunk list; `TransparentForwardPhase` is the sorted list, one
-dispatch through the shared blend kernel.
+grass bucket and terrain over the view's chunk list; `WaterForwardPhase` is the static tier's water
+buckets, indirect as World's but over the depth rather than into it ([Water](water.md));
+`TransparentForwardPhase` is the sorted list, one dispatch through the shared blend kernel.
 A phase takes its kernels already bound, with the framebuffer that kernel declares -- colour,
-velocity and depth for a bucket's, colour and depth for the blend kernel -- and never builds one. The set is fixed and ordered, because
+velocity and depth for a bucket's, colour and velocity for a water bucket's, colour and depth for the
+blend kernel -- and never builds one. The set is fixed and ordered, because
 the frame's order is `RenderContext`'s and Blob Shadows draws between two of them, so the phases are
 concrete members held by value behind one interface, `IForwardPhase`: a phase that may have
 nothing to draw overrides `HasWork` -- the bucketed phases and the sorted list when the view places
@@ -719,7 +722,9 @@ with no placement still draws its ground. **Forward
 Terrain** draws the scene's terrains first, the ground being the largest occluder; **Forward
 World** the non-transparent buckets of the static tier -- the world, moving placements included;
 **Forward Grass** the grass those placements and the terrains grow; **Forward Skinned** the skinned tier's;
-**Forward Transparent** the depth-sorted list, every tier. After the grass the depth holds the
+**Forward Water** the static tier's water buckets, which attaches no depth: it reads the depth the
+phases before it wrote, as Blob Shadows does, discarding where the scene is nearer
+(`IForwardPhase::WritesDepth`); **Forward Transparent** the depth-sorted list, every tier. After the grass the depth holds the
 terrain, the world and its grass alone -- everything a blob shadow lands on, the seam
 [Blob Shadows](#blob-shadows) draws at, and where the HZB of two-phase occlusion culling will be
 built (ROADMAP.md § Culling). One object owns every phase's kernels, since a kernel is per bucket and a bucket is one

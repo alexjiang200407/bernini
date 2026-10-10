@@ -50,11 +50,12 @@ namespace bgl
 	}
 
 	void
-	BucketedForwardPhase::Record(
+	RecordDrawBucket(
 		ForwardPhases&      kernels,
 		bgpu::MeshletState& state,
 		const DrawData&     draw,
-		const PassContext&  resources) const
+		const PassContext&  resources,
+		const uint32_t      bucket)
 	{
 		bgpu::ICommandList* cmd = resources.GetCommandList();
 		core::ensure(cmd != nullptr, "Pass commandlist must be initialized");
@@ -62,44 +63,56 @@ namespace bgl
 		const auto             dispatchArgs = resources.GetBuffer(c_CompactDispatchArgsName);
 		const DrawBucketTable& table        = kernels.DrawBuckets();
 
-		// The transparent buckets are depth-ordered, so they draw in the transparent phase instead.
-		for (uint32_t bucket = 0, count = table.Count(); bucket < count; ++bucket)
+		// Placements at rest, then those dissolving, each lane its own dispatch through its own
+		// pipeline; a lane the cull left empty dispatches nothing (DrawBucketCountIndex).
+		for (const DrawLane lane : { DrawLane::kAtRest, DrawLane::kDissolve })
 		{
-			if (table.Transparent(bucket) || table.Desc(bucket).geom != m_Stage)
+			bgpu::MeshletKernel* kernel =
+				kernels.BindDrawBucketKernel(bucket, lane, state, draw, resources);
+			if (kernel == nullptr)
 			{
 				continue;
 			}
 
-			// Placements at rest, then those dissolving, each lane its own dispatch through its own
-			// pipeline; a lane the cull left empty dispatches nothing (DrawBucketCountIndex).
-			for (const DrawLane lane : { DrawLane::kAtRest, DrawLane::kDissolve })
+			const uint32_t drawLane =
+				lane == DrawLane::kDissolve ? bucket + idl::cDissolveLane : bucket;
+			if (auto expansionData = kernel->FindUniforms("expansionData"))
 			{
-				// A bucket never demanded has no kernel -- and, by the same fact, no instances.
-				bgpu::MeshletKernel* kernel =
-					kernels.BindDrawBucketKernel(bucket, lane, state, draw, resources);
-				if (kernel == nullptr)
-				{
-					continue;
-				}
-
-				const uint32_t drawLane =
-					lane == DrawLane::kDissolve ? bucket + idl::cDissolveLane : bucket;
-				if (auto expansionData = kernel->FindUniforms("expansionData"))
-				{
-					(*expansionData)["drawLane"]    = drawLane;
-					(*expansionData)["baseTable"]   = idl::BaseTable::kDrawBucketed;
-					(*expansionData)["lodDrawMode"] = lane == DrawLane::kDissolve ?
-					                                      idl::LodDrawMode::kDissolve :
-					                                      idl::LodDrawMode::kCurrent;
-					(*expansionData)["cullBackfaces"] =
-						DrawBucketMeshStageCullsBackfaces(table.Desc(bucket));
-				}
-
-				state.indirectArgs  = dispatchArgs;
-				state.commandCounts = dispatchArgs;
-				cmd->SetMeshletState(state);
-				cmd->DispatchMeshIndirectCount(drawLane, DrawBucketCountIndex(drawLane));
+				(*expansionData)["drawLane"]    = drawLane;
+				(*expansionData)["baseTable"]   = idl::BaseTable::kDrawBucketed;
+				(*expansionData)["lodDrawMode"] = lane == DrawLane::kDissolve ?
+				                                      idl::LodDrawMode::kDissolve :
+				                                      idl::LodDrawMode::kCurrent;
+				(*expansionData)["cullBackfaces"] =
+					DrawBucketMeshStageCullsBackfaces(table.Desc(bucket));
 			}
+
+			state.indirectArgs  = dispatchArgs;
+			state.commandCounts = dispatchArgs;
+			cmd->SetMeshletState(state);
+			cmd->DispatchMeshIndirectCount(drawLane, DrawBucketCountIndex(drawLane));
+		}
+	}
+
+	void
+	BucketedForwardPhase::Record(
+		ForwardPhases&      kernels,
+		bgpu::MeshletState& state,
+		const DrawData&     draw,
+		const PassContext&  resources) const
+	{
+		const DrawBucketTable& table = kernels.DrawBuckets();
+
+		// The transparent buckets are depth-ordered, so they draw in the transparent phase instead;
+		// the water buckets draw over the depth this phase writes.
+		for (uint32_t bucket = 0, count = table.Count(); bucket < count; ++bucket)
+		{
+			if (table.Transparent(bucket) || table.Desc(bucket).geom != m_Stage ||
+			    kernels.IsWaterBucket(bucket))
+			{
+				continue;
+			}
+			RecordDrawBucket(kernels, state, draw, resources, bucket);
 		}
 	}
 }

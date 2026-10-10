@@ -3,6 +3,7 @@ import lib.forward.GrassShading;
 import lib.forward.MaterialData;
 import lib.forward.MaterialShading;
 import lib.forward.ToonData;
+import lib.forward.WaterSurface;
 import lib.forward.common;
 import lib.forward.grass_vertex;
 import lib.math.ToonShading;
@@ -88,6 +89,12 @@ ForwardPSOut PSToonAlphaTested(ToonVSOut input, bool isFrontFace: SV_IsFrontFace
 ForwardPSOut PSToonHashedAlpha(ToonVSOut input, bool isFrontFace: SV_IsFrontFace)
 {
     return materialData.GameToonHashedAlphaProgram<NullToonCharacterSurface>(input.Surface(), input.toonShadingRigSlot, isFrontFace);
+}
+
+[shader("pixel")]
+ForwardPSOut PSWater(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace)
+{
+    return materialData.GameWaterProgram<NullWaterSurface>(input, isFrontFace);
 }
 
 // The generated blend program's shape: a switch on the record's kind, an arm per surface -- the

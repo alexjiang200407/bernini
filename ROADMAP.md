@@ -402,7 +402,9 @@ and portability.
     rules (`IScene::AttachTerrainGrass`). Kept open: collision and trampling, a painted density
     map, placing clumps in the editor.
   - [ ] Trees
-- [ ] Water
+- [x] Water -- a static mesh through a game's water surface, drawn by Forward Water over the
+  scene's depth with the ground under it and the clock in reach ([Water](docs/water.md)). Kept
+  open: refraction, reflections, displacement and simulation, splashes, caustics.
 - [ ] Screen-space / Volume Decal Pipeline
 - [ ] FX
   - [ ] WBOIT — order-independent transparency; supersedes the alpha-blend CPU sort (see Materials)

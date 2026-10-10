@@ -321,6 +321,13 @@ is made of and the generator that fills it, how it is cut into levels chosen by 
 rule each node applies alone, why the cuts never crack, why its pixel program is the material's
 own, and the one module anything reads the ground through.
 
+**[Water](./docs/water.md)**
+
+A water body drawn as a static mesh through a game's water surface, in a phase of its own after the
+characters: why it reads the depth instead of attaching it, the three things its reader measures,
+what it does to scene alpha and velocity, and the refraction, reflections and simulation it leaves
+out on purpose.
+
 **[Environment Maps](./docs/envmaps.md)**
 
 The `.bsky` / `.benvl` / `.benv` split, how a `.hdr` becomes them, who consumes which, and the

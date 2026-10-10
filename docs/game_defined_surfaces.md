@@ -151,6 +151,13 @@ a character surface, having no rig to hand it ([Grass](grass.md) § Lighting,
 coverage answers without the rest of the surface's samples. It is not read at all on an opaque
 layer, and a **hashed** layer calls it *twice* — see § Hashed alpha below.
 
+## Water surfaces
+
+A water body's look is one more contract, `IWaterSurfaceSource` (`bgl.WaterSurfaceSource`, document
+model `waterSurface`): `ILitSurfaceSource`'s shape with no `Coverage`, over a reader that also
+measures the scene behind the water, the ground under it and the clock. It draws in Forward Water
+alone, on the static tier; [Water](water.md) is its map.
+
 ## Where the file goes, and when it is read
 
 Shaders live in the project at **`Authored/Shaders/`**
@@ -285,12 +292,13 @@ cutoff is the thing being replaced.
 A material drawn by a surface says so, names it, and sets what it wants by name
 ([`BMaterial.h`](../libs/assetlib_structs/include/assetlib_structs/BMaterial.h)).
 
-The model names the contract, and there are three: **`pbrSurface`** for a surface on
+The model names the contract, and there are four: **`pbrSurface`** for a surface on
 `ISurfaceSource` — the lighting is the engine's PBR, and what the surface supplies is the
 material's half of it, the `PbrSurface` its `Evaluate` returns — **`litSurface`** for one on
 `ILitSurfaceSource`, whose `Shade` is the whole lighting, and **`toonCharacterSurface`** for one on
 `IToonCharacterSurfaceSource` (`bgl.ToonCharacterSurface`), which supplies the material's half of
-the engine's toon lighting for a character (§ Toon surfaces). The document's model is its contract
+the engine's toon lighting for a character (§ Toon surfaces), and **`waterSurface`** for one on
+`IWaterSurfaceSource` (§ Water surfaces). The document's model is its contract
 *expectation*: `CreateSurfaceMaterial` refuses a named surface that conforms to another one, so
 a surface that changes contract fails loud instead of silently changing what every material drawn
 by it means. Everything else in the document — the surface name, `parameters`, `textures`, the
@@ -352,6 +360,8 @@ cooked — so a name is checked at the one place a surface is in hand, which is
 | a value or texture the surface does not declare | `CreateSurfaceMaterial`, naming both |
 | a value bound to a name declared as a texture, or the reverse | `CreateSurfaceMaterial`, saying which it is |
 | `alphaMode: "hashed"` on a surface declaring no `CoverageSlot` and no `ColorSlot` | `CreateSurfaceMaterial`, naming the surface and both kinds |
+| any `alphaMode` but `opaque` on a water surface | `CreateSurfaceMaterial`, naming the surface |
+| a water surface on skinned geometry, a terrain or a grass look | the door that binds it, by name |
 | a file that will not compile, or a surface past `cMaxDrawBuckets - 1` | `CreateGraphics`, naming the file |
 | a surface that compiles but whose generated programs do not, for this backend | fatal, at the first `Draw` that uses that layer |
 
@@ -377,7 +387,8 @@ Deliberate, and each is a decision rather than an omission:
   into a demotion.
 * **No hot reload**, and no export-time compile.
 * **No scene inputs.** The reader gives interpolants, the camera and the material's own fields.
-  Nothing of the frame — no depth, no history. A lit surface additionally reads the light through
+  Nothing of the frame — no depth, no history. The water reader is the one exception, and it gives
+  exactly three: the depth behind, the ground below and the clock ([Water](water.md)). A lit surface additionally reads the light through
   `ISurfaceLight` — the sun and the environment, and only those; a PBR surface reads no light at
   all, because the engine lights it.
 * **No say over bloom beyond `emissive`.** A surface cannot mark itself as glowing or not; bloom
