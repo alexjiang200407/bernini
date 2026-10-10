@@ -127,8 +127,8 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   authoring layout (pos/normal/uv/tangent); a producer may emit only a tightly-packed subset (e.g. a
   mesh import whose source primitive carries no UVs emits a 24-byte position/normal vertex, there
   being nothing to derive a tangent from) and describe it with a matching layout. The procedural primitives emit the **full 48-byte**
-  pos/normal/uv/tangent — see `bgl::MeshVertex` in
-  [bgl/types/MeshVertex.h](libs/bgl/include/bgl/types/MeshVertex.h), whose field order *is* that layout. See
+  pos/normal/uv/tangent — see `VertexGen` in
+  [types/VertexGen.h](libs/bgl/src/types/VertexGen.h), whose field order *is* that layout. See
   `DecodeVertex` in
   [lib/geom/vertexdecode.slang](libs/bgl/shaders/src/lib/geom/vertexdecode.slang).
 
@@ -278,8 +278,10 @@ Structs are populated bottom-up, each parent storing the offset the buffer hands
 
 For a concrete procedural builder, see [Scene_Geometry.cpp](libs/bgl/src/scene/Scene_Geometry.cpp). The three
 primitives — `AddCubeGeom`, `AddSphereGeom`, `AddPlaneGeom` — only generate vertices and indices,
-and `AddTriangleGeom` takes a caller's own (a `bgl::MeshVertex` is the 48-byte layout as it is
-uploaded); they all hand off to `Scene::AddProceduralGeom`, which greedily meshletizes under the
+and `AddTriangleGeom` takes a caller's own vertex bytes with the `assetlib::VertexLayout` that
+decodes them (`bgl::TriangleGeomDesc`), so a generated surface carries only the attributes its
+material reads and the rest decode to `DecodeVertex`'s defaults; they all hand off to
+`Scene::AddProceduralGeom`, which greedily meshletizes under the
 `cMaxVerticesPerMeshlet` / `cMaxPrimsPerMeshlet` caps and performs the upload sequence above. A
 primitive whose grid exceeds the 65535 meshlets one `DispatchMesh` can launch is rejected rather
 than silently truncated.
