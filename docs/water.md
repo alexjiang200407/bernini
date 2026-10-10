@@ -83,7 +83,9 @@ flowchart LR
   every kernel that declares it.
 
 A sea covering more than half of a 1920x1080 frame over the viewer's hilly field (`--water-level
-30 --terrain-eye 120`) costs Forward Water 0.24 ms median on an M3 Pro.
+30 --terrain-eye 120`), drawn through the test project's refracting `ToonWater`, costs 0.39 ms
+median on an M3 Pro: Water Scene Copy 0.09 ms and Forward Water 0.29 ms. The same sea before
+refraction cost Forward Water alone 0.24 ms, and the terrain's share is unchanged.
 
 `WaterRender_test` proves it at the pixel: the depth bands where the ground puts them, dry ground
 hiding the water, foam at the shore and around a sunk ball, zero motion, the TAA marker left as the
