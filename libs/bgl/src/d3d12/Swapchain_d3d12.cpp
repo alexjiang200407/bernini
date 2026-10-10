@@ -47,6 +47,22 @@ namespace bgl
 				const UINT factoryFlags = enableDebug ? DXGI_CREATE_FACTORY_DEBUG : 0;
 				CreateDXGIFactory2(factoryFlags, IID_PPV_ARGS(&factory)) >> d3d12ErrChecker;
 
+				// Presenting without vsync in a window needs tearing allowed, from the swapchain's
+				// creation on; without it an interval of 0 still waits for the compositor.
+				wrl::ComPtr<IDXGIFactory5> factory5;
+				BOOL                       tearing = FALSE;
+				if (SUCCEEDED(factory.As(&factory5)) &&
+				    SUCCEEDED(factory5->CheckFeatureSupport(
+						DXGI_FEATURE_PRESENT_ALLOW_TEARING,
+						&tearing,
+						sizeof(tearing))) &&
+				    tearing)
+				{
+					m_SwapFlags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+				}
+				sd.Flags = m_SwapFlags;
+				m_Vsync  = desc.vsync;
+
 				wrl::ComPtr<IDXGISwapChain1> swap;
 
 				auto* d3d12CommandQueue =
@@ -141,14 +157,21 @@ namespace bgl
 			Present(const uint64_t frameFence) noexcept override
 			{
 				(void)frameFence;
-				m_SwapChain->Present(1, 0) >> d3d12ErrChecker;
+				const UINT flags = !m_Vsync && m_SwapFlags != 0 ? DXGI_PRESENT_ALLOW_TEARING : 0u;
+				m_SwapChain->Present(m_Vsync ? 1 : 0, flags) >> d3d12ErrChecker;
 				return false;
+			}
+
+			void
+			SetVsync(const bool enabled) noexcept override
+			{
+				m_Vsync = enabled;
 			}
 
 			void
 			Resize(const uint32_t width, const uint32_t height) override
 			{
-				m_SwapChain->ResizeBuffers(c_ImageCount, width, height, c_Format, 0) >>
+				m_SwapChain->ResizeBuffers(c_ImageCount, width, height, c_Format, m_SwapFlags) >>
 					d3d12ErrChecker;
 				m_Width  = width;
 				m_Height = height;
@@ -159,8 +182,10 @@ namespace bgl
 			static constexpr DXGI_FORMAT c_Format     = DXGI_FORMAT_B8G8R8A8_UNORM;
 
 			wrl::ComPtr<IDXGISwapChain3> m_SwapChain;
-			uint32_t                     m_Width  = 0;
-			uint32_t                     m_Height = 0;
+			UINT                         m_SwapFlags = 0;
+			bool                         m_Vsync     = true;
+			uint32_t                     m_Width     = 0;
+			uint32_t                     m_Height    = 0;
 		};
 	}
 

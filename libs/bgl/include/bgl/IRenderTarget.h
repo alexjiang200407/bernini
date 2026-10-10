@@ -41,6 +41,10 @@ namespace bgl
 		// backbuffer is sRGB-encoded, and the window's colour space must be set to sRGB explicitly
 		// or the layer is composited unmatched (docs/known_issues.md).
 		void* wnd = nullptr;
+
+		// Whether a windowed target waits for the display's vertical blank to present; see
+		// IRenderTarget::SetVsyncEnabled.
+		bool vsync = true;
 	};
 
 	/**
@@ -132,6 +136,20 @@ namespace bgl
 		 */
 		virtual void
 		SetTaaSharpness(float sharpness) = 0;
+
+		/** Whether a windowed target presents on the display's vertical blank. On by default. */
+		[[nodiscard]] virtual bool
+		IsVsyncEnabled() const noexcept = 0;
+
+		/**
+		 * Turns vsync on or off from the next present. Off, a windowed target presents each frame
+		 * as soon as it is drawn: on D3D12 with tearing where the system allows it, on Vulkan in the
+		 * immediate present mode (mailbox where immediate is not offered), on Metal with the layer's
+		 * display sync off. A Vulkan target remakes its swapchain to change mode, as a resize does.
+		 * A headless target presents nothing and only remembers the setting.
+		 */
+		virtual void
+		SetVsyncEnabled(bool enabled) = 0;
 
 		/** Whether the selection outline is drawn on this target. On by default. */
 		[[nodiscard]] virtual bool

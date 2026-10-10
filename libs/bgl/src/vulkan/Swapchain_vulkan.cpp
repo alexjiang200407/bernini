@@ -69,6 +69,7 @@ namespace bgl
 					bgpu::MaximumPerformance::kRequested)
 			{
 				LoadVulkanFunctions(m_Instance, m_Device);
+				m_Vsync = desc.vsync;
 
 				if (desc.wnd == nullptr)
 				{
@@ -212,7 +213,12 @@ namespace bgl
 				if (presented == VK_SUCCESS || presented == VK_SUBOPTIMAL_KHR)
 				{
 					if (Acquire())
-						return false;
+					{
+						if (!m_ModeStale)
+							return false;
+						Remake(m_Extent.width, m_Extent.height);
+						return true;
+					}
 				}
 				else
 				{
@@ -332,6 +338,44 @@ namespace bgl
 			}
 
 			void
+			SetVsync(const bool enabled) noexcept override
+			{
+				if (enabled != m_Vsync)
+				{
+					m_Vsync     = enabled;
+					m_ModeStale = true;
+				}
+			}
+
+			[[nodiscard]] VkPresentModeKHR
+			UnsyncedMode() const
+			{
+				uint32_t count = 0;
+				Check(
+					vkGetPhysicalDeviceSurfacePresentModesKHR(
+						m_Physical,
+						m_Surface,
+						&count,
+						nullptr),
+					"vkGetPhysicalDeviceSurfacePresentModesKHR");
+				auto modes = std::vector<VkPresentModeKHR>(count);
+				Check(
+					vkGetPhysicalDeviceSurfacePresentModesKHR(
+						m_Physical,
+						m_Surface,
+						&count,
+						modes.data()),
+					"vkGetPhysicalDeviceSurfacePresentModesKHR");
+				for (const VkPresentModeKHR wanted :
+				     { VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_MAILBOX_KHR })
+				{
+					if (std::ranges::find(modes, wanted) != modes.end())
+						return wanted;
+				}
+				return VK_PRESENT_MODE_FIFO_KHR;
+			}
+
+			void
 			Create(const uint32_t width, const uint32_t height)
 			{
 				auto caps = VkSurfaceCapabilitiesKHR();
@@ -375,8 +419,10 @@ namespace bgl
 				info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 				info.preTransform     = caps.currentTransform;
 				info.compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-				// DXGI's Present(1, 0): one image per vertical blank.
-				info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+				// FIFO is DXGI's Present(1, 0), one image per vertical blank; without vsync, immediate,
+				// or mailbox where the surface does not offer it.
+				info.presentMode = m_Vsync ? VK_PRESENT_MODE_FIFO_KHR : UnsyncedMode();
+				m_ModeStale      = false;
 				info.clipped     = VK_TRUE;
 
 				// The context enabled VK_NV_low_latency2 for the desc's preferMaximumPerformance, and
@@ -473,6 +519,8 @@ namespace bgl
 
 			VkSurfaceKHR   m_Surface   = VK_NULL_HANDLE;
 			VkSwapchainKHR m_Swapchain = VK_NULL_HANDLE;
+			bool           m_Vsync     = true;
+			bool           m_ModeStale = false;
 			VkExtent2D     m_Extent{};
 			VkFence        m_Acquired = VK_NULL_HANDLE;
 			uint32_t       m_Current  = 0;

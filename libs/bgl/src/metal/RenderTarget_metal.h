@@ -289,6 +289,10 @@ namespace bgl
 		void
 		SetRenderScale(float scale) override;
 
+	protected:
+		void
+		ApplyVsync(bool enabled) override;
+
 	private:
 		struct Backbuffer
 		{

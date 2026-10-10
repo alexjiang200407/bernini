@@ -55,6 +55,9 @@ namespace
 		// to does; zero is no window, and the size asked for.
 		uint32_t windowWidth  = 0;
 		uint32_t windowHeight = 0;
+
+		// What SetVsync was told, in order.
+		std::vector<bool> vsync;
 	};
 
 	class FakeSwapchain final : public bgl::ISwapchain
@@ -116,6 +119,12 @@ namespace
 		CanReadPresented() const noexcept override
 		{
 			return false;
+		}
+
+		void
+		SetVsync(const bool enabled) noexcept override
+		{
+			m_Log.vsync.push_back(enabled);
 		}
 
 		[[nodiscard]] bool
@@ -407,3 +416,47 @@ TEST_CASE(
 	CHECK(owner.rm->GetTextureDesc(target->GetDepthTexture()).height == 10);
 }
 #endif
+TEST_CASE(
+	"A swapchain target hands each change of vsync to its swapchain, and a headless one keeps it",
+	"[render][swapchain]")
+{
+	auto owner = Owner();
+	auto log   = FakeLog();
+
+	auto desc   = bgl::RenderTargetDesc();
+	desc.width  = 8;
+	desc.height = 8;
+	CHECK(desc.vsync);
+
+	auto target = core::SharedRef<bgl::RenderTarget>::Make(
+		desc,
+		std::make_unique<FakeSwapchain>(*owner.rm, log, 8, 8),
+		owner.device,
+		owner.queue,
+		owner.rm);
+
+	// Made with the desc's setting, so nothing is handed over until it changes.
+	CHECK(target->IsVsyncEnabled());
+	CHECK(log.vsync.empty());
+
+	target->SetVsyncEnabled(false);
+	target->SetVsyncEnabled(false);
+	target->SetVsyncEnabled(true);
+	CHECK(target->IsVsyncEnabled());
+	CHECK(log.vsync == std::vector<bool>{ false, true });
+
+	auto headless     = bgl::RenderTargetDesc();
+	headless.width    = 8;
+	headless.height   = 8;
+	headless.headless = true;
+	headless.vsync    = false;
+	auto offscreen    = core::SharedRef<bgl::RenderTarget>::Make(
+		headless,
+		nullptr,
+		owner.device,
+		owner.queue,
+		owner.rm);
+	CHECK_FALSE(offscreen->IsVsyncEnabled());
+	offscreen->SetVsyncEnabled(true);
+	CHECK(offscreen->IsVsyncEnabled());
+}
