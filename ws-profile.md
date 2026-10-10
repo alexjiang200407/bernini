@@ -4,6 +4,7 @@ test: just test
 format: just format
 tidy: just tidy --changed
 docs_index: CLAUDE.md
+run: just run editor --
 ---
 
 # Bernini — the agent profile
