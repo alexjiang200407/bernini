@@ -735,8 +735,10 @@ World** the non-transparent buckets of the static tier -- the world, moving plac
 **Forward Impostor** every placement past its last level as its geom's impostor
 (`programs/forward/Impostor.slang`): one quad a placement facing the camera across the bake sphere,
 its pixel the three hemi-octahedral frames nearest the view blended by their barycentric weights
-(the atlas layout is `assetlib::MeshImpostor`'s), cut at half coverage, pushed off the quad by the
-baked depth it writes as `SV_Depth`, and lit through `ShadeSurface` as a matte dielectric of the
+(the atlas layout is `assetlib::MeshImpostor`'s), cut at half coverage, sampled at the mip whose frames are as many texels as the quad is
+pixels, and pushed back from the quad -- which stands on the sphere's near side -- by the baked depth
+it writes as `SV_DepthGreaterEqual`, so an impostor behind what is drawn is still rejected before
+it shades; and lit through `ShadeSurface` as a matte dielectric of the
 baked base colour, so the sun and the environment light it as they light the mesh it stands in for;
 **Forward Grass** the grass those placements and the terrains grow; **Forward Skinned** the skinned tier's;
 **Forward Water** the static tier's water buckets, which attaches no depth: it reads the depth the

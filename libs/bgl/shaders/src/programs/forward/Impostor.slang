@@ -49,6 +49,11 @@ struct ImpostorVSOut
 
     nointerpolation uint compacted : IMPOSTORENTRY;
     nointerpolation float lodDissolve : LODDISSOLVE;
+
+    // How many pixels the quad spans: what chooses the atlas mip, one for the whole quad since every
+    // pixel of it samples a frame at the same scale. A far tree that read the first mip would read
+    // a whole frame's texels for a few pixels.
+    nointerpolation float pixels : IMPOSTORPIXELS;
 };
 
 // The direction toward the viewer frame (x, y) was baked from: assetlib::impostorFrameDirection.
@@ -127,6 +132,20 @@ void ASMain(uint gid: SV_GroupID)
     DispatchMesh(1, 1, 1, gImpostorPayload);
 }
 
+// How far toward the camera from the sphere's centre the quad stands: its near side, or half way
+// to a camera inside twice the radius.
+float NearOffset(float4 sphere)
+{
+    let distance = length(expansionData.cullView[0].cameraPosAndPixelsPerUnit.xyz - sphere.xyz);
+    return min(sphere.w, 0.5 * distance);
+}
+
+float NearScale(float4 sphere)
+{
+    let distance = length(expansionData.cullView[0].cameraPosAndPixelsPerUnit.xyz - sphere.xyz);
+    return (distance - NearOffset(sphere)) / max(distance, 1e-4);
+}
+
 ImpostorVSOut QuadCorner(ImpostorPayload payload, uint v)
 {
     let p = LoadPlacement(payload.compacted);
@@ -138,7 +157,10 @@ ImpostorVSOut QuadCorner(ImpostorPayload payload, uint v)
     FrameBasis(toCamera, right, up);
 
     let corner = float2((v & 1u) != 0u ? 1.0 : -1.0, (v & 2u) != 0u ? 1.0 : -1.0);
-    let world = sphere.xyz + (corner.x * right + corner.y * up) * sphere.w;
+    // On the sphere's near side, so the depth a pixel writes only ever moves away from the camera
+    // (SV_DepthGreaterEqual) and the raster still rejects an impostor behind what is drawn before
+    // shading it. Shrunk by its nearness, so it covers on screen what one through the centre would.
+    let world = sphere.xyz + toCamera * NearOffset(sphere) + (corner.x * right + corner.y * up) * sphere.w * NearScale(sphere);
 
     // The quad turns with the camera, so only the placement's own motion is carried back a frame.
     let moved = p.mesh.PrevTransformPoint(p.impostor.sphere.xyz) - p.mesh.TransformPoint(p.impostor.sphere.xyz);
@@ -155,6 +177,9 @@ ImpostorVSOut QuadCorner(ImpostorPayload payload, uint v)
     out.corner = corner;
     out.compacted = payload.compacted;
     out.lodDissolve = payload.lodDissolve;
+
+    let view = expansionData.cullView[0].cameraPosAndPixelsPerUnit;
+    out.pixels = 2.0 * sphere.w * view.w / max(length(view.xyz - sphere.xyz), 1e-4);
     return out;
 }
 
@@ -204,8 +229,20 @@ struct ImpostorSample
 };
 
 // One frame's surface where the pixel's point on the quad projects into it along the frame's view.
-ImpostorSample SampleFrame(Placement p, uint2 frame, float3 local, float weight)
+ImpostorSample SampleFrame(Placement p, uint2 frame, float3 local, float weight, float mip)
 {
+    // A frame the view barely leans toward adds nothing a reader could see; near a grid point that
+    // is two of the three, and each is two samples.
+    if (weight < 0.02)
+    {
+        ImpostorSample none;
+        none.albedo = float3(0.0, 0.0, 0.0);
+        none.coverage = 0.0;
+        none.normal = float3(0.0, 0.0, 0.0);
+        none.depth = 0.0;
+        return none;
+    }
+
     let n = p.impostor.framesPerSide;
     float3 right;
     float3 up;
@@ -214,8 +251,8 @@ ImpostorSample SampleFrame(Placement p, uint2 frame, float3 local, float weight)
     let inFrame = float2(dot(local, right) * 0.5 + 0.5, 0.5 - dot(local, up) * 0.5);
     let uv = (float2(frame) + saturate(inFrame)) / float(n);
 
-    let albedo = impostorData.impostors.GetHandleAt(p.handles, 0).SampleLevel(materialData.linearClampSampler, uv, 0.0);
-    let normalDepth = impostorData.impostors.GetHandleAt(p.handles, 1).SampleLevel(materialData.linearClampSampler, uv, 0.0);
+    let albedo = impostorData.impostors.GetHandleAt(p.handles, 0).SampleLevel(materialData.linearClampSampler, uv, mip);
+    let normalDepth = impostorData.impostors.GetHandleAt(p.handles, 1).SampleLevel(materialData.linearClampSampler, uv, mip);
 
     // Off the frame is off the mesh: what saturate pulled back in is another texel's surface.
     let inside = all(inFrame == saturate(inFrame)) ? 1.0 : 0.0;
@@ -232,7 +269,7 @@ ImpostorSample SampleFrame(Placement p, uint2 frame, float3 local, float weight)
 struct ImpostorPixel
 {
     ForwardPSOut output;
-    float depth : SV_Depth;
+    float depth : SV_DepthGreaterEqual;
 };
 
 ImpostorPixel Program(ImpostorVSOut input)
@@ -245,24 +282,30 @@ ImpostorPixel Program(ImpostorVSOut input)
     float3 up;
     FrameBasis(toCamera, right, up);
     let local = ToLocal(p.mesh, right) * input.corner.x + ToLocal(p.mesh, up) * input.corner.y;
+    let nearOffset = NearOffset(sphere);
 
     // The three frames around the view on the grid, by their barycentric weights.
     let n = p.impostor.framesPerSide;
+    uint atlasTexels;
+    uint atlasHeight;
+    uint atlasMips;
+    impostorData.impostors.GetHandleAt(p.handles, 0).GetDimensions(0, atlasTexels, atlasHeight, atlasMips);
+    let mip = clamp(log2(float(atlasTexels / n) / max(input.pixels, 1.0)), 0.0, float(atlasMips - 1u));
     let grid = FrameGrid(ToLocal(p.mesh, toCamera), n);
     let base = min(uint2(floor(grid)), uint2(n - 2u, n - 2u));
     let f = grid - float2(base);
     ImpostorSample a, b, c;
     if (f.x + f.y < 1.0)
     {
-        a = SampleFrame(p, base, local, 1.0 - f.x - f.y);
-        b = SampleFrame(p, base + uint2(1, 0), local, f.x);
-        c = SampleFrame(p, base + uint2(0, 1), local, f.y);
+        a = SampleFrame(p, base, local, 1.0 - f.x - f.y, mip);
+        b = SampleFrame(p, base + uint2(1, 0), local, f.x, mip);
+        c = SampleFrame(p, base + uint2(0, 1), local, f.y, mip);
     }
     else
     {
-        a = SampleFrame(p, base + uint2(1, 1), local, f.x + f.y - 1.0);
-        b = SampleFrame(p, base + uint2(1, 0), local, 1.0 - f.y);
-        c = SampleFrame(p, base + uint2(0, 1), local, 1.0 - f.x);
+        a = SampleFrame(p, base + uint2(1, 1), local, f.x + f.y - 1.0, mip);
+        b = SampleFrame(p, base + uint2(1, 0), local, 1.0 - f.y, mip);
+        c = SampleFrame(p, base + uint2(0, 1), local, 1.0 - f.x, mip);
     }
 
     let coverage = a.coverage + b.coverage + c.coverage;
@@ -275,8 +318,9 @@ ImpostorPixel Program(ImpostorVSOut input)
     let normal = normalize(p.mesh.TransformDirection(a.normal + b.normal + c.normal));
     let depth = (a.depth + b.depth + c.depth) / coverage;
 
-    // The surface the frames saw, moved off the quad toward the viewer by its baked depth.
-    let surfacePos = input.worldPos + toCamera * depth * sphere.w;
+    // The surface the frames saw: back from the near quad by how far its baked depth falls short
+    // of it -- never forward, which the conservative depth promises.
+    let surfacePos = input.worldPos - toCamera * max(nearOffset - depth * sphere.w, 0.0);
 
     ForwardVSOut surface;
     surface.position = input.position;
