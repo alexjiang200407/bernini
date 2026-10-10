@@ -3,9 +3,14 @@ import idl.Constants;
 import idl.Geom;
 import idl.Impostor;
 import idl.InstanceLod;
+import idl.IMaterial;
 import idl.LodDrawMode;
+import idl.LoosePbrMaterial;
+import idl.MaterialType;
+import idl.PbrMaterial;
 import idl.MeshInstance;
 import idl.RawArena;
+import idl.RawEntry;
 import lib.data.SubmeshInstance;
 import lib.forward.common;
 import lib.forward.ExpansionData;
@@ -289,6 +294,33 @@ struct ImpostorPixel
     float depth : SV_DepthGreaterEqual;
 };
 
+// How the surface reflects, from the material the placement's first submesh draws with -- the one
+// the mesh is lit by, overrides and edits included -- where it is a PBR kind: its roughness and
+// metallic factors and its specular. Past that, the bake's averages and glTF's specular.
+void BoundReflectance(uint compacted, Impostor impostor, inout PbrSurface lit, float occlusion)
+{
+    lit.orm = float3(occlusion, impostor.roughness, impostor.metallic);
+    let instance = forwardData.instanceBuffer.Get(compacted & ~cOutgoingDrawBit);
+    if (instance.material.Null())
+    {
+        return;
+    }
+    let offset = instance.material.GetByteOffset();
+    let kind = LoadMaterialKind(offset);
+    if (kind == MaterialType.kPBR)
+    {
+        let m = materialData.materials.LoadRecordAs<PbrMaterial>(RawEntry<IMaterial>.At(offset));
+        lit.orm = float3(occlusion, m.roughnessFactor, m.metallicFactor);
+        lit.specularFactors = m.specular;
+    }
+    else if (kind == MaterialType.kLoosePbr)
+    {
+        let m = materialData.materials.LoadRecordAs<LoosePbrMaterial>(RawEntry<IMaterial>.At(offset));
+        lit.orm = float3(occlusion, m.roughnessFactor, m.metallicFactor);
+        lit.specularFactors = m.specular;
+    }
+}
+
 ImpostorPixel Program(ImpostorVSOut input)
 {
     let p = LoadPlacement(input.compacted);
@@ -352,11 +384,11 @@ ImpostorPixel Program(ImpostorVSOut input)
     surface.prevClip = input.prevClip;
     surface.cameraPrevClip = input.cameraPrevClip;
 
-    // Occlusion per texel; roughness and metallic the whole impostor's, which no texel needs its own
-    // of at this size. The rest is PbrSurface()'s: a flat normal map, glTF's specular.
+    // Base colour and occlusion per texel, the reflectance the bound material's; the rest is
+    // PbrSurface()'s, a flat normal map.
     var lit = PbrSurface();
     lit.baseColor = float4(albedo, 1.0);
-    lit.orm = float3(occlusion, p.impostor.roughness, p.impostor.metallic);
+    BoundReflectance(input.compacted, p.impostor, lit, occlusion);
 
     ImpostorPixel pixel;
     pixel.output.color = float4(materialData.ShadeSurface(surface, lit, true), 1.0);

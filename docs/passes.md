@@ -738,8 +738,9 @@ its pixel the three hemi-octahedral frames nearest the view blended by their bar
 (the atlas layout is `assetlib::MeshImpostor`'s), cut at half coverage, sampled at the mip whose frames are as many texels as the quad is
 pixels, and pushed back from the quad -- which stands on the sphere's near side -- by the baked depth
 it writes as `SV_DepthGreaterEqual`, so an impostor behind what is drawn is still rejected before
-it shades; and lit through `ShadeSurface` from the baked base colour and occlusion, with the
-record's roughness and metallic, so the sun and the environment light it as they light the mesh it
+it shades; and lit through `ShadeSurface` from the baked base colour and occlusion, and the
+roughness, metallic and specular of the material the placement's first submesh draws with -- the
+bake's averages where it is no PBR kind -- so the sun and the environment light it as they light the mesh it
 stands in for;
 **Forward Grass** the grass those placements and the terrains grow; **Forward Skinned** the skinned tier's;
 **Forward Water** the static tier's water buckets, which attaches no depth: it reads the depth the
