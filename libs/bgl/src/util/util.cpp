@@ -44,6 +44,14 @@ namespace bgl
 		       surfaces[*slot].shading == SurfaceShading::kToonCharacter;
 	}
 
+	bool
+	DrawsWater(MaterialType material, std::span<const SurfaceType> surfaces) noexcept
+	{
+		const std::optional<uint32_t> slot = GameSlot(material);
+		return slot.has_value() && *slot < surfaces.size() &&
+		       surfaces[*slot].shading == SurfaceShading::kWater;
+	}
+
 	MaterialType
 	GameSlotKind(uint32_t slot) noexcept
 	{
@@ -68,13 +76,18 @@ namespace bgl
 	}
 
 	bool
-	AcceptsMaterial(const GeomType geomType, const MaterialHandle material) noexcept
+	AcceptsMaterial(
+		const GeomType                     geomType,
+		const MaterialHandle               material,
+		const std::span<const SurfaceType> surfaces) noexcept
 	{
 		if (geomType == GeomType::kStaticMesh)
 			return true;
 
-		return material.IsValid() && (material.materialType == MaterialType::kPBR ||
-		                              GameSlot(material.materialType).has_value());
+		return material.IsValid() &&
+		       (material.materialType == MaterialType::kPBR ||
+		        GameSlot(material.materialType).has_value()) &&
+		       !DrawsWater(material.materialType, surfaces);
 	}
 
 	bool

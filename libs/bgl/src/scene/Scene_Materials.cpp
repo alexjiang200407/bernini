@@ -120,6 +120,8 @@ namespace bgl
 					return "owns its lighting (ILitSurfaceSource)";
 				case SurfaceShading::kToonCharacter:
 					return "is toon-lit as a character (IToonCharacterSurfaceSource)";
+				case SurfaceShading::kWater:
+					return "shades water (IWaterSurfaceSource)";
 				}
 				return "is lit by the engine (ISurfaceSource)";
 			};
@@ -129,6 +131,16 @@ namespace bgl
 					desc.surfaceName,
 					name(surface.shading),
 					name(*desc.shading)));
+		}
+
+		// Water is composited by its own phase from Shade's alpha; a layer would send it to another.
+		if (surface.shading == SurfaceShading::kWater && desc.layerType != LayerType::kOpaque)
+		{
+			throw SceneError(
+				std::format(
+					"surface '{}' shades water, which has no alpha layer: its material is "
+					"opaque-moded, and the water phase blends what Shade returns",
+					desc.surfaceName));
 		}
 
 		const std::optional<uint32_t> carrier = CoverageCarrierSlot(params);
@@ -641,11 +653,12 @@ namespace bgl
 		{
 			throw SceneError("Invalid MaterialHandle passed to SetSubmeshMaterial");
 		}
-		if (!AcceptsMaterial(geom.geomType, material))
+		if (!AcceptsMaterial(geom.geomType, material, m_Surfaces))
 		{
 			throw SceneError(
 				"SetSubmeshMaterial: animated geometry takes a baked PBR or a game surface "
-				"material -- neither animated pipeline has an unlit or loose variant");
+				"material other than water -- neither animated pipeline has an unlit, loose or "
+				"water variant");
 		}
 
 		const idl::LodSubmeshRange& submeshes = m_Geoms[geom.handle.index].submeshes;

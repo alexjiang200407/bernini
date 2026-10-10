@@ -99,6 +99,9 @@ namespace bgl
 			// A blade's programs write a third target, its height above its root, after the
 			// velocity: GrassForwardPhase attaches it.
 			bool grassRootHeight = false;
+			// Water's: no depth attached, the test done in the pixel stage against the depth read
+			// there, and colour blended premultiplied with alpha left as the ground wrote it.
+			bool water = false;
 		};
 
 		// Every bucket kernel is opaque-shaped; only the shared blend kernel differs.
@@ -106,7 +109,11 @@ namespace bgl
 		// toon shading rig block; its dissolve lane, and every other bucket, through the shared ones.
 		// Only a mesh tier has MSToon: a blade and a terrain patch carry no placement's rig.
 		PsoConfig
-		ConfigFor(const DrawBucketDesc& desc, const DrawLane lane, const bool toonCharacter)
+		ConfigFor(
+			const DrawBucketDesc& desc,
+			const DrawLane        lane,
+			const bool            toonCharacter,
+			const bool            water)
 		{
 			auto config =
 				PsoConfig{ DrawBucketPixelSrc(desc),    DrawBucketCullMode(desc),   true, false,
@@ -123,6 +130,7 @@ namespace bgl
 				config.meshEntry = "MSToon"sv;
 			}
 			config.grassRootHeight = desc.geom == GeometryStage::kGrass;
+			config.water           = water;
 			return config;
 		}
 
@@ -150,7 +158,10 @@ namespace bgl
 			{
 				pipelineDesc.AddRtvFormat(c_GrassRootHeightFormat);
 			}
-			pipelineDesc.SetDsvFormat(bgpu::Format::D24S8);
+			if (!cfg.water)
+			{
+				pipelineDesc.SetDsvFormat(bgpu::Format::D24S8);
+			}
 
 			auto raster = bgpu::RasterState();
 			raster.SetFillMode(bgpu::RasterFillMode::kSolid)
@@ -159,8 +170,8 @@ namespace bgl
 				.SetDepthClipEnable(true);
 
 			auto depth = bgpu::DepthStencilState{};
-			depth.SetDepthTestEnable(true)
-				.SetDepthWriteEnable(cfg.depthWrite)
+			depth.SetDepthTestEnable(!cfg.water)
+				.SetDepthWriteEnable(cfg.depthWrite && !cfg.water)
 				.SetDepthFunc(cfg.depthFunc)
 				.SetStencilEnable(false);
 
@@ -181,6 +192,25 @@ namespace bgl
 						.SetSrcBlendAlpha(bgpu::BlendFactor::kZero)
 						.SetDestBlendAlpha(bgpu::BlendFactor::kZero)
 						.SetBlendOpAlpha(bgpu::BlendOp::kAdd));
+			}
+
+			// The scene alpha under water is the TAA marker its ground wrote, and the depth it
+			// vouches for is still the ground's: masked out rather than overwritten. The velocity
+			// target is the water surface's own, unblended.
+			if (cfg.water)
+			{
+				constexpr auto c_Rgb = static_cast<bgpu::ColorMask>(
+					std::to_underlying(bgpu::ColorMask::kRed) |
+					std::to_underlying(bgpu::ColorMask::kGreen) |
+					std::to_underlying(bgpu::ColorMask::kBlue));
+				blend.SetRenderTarget(
+					0,
+					bgpu::BlendState::RenderTarget{}
+						.EnableBlend()
+						.SetSrcBlend(bgpu::BlendFactor::kOne)
+						.SetDestBlend(bgpu::BlendFactor::kInvSrcAlpha)
+						.SetBlendOp(bgpu::BlendOp::kAdd)
+						.SetColorWriteMask(c_Rgb));
 			}
 
 			pipelineDesc.renderState = bgpu::RenderState()
@@ -261,20 +291,25 @@ namespace bgl
 				core::ensure(
 					!m_DrawBucketTable->Transparent(bucket),
 					"A transparent bucket demands the shared kernel, never one of its own");
-				const DrawBucketDesc& desc = m_DrawBucketTable->Desc(bucket);
-				const auto            slot = GameSlot(desc.material);
-				const bool toon = slot.has_value() && *slot < m_ToonCharacterSlots.size() &&
-				                  m_ToonCharacterSlots[*slot];
+				const DrawBucketDesc&               desc    = m_DrawBucketTable->Desc(bucket);
+				const std::optional<SurfaceShading> shading = ShadingOf(desc.material);
+				const bool toon  = shading == SurfaceShading::kToonCharacter;
+				const bool water = shading == SurfaceShading::kWater;
+				core::ensure(
+					!water || desc.geom == GeometryStage::kStaticMesh,
+					"Water draws on the static tier alone; every other door refuses it");
 				ctx.pipelines->Add(
 					m_Kernels[bucket],
-					ForwardPipelineDesc(ctx.device, ConfigFor(desc, DrawLane::kAtRest, toon)));
+					ForwardPipelineDesc(
+						ctx.device,
+						ConfigFor(desc, DrawLane::kAtRest, toon, water)));
 				if (DrawBucketDissolves(desc))
 				{
 					ctx.pipelines->Add(
 						m_DissolveKernels[bucket],
 						ForwardPipelineDesc(
 							ctx.device,
-							ConfigFor(desc, DrawLane::kDissolve, toon)));
+							ConfigFor(desc, DrawLane::kDissolve, toon, water)));
 				}
 				// Built with the bucket whether or not a look ever asks for the ground's colour: one
 				// more pipeline per terrain material kind, against demand-building it a frame late.
@@ -289,9 +324,27 @@ namespace bgl
 	}
 
 	void
-	ForwardPhases::SetToonCharacterSlots(std::vector<bool> slots)
+	ForwardPhases::SetSurfaceShading(std::vector<SurfaceShading> slots)
 	{
-		m_ToonCharacterSlots = std::move(slots);
+		m_SurfaceShading = std::move(slots);
+	}
+
+	std::optional<SurfaceShading>
+	ForwardPhases::ShadingOf(const MaterialType material) const noexcept
+	{
+		const std::optional<uint32_t> slot = GameSlot(material);
+		if (!slot.has_value() || *slot >= m_SurfaceShading.size())
+		{
+			return std::nullopt;
+		}
+		return m_SurfaceShading[*slot];
+	}
+
+	bool
+	ForwardPhases::IsWaterBucket(const uint32_t bucket) const noexcept
+	{
+		return bucket < m_DrawBucketTable->Count() &&
+		       ShadingOf(m_DrawBucketTable->Desc(bucket).material) == SurfaceShading::kWater;
 	}
 
 	void
@@ -344,6 +397,7 @@ namespace bgl
 			.Check("skinnedData"sv, GetUniformKeys(c_SkinnedBuffers));
 		GrassForwardPhase::CheckBindings(check);
 		TerrainForwardPhase::CheckBindings(check);
+		WaterForwardPhase::CheckBindings(check);
 	}
 
 	const IForwardPhase&
@@ -359,6 +413,8 @@ namespace bgl
 			return m_Grass;
 		case ForwardPhase::kSkinned:
 			return m_Skinned;
+		case ForwardPhase::kWater:
+			return m_Water;
 		case ForwardPhase::kTransparent:
 			return m_Transparent;
 		}
@@ -378,9 +434,11 @@ namespace bgl
 		}
 
 		auto desc = PassDesc();
-		desc.SetName("Forward {} {}", phase.Name(), draw.drawIdx)
-			.AddRenderTarget(c_BackbufferName)
-			.AddDepthWrite(c_DepthName);
+		desc.SetName("Forward {} {}", phase.Name(), draw.drawIdx).AddRenderTarget(c_BackbufferName);
+		if (phase.WritesDepth())
+		{
+			desc.AddDepthWrite(c_DepthName);
+		}
 
 		for (const auto& binding : c_ForwardDataBuffers)
 		{
@@ -428,8 +486,11 @@ namespace bgl
 		state.kernel      = &kernel;
 		state.frameBuffer = bgpu::FrameBuffer()
 		                        .AddColorAttachment(draw.targets.sceneColor)
-		                        .AddColorAttachment(draw.targets.motionVector)
-		                        .SetDepthAttachment(draw.targets.depth);
+		                        .AddColorAttachment(draw.targets.motionVector);
+		if (!IsWaterBucket(bucket))
+		{
+			state.frameBuffer.SetDepthAttachment(draw.targets.depth);
+		}
 		return &kernel;
 	}
 
@@ -582,6 +643,8 @@ namespace bgl
 			matData["sunDirection"].SetIfValid(draw.lighting.sunDirection);
 			matData["sunRadiance"].SetIfValid(draw.lighting.sunRadiance);
 		}
+
+		WaterForwardPhase::Bind(kernel, draw, resources);
 
 		if (auto foundToonData = kernel.FindUniforms("toonData"))
 		{

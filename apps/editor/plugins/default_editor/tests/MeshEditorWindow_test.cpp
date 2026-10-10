@@ -405,6 +405,58 @@ TEST_CASE("A toon surface board saves its own model", "[mesheditor][surface][too
 	CHECK(saved.surface.values[0].value[0] == Catch::Approx(0.8f));
 }
 
+// A water document saves back as the water model, a data slot and its value with it: the model is
+// the registered surface's contract, read off the sink, as for the toon one.
+TEST_CASE("A water surface board saves its own model", "[mesheditor][surface][water]")
+{
+	QTemporaryDir temp;
+	REQUIRE(temp.isValid());
+
+	const std::filesystem::path root = std::filesystem::path(temp.path().toStdWString());
+	const QString               path = temp.filePath("Authored/Materials/lake.bmaterial");
+
+	{
+		auto material                = assetlib::BMaterial();
+		material.name                = "lake";
+		material.shadingModel        = assetlib::ShadingModel::kWaterSurface;
+		material.surface.surfaceName = "Lake";
+		material.surface.values      = { { "depthStep", { 2.5f } } };
+
+		assetlib::AssetStore(root).Save(material, "Authored/Materials/lake.bmaterial");
+	}
+
+	auto surface            = bgl::SurfaceType();
+	surface.surfaceName     = "Lake";
+	surface.shading         = bgl::SurfaceShading::kWater;
+	auto step               = bgl::SurfaceValue();
+	step.name               = "depthStep";
+	step.type               = bgl::SurfaceValueType::kFloat;
+	step.defaultValue       = glm::vec4(1.5f);
+	auto noise              = bgl::SurfaceTexture();
+	noise.name              = "foamNoise";
+	noise.kind              = bgl::SurfaceTextureKind::kData;
+	surface.params.values   = { step };
+	surface.params.textures = { noise };
+
+	MaterialGraphModel model(
+		MakeMaterialNodeRegistry(c_Language, nullptr, nullptr, { &surface, 1 }));
+	const assetlib::BMaterial onDisk =
+		assetlib::AssetStore(root).Load<assetlib::BMaterial>("Authored/Materials/lake.bmaterial");
+	REQUIRE(BuildSurfaceMaterialGraph(model, onDisk, root));
+	REQUIRE(qobject_cast<SurfaceOutputNode*>(model.OutputNode()) != nullptr);
+
+	const assetlib::BMaterial saved =
+		editor::BuildMaterial(model, path, assetlib::AssetStore(root));
+
+	CHECK(saved.shadingModel == assetlib::ShadingModel::kWaterSurface);
+	CHECK(saved.surface.surfaceName == "Lake");
+	REQUIRE(saved.surface.values.size() == 1u);
+	CHECK(saved.surface.values[0].name == "depthStep");
+	REQUIRE(saved.surface.values[0].value.size() == 1u);
+	CHECK(saved.surface.values[0].value[0] == Catch::Approx(2.5f));
+	CHECK(saved.layer.alphaMode == assetlib::AlphaMode::kOpaque);
+}
+
 TEST_CASE("A save keeps a routed slot's bake state", "[mesheditor][surface]")
 {
 	// The board authors the routes; the bake owns the stamps and the map. A save must carry the
@@ -656,4 +708,32 @@ TEST_CASE("FillLayerSection shows a surface sink's layer and hides for a PBR boa
 	// A PBR board -- no surface sink -- hides the section; its layer is the Output selector's.
 	editor::FillLayerSection(nullptr, ui);
 	CHECK(ui.layerSection->isHidden());
+}
+
+TEST_CASE("A water sink offers no alpha layer", "[mesheditor][water]")
+{
+	QWidget parent;
+
+	const editor::MeshEditorWidgets ui = editor::BuildMeshEditorUi(c_Language, &parent);
+
+	auto lake        = bgl::SurfaceType();
+	lake.surfaceName = "Lake";
+	lake.shading     = bgl::SurfaceShading::kWater;
+	SurfaceOutputNode water(c_Language, lake);
+	water.SetDoubleSided(true);
+
+	editor::FillLayerSection(&water, ui);
+
+	CHECK_FALSE(ui.layerSection->isHidden());
+	CHECK_FALSE(ui.layerForm->isRowVisible(ui.layerSelector));
+	CHECK_FALSE(ui.layerForm->isRowVisible(ui.alphaCutoff));
+	CHECK(ui.layerForm->isRowVisible(ui.doubleSided));
+	CHECK(ui.doubleSided->isChecked());
+
+	// Another surface's sink after it offers its layer again.
+	auto rim        = bgl::SurfaceType();
+	rim.surfaceName = "Rim";
+	SurfaceOutputNode sink(c_Language, rim);
+	editor::FillLayerSection(&sink, ui);
+	CHECK(ui.layerForm->isRowVisible(ui.layerSelector));
 }

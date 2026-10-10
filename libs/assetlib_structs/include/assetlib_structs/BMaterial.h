@@ -28,6 +28,10 @@ namespace assetlib
 		// document shape is kPbrSurface's exactly.
 		kToonCharacterSurface = 3,
 
+		// A water body's lighting, over the scene's depth, ground and clock: the surface's Shade
+		// returns radiance and how much it hides. The document shape is kPbrSurface's exactly.
+		kWaterSurface = 4,
+
 		kCount,
 	};
 

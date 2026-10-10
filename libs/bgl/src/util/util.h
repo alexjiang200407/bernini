@@ -27,6 +27,13 @@ namespace bgl
 	[[nodiscard]] bool
 	DrawsToonCharacter(MaterialType material, std::span<const SurfaceType> surfaces) noexcept;
 
+	/**
+	 * Whether `material` is drawn by a water surface among `surfaces`, which only Forward Water
+	 * draws: over the scene's depth, on the static tier alone.
+	 */
+	[[nodiscard]] bool
+	DrawsWater(MaterialType material, std::span<const SurfaceType> surfaces) noexcept;
+
 	/** The kind the records of the surface registered `slot`th carry. */
 	[[nodiscard]] MaterialType
 	GameSlotKind(uint32_t slot) noexcept;
@@ -51,13 +58,16 @@ namespace bgl
 	/**
 	 * Whether `geomType` can be drawn with `material`, which is what every door binding one to
 	 * animated geometry checks. Static geometry takes anything; the animated tiers take every layer
-	 * of a `kPBR` material and of a game surface's, and no other material type, having neither an
-	 * unlit nor a loose variant.
+	 * of a `kPBR` material and of a game surface's but a water surface's, and no other material
+	 * type, having neither an unlit nor a loose variant nor a water phase.
 	 *
 	 * An invalid handle is rejected -- animated geometry has no unlit variant to fall back to.
 	 */
 	[[nodiscard]] bool
-	AcceptsMaterial(GeomType geomType, MaterialHandle material) noexcept;
+	AcceptsMaterial(
+		GeomType                     geomType,
+		MaterialHandle               material,
+		std::span<const SurfaceType> surfaces) noexcept;
 
 	/**
 	 * Fills a placement's transform from an affine matrix. glm stores columns and the GPU reads

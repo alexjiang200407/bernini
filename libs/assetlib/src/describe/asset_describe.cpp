@@ -60,6 +60,8 @@ namespace assetlib
 				return "litSurface";
 			case ShadingModel::kToonCharacterSurface:
 				return "toonCharacterSurface";
+			case ShadingModel::kWaterSurface:
+				return "waterSurface";
 			case ShadingModel::kCount:
 				break;
 			}
@@ -494,6 +496,7 @@ namespace assetlib
 		case ShadingModel::kPbrSurface:
 		case ShadingModel::kLitSurface:
 		case ShadingModel::kToonCharacterSurface:
+		case ShadingModel::kWaterSurface:
 			describeSurface(out, material.surface, fileSystem);
 			break;
 

@@ -81,14 +81,16 @@ namespace bgl
 			return std::format("game.slot{}", slot);
 		}
 
-		// Every contract but ISurfaceSource draws through the lit programs: a toon surface does so
-		// as its model's adapter (lib.math.ToonShading), whose Shade is the engine's toon lighting.
+		// Every contract but ISurfaceSource and water draws through the lit programs: a toon surface
+		// does so as its model's adapter (lib.math.ToonShading), whose Shade is the engine's toon
+		// lighting. Water has programs of its own.
 		bool
 		DrawsLitPrograms(SurfaceShading shading) noexcept
 		{
 			switch (shading)
 			{
 			case SurfaceShading::kPbrSurface:
+			case SurfaceShading::kWater:
 				return false;
 			case SurfaceShading::kLit:
 			case SurfaceShading::kToonCharacter:
@@ -125,10 +127,13 @@ namespace bgl
 		// A registered surface's programs, generated rather than shipped because a program has to
 		// name the surface's type: PSMain, and PSDissolve for the bucket's dissolve lane.
 		std::string
-		ColorProgramSource(uint32_t slot, std::string_view program)
+		ColorProgramSource(
+			uint32_t         slot,
+			std::string_view program,
+			std::string_view module = "lib.forward.GameSurface")
 		{
 			return std::format(
-				"import {0};\nimport lib.forward.GameSurface;\nimport lib.forward.MaterialData;\n"
+				"import {0};\nimport {3};\nimport lib.forward.MaterialData;\n"
 				"import lib.forward.common;\nimport "
 				"lib.forward.lod_dissolve;\n\n[shader(\"pixel\")]\n"
 				"ForwardPSOut PSMain(ForwardVSOut input, bool isFrontFace: SV_IsFrontFace)\n{{\n"
@@ -141,7 +146,8 @@ namespace bgl
 				"isFrontFace));\n}}\n",
 				BindingModuleName(slot),
 				program,
-				slot);
+				slot,
+				module);
 		}
 
 		// A toon character surface's programs, named on the game's type so they light it with the toon
@@ -209,6 +215,11 @@ namespace bgl
 			std::string arms;
 			for (uint32_t slot = 0; slot < types.size(); ++slot)
 			{
+				// No water material reaches the sorted list.
+				if (types[slot].shading == SurfaceShading::kWater)
+				{
+					continue;
+				}
 				imports += std::format("import {};\n", BindingModuleName(slot));
 				const bool toon = types[slot].shading == SurfaceShading::kToonCharacter;
 				arms += std::format(
@@ -249,6 +260,16 @@ namespace bgl
 				return DrawBucketPixelSrc(
 					DrawBucketDesc{ GeometryStage::kStaticMesh, kind, layer });
 			};
+
+			// One colour program: a water material is opaque-moded, and draws no grass or ground.
+			if (shading == SurfaceShading::kWater)
+			{
+				return {
+					{ colour(LayerType::kOpaque),
+					  ColorProgramSource(slot, "GameWaterProgram", "lib.forward.WaterSurface"),
+					  false },
+				};
+			}
 
 			if (shading == SurfaceShading::kToonCharacter)
 			{

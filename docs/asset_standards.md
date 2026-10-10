@@ -640,7 +640,8 @@ A re-import preserves authored grass bindings. No standalone grass container is 
   garbage**), a case in `asset_describe.cpp`, and a renderer path in `gamelib`'s `AssetManager` — which
   rejects any model it has no path for rather than rendering it wrong. Each of those is a `switch` on
   `shadingModel` with no `default`, so the compiler names every one of them. The models today are
-  `pbr` and the three surface models — `pbrSurface`, `litSurface` and `toonCharacterSurface` —
+  `pbr` and the four surface models — `pbrSurface`, `litSurface`, `toonCharacterSurface` and
+  `waterSurface` —
   which share one document shape and one renderer path, differing only
   in the contract the named surface must conform to
   ([docs/game_defined_surfaces.md](game_defined_surfaces.md) § The document).

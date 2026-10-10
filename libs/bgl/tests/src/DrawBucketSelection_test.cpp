@@ -4,6 +4,7 @@
 #include <array>
 #include <bgl/GeomType.h>
 #include <bgl/MaterialType.h>
+#include <bgl/SurfaceType.h>
 #include <bgl/idl/DispatchArgs.h>
 #include <bgl/idl/DrawBucket.h>
 #include <bgl/types/LayerType.h>
@@ -51,7 +52,7 @@ TEST_CASE("every layer of a kPBR material binds to animated geometry", "[drawbuc
 	{
 		const auto pbr = Handle(bgl::MaterialType::kPBR, layer);
 
-		CHECK(bgl::AcceptsMaterial(bgl::GeomType::kSkinnedMesh, pbr));
+		CHECK(bgl::AcceptsMaterial(bgl::GeomType::kSkinnedMesh, pbr, {}));
 	}
 }
 
@@ -59,7 +60,7 @@ TEST_CASE("animated geometry takes no unlit or loose material", "[drawbucket]")
 {
 	// No unlit variant to fall back to, so an unnamed material is a refusal rather than the flat
 	// shading a static submesh gets.
-	CHECK_FALSE(bgl::AcceptsMaterial(bgl::GeomType::kSkinnedMesh, bgl::MaterialHandle{}));
+	CHECK_FALSE(bgl::AcceptsMaterial(bgl::GeomType::kSkinnedMesh, bgl::MaterialHandle{}, {}));
 
 	// A loose material routes its channels rather than sampling a baked triplet, and the animated
 	// geometry stage has no pixel shader that does the routing.
@@ -67,12 +68,35 @@ TEST_CASE("animated geometry takes no unlit or loose material", "[drawbucket]")
 	{
 		const auto loose = Handle(bgl::MaterialType::kLoosePbr, layer);
 
-		CHECK_FALSE(bgl::AcceptsMaterial(bgl::GeomType::kSkinnedMesh, loose));
+		CHECK_FALSE(bgl::AcceptsMaterial(bgl::GeomType::kSkinnedMesh, loose, {}));
 	}
 
 	// Static geometry is the exception and takes anything, an invalid handle included: it resolves
 	// to the unlit kNull bucket rather than failing to load.
-	CHECK(bgl::AcceptsMaterial(bgl::GeomType::kStaticMesh, bgl::MaterialHandle{}));
+	CHECK(bgl::AcceptsMaterial(bgl::GeomType::kStaticMesh, bgl::MaterialHandle{}, {}));
+}
+
+TEST_CASE("animated geometry takes no water surface", "[drawbucket][water]")
+{
+	// Water draws only in its own phase, which the static tier alone reaches; every other surface
+	// in the same slot set still binds.
+	const std::array<bgl::SurfaceType, 2> surfaces = { {
+		{ .surfaceName = "Lake",
+		  .kind        = bgl::GameSlotKind(0),
+		  .shading     = bgl::SurfaceShading::kWater },
+		{ .surfaceName = "Glow",
+		  .kind        = bgl::GameSlotKind(1),
+		  .shading     = bgl::SurfaceShading::kLit },
+	} };
+
+	const auto water = Handle(bgl::GameSlotKind(0), bgl::LayerType::kOpaque);
+	const auto lit   = Handle(bgl::GameSlotKind(1), bgl::LayerType::kOpaque);
+
+	CHECK_FALSE(bgl::AcceptsMaterial(bgl::GeomType::kSkinnedMesh, water, surfaces));
+	CHECK(bgl::AcceptsMaterial(bgl::GeomType::kSkinnedMesh, lit, surfaces));
+	CHECK(bgl::AcceptsMaterial(bgl::GeomType::kStaticMesh, water, surfaces));
+	CHECK(bgl::DrawsWater(water.materialType, surfaces));
+	CHECK_FALSE(bgl::DrawsWater(lit.materialType, surfaces));
 }
 
 TEST_CASE("every drawable key has a bucket of its own", "[drawbucket]")
@@ -99,7 +123,7 @@ TEST_CASE("every drawable key has a bucket of its own", "[drawbucket]")
 
 			for (const auto geom : { bgl::GeomType::kStaticMesh, bgl::GeomType::kSkinnedMesh })
 			{
-				if (!bgl::AcceptsMaterial(geom, Handle(material, layer)))
+				if (!bgl::AcceptsMaterial(geom, Handle(material, layer), {}))
 				{
 					continue;
 				}
@@ -226,7 +250,7 @@ TEST_CASE("a game slot's layers resolve to its own programs, on both tiers", "[d
 		// surface's tiers differ in nothing but the geometry stage.
 		for (const LayerType layer : c_Layers)
 		{
-			CHECK(bgl::AcceptsMaterial(GeomType::kSkinnedMesh, Handle(kind, layer)));
+			CHECK(bgl::AcceptsMaterial(GeomType::kSkinnedMesh, Handle(kind, layer), {}));
 		}
 	}
 

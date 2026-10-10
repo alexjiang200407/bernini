@@ -757,6 +757,13 @@ namespace bgl
 			return m_Ground;
 		}
 
+		/** The surfaces the graphics registered, indexed by game slot. */
+		[[nodiscard]] std::span<const SurfaceType>
+		GetSurfaces() const noexcept
+		{
+			return m_Surfaces;
+		}
+
 		void
 		SetFootPlanting(bool enabled) noexcept override
 		{

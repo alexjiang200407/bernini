@@ -5,10 +5,13 @@
 #include "passes/PassInitContext.h"
 #include "passes/TerrainForwardPhase.h"
 #include "passes/TransparentForwardPhase.h"
+#include "passes/WaterForwardPhase.h"
 #include "types/DrawBucketMask.h"
+#include <bgl/SurfaceType.h>
 #include <bgpu/pipeline/MeshletKernel.h>
 #include <bgpu/types/MeshletState.h>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <spdlog/spdlog.h>
 #include <string_view>
@@ -43,6 +46,7 @@ namespace bgl
 		kWorld,        // the static tier's non-transparent buckets
 		kGrass,        // the grass the view's geoms grow
 		kSkinned,      // the skinned tier's non-transparent buckets
+		kWater,        // the static tier's water buckets, over the depth the phases above wrote
 		kTransparent,  // the depth-sorted list, every tier
 	};
 
@@ -100,12 +104,17 @@ namespace bgl
 		AddTransparentKernel(const PassInitContext& ctx);
 
 		/**
-		 * Marks the registered surfaces' slots that are toon characters: their buckets draw through
-		 * MSToon at rest, whose vertices carry the placement's toon shading rig block. Indexed by
-		 * slot. @pre called before any bucket kernel is requested.
+		 * The registered surfaces' contracts, indexed by slot. A toon character's buckets draw
+		 * through MSToon at rest, whose vertices carry the placement's toon shading rig block; a
+		 * water surface's draw in Forward Water, through pipelines that read the depth rather than
+		 * attach it. @pre called before any bucket kernel is requested.
 		 */
 		void
-		SetToonCharacterSlots(std::vector<bool> slots);
+		SetSurfaceShading(std::vector<SurfaceShading> slots);
+
+		/** Whether `bucket` draws a water surface, and so in Forward Water alone. */
+		[[nodiscard]] bool
+		IsWaterBucket(uint32_t bucket) const noexcept;
 
 		[[nodiscard]] bool
 		DrawBucketInitialized(uint32_t bucket) const noexcept
@@ -147,7 +156,8 @@ namespace bgl
 
 		/**
 		 * The bucket's kernel for `lane` with the uniforms every forward kernel shares bound for this
-		 * draw, set into `state` with the targets it declares -- colour, velocity and depth. Null,
+		 * draw, set into `state` with the targets it declares -- colour, velocity and depth, which a
+		 * water bucket reads rather than attaches. Null,
 		 * and `state` untouched, while it is unbuilt, and for a lane the bucket does not have.
 		 */
 		[[nodiscard]] bgpu::MeshletKernel*
@@ -204,13 +214,18 @@ namespace bgl
 		// The shared blend kernel (see DrawTransparent); no bucket owns it.
 		bgpu::MeshletKernel m_TransparentKernel;
 
-		const DrawBucketTable* m_DrawBucketTable = nullptr;
-		std::vector<bool>      m_ToonCharacterSlots;
+		/** The contract of the surface `material` names, empty for an engine kind. */
+		[[nodiscard]] std::optional<SurfaceShading>
+		ShadingOf(MaterialType material) const noexcept;
+
+		const DrawBucketTable*      m_DrawBucketTable = nullptr;
+		std::vector<SurfaceShading> m_SurfaceShading;
 
 		BucketedForwardPhase    m_World{ GeometryStage::kStaticMesh, "World" };
 		BucketedForwardPhase    m_Skinned{ GeometryStage::kSkinnedMesh, "Skinned" };
 		TerrainForwardPhase     m_Terrain;
 		GrassForwardPhase       m_Grass;
 		TransparentForwardPhase m_Transparent;
+		WaterForwardPhase       m_Water{ *this };
 	};
 }

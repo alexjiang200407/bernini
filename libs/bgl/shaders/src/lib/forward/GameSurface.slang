@@ -66,9 +66,9 @@ float4 SampleRoutedSlotBias(uint byteOffset, uint slot, float2 uv, float lodBias
 // surface sees a slot index and a UV, never the arena.
 public struct MaterialArenaReader : IMaterialReader
 {
-    uint byteOffset;
-    ForwardVSOut input;
-    bool isFrontFace;
+    public uint byteOffset;
+    public ForwardVSOut input;
+    public bool isFrontFace;
 
     public float4 Sample<S : ISlot>(S slot, float2 uv)
     {
@@ -144,7 +144,7 @@ public struct GrassMaterialArenaReader : IMaterialReader
 
 // The readers a record hands its surface, built by the record's location alone: neither depends
 // on the surface's type, so both record structs below share these.
-MaterialArenaReader ArenaReaderAt(uint byteOffset, ForwardVSOut input, bool isFrontFace)
+public MaterialArenaReader ArenaReaderAt(uint byteOffset, ForwardVSOut input, bool isFrontFace)
 {
     MaterialArenaReader reader;
     reader.byteOffset = byteOffset;

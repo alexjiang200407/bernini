@@ -119,6 +119,10 @@ namespace bgl
 					"a toon character surface shades a placement's rig, which a terrain has none "
 					"of");
 			}
+			if (DrawsWater(kind, surfaces))
+			{
+				refuse("a water surface is drawn over the ground, never as it");
+			}
 		}
 
 		/** The samples as one R16_UNORM image, row-major as the field is. */

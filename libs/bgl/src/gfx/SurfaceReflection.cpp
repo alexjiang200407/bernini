@@ -29,10 +29,11 @@ namespace bgl
 			SurfaceShading shading;
 		};
 
-		constexpr std::array<Contract, 3> c_Contracts = { {
+		constexpr std::array<Contract, 4> c_Contracts = { {
 			{ "ISurfaceSource", SurfaceShading::kPbrSurface },
 			{ "ILitSurfaceSource", SurfaceShading::kLit },
 			{ "IToonCharacterSurfaceSource", SurfaceShading::kToonCharacter },
+			{ "IWaterSurfaceSource", SurfaceShading::kWater },
 		} };
 
 		struct FoundSurface

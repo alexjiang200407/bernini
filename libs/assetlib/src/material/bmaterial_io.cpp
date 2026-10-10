@@ -82,6 +82,7 @@ namespace assetlib
 				"pbrSurface",
 				"litSurface",
 				"toonCharacterSurface",
+				"waterSurface",
 			} };
 
 		constexpr std::array<std::string_view, 4> c_AlphaModeNames = { {
@@ -704,6 +705,7 @@ namespace assetlib
 		case ShadingModel::kPbrSurface:
 		case ShadingModel::kLitSurface:
 		case ShadingModel::kToonCharacterSurface:
+		case ShadingModel::kWaterSurface:
 			json["shadingModel"] = c_ShadingModelNames[static_cast<size_t>(material.shadingModel)];
 			break;
 		case ShadingModel::kCount:

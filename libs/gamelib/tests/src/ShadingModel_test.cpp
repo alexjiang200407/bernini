@@ -11,10 +11,12 @@ using bgl::SurfaceShading;
 
 // Every contract maps to its own document model and back. A model that fell to the default would
 // have its materials checked against the PBR surface contract, and refused by name at load.
-TEST_CASE("Each surface contract round-trips through its document model", "[surface][toon]")
+TEST_CASE("Each surface contract round-trips through its document model", "[surface][toon][water]")
 {
-	for (const SurfaceShading shading :
-	     { SurfaceShading::kPbrSurface, SurfaceShading::kLit, SurfaceShading::kToonCharacter })
+	for (const SurfaceShading shading : { SurfaceShading::kPbrSurface,
+	                                      SurfaceShading::kLit,
+	                                      SurfaceShading::kToonCharacter,
+	                                      SurfaceShading::kWater })
 	{
 		const ShadingModel model = game::ToShadingModel(shading);
 		CAPTURE(static_cast<int>(shading));
@@ -25,4 +27,5 @@ TEST_CASE("Each surface contract round-trips through its document model", "[surf
 	CHECK(
 		game::ToShadingModel(SurfaceShading::kToonCharacter) ==
 		ShadingModel::kToonCharacterSurface);
+	CHECK(game::ToShadingModel(SurfaceShading::kWater) == ShadingModel::kWaterSurface);
 }
