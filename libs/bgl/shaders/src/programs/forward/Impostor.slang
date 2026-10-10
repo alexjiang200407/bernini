@@ -44,8 +44,11 @@ struct ImpostorVSOut
     float4 prevClip : PREVCLIPPOSITION;
     float4 cameraPrevClip : CAMERAPREVCLIPPOSITION;
 
-    // Where on the quad, in units of the sphere's radius: (-1, -1) at its lower left.
-    float2 corner : IMPOSTORCORNER;
+    // Where on the quad, in units of the sphere's radius: (-1, -1) at its lower left. Interpolated
+    // per sample, which runs the pixel stage at sample frequency -- what D3D requires of a stage
+    // writing SV_DepthGreaterEqual whose position is not read at the centroid, and which Metal will
+    // not let a position attribute say. The targets are single-sample, so it costs nothing.
+    sample float2 corner : IMPOSTORCORNER;
 
     nointerpolation uint compacted : IMPOSTORENTRY;
     nointerpolation float lodDissolve : LODDISSOLVE;
