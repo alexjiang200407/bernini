@@ -294,6 +294,7 @@ namespace bgl
 			m_GameSurfaceShading.emplace_back(type.shading);
 		}
 		m_Forward.SetSurfaceShading(m_GameSurfaceShading);
+		m_DrawBucketTable->SetSurfaceShading(m_GameSurfaceShading);
 
 		// Registered so a deferred destroy cannot reclaim a slot this queue may still be reading.
 		m_CommandQueue = m_Device->CreateGraphicsCommandQueue();

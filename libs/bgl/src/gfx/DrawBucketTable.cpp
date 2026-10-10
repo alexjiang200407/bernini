@@ -2,8 +2,10 @@
 #include "util/util.h"
 #include <core/err/util.h>
 #include <cstdint>
+#include <optional>
 #include <spdlog/spdlog.h>
 #include <utility>
+#include <vector>
 
 namespace bgl
 {
@@ -108,8 +110,7 @@ namespace bgl
 
 		const auto bucket = static_cast<uint32_t>(m_Descs.size());
 		m_Descs.push_back(DrawBucketDesc{ geom, material, layer });
-		m_Flags[bucket] =
-			layer == LayerType::kBlend ? std::to_underlying(idl::DrawBucketFlag::kTransparent) : 0u;
+		m_Flags[bucket] = FlagsOf(m_Descs.back());
 		m_KeyToDrawBucket.emplace(key, bucket);
 
 		return bucket;
@@ -135,6 +136,56 @@ namespace bgl
 	DrawBucketTable::Transparent(const uint32_t bucket) const noexcept
 	{
 		core::ensure(bucket < Count(), "Transparent takes an allocated bucket");
-		return (m_Flags[bucket] & std::to_underlying(idl::DrawBucketFlag::kTransparent)) != 0u;
+		return HasFlag(bucket, idl::DrawBucketFlag::kTransparent);
+	}
+
+	void
+	DrawBucketTable::SetSurfaceShading(std::vector<SurfaceShading> slots)
+	{
+		m_SurfaceShading = std::move(slots);
+		for (uint32_t bucket = 0; bucket < Count(); ++bucket)
+		{
+			m_Flags[bucket] = FlagsOf(m_Descs[bucket]);
+		}
+	}
+
+	bool
+	DrawBucketTable::Water(const uint32_t bucket) const noexcept
+	{
+		core::ensure(bucket < Count(), "Water takes an allocated bucket");
+		const std::optional<uint32_t> slot = GameSlot(m_Descs[bucket].material);
+		return slot.has_value() && *slot < m_SurfaceShading.size() &&
+		       m_SurfaceShading[*slot] == SurfaceShading::kWater;
+	}
+
+	bool
+	DrawBucketTable::Occludee(const uint32_t bucket) const noexcept
+	{
+		core::ensure(bucket < Count(), "Occludee takes an allocated bucket");
+		return HasFlag(bucket, idl::DrawBucketFlag::kOccludee);
+	}
+
+	uint32_t
+	DrawBucketTable::FlagsOf(const DrawBucketDesc& desc) const noexcept
+	{
+		uint32_t flags = 0u;
+		if (desc.layer == LayerType::kBlend)
+		{
+			flags |= std::to_underlying(idl::DrawBucketFlag::kTransparent);
+		}
+		const std::optional<uint32_t> slot  = GameSlot(desc.material);
+		const bool                    water = slot.has_value() && *slot < m_SurfaceShading.size() &&
+		                                      m_SurfaceShading[*slot] == SurfaceShading::kWater;
+		if (desc.geom == GeometryStage::kStaticMesh && desc.layer != LayerType::kBlend && !water)
+		{
+			flags |= std::to_underlying(idl::DrawBucketFlag::kOccludee);
+		}
+		return flags;
+	}
+
+	bool
+	DrawBucketTable::HasFlag(const uint32_t bucket, const idl::DrawBucketFlag flag) const noexcept
+	{
+		return (m_Flags[bucket] & std::to_underlying(flag)) != 0u;
 	}
 }

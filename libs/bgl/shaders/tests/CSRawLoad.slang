@@ -49,6 +49,9 @@ void main()
     gUniforms.outValues[3] = view.cameraPosAndPixelsPerUnit;
     gUniforms.outValues[4] = float4(view.lodPixelScale, float(view.lodForcedLevel), view.lodFadeStep, view.posePixels);
     gUniforms.outValues[7] = float4(float(view.poseBudget), float(view.poseForced), 0.0, 0.0);
+    gUniforms.outValues[12] = view.prevViewProj[1];
+    gUniforms.outValues[13] = view.hzbRect;
+    gUniforms.outValues[14] = float4(view.hzbLevel0Size, float(view.hzbLevelCount), float(view.occlusion));
 
     gUniforms.outValues[5] = gUniforms.records.Load<float4>(gUniforms.vertexOffset);
     gUniforms.outValues[6] = float4(gUniforms.records.Load<float3>(gUniforms.vertexOffset + 16u), 0.0);

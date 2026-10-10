@@ -439,6 +439,20 @@ namespace bgl
 		GetLodSelection() const noexcept = 0;
 
 		/**
+		 * Whether this view culls its occludees -- the static tier's opaque placements -- against
+		 * the depth of its own previous draw before drawing them, so what stands behind terrain or
+		 * behind another placement is never drawn. On by default. A setting rather than a per-frame
+		 * call, like SetLodSelection, and like it per view and not an epoch change: the frame it
+		 * draws is the same either way, only its cost differs, which is what a benchmark turns it
+		 * off to measure.
+		 */
+		virtual void
+		SetOcclusionCulling(bool enabled) noexcept = 0;
+
+		[[nodiscard]] virtual bool
+		GetOcclusionCulling() const noexcept = 0;
+
+		/**
 		 * Reserves `desc.capacity` placements of one geom that a GPU kernel places every
 		 * frame -- see SetBlockWriter -- and the CPU never writes again: a crowd, or mesh
 		 * particles. Its placements have no handles, so nothing here moves, flags or deletes one

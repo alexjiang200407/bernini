@@ -589,8 +589,10 @@ instance buffer, not off the capacity, so the depth-key pass cannot append past 
 many instances turn out to be transparent; only the sort itself is bounded.
 
 * **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.instanceVisibility`,
-  `scene.drawBucketFlags` (one word per draw bucket, owned by the view and uploaded from the
-  renderer's `DrawBucketTable` whenever it has grown), the camera position.
+  `scene.drawBucketFlags` (one `idl::DrawBucketFlag` word per draw bucket -- `kTransparent`, and
+  `kOccludee` for the static stage's opaque buckets but water's, which the occlusion cull tests --
+  owned by the view and uploaded from the renderer's `DrawBucketTable` whenever it has grown),
+  the camera position.
 * **Out:** `scene.transparentSortEntries`/`Count`, `scene.sortedTransparentInstances` and
   `transparentSort.dispatchArgs` — all owned by the view's `TransparentSortState`, one per view
   rather than per frustum since only a camera sorts transparents, the last two consumed by

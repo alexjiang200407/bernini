@@ -2,7 +2,7 @@ import DrawBucket;
 
 // What one submesh instance draws this frame under one culled frustum, written by CullInstances:
 // a word of the bits below. Zero is culled, hidden or padding. A word rather than a bit per slot
-// because the roadmap widens it further: an occlusion-phase bit (C4), an animation-tick tag.
+// because the roadmap widens it further: an animation-tick tag.
 public struct InstanceVisibility
 {
     public uint visible;
@@ -28,3 +28,8 @@ public static const uint cVisibleDissolvingBit = 4;
 // placement, not one a submesh, and counted into cImpostorDrawBucket's lanes rather than the
 // instance's own bucket.
 public static const uint cVisibleImpostorBit = 8;
+
+// An occludee inside the frustum that phase 1 of the occlusion cull did not draw -- not drawn last
+// frame, or hidden by last frame's HZB -- which phase 2 tests against the HZB built from phase 1's
+// depth. Counted and compacted by neither phase: on its own it draws nothing.
+public static const uint cVisibleCandidateBit = 16;

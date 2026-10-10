@@ -294,7 +294,7 @@ namespace bgl
 				const DrawBucketDesc&               desc    = m_DrawBucketTable->Desc(bucket);
 				const std::optional<SurfaceShading> shading = ShadingOf(desc.material);
 				const bool toon  = shading == SurfaceShading::kToonCharacter;
-				const bool water = shading == SurfaceShading::kWater;
+				const bool water = m_DrawBucketTable->Water(bucket);
 				core::ensure(
 					!water || desc.geom == GeometryStage::kStaticMesh,
 					"Water draws on the static tier alone; every other door refuses it");
@@ -343,8 +343,7 @@ namespace bgl
 	bool
 	ForwardPhases::IsWaterBucket(const uint32_t bucket) const noexcept
 	{
-		return bucket < m_DrawBucketTable->Count() &&
-		       ShadingOf(m_DrawBucketTable->Desc(bucket).material) == SurfaceShading::kWater;
+		return bucket < m_DrawBucketTable->Count() && m_DrawBucketTable->Water(bucket);
 	}
 
 	bool

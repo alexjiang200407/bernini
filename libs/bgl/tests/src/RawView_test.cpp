@@ -38,8 +38,8 @@ namespace
 	// size, so a tangent lands at 20 in a layout carrying no normal).
 	constexpr uint32_t c_StateOffset  = 16;
 	constexpr uint32_t c_ViewOffset   = 32;
-	constexpr uint32_t c_VertexOffset = 260;
-	constexpr uint32_t c_AutoOffset   = 288;
+	constexpr uint32_t c_VertexOffset = 356;
+	constexpr uint32_t c_AutoOffset   = 400;
 	constexpr uint32_t c_RigOffset    = c_AutoOffset + 256;
 	constexpr uint32_t c_BlobOffset   = c_RigOffset + 128;
 	constexpr uint32_t c_PoseOffset   = c_BlobOffset + 32;
@@ -47,7 +47,7 @@ namespace
 	constexpr uint32_t c_FramesOffset = c_PosedOffset + 16;
 	constexpr uint32_t c_BufferBytes  = c_FramesOffset + 32;
 
-	constexpr uint32_t c_OutValues = 12;
+	constexpr uint32_t c_OutValues = 15;
 }
 
 /**
@@ -108,12 +108,25 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	}
 	// The scalars trailing the float4 are where MSL's 16-byte vector alignment would show.
 	view.cameraPosAndPixelsPerUnit = glm::vec4(31.0f, 32.0f, 33.0f, 34.0f);
-	view.lodPixelScale             = 1.5f;
-	view.lodForcedLevel            = 3u;
-	view.lodFadeStep               = 0.25f;
-	view.posePixels                = 96.0f;
-	view.poseBudget                = 17u;
-	view.poseForced                = bgl::idl::cPoseForceTable;
+	for (int col = 0; col < 4; ++col)
+	{
+		for (int row = 0; row < 4; ++row)
+		{
+			view.prevViewProj[col][row] = static_cast<float>(100 + col * 4 + row);
+		}
+	}
+	// A float2 and two scalars between the float4s and the scalars after them: where a 16-byte
+	// vector alignment on either side would shift everything that follows.
+	view.hzbRect        = glm::vec4(8.0f, 4.0f, 960.0f, 540.0f);
+	view.hzbLevel0Size  = glm::vec2(968.0f, 544.0f);
+	view.hzbLevelCount  = 11u;
+	view.occlusion      = bgl::idl::cOcclusionTestBit | bgl::idl::cOcclusionHzbValidBit;
+	view.lodPixelScale  = 1.5f;
+	view.lodForcedLevel = 3u;
+	view.lodFadeStep    = 0.25f;
+	view.posePixels     = 96.0f;
+	view.poseBudget     = 17u;
+	view.poseForced     = bgl::idl::cPoseForceTable;
 
 	// The automatic record's last slot and the field after the array, where a slot stride the two
 	// sides disagree on would land.
@@ -280,6 +293,21 @@ TEST_CASE("A raw buffer loads records and loose attributes as written", "[raw][c
 	CHECK(got[4].w == Catch::Approx(view.posePixels).margin(c_Margin));
 	CHECK(got[7].x == Catch::Approx(static_cast<float>(view.poseBudget)).margin(c_Margin));
 	CHECK(got[7].y == Catch::Approx(static_cast<float>(view.poseForced)).margin(c_Margin));
+
+	CHECK(got[12].x == Catch::Approx(view.prevViewProj[0][1]).margin(c_Margin));
+	CHECK(got[12].y == Catch::Approx(view.prevViewProj[1][1]).margin(c_Margin));
+	CHECK(got[12].z == Catch::Approx(view.prevViewProj[2][1]).margin(c_Margin));
+	CHECK(got[12].w == Catch::Approx(view.prevViewProj[3][1]).margin(c_Margin));
+
+	CHECK(got[13].x == Catch::Approx(view.hzbRect.x).margin(c_Margin));
+	CHECK(got[13].y == Catch::Approx(view.hzbRect.y).margin(c_Margin));
+	CHECK(got[13].z == Catch::Approx(view.hzbRect.z).margin(c_Margin));
+	CHECK(got[13].w == Catch::Approx(view.hzbRect.w).margin(c_Margin));
+
+	CHECK(got[14].x == Catch::Approx(view.hzbLevel0Size.x).margin(c_Margin));
+	CHECK(got[14].y == Catch::Approx(view.hzbLevel0Size.y).margin(c_Margin));
+	CHECK(got[14].z == Catch::Approx(static_cast<float>(view.hzbLevelCount)).margin(c_Margin));
+	CHECK(got[14].w == Catch::Approx(static_cast<float>(view.occlusion)).margin(c_Margin));
 
 	CHECK(got[8].x == Catch::Approx(static_cast<float>(autoState.rig.offset)).margin(c_Margin));
 	CHECK(
