@@ -22,3 +22,8 @@ public static const uint cVisibleOutgoingBit = 2;
 // The placement is dissolving between two levels: its entries draw through its bucket's dissolve
 // lane (cDissolveLane), whose pipelines carry the dither, so a placement at rest never pays for it.
 public static const uint cVisibleDissolvingBit = 4;
+
+// The placement's impostor draws: it is past its geom's last level, or dissolving into or out of
+// that tier. Set on the placement's first submesh instance only, since an impostor is one quad a
+// placement, not one a submesh.
+public static const uint cVisibleImpostorBit = 8;

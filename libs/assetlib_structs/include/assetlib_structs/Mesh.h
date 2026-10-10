@@ -121,4 +121,58 @@ namespace assetlib
 	};
 
 	static_assert(sizeof(Mesh) == 20);
+
+	/** Frames along each side of an impostor's atlas: the upper hemisphere of views, octahedrally. */
+	constexpr uint32_t c_ImpostorFramesPerSide = 8;
+
+	/** Texels along each side of one frame. */
+	constexpr uint32_t c_ImpostorFrameTexels = 128;
+
+	/** Texels along each side of an impostor's atlas, at its first mip. */
+	constexpr uint32_t c_ImpostorAtlasTexels = c_ImpostorFramesPerSide * c_ImpostorFrameTexels;
+
+	/**
+	 * Mips each atlas carries, the first included: down to frames of 8 texels, past which a mip
+	 * would blend neighbouring frames' views together.
+	 */
+	constexpr uint32_t c_ImpostorAtlasMips = 5;
+
+	/** Bytes of one atlas, its whole mip chain of RGBA8 texels, mip 0 first. */
+	constexpr uint32_t c_ImpostorAtlasBytes =
+		4 * (c_ImpostorAtlasTexels * c_ImpostorAtlasTexels +
+	         (c_ImpostorAtlasTexels >> 1) * (c_ImpostorAtlasTexels >> 1) +
+	         (c_ImpostorAtlasTexels >> 2) * (c_ImpostorAtlasTexels >> 2) +
+	         (c_ImpostorAtlasTexels >> 3) * (c_ImpostorAtlasTexels >> 3) +
+	         (c_ImpostorAtlasTexels >> 4) * (c_ImpostorAtlasTexels >> 4));
+
+	static_assert(c_ImpostorAtlasMips == 5, "c_ImpostorAtlasBytes sums one term per mip");
+
+	/**
+	 * A mesh's baked impostor, in `BMesh::impostors`: the tier past its last level of detail, drawn
+	 * as one quad per placement. Two atlases of `c_ImpostorFramesPerSide` squared frames, each the
+	 * mesh's level 0 seen from one direction of the upper hemisphere, laid out hemi-octahedrally --
+	 * frame (x, y) looks along the direction whose octahedral encoding is the frame's centre.
+	 *
+	 * The albedo atlas holds linear base colour in rgb and coverage in a; the normal-depth atlas
+	 * holds the surface normal in the mesh's local space, as `n * 0.5 + 0.5` in rgb, and in a the
+	 * depth toward the viewer across the bake sphere, 0 at its far side and 1 at its near. A texel
+	 * no surface covers has coverage 0. Both are linear RGBA8, `c_ImpostorAtlasBytes` each.
+	 */
+	struct MeshImpostor
+	{
+		uint32_t mesh;               // into BMesh::meshes
+		uint32_t albedoOffset;       // into BMesh::impostorTexels
+		uint32_t normalDepthOffset;  // into BMesh::impostorTexels
+
+		// Drawn while the placement's projected diameter, in pixels, is at least this and below
+		// its last level's floor; 0 means never dropped.
+		float minPixels = 0.0f;
+
+		// The sphere every frame was baked over, in the mesh's local space: a frame's quad is the
+		// sphere's diameter across, facing its view direction from the centre.
+		glm::vec3 center;
+		float     radius;
+	};
+
+	static_assert(sizeof(MeshImpostor) == 32);
 }

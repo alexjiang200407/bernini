@@ -2037,6 +2037,11 @@ namespace bgl
 					static_cast<uint32_t>(*desc.forceLevel),
 					cMaxMeshLods));
 		}
+		if (desc.forceImpostor && desc.forceLevel.has_value())
+		{
+			throw SceneError(
+				"SetLodSelection: forceImpostor and forceLevel each force a tier; give one");
+		}
 
 		if (desc.poseBudget != m_LodSelection.poseBudget)
 		{

@@ -1,3 +1,5 @@
+import Entry;
+import Impostor;
 import LodLevel;
 import LodSubmeshRange;
 
@@ -17,4 +19,8 @@ public struct Geom
     // walked from 0; below every entry nothing is drawn, so entry submeshes.lodCount - 1 is the
     // draw-nothing size and 0 there means never dropped. Entries past the level count are unread.
     public float lodMinPixels[cMaxMeshLods];
+
+    // Drawn past the last level, below that level's floor and down to the impostor's own; null
+    // where the mesh has none, so a placement there draws nothing as before.
+    public Entry<Impostor> impostor;
 };

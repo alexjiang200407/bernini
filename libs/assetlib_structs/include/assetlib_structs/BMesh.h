@@ -21,6 +21,10 @@ namespace assetlib
 		std::vector<Submesh>  submeshes;
 		std::vector<MeshLod>  lods;  // each mesh's levels, see Mesh::firstLod
 
+		// The meshes that have one, in mesh order; and the atlases they address.
+		std::vector<MeshImpostor> impostors;
+		std::vector<uint8_t>      impostorTexels;
+
 		std::vector<Meshlet>      meshlets;
 		std::vector<MeshletGroup> meshletGroups;     // one bound per c_MeshletsPerGroup meshlets
 		std::vector<uint32_t>     meshletVertices;   // meshopt vertex remap

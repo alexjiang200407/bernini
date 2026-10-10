@@ -21,6 +21,11 @@ namespace bgl
 		// draws its coarsest -- which is how a level is looked at on its own. Empty selects by size.
 		std::optional<LodLevel> forceLevel;
 
+		// Draws every placement past its last level -- its impostor, or nothing where its mesh has
+		// none -- skipping the size test: how an impostor is looked at on its own. Refused with
+		// forceLevel.
+		bool forceImpostor = false;
+
 		// How long a change of level dissolves over, the two levels dithered against each other
 		// and resolved by temporal AA. 0 swaps in one frame. A PoseSource::kAuto placement changing
 		// source dissolves over the same time.

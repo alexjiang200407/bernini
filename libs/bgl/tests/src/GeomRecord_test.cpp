@@ -87,6 +87,10 @@ TEST_CASE("Every geom kind uploads a record naming its submeshes", "[geom]")
 		// One level, so the whole range is that level's submeshes.
 		CHECK(onGpu.submeshes.lodCount == 1u);
 
+		// No geom made from these has a baked impostor, so the tier past its last level draws
+		// nothing, as it did before impostors existed.
+		CHECK(onGpu.impostor.Null());
+
 		// Element 0 is the arena's reserved null, so a live geom never lands on it -- which is what
 		// lets a placement's Entry<Geom> mean "no geom" by being zero.
 		CHECK(scene->GetGeomEntry(geom.handle.index).index != 0);

@@ -7,6 +7,9 @@ import LodLevel;
 // while the placement lives where the dense instance slot does not. One word: 90k placements is
 // 360 KB per frustum.
 //
+// A level equal to the geom's lodCount is the tier past its last level: its impostor where the
+// geom has one (Geom.impostor), and nothing drawn where it has none.
+//
 // The packing is these constants, and the CPU decode (bgl::UnpackInstanceLod) reads the same ones.
 public static const uint cInstanceLodLevelMask = 0x0F;
 public static const uint cInstanceLodOutgoingShift = 8;
