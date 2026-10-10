@@ -33,6 +33,37 @@ slope is measured on the ground as it will stand. It is deterministic by seed an
 samples. The offline
 container a terrain is stored as later is this struct serialised; nothing stores one yet.
 
+## Terracing
+
+Ridged noise has no shelves: every slope is one run from valley to crest, so nothing a game lays
+on gentle ground -- grass, snow, woods -- finds anywhere to settle on a mountain.
+`TerrainGenerateDesc::terrace`
+([terrainlib/types/TerraceDesc.h](../libs/terrainlib/include/terrainlib/types/TerraceDesc.h)) steps
+the generated heights into strata, after the noise and before erosion, as bedded rock weathers
+into benches and cliffs ([src/Generate.cpp](../libs/terrainlib/src/Generate.cpp)). The default
+steps nothing.
+
+- **The profile.** Each step of `stepHeight` metres is a near-level shelf climbing `shelfRise` of
+  the step over the first `shelf` of its run, then a face climbing the rest: leaving the shelf at a
+  scree's angle, steepening, and rounding over at its lip, so it meets the next shelf with no seam.
+- **Cut into the broad land.** The steps are cut into the heights smoothed over `smoothing` metres,
+  and `detail` of what that smoothing took away is laid back over them. Stepped raw, a face's edge
+  moves with every bump of the noise's finest octaves -- tens of metres tall on the mountains --
+  and the faces come out fluted into vertical teeth; stepped smoothed, a face follows the land's
+  broad contour, and the detail laid back at a share roughens it without amplifying it.
+- **Never contour lines.** A step's height varies by `jitter` of itself across the field, the
+  strata dip by `tilt` along a direction the seed fixes, their edges wander by `edgeNoise` metres,
+  and minor steps `minorStep` of a step tall, cut `minorStrength` deep, break up the faces.
+- **Only the high ground.** Stepping fades in from `startHeight` metres above the field's lowest
+  ground over `fadeHeight`, by the smoothed height, so valleys and meadows keep the noise's slopes.
+- **Held to the grid.** A lip sharper than a cell is drawn as a staircase of triangles, so where it
+  steps, the field is smoothed over one cell after.
+
+It is deterministic by seed and linear in the samples: two box filters from summed-area tables,
+one pass over the samples, and a third filter. gpu-battle-sim's `mountains` field, 1001 x 1001
+samples at 2 m, generated in about 80 ms with it against about 50 ms without (its report's
+`generationMs.heightfield`, a release build on 12 hardware threads).
+
 ## Erosion
 
 Noise is a plain with no history: its hollows drain nowhere and its slopes carry no mark of the
