@@ -69,7 +69,7 @@ namespace bgl
 		auto& uniforms = *found;
 
 		uniforms["sceneDepth"]  = draw.targets.depthSrv;
-		uniforms["sceneColor"]  = draw.targets.sceneColorCopySrv;
+		uniforms["sceneColor"]  = draw.targets.waterCopy.copySrv;
 		uniforms["invViewProj"] = glm::inverse(draw.viewState.viewProj);
 
 		const bgpu::Viewport& viewport = draw.viewState.viewport;
@@ -101,7 +101,7 @@ namespace bgl
 	{
 		// No copy is a pool that refused it, and water is then skipped rather than refracting
 		// through a null view.
-		return !draw.targets.sceneColorCopySrv.IsNull() && m_Kernels.DemandsWater(draw);
+		return !draw.targets.waterCopy.copySrv.IsNull() && m_Kernels.DemandsWater(draw);
 	}
 
 	void

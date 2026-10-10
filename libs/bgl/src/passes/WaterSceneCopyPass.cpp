@@ -73,7 +73,7 @@ namespace bgl
 	void
 	WaterSceneCopyPass::AttachToFrameGraph(FrameGraph& fg, const DrawData& draw)
 	{
-		if (draw.targets.sceneColorCopy.IsNull())
+		if (draw.targets.waterCopy.copy.IsNull())
 		{
 			return;
 		}
@@ -101,7 +101,7 @@ namespace bgl
 
 		if (auto found = m_Kernel.FindUniforms(c_Cbuffer))
 		{
-			(*found)["sceneColor"] = draw.targets.sceneColorSrv;
+			(*found)["sceneColor"] = draw.targets.waterCopy.source;
 		}
 		else
 		{
@@ -111,7 +111,7 @@ namespace bgl
 		auto gfxState   = bgpu::MeshletState();
 		gfxState.kernel = &m_Kernel;
 		gfxState.viewportState.AddViewportAndScissorRect(draw.viewState.viewport);
-		gfxState.frameBuffer = bgpu::FrameBuffer().AddColorAttachment(draw.targets.sceneColorCopy);
+		gfxState.frameBuffer = bgpu::FrameBuffer().AddColorAttachment(draw.targets.waterCopy.copy);
 
 		cmd->SetMeshletState(gfxState);
 

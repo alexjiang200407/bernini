@@ -918,7 +918,6 @@ namespace bgl
 		draw.targets.outlineMask          = m_ActiveTarget->GetOutlineMaskRtv();
 		draw.targets.grassRootHeight      = m_ActiveTarget->GetGrassRootHeightRtv();
 		draw.targets.grassRootHeightSrv   = m_ActiveTarget->GetGrassRootHeightSrv();
-		draw.targets.sceneColorSrv        = m_ActiveTarget->GetSceneColorSrv();
 
 		draw.materialArena            = scene->GetMaterialBinding();
 		draw.samplers.anisoLinearWrap = scene->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
@@ -1028,8 +1027,9 @@ namespace bgl
 			if (!copy.GetTexture().IsNull())
 			{
 				m_FrameGraph.ImportGlobalTexture(c_SceneColorCopyName, copy.GetTexture());
-				draw.targets.sceneColorCopy    = copy.GetRtv();
-				draw.targets.sceneColorCopySrv = copy.GetSrv();
+				draw.targets.waterCopy.source  = m_ActiveTarget->GetSceneColorSrv();
+				draw.targets.waterCopy.copy    = copy.GetRtv();
+				draw.targets.waterCopy.copySrv = copy.GetSrv();
 			}
 		}
 		m_WaterSceneCopy.AttachToFrameGraph(m_FrameGraph, draw);
