@@ -1,3 +1,5 @@
+#include "grids.h"
+
 #include <algorithm>
 #include <array>
 #include <assetlib_structs/Heightfield.h>
@@ -9,7 +11,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <numeric>
-#include <queue>
 #include <terrainlib/fields.h>
 #include <terrainlib/layer.h>
 #include <utility>
@@ -148,46 +149,10 @@ namespace terrain
 			fields.wetness.values[i] =
 				std::clamp((std::log(flow[i]) - logDry) / (logWet - logDry), 0.0f, 1.0f);
 		}
-		// Priority flood: water rises from the field's edge, lowest first, and every sample it
-		// reaches stands at least as high as the water that reached it.
-		using Entry = std::pair<float, uint32_t>;
-		auto queue  = std::priority_queue<Entry, std::vector<Entry>, std::greater<>>();
-		auto filled = std::vector<float>(field.heights.size(), -1.0f);
-		for (uint32_t z = 0; z < sz; ++z)
-		{
-			for (uint32_t x = 0; x < sx; ++x)
-			{
-				if (x == 0 || z == 0 || x == sx - 1 || z == sz - 1)
-				{
-					const size_t i = index(x, z);
-					filled[i]      = static_cast<float>(field.heights[i]) * scale;
-					queue.emplace(filled[i], static_cast<uint32_t>(i));
-				}
-			}
-		}
-		while (!queue.empty())
-		{
-			const auto [level, i] = queue.top();
-			queue.pop();
-			const auto x = static_cast<int>(i % sx);
-			const auto z = static_cast<int>(i / sx);
-			for (const glm::ivec2 n : core::c_Neighbours8)
-			{
-				const int nx = x + n.x;
-				const int nz = z + n.y;
-				if (nx < 0 || nz < 0 || nx >= static_cast<int>(sx) || nz >= static_cast<int>(sz))
-				{
-					continue;
-				}
-				const size_t to = index(static_cast<uint32_t>(nx), static_cast<uint32_t>(nz));
-				if (filled[to] >= 0.0f)
-				{
-					continue;
-				}
-				filled[to] = std::max(level, height(nx, nz));
-				queue.emplace(filled[to], static_cast<uint32_t>(to));
-			}
-		}
+		auto ground = std::vector<float>(field.heights.size());
+		for (size_t i = 0; i < ground.size(); ++i)
+			ground[i] = static_cast<float>(field.heights[i]) * scale;
+		const std::vector<float> filled = FloodFromEdge(ground, sx, sz).filled;
 		for (size_t i = 0; i < filled.size(); ++i)
 		{
 			fields.lakeDepth.values[i] = filled[i] - static_cast<float>(field.heights[i]) * scale;

@@ -277,8 +277,11 @@ Structs are populated bottom-up, each parent storing the offset the buffer hands
   copies only the dirty blocks.
 
 For a concrete procedural builder, see [Scene_Geometry.cpp](libs/bgl/src/scene/Scene_Geometry.cpp). The three
-primitives — `AddCubeGeom`, `AddSphereGeom`, `AddPlaneGeom` — only generate vertices and indices;
-they all hand off to `Scene::AddProceduralGeom`, which greedily meshletizes under the
+primitives — `AddCubeGeom`, `AddSphereGeom`, `AddPlaneGeom` — only generate vertices and indices,
+and `AddTriangleGeom` takes a caller's own vertex bytes with the `assetlib::VertexLayout` that
+decodes them (`bgl::TriangleGeomDesc`), so a generated surface carries only the attributes its
+material reads and the rest decode to `DecodeVertex`'s defaults; they all hand off to
+`Scene::AddProceduralGeom`, which greedily meshletizes under the
 `cMaxVerticesPerMeshlet` / `cMaxPrimsPerMeshlet` caps and performs the upload sequence above. A
 primitive whose grid exceeds the 65535 meshlets one `DispatchMesh` can launch is rejected rather
 than silently truncated.

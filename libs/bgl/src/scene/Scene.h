@@ -56,6 +56,7 @@
 #include <bgl/types/TextureAssetHandle.h>
 #include <bgl/types/ToonShadingRigDesc.h>
 #include <bgl/types/ToonShadingRigHandle.h>
+#include <bgl/types/TriangleGeomDesc.h>
 #include <bgpu/buffer/ComputeBuffer.h>
 #include <bgpu/buffer/EntryBuffer.h>
 #include <bgpu/buffer/PackedBuffer.h>
@@ -566,6 +567,9 @@ namespace bgl
 			MaterialHandle material = {}) override;
 
 		GeomHandle
+		AddTriangleGeom(const TriangleGeomDesc& desc) override;
+
+		GeomHandle
 		AddStaticMeshGeom(const StaticMeshGeomDesc& desc) override;
 
 		GeomHandle
@@ -788,17 +792,27 @@ namespace bgl
 		 * The tail every procedural primitive shares: meshletize `indices`, upload the vertex, vertex-map,
 		 * index and meshlet pools, and register the result as one single-submesh geometry asset.
 		 *
-		 * `verts` is packed verbatim, so it must already be in the 48-byte procedural layout.
+		 * `vertices` is packed verbatim and decoded by `layout`; `positions` are its positions, which
+		 * the meshlets' and the geom's bounds are fitted to.
 		 *
 		 * @throws SceneError if the primitive needs more meshlets than one DispatchMesh can launch, or if
 		 *         a buffer allocation fails.
 		 */
 		GeomHandle
 		AddProceduralGeom(
-			std::span<const VertexGen>     verts,
+			std::span<const std::byte>     vertices,
+			const idl::VertexLayout&       layout,
+			std::span<const glm::vec3>     positions,
 			std::span<const uint32_t>      indices,
 			MaterialHandle                 material,
 			const std::optional<glm::vec4> boundingSphere = std::nullopt);
+
+		/** A cube, sphere or plane: AddProceduralGeom over the 48-byte procedural layout. */
+		GeomHandle
+		AddPrimitiveGeom(
+			std::span<const VertexGen> verts,
+			std::span<const uint32_t>  indices,
+			MaterialHandle             material);
 
 		/**
 		 * AddStaticMeshGeom's body, with the one knob an animated geom needs: `sphereOverride`

@@ -74,6 +74,46 @@ itself is 0.04 s. It is linear in the samples at a fixed droplet density (`Erosi
 `[perf]` case). Longer droplet paths (`maxSteps`) widen the tiles and starve the phases of
 parallel work: 160 steps at three droplets a sample took 17 s.
 
+## Water
+
+`terrain::CarveWater` ([terrainlib/water.h](../libs/terrainlib/include/terrainlib/water.h)) cuts
+rivers and lakes into a field, in place, after it is generated and before anything is derived from
+it, and returns the water standing in them ([src/water.cpp](../libs/terrainlib/src/water.cpp)).
+It reads any heightfield, generated or not. `WaterDesc` holds a `RiverRule` and a `LakeRule`; an
+area of 0 cuts no river and a count of 0 digs no lake.
+
+- **Drainage.** A priority flood from the field's edge: each sample drains to the neighbour the
+  flood reached it from, its lowest by the ground as filled, so a hollow drains over its rim and
+  every sample reaches the edge. Each sample's upstream area is summed down that tree.
+- **Rivers** begin where `area` square metres drain through. A stem is walked upstream from a river
+  sample on the edge through its largest donor; every other donor starts a tributary ending on the
+  point of the stem it joins, so the larger branch of each confluence is laid first and a tributary
+  meets a surface already decided. A course shorter than `minLength` is dropped with its tributaries.
+  Each course is smoothed over `smoothing` metres, ends held. A river is `width` metres wide where a
+  square kilometre drains through, growing with the square root of the area, within its limits.
+- **The surface** of a river is, at each point, the lowest ground across its width, never rising
+  downstream, smoothed into slopes but never lifted above that lowest ground, and on a tributary
+  held at least at the surface it meets. So the water lies in its channel, not over its banks.
+- **Lakes** are dug, not kept from breaching: up to `count` of them on flat ground, low against
+  the ground three radii around and gathering water, `spacing` apart and clear of the field's edge.
+  A lake's shore is a circle pushed in and out by a noise; its level is the lowest point of its rim,
+  where it would spill, and no higher than any river through it, which runs at that level inside it.
+- **The cut.** A channel is a bed `depth` per metre of width below the surface at its middle, rising
+  through the surface to 0.3 m above it at its banks; a lake a bowl `depth` below its level at its
+  middle, rising the same way at its shore. Beyond either, the ground rises back to where it stood
+  over `bank` metres. The shore is where a slope crosses the water, never ground level with it. The
+  field is requantised to the range it holds after the cut.
+
+`TerrainWater` is five layers laid as the field is: the water's `surface` (the ground's own height
+where it is dry), its `depth`, its flow in metres a second along x and z (down a river, 0 on a
+lake), and `shore`, the signed distance to the water's edge, positive on land: what lays a beach and
+keeps a wood back from the water. With them come each river's course, surface and width, and each
+lake's centre, radius and level. Heights are in the field's own frame, as `minHeight` is.
+
+Deterministic from the field and the desc, and linear in the samples but for the flood's heap and
+the sorts of the rivers' outlets and the lakes' candidate sites. The flood is the one `lakeDepth`
+is derived by, so the carved drainage and the lakes agree on where water goes.
+
 ## Fields
 
 `terrain::DeriveFields` ([terrainlib/fields.h](../libs/terrainlib/include/terrainlib/fields.h))
@@ -89,8 +129,7 @@ is like at each sample, as layers laid like it:
 | `lakeDepth` | metres of standing water, were each hollow filled to where it spills | a priority flood from the edge, where water leaves |
 
 Deterministic, and linear in the samples but for one sort by height and one heap: 0.3 s for
-1001 x 1001 in release. Lake depth and flow are what a water surface will stand on; nothing
-draws one yet.
+1001 x 1001 in release. After CarveWater, its lakes are what `lakeDepth` finds.
 
 ## Masks
 
@@ -100,7 +139,9 @@ every value 0 or 1 -- so a channel painted by hand later replaces one kind witho
 others:
 
 - **Water** first, from the fields alone: a lake at least `minLakeDepth` deep, or a channel that
-  `riverArea` drains through. Nothing else of the masks lies on it.
+  `riverArea` drains through -- or, given a water layer, that layer, which a field carved by
+  CarveWater passes with whatever margin of shore it keeps clear. Nothing else of the masks lies
+  on it.
 - **Woods** in hollows and on gentle wet ground, never on a crest, past `maxSlope` or on water.
   Each sample scores a low-frequency noise `patchSize` metres across plus its wetness and how deep
   in a hollow it lies, each by a bias; hollow and crest are the topographic position index, a

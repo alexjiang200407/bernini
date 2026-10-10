@@ -29,6 +29,7 @@
 #include <bgl/types/TextureAssetHandle.h>
 #include <bgl/types/ToonShadingRigDesc.h>
 #include <bgl/types/ToonShadingRigHandle.h>
+#include <bgl/types/TriangleGeomDesc.h>
 #include <core/ref/Ref.h>
 #include <core/ref/SharedRef.h>
 #include <cstdint>
@@ -89,6 +90,22 @@ namespace bgl
 			float          width,
 			float          height,
 			MaterialHandle material = {}) = 0;
+
+		/**
+		 * Adds a triangle list built in memory as static-mesh geometry: `desc.vertices` decoded by
+		 * `desc.layout`, as a cooked submesh's are, and `desc.indices` three to a triangle into them.
+		 * What the cube, sphere and plane are built through, for geometry a game generates rather
+		 * than cooks, such as a water surface over a generated field; a vertex carries only what its
+		 * surface reads.
+		 *
+		 * @throws SceneError if there is no triangle, `indices` is not a whole number of them or names
+		 *         a vertex past `vertices`, `vertices` is not a whole number of `layout.stride`, the
+		 *         layout has no float32x3 position, carries a skin binding, places an attribute past
+		 *         the stride or off a 4-byte boundary, the triangles need more meshlets than one draw
+		 *         can launch, or a buffer allocation fails.
+		 */
+		virtual GeomHandle
+		AddTriangleGeom(const TriangleGeomDesc& desc) = 0;
 
 		/**
 		 * Adds one mesh of a loaded BMesh as static-mesh geometry, uploading its submeshes'

@@ -176,7 +176,7 @@ flowchart TD
     IG -- "CreateSceneView(scene, initialInstances)" --> SV[ISceneView]
 
     SV -- "keeps alive" --> SC
-    SC -- "AddStaticMeshGeom / AddSphereGeom / ..." --> GH[GeomHandle]
+    SC -- "AddStaticMeshGeom / AddTriangleGeom / AddSphereGeom / ..." --> GH[GeomHandle]
     SC -- "CreatePbrMaterial / CreateLoosePbrMaterial / CreateSurfaceMaterial" --> MH[MaterialHandle]
     SC -- "AddTextureAsset(ImageData)" --> TH[TextureAssetHandle]
 

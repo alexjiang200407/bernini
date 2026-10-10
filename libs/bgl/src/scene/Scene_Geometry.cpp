@@ -170,7 +170,7 @@ namespace bgl
 		 * a local slot; a vertex shared across meshlets is simply stored in each of them.
 		 */
 		MeshletBuild
-		BuildMeshlets(std::span<const VertexGen> verts, std::span<const uint32_t> indices)
+		BuildMeshlets(std::span<const glm::vec3> positions, std::span<const uint32_t> indices)
 		{
 			auto build = MeshletBuild();
 
@@ -231,8 +231,8 @@ namespace bgl
 				auto maxBound = glm::vec3(std::numeric_limits<float>::lowest());
 				for (const auto& [geomVertexIdx, localIdx] : localRemap)
 				{
-					minBound = glm::min(minBound, verts[geomVertexIdx].pos);
-					maxBound = glm::max(maxBound, verts[geomVertexIdx].pos);
+					minBound = glm::min(minBound, positions[geomVertexIdx]);
+					maxBound = glm::max(maxBound, positions[geomVertexIdx]);
 				}
 				const glm::vec4 sphere = core::bounding_sphere_of(minBound, maxBound);
 				meshlet.boundingSphere = sphere;
@@ -278,12 +278,14 @@ namespace bgl
 
 	GeomHandle
 	Scene::AddProceduralGeom(
-		std::span<const VertexGen>     verts,
-		std::span<const uint32_t>      indices,
-		MaterialHandle                 material,
-		const std::optional<glm::vec4> boundingSphere)
+		const std::span<const std::byte> vertices,
+		const idl::VertexLayout&         layout,
+		const std::span<const glm::vec3> positions,
+		const std::span<const uint32_t>  indices,
+		const MaterialHandle             material,
+		const std::optional<glm::vec4>   boundingSphere)
 	{
-		const auto build = BuildMeshlets(verts, indices);
+		const auto build = BuildMeshlets(positions, indices);
 
 		// A procedural primitive is one submesh, so its meshlets all have to fit in a single
 		// dispatch.
@@ -302,9 +304,8 @@ namespace bgl
 			// the fallback down too.
 			auto rollback = GeomRollback();
 
-			const auto baseVertexGlobal = rollback.Track(
-				m_VertexDataBuffer,
-				m_VertexDataBuffer.AddBytes(std::as_bytes(verts)));
+			const auto baseVertexGlobal =
+				rollback.Track(m_VertexDataBuffer, m_VertexDataBuffer.AddBytes(vertices));
 			const auto baseMapGlobal =
 				rollback.Track(m_VertexMapBuffer, m_VertexMapBuffer.Add(build.vertexMap));
 			const auto baseIndexGlobal =
@@ -317,13 +318,13 @@ namespace bgl
 				rollback.Track(m_MeshletGroupBuffer, m_MeshletGroupBuffer.Add(groups));
 
 			auto submesh          = idl::Submesh();
-			submesh.layout        = MakeProceduralLayout();
+			submesh.layout        = layout;
 			submesh.meshlets      = baseMeshletGlobal;
 			submesh.meshletGroups = baseGroupGlobal;
 			submesh.vertexMap     = baseMapGlobal;
 			submesh.vertexData    = baseVertexGlobal;
 			submesh.indices       = baseIndexGlobal;
-			submesh.vertexCount   = static_cast<uint32_t>(verts.size());
+			submesh.vertexCount   = static_cast<uint32_t>(positions.size());
 
 			// An animated geom overrides the fold: its vertices move every frame, so the sphere must
 			// come from the clip set's posed bounds rather than the bind pose uploaded here.
@@ -331,14 +332,14 @@ namespace bgl
 			{
 				submesh.boundingSphere = *boundingSphere;
 			}
-			else if (!verts.empty())
+			else if (!positions.empty())
 			{
 				auto minBound = glm::vec3(std::numeric_limits<float>::max());
 				auto maxBound = glm::vec3(std::numeric_limits<float>::lowest());
-				for (const VertexGen& v : verts)
+				for (const glm::vec3& p : positions)
 				{
-					minBound = glm::min(minBound, v.pos);
-					maxBound = glm::max(maxBound, v.pos);
+					minBound = glm::min(minBound, p);
+					maxBound = glm::max(maxBound, p);
 				}
 
 				const glm::vec4 sphere = core::bounding_sphere_of(minBound, maxBound);
@@ -501,7 +502,7 @@ namespace bgl
 			cubeIndices.push_back(base + 3u);
 		}
 
-		return AddProceduralGeom(cubeVertices, cubeIndices, material);
+		return AddPrimitiveGeom(cubeVertices, cubeIndices, material);
 	}
 
 	GeomHandle
@@ -559,7 +560,7 @@ namespace bgl
 			}
 		}
 
-		return AddProceduralGeom(sphereVerts, sphereIndices, material);
+		return AddPrimitiveGeom(sphereVerts, sphereIndices, material);
 	}
 
 	GeomHandle
@@ -623,7 +624,128 @@ namespace bgl
 			}
 		}
 
-		return AddProceduralGeom(planeVerts, planeIndices, material);
+		return AddPrimitiveGeom(planeVerts, planeIndices, material);
+	}
+
+	GeomHandle
+	Scene::AddPrimitiveGeom(
+		const std::span<const VertexGen> verts,
+		const std::span<const uint32_t>  indices,
+		const MaterialHandle             material)
+	{
+		auto positions = std::vector<glm::vec3>();
+		positions.reserve(verts.size());
+		for (const VertexGen& v : verts) positions.push_back(v.pos);
+		return AddProceduralGeom(
+			std::as_bytes(verts),
+			MakeProceduralLayout(),
+			positions,
+			indices,
+			material);
+	}
+
+	namespace
+	{
+		/** The bytes one attribute of `format` takes in a vertex. */
+		[[nodiscard]] uint32_t
+		FormatBytes(const assetlib::VertexFormat format) noexcept
+		{
+			switch (format)
+			{
+			case assetlib::VertexFormat::kFloat32x2:
+				return 8;
+			case assetlib::VertexFormat::kFloat32x3:
+				return 12;
+			case assetlib::VertexFormat::kFloat32x4:
+				return 16;
+			case assetlib::VertexFormat::kUnorm8x4:
+			case assetlib::VertexFormat::kUnorm16x2:
+				return 4;
+			case assetlib::VertexFormat::kUnorm16x4:
+			case assetlib::VertexFormat::kUint16x4:
+				return 8;
+			}
+			core::fatal("An unknown vertex format");
+		}
+	}
+
+	GeomHandle
+	Scene::AddTriangleGeom(const TriangleGeomDesc& desc)
+	{
+		const auto refuse = [](const std::string& why) {
+			throw SceneError("Scene::AddTriangleGeom: " + why);
+		};
+		const assetlib::VertexLayout& layout = desc.layout;
+
+		if (desc.indices.empty() || desc.indices.size() % 3u != 0u)
+			refuse(
+				std::format("{} indices are not a whole number of triangles", desc.indices.size()));
+		if (layout.stride == 0 || desc.vertices.size() % layout.stride != 0)
+		{
+			refuse(
+				std::format(
+					"{} bytes of vertices are not a whole number of {}-byte vertices",
+					desc.vertices.size(),
+					layout.stride));
+		}
+		if (layout.attributeCount > assetlib::VertexLayout::c_MaxAttributes)
+			refuse(std::format("a layout of {} attributes", layout.attributeCount));
+
+		const assetlib::VertexAttribute* position = nullptr;
+		for (uint32_t i = 0; i < layout.attributeCount; ++i)
+		{
+			const assetlib::VertexAttribute& attribute = layout.attributes[i];
+			if (attribute.offset + FormatBytes(attribute.format) > layout.stride)
+			{
+				refuse(
+					std::format(
+						"attribute {} at byte {} runs past the {}-byte vertex",
+						i,
+						attribute.offset,
+						layout.stride));
+			}
+			if (attribute.semantic == assetlib::VertexSemantic::kJoints0 ||
+			    attribute.semantic == assetlib::VertexSemantic::kWeights0)
+				refuse("a skin binding; a triangle list is static geometry");
+			if (attribute.semantic == assetlib::VertexSemantic::kPosition)
+				position = &attribute;
+		}
+		if (position == nullptr || position->format != assetlib::VertexFormat::kFloat32x3)
+			refuse("the layout carries no float32x3 position");
+
+		auto converted = idl::VertexLayout();
+		try
+		{
+			converted = ConvertLayout(layout);
+		}
+		catch (const std::runtime_error& e)
+		{
+			refuse(e.what());
+		}
+
+		const size_t count = desc.vertices.size() / layout.stride;
+		const auto   past  = std::ranges::find_if(desc.indices, [&](const uint32_t index) {
+			return index >= count;
+		});
+		if (past != desc.indices.end())
+		{
+			refuse(
+				std::format(
+					"index {} names vertex {} of {}",
+					past - desc.indices.begin(),
+					*past,
+					count));
+		}
+
+		auto positions = std::vector<glm::vec3>(count);
+		for (size_t v = 0; v < count; ++v)
+		{
+			std::memcpy(
+				&positions[v],
+				desc.vertices.data() + v * layout.stride + position->offset,
+				sizeof(glm::vec3));
+		}
+		return AddProceduralGeom(desc.vertices, converted, positions, desc.indices, desc.material);
 	}
 
 	struct PreparedStaticMesh::Impl
