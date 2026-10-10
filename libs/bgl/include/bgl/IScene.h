@@ -17,6 +17,7 @@
 #include <bgl/types/GroundPlaneDesc.h>
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/MaterialHandle.h>
+#include <bgl/types/MeshVertex.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/RigHandle.h>
 #include <bgl/types/SceneDesc.h>
@@ -89,6 +90,22 @@ namespace bgl
 			float          width,
 			float          height,
 			MaterialHandle material = {}) = 0;
+
+		/**
+		 * Adds a triangle list built in memory as static-mesh geometry: `indices` three to a triangle,
+		 * each wound counter-clockwise seen from the side its normals face, into `vertices`, uploaded
+		 * as they stand. What the cube, sphere and plane are built through, for geometry a game
+		 * generates rather than cooks, such as a water surface over a generated field.
+		 *
+		 * @throws SceneError if there is no triangle, `indices` is not a whole number of them or names
+		 *         a vertex past `vertices`, the triangles need more meshlets than one draw can
+		 *         launch, or a buffer allocation fails.
+		 */
+		virtual GeomHandle
+		AddTriangleGeom(
+			std::span<const MeshVertex> vertices,
+			std::span<const uint32_t>   indices,
+			MaterialHandle              material = {}) = 0;
 
 		/**
 		 * Adds one mesh of a loaded BMesh as static-mesh geometry, uploading its submeshes'

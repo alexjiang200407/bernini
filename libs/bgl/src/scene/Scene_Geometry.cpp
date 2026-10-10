@@ -1,6 +1,5 @@
 #include "scene/GeomRollback.h"
 #include "scene/Scene.h"
-#include "types/VertexGen.h"
 #include "util/util.h"
 #include <algorithm>
 #include <array>
@@ -18,6 +17,7 @@
 #include <bgl/idl/VertexLayout.h>
 #include <bgl/types/GeomHandle.h>
 #include <bgl/types/MaterialHandle.h>
+#include <bgl/types/MeshVertex.h>
 #include <bgl/types/RigHandle.h>
 #include <bgpu/idl/RawRange.h>
 #include <cmath>
@@ -127,10 +127,10 @@ namespace bgl
 
 		// The interleaved vertex layout the procedural geometry emits: position,
 		// normal, uv, tangent, tightly packed at a 48-byte stride. This is exactly
-		// the full VertexGen, and is decoded on the GPU via each submesh's
+		// the full MeshVertex, and is decoded on the GPU via each submesh's
 		// VertexLayout descriptor.
 		constexpr uint32_t c_ProceduralStride = 48;
-		static_assert(sizeof(VertexGen) == c_ProceduralStride);
+		static_assert(sizeof(MeshVertex) == c_ProceduralStride);
 
 		idl::VertexLayout
 		MakeProceduralLayout()
@@ -170,7 +170,7 @@ namespace bgl
 		 * a local slot; a vertex shared across meshlets is simply stored in each of them.
 		 */
 		MeshletBuild
-		BuildMeshlets(std::span<const VertexGen> verts, std::span<const uint32_t> indices)
+		BuildMeshlets(std::span<const MeshVertex> verts, std::span<const uint32_t> indices)
 		{
 			auto build = MeshletBuild();
 
@@ -278,7 +278,7 @@ namespace bgl
 
 	GeomHandle
 	Scene::AddProceduralGeom(
-		std::span<const VertexGen>     verts,
+		std::span<const MeshVertex>    verts,
 		std::span<const uint32_t>      indices,
 		MaterialHandle                 material,
 		const std::optional<glm::vec4> boundingSphere)
@@ -335,7 +335,7 @@ namespace bgl
 			{
 				auto minBound = glm::vec3(std::numeric_limits<float>::max());
 				auto maxBound = glm::vec3(std::numeric_limits<float>::lowest());
-				for (const VertexGen& v : verts)
+				for (const MeshVertex& v : verts)
 				{
 					minBound = glm::min(minBound, v.pos);
 					maxBound = glm::max(maxBound, v.pos);
@@ -473,8 +473,8 @@ namespace bgl
 		// Per-face corners in (s, t) order: BL, BR, TR, TL -- CCW from outside.
 		static const glm::vec2 c_Corners[4] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
 
-		std::vector<VertexGen> cubeVertices;
-		std::vector<uint32_t>  cubeIndices;
+		std::vector<MeshVertex> cubeVertices;
+		std::vector<uint32_t>   cubeIndices;
 		cubeVertices.reserve(24);
 		cubeIndices.reserve(36);
 
@@ -485,7 +485,7 @@ namespace bgl
 
 			for (const auto& c : c_Corners)
 			{
-				auto v    = VertexGen();
+				auto v    = MeshVertex();
 				v.pos     = face.normal + c.x * face.tangent + c.y * up;
 				v.normal  = face.normal;
 				v.uv      = glm::vec2((c.x + 1.0f) * 0.5f, (c.y + 1.0f) * 0.5f);
@@ -517,8 +517,8 @@ namespace bgl
 				"Scene::AddSphereGeom: xSegments and ySegments must both be at least 1");
 		}
 
-		std::vector<VertexGen> sphereVerts;
-		std::vector<uint32_t>  sphereIndices;
+		std::vector<MeshVertex> sphereVerts;
+		std::vector<uint32_t>   sphereIndices;
 
 		for (uint32_t y = 0u; y <= ySegments; ++y)
 		{
@@ -535,7 +535,7 @@ namespace bgl
 				// normalized. bitangent = cross(normal, tangent), so w = +1.
 				const float a = xSegment * 2.0f * c_Pi;
 
-				auto v   = VertexGen();
+				auto v   = MeshVertex();
 				v.pos    = glm::vec3(xPos, yPos, zPos) * radius;
 				v.normal = glm::normalize(v.pos);
 				v.uv     = glm::vec2(xSegment, ySegment);
@@ -576,8 +576,8 @@ namespace bgl
 				"Scene::AddPlaneGeom: xSegments and ySegments must both be at least 1");
 		}
 
-		std::vector<VertexGen> planeVerts;
-		std::vector<uint32_t>  planeIndices;
+		std::vector<MeshVertex> planeVerts;
+		std::vector<uint32_t>   planeIndices;
 		planeVerts.reserve(static_cast<size_t>(xSegments + 1u) * (ySegments + 1u));
 		planeIndices.reserve(static_cast<size_t>(xSegments) * ySegments * 6u);
 
@@ -588,7 +588,7 @@ namespace bgl
 				const float u = static_cast<float>(x) / static_cast<float>(xSegments);
 				const float v = static_cast<float>(y) / static_cast<float>(ySegments);
 
-				auto vert   = VertexGen();
+				auto vert   = MeshVertex();
 				vert.pos    = glm::vec3((u - 0.5f) * width, (v - 0.5f) * height, 0.0f);
 				vert.normal = glm::vec3(0.0f, 0.0f, 1.0f);
 				vert.uv     = glm::vec2(u, v);
@@ -624,6 +624,34 @@ namespace bgl
 		}
 
 		return AddProceduralGeom(planeVerts, planeIndices, material);
+	}
+
+	GeomHandle
+	Scene::AddTriangleGeom(
+		const std::span<const MeshVertex> vertices,
+		const std::span<const uint32_t>   indices,
+		const MaterialHandle              material)
+	{
+		if (indices.empty() || indices.size() % 3u != 0u)
+		{
+			throw SceneError(
+				std::format(
+					"Scene::AddTriangleGeom: {} indices are not a whole number of triangles",
+					indices.size()));
+		}
+		const auto past = std::ranges::find_if(indices, [&](const uint32_t index) {
+			return index >= vertices.size();
+		});
+		if (past != indices.end())
+		{
+			throw SceneError(
+				std::format(
+					"Scene::AddTriangleGeom: index {} names vertex {} of {}",
+					past - indices.begin(),
+					*past,
+					vertices.size()));
+		}
+		return AddProceduralGeom(vertices, indices, material);
 	}
 
 	struct PreparedStaticMesh::Impl

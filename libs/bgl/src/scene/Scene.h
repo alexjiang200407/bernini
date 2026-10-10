@@ -4,7 +4,6 @@
 #include "scene/TextureAssetStore.h"
 #include "scene/scene_buffer_names.h"
 #include "types/SubmeshInstance.h"
-#include "types/VertexGen.h"
 #include <RangeWithCount.h>
 #include <array>
 #include <assetlib_structs/Animation.h>
@@ -46,6 +45,7 @@
 #include <bgl/types/GroundPlaneDesc.h>
 #include <bgl/types/LoosePbrMaterialDesc.h>
 #include <bgl/types/MaterialHandle.h>
+#include <bgl/types/MeshVertex.h>
 #include <bgl/types/PbrMaterialDesc.h>
 #include <bgl/types/RigHandle.h>
 #include <bgl/types/SceneDesc.h>
@@ -566,6 +566,12 @@ namespace bgl
 			MaterialHandle material = {}) override;
 
 		GeomHandle
+		AddTriangleGeom(
+			std::span<const MeshVertex> vertices,
+			std::span<const uint32_t>   indices,
+			MaterialHandle              material = {}) override;
+
+		GeomHandle
 		AddStaticMeshGeom(const StaticMeshGeomDesc& desc) override;
 
 		GeomHandle
@@ -795,7 +801,7 @@ namespace bgl
 		 */
 		GeomHandle
 		AddProceduralGeom(
-			std::span<const VertexGen>     verts,
+			std::span<const MeshVertex>    verts,
 			std::span<const uint32_t>      indices,
 			MaterialHandle                 material,
 			const std::optional<glm::vec4> boundingSphere = std::nullopt);
