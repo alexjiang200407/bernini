@@ -103,6 +103,11 @@ On the CPU, `terrain::HeightAt` ([terrainlib/height.h](../libs/terrainlib/includ
 is the same read: bilinear between samples, clamped at the edge, the heightfield laid at the
 origin `TerrainDesc` gives it, a sample of 0 at the origin's height plus the field's `minHeight`. It is how a game stands a camera or a unit on the ground it drew
 without a GPU readback.
+`terrain::LayerAt` ([terrainlib/TerrainLayer.h](../libs/terrainlib/include/terrainlib/TerrainLayer.h))
+reads a `TerrainLayer` -- one float per sample, laid exactly as the heightfield is -- the same
+way, and the fields of the ground and the masks over it (`TerrainFields`, `TerrainMasks`) are
+layers, so a game asks what the ground is like where something stands by the position it stood
+it at.
 
 ## Looking at one
 
