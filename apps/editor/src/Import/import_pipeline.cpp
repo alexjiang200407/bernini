@@ -209,6 +209,8 @@ namespace editor
 		// the writer knows whether it produced the rig or bound one already here.
 		auto rig = assetlib::ImportedRig();
 
+		auto extractedTextures = std::optional<std::vector<std::string>>();
+
 		ZoneScopedN("editor import");
 		ZoneTextF("%s", qPrintable(name));
 
@@ -228,7 +230,7 @@ namespace editor
 
 				if (options.textures)
 				{
-					assetlib::AssetStore(dataRoot).WriteTextures(
+					extractedTextures = assetlib::AssetStore(dataRoot).WriteTextures(
 						*imported,
 						textureDirKey,
 						[&](const assetlib::ProgressEvent& event) {
@@ -307,7 +309,8 @@ namespace editor
 						imported->animations,
 						store.KeyFor(banimPath),
 						sourceRef);
-					target.outputs = { store.KeyFor(banimPath) };
+					target.outputs  = { store.KeyFor(banimPath) };
+					target.textures = extractedTextures;
 					store.WriteImportedDocument(target, nullptr);
 				}
 				else if (options.textures)
@@ -317,6 +320,7 @@ namespace editor
 					                                   assetlib::c_DefaultSampleRate,
 					                                   textureDirKey };
 					target.identity = options.outputs.identity;
+					target.textures = extractedTextures;
 					(void)store.CopyImportedSource(source, target);
 					store.WriteImportedDocument(target, nullptr);
 				}
@@ -363,6 +367,7 @@ namespace editor
 					rig.outputs.push_back(meshStore.KeyFor(bmeshPath));
 					target.skeleton = std::move(rig.skeleton);
 					target.outputs  = std::move(rig.outputs);
+					target.textures = extractedTextures;
 
 					meshStore.WriteImportedDocument(target, &*mesh);
 				}
