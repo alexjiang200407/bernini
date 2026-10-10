@@ -188,7 +188,7 @@ void main(uint globalIdx: SV_DispatchThreadID)
     bool candidate = false;
     if (visible && occludee && (view.occlusion & cOcclusionHzbValidBit) != 0u)
     {
-        if (gUniforms.drawnHistory[globalIdx] == 0u)
+        if ((gUniforms.drawnHistory[globalIdx] & cDrawnMeshBit) == 0u)
         {
             candidate = true;
         }
@@ -228,7 +228,7 @@ void main(uint globalIdx: SV_DispatchThreadID)
     }
 
     gUniforms.visibility[globalIdx].visible = bits;
-    gUniforms.drawnHistory[globalIdx] = meshDrawn ? 1u : 0u;
+    gUniforms.drawnHistory[globalIdx] = meshDrawn ? cDrawnMeshBit : 0u;
 
 #if defined(BERNINI_GPU_DEBUG)
     gUniforms.stats[0].tested.add(1u);

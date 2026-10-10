@@ -115,7 +115,7 @@ void main(uint globalIdx: SV_DispatchThreadID)
     gUniforms.visibility[globalIdx].visible = bits;
     if ((bits & (cVisibleCurrentBit | cVisibleOutgoingBit)) != 0u)
     {
-        gUniforms.drawnHistory[globalIdx] = 1u;
+        gUniforms.drawnHistory[globalIdx] |= cDrawnMeshBit;
     }
 
 #if defined(BERNINI_GPU_DEBUG)

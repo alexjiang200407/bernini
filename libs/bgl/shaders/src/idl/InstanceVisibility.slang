@@ -33,3 +33,16 @@ public static const uint cVisibleImpostorBit = 8;
 // frame, or hidden by last frame's HZB -- which phase 2 tests against the HZB built from phase 1's
 // depth. Counted and compacted by neither phase: on its own it draws nothing.
 public static const uint cVisibleCandidateBit = 16;
+
+// The impostor's own candidate: the placement would draw its impostor (cVisibleImpostorBit) but
+// phase 1 of the occlusion cull did not -- not drawn last frame, or hidden by last frame's HZB --
+// so phase 2 tests its whole-mesh sphere against the HZB phase 1's depth built. Independent of
+// cVisibleCandidateBit: a placement dissolving out of its last level into its impostor carries
+// both decisions.
+public static const uint cVisibleImpostorCandidateBit = 32;
+
+// The bits of the drawn-history word, one per instance slot across frames: whether the slot drew
+// its mesh last frame, and whether it drew its impostor, in either phase. Phase 1 tests each only
+// if it drew; a slot that did not draws nothing in phase 1 and is phase 2's to test.
+public static const uint cDrawnMeshBit = 1;
+public static const uint cDrawnImpostorBit = 2;

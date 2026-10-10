@@ -31,8 +31,9 @@ public enum DrawBucketFlag : uint32_t
     // Drawn from the depth-sorted list rather than by its own indirect dispatch.
     kTransparent = 1,
 
-    // Culled against the HZB and drawn by Forward World in two phases: the static stage's opaque
-    // buckets, a water surface's excepted, since Forward Water draws from phase 1's compaction.
+    // Culled against the HZB and drawn in two phases: the static stage's opaque buckets, a water
+    // surface's excepted, since Forward Water draws from phase 1's compaction; and the impostor
+    // bucket, whose entries are tested by their placement's whole-mesh sphere.
     kOccludee = 2,
 }
 ;

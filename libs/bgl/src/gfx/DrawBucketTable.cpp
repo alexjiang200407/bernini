@@ -176,7 +176,9 @@ namespace bgl
 		const std::optional<uint32_t> slot  = GameSlot(desc.material);
 		const bool                    water = slot.has_value() && *slot < m_SurfaceShading.size() &&
 		                                      m_SurfaceShading[*slot] == SurfaceShading::kWater;
-		if (desc.geom == GeometryStage::kStaticMesh && desc.layer != LayerType::kBlend && !water)
+		const bool                    occluding =
+			desc.geom == GeometryStage::kStaticMesh || desc.geom == GeometryStage::kImpostor;
+		if (occluding && desc.layer != LayerType::kBlend && !water)
 		{
 			flags |= std::to_underlying(idl::DrawBucketFlag::kOccludee);
 		}

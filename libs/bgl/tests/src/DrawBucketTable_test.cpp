@@ -117,6 +117,13 @@ TEST_CASE(
 	CHECK_FALSE(table.Occludee(grass));
 	CHECK_FALSE(table.Occludee(terrain));
 
+	// The impostor bucket is an occludee: a placement drawn as its impostor is tested by its
+	// whole-mesh sphere, as its mesh would be.
+	CHECK(table.Occludee(bgl::idl::cImpostorDrawBucket));
+	CHECK(
+		table.Flags()[bgl::idl::cImpostorDrawBucket] ==
+		std::to_underlying(bgl::idl::DrawBucketFlag::kOccludee));
+
 	// The unlit seed is static and opaque: an occludee like any other.
 	CHECK(table.Occludee(0u));
 

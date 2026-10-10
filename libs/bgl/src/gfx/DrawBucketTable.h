@@ -116,8 +116,9 @@ namespace bgl
 		Water(uint32_t bucket) const noexcept;
 
 		/**
-		 * @pre bucket < Count(). Whether the occlusion cull tests the bucket's instances and Forward
-		 * World draws them in two phases: the static stage's opaque buckets, water excepted.
+		 * @pre bucket < Count(). Whether the occlusion cull tests what draws through the bucket and
+		 * draws it in two phases: the static stage's opaque buckets, water excepted, and the
+		 * impostor bucket, whose entries are the placements drawn as their impostor.
 		 */
 		[[nodiscard]] bool
 		Occludee(uint32_t bucket) const noexcept;

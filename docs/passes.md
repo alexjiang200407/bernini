@@ -619,7 +619,7 @@ many instances turn out to be transparent; only the sort itself is bounded.
 
 * **In:** `scene.instanceBuffer`, `scene.meshInstanceBuffer`, `scene.instanceVisibility`,
   `scene.drawBucketFlags` (one `idl::DrawBucketFlag` word per draw bucket -- `kTransparent`, and
-  `kOccludee` for the static stage's opaque buckets but water's, which the occlusion cull tests --
+  `kOccludee` for the static stage's opaque buckets but water's and for the impostor bucket, which the occlusion cull tests --
   owned by the view and uploaded from the renderer's `DrawBucketTable` whenever it has grown),
   the camera position.
 * **Out:** `scene.transparentSortEntries`/`Count`, `scene.sortedTransparentInstances` and

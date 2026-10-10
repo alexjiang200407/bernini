@@ -40,6 +40,7 @@
 #include <bgpu/types/Format.h>
 #include <bgpu/types/QueueType.h>
 #include <bgpu/uniforms/Uniforms.h>
+#include <bit>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <core/math.h>
@@ -84,6 +85,30 @@ namespace
 		const glm::vec4 clip = viewProj * glm::vec4(world, 1.0f);
 		return clip.z / clip.w;
 	}
+}
+
+TEST_CASE("Every visibility and drawn-history bit is a bit of its own", "[culling][occlusion][idl]")
+{
+	using namespace bgl::idl;
+	constexpr std::array<uint32_t, 6> c_Visibility = { {
+		cVisibleCurrentBit,
+		cVisibleOutgoingBit,
+		cVisibleDissolvingBit,
+		cVisibleImpostorBit,
+		cVisibleCandidateBit,
+		cVisibleImpostorCandidateBit,
+	} };
+	uint32_t                          seen         = 0u;
+	for (const uint32_t bit : c_Visibility)
+	{
+		CAPTURE(bit);
+		CHECK(std::has_single_bit(bit));
+		CHECK((seen & bit) == 0u);
+		seen |= bit;
+	}
+	STATIC_CHECK(std::has_single_bit(cDrawnMeshBit));
+	STATIC_CHECK(std::has_single_bit(cDrawnImpostorBit));
+	STATIC_CHECK(cDrawnMeshBit != cDrawnImpostorBit);
 }
 
 TEST_CASE(
@@ -179,7 +204,7 @@ TEST_CASE(
 		instance.drawBucket   = p.bucket;
 		instanceBuffer.Add(instance);
 
-		history[i] = p.drawnLastFrame ? 1u : 0u;
+		history[i] = p.drawnLastFrame ? bgl::idl::cDrawnMeshBit : 0u;
 	}
 	for (uint32_t i = c_LiveCount; i < padded; ++i)
 	{
