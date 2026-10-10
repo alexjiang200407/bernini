@@ -151,7 +151,8 @@ namespace assetlib
 	 * A mesh's baked impostor, in `BMesh::impostors`: the tier past its last level of detail, drawn
 	 * as one quad per placement. Two atlases of `c_ImpostorFramesPerSide` squared frames, each the
 	 * mesh's level 0 seen from one direction of the upper hemisphere, laid out hemi-octahedrally --
-	 * frame (x, y) looks along the direction whose octahedral encoding is the frame's centre.
+	 * frame (x, y) is seen from the hemi-octahedral decode of the grid point (x, y) /
+	 * (c_ImpostorFramesPerSide - 1), so the corner frames look along the horizon.
 	 *
 	 * The albedo atlas holds linear base colour in rgb and coverage in a; the normal-depth atlas
 	 * holds the surface normal in the mesh's local space, as `n * 0.5 + 0.5` in rgb, and in a the
