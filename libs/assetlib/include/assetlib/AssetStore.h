@@ -463,7 +463,8 @@ namespace assetlib
 			const CancelToken&      cancel     = {}) const;
 
 		/**
-		 * The copied sources re-exported since the import that extracted their textures. Sorted,
+		 * The copied sources re-exported since the import that extracted their textures, or missing
+		 * a file that extract wrote. Sorted,
 		 * and empty on a read-only store. A source with no recorded folder, or no longer in the
 		 * project, is not stale -- see docs/asset_containers.md.
 		 *
@@ -681,9 +682,9 @@ namespace assetlib
 		 * sweeping a clip set's boxes exactly as the writer that produced it did. Re-measuring
 		 * them across the project is `RebakePosedBounds`.
 		 *
-		 * A source's extracted textures are covered too, but by a different question: a `.ktx2`
-		 * carries no header, so `outputs` cannot name one and the only signal available is the
-		 * texture folder being absent or empty.
+		 * A source's extracted textures are covered too: a file its document's `textures` names
+		 * that is absent, or, for a document from before that list, the folder being absent or
+		 * empty.
 		 *
 		 * Rigs, then meshes, then clips -- a clip set's posed boxes are measured against the
 		 * meshes on disk, and a mesh names the rig it binds. Environments, from

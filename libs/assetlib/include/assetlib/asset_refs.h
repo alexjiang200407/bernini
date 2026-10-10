@@ -65,7 +65,7 @@ namespace assetlib
 		kClipSkeleton,      // a .banim's clips were resampled against a .bskel
 		kImportedSource,    // a .bimport names the source it was imported from, and stores it
 		kDocumentSkeleton,  // a .bimport names the .bskel its source's joint indices address
-		kDocumentOutput,    // a .bimport names a container its source produced
+		kDocumentOutput,    // a .bimport names a container or texture its source produced
 		kAvatarSkeleton,  // a .bavatar's bone names address the .bskel it sits by convention beside
 		kBlendClips,      // a .bblend's spaces name clips of the .banim it stores the path of
 		kGrassMaterial,   // a .bgrass names the .bmaterial its blades shade through

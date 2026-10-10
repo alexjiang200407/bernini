@@ -18,12 +18,14 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <core/file/file.h>
 #include <cstddef>
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <ranges>
 #include <span>
 #include <string>
@@ -227,15 +229,22 @@ TEST_CASE("An emptied texture folder is re-extracted", "[reimport]")
 		30.0f,
 		"Derived/BakedTextures/unit");
 
+	// From before the document listed its textures, too: then the empty folder is the only signal.
+	const bool listed = GENERATE(true, false);
+	if (!listed)
+	{
+		ImportDocument document = loadImportDocument(dataRoot / "Authored/Meshes/unit.bimport");
+		document.textures       = std::nullopt;
+		AssetStore(dataRoot).Save(document, "Authored/Meshes/unit.bimport");
+	}
+
 	const fs::path folder = dataRoot / "Derived/BakedTextures/unit";
 	REQUIRE(fs::exists(folder));
 	const auto before = DerivedFiles(dataRoot);
 
 	// A fresh checkout of a project that gitignores its derived tree: the folder is not there, and
-	// the source has not moved -- so the stamp the texture key compares still matches, and nothing
-	// else in the library would notice.
+	// the source has not moved -- so the stamp the texture key compares still matches.
 	fs::remove_all(folder);
-	REQUIRE(AssetStore(dataRoot).GetStaleImportedTextureSources().empty());
 
 	const ReimportReport report = AssetStore(dataRoot).Reimport(/*dryRun*/ false);
 	CHECK(report.GetFailedCount() == 0);

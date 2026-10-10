@@ -13,6 +13,7 @@
 
 #include "io/mounted_io.h"
 #include "references/ref_paths.h"
+#include "texture/extracted_textures.h"
 #include <assetlib/cancel.h>
 #include <assetlib/codecs.h>
 #include <assetlib/progress.h>
@@ -179,8 +180,9 @@ namespace assetlib
 			// An absent source cannot be compared, so it stales nothing -- the rule the geometry
 			// cache keys follow, which keeps a project missing its sources usable.
 			const SourceStamp stamp = StampOf(sourceKey);
-			if (stamp != SourceStamp() &&
-			    (stamp != document.textureStamp || document.textureBakeToken != c_TextureBakeToken))
+			if (stamp != SourceStamp() && (stamp != document.textureStamp ||
+			                               document.textureBakeToken != c_TextureBakeToken ||
+			                               missesExtractedTexture(*this, document)))
 			{
 				stale.push_back(sourceKey);
 				continue;
@@ -261,6 +263,7 @@ namespace assetlib
 		ImportDocument advanced   = document;
 		advanced.textureStamp     = StampOf(sourceKey);
 		advanced.textureBakeToken = c_TextureBakeToken;
+		advanced.textures         = refresh.written;
 		Save(advanced, documentKey);
 
 		return refresh;

@@ -129,7 +129,7 @@ namespace assetlib
 
 		/**
 		 * The document holds its source, every material its bindings and overrides name, the rig it binds and
-		 * every container it produced. The last two are references like any other: nothing else
+		 * every container and extracted texture it produced. The rig and the outputs are references like any other: nothing else
 		 * records them, so a rename that missed one would leave the document naming a file that is
 		 * gone -- and an `outputs` entry naming a key that no longer exists reads as *absent* to
 		 * the producing side, which would put the old file back. It also names the toon shading rig
@@ -161,6 +161,9 @@ namespace assetlib
 			addEdge(edges, referrer, document.toonShadingRig, RefKind::kToonShadingRig);
 			for (const std::string& output : document.outputs)
 				addEdge(edges, referrer, output, RefKind::kDocumentOutput);
+			for (const std::string& texture :
+			     document.textures.value_or(std::vector<std::string>()))
+				addEdge(edges, referrer, texture, RefKind::kDocumentOutput);
 		}
 
 		/** The baked triplet a `.bmaterial` names, and the sources its channels route from. */
@@ -755,12 +758,15 @@ namespace assetlib
 		{
 			try
 			{
-				ImportDocument document = loadImportDocument(GetFiles(), documentKey);
-				const size_t   before   = document.outputs.size();
-				std::erase_if(document.outputs, [&gone](const std::string& output) {
+				ImportDocument       document = loadImportDocument(GetFiles(), documentKey);
+				const ImportDocument before   = document;
+				const auto           isGone   = [&gone](const std::string& output) {
 					return gone.contains(output);
-				});
-				if (document.outputs.size() == before)
+				};
+				std::erase_if(document.outputs, isGone);
+				if (document.textures)
+					std::erase_if(*document.textures, isGone);
+				if (document == before)
 					continue;
 
 				core::file::write_atomic(
