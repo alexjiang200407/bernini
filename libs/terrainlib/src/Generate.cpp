@@ -7,7 +7,6 @@
 #include <core/parallel_for.h>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <terrainlib/Generate.h>
 #include <vector>
 
@@ -110,6 +109,10 @@ namespace terrain
 				core::throw_runtime_error(
 					"terrain::Generate: cellSize must be finite and positive");
 			}
+			if (!std::isfinite(desc.relief) || desc.relief <= 0.0f)
+			{
+				core::throw_runtime_error("terrain::Generate: relief must be finite and positive");
+			}
 		}
 	}
 
@@ -118,13 +121,12 @@ namespace terrain
 	{
 		Validate(desc);
 
-		const ShapeParams params = ParamsOf(desc.shape);
-		const size_t      count  = static_cast<size_t>(desc.samplesX) * desc.samplesZ;
+		ShapeParams params = ParamsOf(desc.shape);
+		params.amplitude *= desc.relief;
+		const size_t count = static_cast<size_t>(desc.samplesX) * desc.samplesZ;
 
-		// Rows in parallel: each writes its own run and its own extremes, and nothing is shared.
+		// Rows in parallel: each writes its own run, and nothing is shared.
 		auto heights = std::vector<float>(count);
-		auto rowMin  = std::vector<float>(desc.samplesZ, std::numeric_limits<float>::max());
-		auto rowMax  = std::vector<float>(desc.samplesZ, std::numeric_limits<float>::lowest());
 		core::parallel_for(desc.samplesZ, 0, "terrain generate", [&](const size_t z) {
 			float* row = heights.data() + z * desc.samplesX;
 			for (uint32_t x = 0; x < desc.samplesX; ++x)
@@ -132,14 +134,11 @@ namespace terrain
 				const glm::vec2 xz(
 					static_cast<float>(x) * desc.cellSize,
 					static_cast<float>(z) * desc.cellSize);
-				row[x]    = HeightAt(xz, params, desc.seed);
-				rowMin[z] = std::min(rowMin[z], row[x]);
-				rowMax[z] = std::max(rowMax[z], row[x]);
+				row[x] = HeightAt(xz, params, desc.seed);
 			}
 		});
 
-		const float lowest  = *std::ranges::min_element(rowMin);
-		const float highest = *std::ranges::max_element(rowMax);
+		const auto [lowest, highest] = std::ranges::minmax(heights);
 		// A field with no relief still spans something, so a sample decodes to one height.
 		const float range = std::max(highest - lowest, 1e-3f);
 

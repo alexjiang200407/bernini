@@ -28,7 +28,9 @@ terrain epoch moves, each with the bucket its material resolves to.
 The generator fills the same struct: `terrain::Generate` turns a seed and a shape -- flat, hilly,
 mountainous -- into a `Heightfield` from fractal gradient noise over a warped domain, ridged for
 the mountains, each shape's features sized in world units so a finer cell resolves the same land
-rather than smaller land. It is deterministic by seed and linear in the samples. The offline
+rather than smaller land, and scaled by the desc's `relief` before anything reads it, so every
+slope is measured on the ground as it will stand. It is deterministic by seed and linear in the
+samples. The offline
 container a terrain is stored as later is this struct serialised; nothing stores one yet.
 
 ## The levels

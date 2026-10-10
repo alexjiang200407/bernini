@@ -36,6 +36,10 @@ namespace terrain
 		// cell resolves the same hills more closely rather than making smaller ones.
 		float cellSize = 2.0f;
 
+		// A scale on the shape's heights, applied before anything else reads them: below 1 the
+		// hills are gentler than the shape's own, and every slope is measured on the scaled ground.
+		float relief = 1.0f;
+
 		template <typename Self>
 		Self&&
 		SetShape(this Self&& self, TerrainShape value) noexcept
@@ -68,11 +72,19 @@ namespace terrain
 			self.cellSize = value;
 			return std::forward<Self>(self);
 		}
+
+		template <typename Self>
+		Self&&
+		SetRelief(this Self&& self, float value) noexcept
+		{
+			self.relief = value;
+			return std::forward<Self>(self);
+		}
 	};
 
 	/**
 	 * A heightfield of `desc`'s shape, from fractal gradient noise -- ridged for the mountainous
-	 * shape -- over a warped domain, seeded by `desc.seed`. Deterministic as the desc says, and a
+	 * shape -- over a warped domain, seeded by `desc.seed`, scaled by `desc.relief`. Deterministic as the desc says, and a
 	 * different seed is a different field of the same character. The field's
 	 * `minHeight` and `heightRange` are the lowest and the span of what was generated, so its
 	 * 16-bit samples use their whole range.
@@ -80,7 +92,8 @@ namespace terrain
 	 * Cost is linear in the samples, spread over the hardware threads.
 	 *
 	 * @throws std::runtime_error if either sample count is below 2 or above
-	 *         c_MaxGenerateSamples, or `cellSize` is not finite and positive.
+	 *         c_MaxGenerateSamples, `cellSize` is not finite and positive, or `relief` is not
+	 *         finite and positive.
 	 */
 	[[nodiscard]] assetlib::Heightfield
 	Generate(const TerrainGenerateDesc& desc);
