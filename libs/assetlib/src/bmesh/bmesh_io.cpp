@@ -163,12 +163,12 @@ namespace assetlib
 		void
 		validateImpostors(const BMesh& mesh)
 		{
-			const uint64_t texels = mesh.impostorTexels.size();
-			for (size_t i = 0; i < mesh.impostors.size(); ++i)
+			const uint64_t texels = mesh.impostors.texels.size();
+			for (size_t i = 0; i < mesh.impostors.records.size(); ++i)
 			{
-				const MeshImpostor& impostor = mesh.impostors[i];
+				const MeshImpostor& impostor = mesh.impostors.records[i];
 				if (impostor.mesh >= mesh.meshes.size() ||
-				    (i > 0 && impostor.mesh <= mesh.impostors[i - 1].mesh))
+				    (i > 0 && impostor.mesh <= mesh.impostors.records[i - 1].mesh))
 					core::throw_runtime_error(
 						"bmesh: impostor {} names no mesh, or not in mesh order",
 						i);
@@ -223,8 +223,8 @@ namespace assetlib
 		writer.Add(ChunkId::kGrassNames, cache::packStrings(fieldNames));
 		writer.Add(ChunkId::kGrassChunks, mesh.grassFields.chunks);
 		writer.Add(ChunkId::kGrassClumps, mesh.grassFields.clumps);
-		writer.Add(ChunkId::kImpostors, mesh.impostors);
-		writer.Add(ChunkId::kImpostorTexels, mesh.impostorTexels);
+		writer.Add(ChunkId::kImpostors, mesh.impostors.records);
+		writer.Add(ChunkId::kImpostorTexels, mesh.impostors.texels);
 
 		// Computed here rather than taken from the struct, so a producer that rewrote the blob and
 		// forgot the field cannot write a file that disagrees with its own geometry.
@@ -269,8 +269,8 @@ namespace assetlib
 		mesh.grassFields.clumps = reader.Read<GrassClump>(ChunkId::kGrassClumps);
 		validateGrassGeometry(mesh);
 
-		mesh.impostors      = reader.Read<MeshImpostor>(ChunkId::kImpostors);
-		mesh.impostorTexels = reader.Read<uint8_t>(ChunkId::kImpostorTexels);
+		mesh.impostors.records = reader.Read<MeshImpostor>(ChunkId::kImpostors);
+		mesh.impostors.texels  = reader.Read<uint8_t>(ChunkId::kImpostorTexels);
 		validateImpostors(mesh);
 
 		const auto geometry    = reader.Read<uint64_t>(ChunkId::kGeometrySignature);
@@ -289,7 +289,6 @@ namespace assetlib
 		out.submeshes        = mesh.submeshes;
 		out.lods             = mesh.lods;
 		out.impostors        = mesh.impostors;
-		out.impostorTexels   = mesh.impostorTexels;
 		out.meshlets         = mesh.meshlets;
 		out.meshletGroups    = mesh.meshletGroups;
 		out.meshletVertices  = mesh.meshletVertices;

@@ -79,8 +79,8 @@ namespace
 	void
 	AppendDiscImpostor(assetlib::BMesh& mesh)
 	{
-		mesh.impostorTexels.resize(2 * size_t{ assetlib::c_ImpostorAtlasBytes });
-		uint8_t* albedo      = mesh.impostorTexels.data();
+		mesh.impostors.texels.resize(2 * size_t{ assetlib::c_ImpostorAtlasBytes });
+		uint8_t* albedo      = mesh.impostors.texels.data();
 		uint8_t* normalDepth = albedo + assetlib::c_ImpostorAtlasBytes;
 		size_t   offset      = 0;
 		for (uint32_t mip = 0; mip < assetlib::c_ImpostorAtlasMips; ++mip)
@@ -109,13 +109,13 @@ namespace
 			}
 			offset += static_cast<size_t>(side) * side * 4;
 		}
-		mesh.impostors = { assetlib::MeshImpostor{ .mesh         = 0,
-			                                       .albedoOffset = 0,
-			                                       .normalDepthOffset =
-			                                           assetlib::c_ImpostorAtlasBytes,
-			                                       .minPixels = 0.0f,
-			                                       .center    = glm::vec3(0.0f),
-			                                       .radius    = 1.0f } };
+		mesh.impostors.records = { assetlib::MeshImpostor{ .mesh         = 0,
+			                                               .albedoOffset = 0,
+			                                               .normalDepthOffset =
+			                                                   assetlib::c_ImpostorAtlasBytes,
+			                                               .minPixels = 0.0f,
+			                                               .center    = glm::vec3(0.0f),
+			                                               .radius    = 1.0f } };
 	}
 
 	/** One level drawn down to `lastFloor` pixels, past which the geom draws its impostor, if any. */

@@ -148,7 +148,7 @@ namespace assetlib
 	static_assert(c_ImpostorAtlasMips == 5, "c_ImpostorAtlasBytes sums one term per mip");
 
 	/**
-	 * A mesh's baked impostor, in `BMesh::impostors`: the tier past its last level of detail, drawn
+	 * A mesh's baked impostor, in `BMesh::impostors` (MeshImpostors): the tier past its last level of detail, drawn
 	 * as one quad per placement. Two atlases of `c_ImpostorFramesPerSide` squared frames, each the
 	 * mesh's level 0 seen from one direction of the upper hemisphere, laid out hemi-octahedrally --
 	 * frame (x, y) is seen from the hemi-octahedral decode of the grid point (x, y) /
@@ -162,8 +162,8 @@ namespace assetlib
 	struct MeshImpostor
 	{
 		uint32_t mesh;               // into BMesh::meshes
-		uint32_t albedoOffset;       // into BMesh::impostorTexels
-		uint32_t normalDepthOffset;  // into BMesh::impostorTexels
+		uint32_t albedoOffset;       // into MeshImpostors::texels
+		uint32_t normalDepthOffset;  // into MeshImpostors::texels
 
 		// Drawn while the placement's projected diameter, in pixels, is at least this and below
 		// its last level's floor; 0 means never dropped.

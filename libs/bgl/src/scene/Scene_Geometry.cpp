@@ -859,21 +859,21 @@ namespace bgl
 		ImpostorOf(const assetlib::BMesh& mesh, const uint32_t meshIndex)
 		{
 			const auto found =
-				std::ranges::find(mesh.impostors, meshIndex, &assetlib::MeshImpostor::mesh);
-			if (found == mesh.impostors.end())
+				std::ranges::find(mesh.impostors.records, meshIndex, &assetlib::MeshImpostor::mesh);
+			if (found == mesh.impostors.records.end())
 			{
 				return std::nullopt;
 			}
 			const auto atlas = [&](const uint32_t offset) {
 				if (static_cast<uint64_t>(offset) + assetlib::c_ImpostorAtlasBytes >
-				    mesh.impostorTexels.size())
+				    mesh.impostors.texels.size())
 				{
 					throw SceneError(
 						std::format(
 							"CookStaticMesh: mesh {}'s impostor atlas runs past the mesh's texels",
 							meshIndex));
 				}
-				const auto first = mesh.impostorTexels.begin() + offset;
+				const auto first = mesh.impostors.texels.begin() + offset;
 				return std::as_bytes(std::span(first, first + assetlib::c_ImpostorAtlasBytes));
 			};
 			const auto albedo      = atlas(found->albedoOffset);

@@ -46,7 +46,7 @@ namespace editor
 		}
 		lods.levelZeroSphere = core::bounding_sphere_of(minBound, maxBound);
 		lods.impostor =
-			std::ranges::contains(mesh.impostors, meshIndex, &assetlib::MeshImpostor::mesh);
+			std::ranges::contains(mesh.impostors.records, meshIndex, &assetlib::MeshImpostor::mesh);
 		return lods;
 	}
 

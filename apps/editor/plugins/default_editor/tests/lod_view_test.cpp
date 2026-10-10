@@ -140,7 +140,7 @@ TEST_CASE(
 	CHECK_FALSE(editor::LodsOf(ThreeLevels(), 0).impostor);
 
 	auto mesh                   = ThreeLevels();
-	mesh.impostors              = { assetlib::MeshImpostor{ .mesh = 0, .radius = 1.0f } };
+	mesh.impostors.records      = { assetlib::MeshImpostor{ .mesh = 0, .radius = 1.0f } };
 	const editor::MeshLods lods = editor::LodsOf(mesh, 0);
 	CHECK(lods.impostor);
 

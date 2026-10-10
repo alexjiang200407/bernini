@@ -269,13 +269,13 @@ TEST_CASE(
 		const Glb glb =
 			SquareGlb("bernini_impostor_mesh.glb", { { "bernini_impostor", true } }, nullptr);
 		const imp::BMeshImport mesh = loadFromGltf(glb.Path(), { .textures = GltfTextures::kSkip });
-		REQUIRE(mesh.impostors.size() == 1);
-		CHECK(mesh.impostors[0].mesh == 0);
-		CHECK(mesh.impostorTexels.size() == 2 * size_t{ c_ImpostorAtlasBytes });
+		REQUIRE(mesh.impostors.records.size() == 1);
+		CHECK(mesh.impostors.records[0].mesh == 0);
+		CHECK(mesh.impostors.texels.size() == 2 * size_t{ c_ImpostorAtlasBytes });
 
 		// The glTF's own base colour, with no material import: regeneration runs without one.
 		CHECK(
-			mesh.impostorTexels
+			mesh.impostors.texels
 				[(c_FrontY * c_ImpostorFrameTexels + 64) * 4 * c_ImpostorAtlasTexels +
 		         (c_FrontX * c_ImpostorFrameTexels + 64) * 4 + 1] == 128);
 	}
@@ -286,24 +286,24 @@ TEST_CASE(
 			SquareGlb("bernini_impostor_skip.glb", { { "bernini_impostor", true } }, nullptr);
 		const imp::BMeshImport mesh =
 			loadFromGltf(glb.Path(), { .impostors = GltfImpostors::kSkip });
-		CHECK(mesh.impostors.empty());
-		CHECK(mesh.impostorTexels.empty());
+		CHECK(mesh.impostors.records.empty());
+		CHECK(mesh.impostors.texels.empty());
 	}
 
 	SECTION("the object's, which Blender writes on the node")
 	{
 		const Glb glb =
 			SquareGlb("bernini_impostor_node.glb", nullptr, { { "bernini_impostor", 1 } });
-		CHECK(loadFromGltf(glb.Path()).impostors.size() == 1);
+		CHECK(loadFromGltf(glb.Path()).impostors.records.size() == 1);
 	}
 
 	SECTION("none, or turned off")
 	{
 		const Glb none = SquareGlb("bernini_impostor_none.glb", nullptr, nullptr);
-		CHECK(loadFromGltf(none.Path()).impostors.empty());
+		CHECK(loadFromGltf(none.Path()).impostors.records.empty());
 		const Glb off =
 			SquareGlb("bernini_impostor_off.glb", { { "bernini_impostor", false } }, nullptr);
-		CHECK(loadFromGltf(off.Path()).impostors.empty());
+		CHECK(loadFromGltf(off.Path()).impostors.records.empty());
 	}
 
 	SECTION("a blended material is cut at half coverage, as a leaf card is drawn")
@@ -321,9 +321,9 @@ TEST_CASE(
 			nullptr,
 			clear);
 		const imp::BMeshImport mesh = loadFromGltf(glb.Path());
-		REQUIRE(mesh.impostors.size() == 1);
+		REQUIRE(mesh.impostors.records.size() == 1);
 		CHECK(
-			mesh.impostorTexels
+			mesh.impostors.texels
 				[(c_FrontY * c_ImpostorFrameTexels + 64) * 4 * c_ImpostorAtlasTexels +
 		         (c_FrontX * c_ImpostorFrameTexels + 64) * 4 + 3] == 0);
 	}
@@ -333,7 +333,7 @@ TEST_CASE(
 		const Glb glb =
 			SquareGlb("bernini_impostor_string.glb", { { "bernini_impostor", "yes" } }, nullptr);
 		const imp::BMeshImport mesh = loadFromGltf(glb.Path());
-		CHECK(mesh.impostors.empty());
+		CHECK(mesh.impostors.records.empty());
 		CHECK(mesh.meshes.size() == 1);
 	}
 }
@@ -345,6 +345,6 @@ TEST_CASE("a skinned mesh that asks for an impostor imports without one", "[impo
 		{ { R"("meshes": [ { "name": "body",)",
 	        R"("meshes": [ { "name": "body", "extras": { "bernini_impostor": true },)" } });
 	const imp::BMeshImport mesh = loadFromGltf(rig.gltf);
-	CHECK(mesh.impostors.empty());
+	CHECK(mesh.impostors.records.empty());
 	CHECK_FALSE(mesh.skeleton.bones.empty());
 }

@@ -4,6 +4,7 @@
 #include <assetlib_structs/BMaterialImport.h>
 #include <assetlib_structs/ImageData.h>
 #include <assetlib_structs/Mesh.h>
+#include <assetlib_structs/MeshImpostors.h>
 #include <assetlib_structs/Node.h>
 #include <assetlib_structs/Skeleton.h>
 #include <core/str/string_pool.h>
@@ -29,9 +30,7 @@ namespace assetlib::imp
 		std::vector<MeshLod>         lods;  // each mesh's levels, see Mesh::firstLod
 		std::vector<BMaterialImport> materials;
 
-		// The meshes that have one, in mesh order; and the atlases they address. See BMesh.
-		std::vector<MeshImpostor> impostors;
-		std::vector<uint8_t>      impostorTexels;
+		MeshImpostors impostors;
 
 		std::vector<Meshlet>      meshlets;
 		std::vector<MeshletGroup> meshletGroups;     // one bound per c_MeshletsPerGroup meshlets

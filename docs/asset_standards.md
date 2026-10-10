@@ -549,7 +549,7 @@ A re-import preserves authored grass bindings. No standalone grass container is 
   [bmesh.h](libs/assetlib/include/assetlib/bmesh.h), so no reader restates the layout.
   A mesh may also carry a baked **impostor** (`MeshImpostor`, at most one a mesh, in mesh order):
   the tier past its last level, two hemi-octahedral RGBA8 atlases with their mips in
-  `impostorTexels`. A file with no impostor chunk holds none.
+  `impostors.texels` (`MeshImpostors`). A file with no impostor chunk holds none.
   Struct: [libs/assetlib_structs/include/assetlib_structs/BMesh.h](libs/assetlib_structs/include/assetlib_structs/BMesh.h);
   container I/O: [libs/assetlib/include/assetlib/codecs.h](libs/assetlib/include/assetlib/codecs.h).
 * **`.bmaterial`** — **a shading-model tag plus that model's parameters**, as an authored text

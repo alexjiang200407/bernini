@@ -2006,7 +2006,7 @@ namespace assetlib
 
 		/**
 		 * Bakes an impostor for every mesh entry `wants` names, from the glTF's own base colour, into
-		 * `mesh.impostors` and `mesh.impostorTexels`. A skinned mesh is skipped with a warning: its
+		 * `mesh.impostors.records` and `mesh.impostors.texels`. A skinned mesh is skipped with a warning: its
 		 * impostor would need a frame set per pose.
 		 */
 		void
@@ -2091,11 +2091,12 @@ namespace assetlib
 				                    .vertexData = mesh.vertexData,
 				                    .indexData  = mesh.indexData });
 				baked.record.mesh = entryIndex;
-				baked.record.albedoOffset += static_cast<uint32_t>(mesh.impostorTexels.size());
-				baked.record.normalDepthOffset += static_cast<uint32_t>(mesh.impostorTexels.size());
-				mesh.impostors.push_back(baked.record);
-				mesh.impostorTexels.insert(
-					mesh.impostorTexels.end(),
+				baked.record.albedoOffset += static_cast<uint32_t>(mesh.impostors.texels.size());
+				baked.record.normalDepthOffset +=
+					static_cast<uint32_t>(mesh.impostors.texels.size());
+				mesh.impostors.records.push_back(baked.record);
+				mesh.impostors.texels.insert(
+					mesh.impostors.texels.end(),
 					baked.texels.begin(),
 					baked.texels.end());
 			}
