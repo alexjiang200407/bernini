@@ -60,7 +60,22 @@ namespace assetlib
 			return table;
 		}
 
-		/** Bilinear, repeating, in linear colour; alpha is not colour and is not converted. */
+		/** A byte as the unit float it stores, for a data image. */
+		[[nodiscard]] std::array<float, 256>
+		unormTable() noexcept
+		{
+			auto table = std::array<float, 256>();
+			for (size_t i = 0; i < table.size(); ++i) table[i] = static_cast<float>(i) / 255.0f;
+			return table;
+		}
+
+		struct Tables
+		{
+			std::array<float, 256> srgb  = srgbToLinearTable();
+			std::array<float, 256> unorm = unormTable();
+		};
+
+		/** Bilinear and repeating, rgb through `toLinear`; alpha is not colour and is not converted. */
 		[[nodiscard]] glm::vec4
 		sampleLinear(
 			const ImpostorImage&          image,
@@ -98,19 +113,31 @@ namespace assetlib
 		/** One raster sample of a frame: what the nearest surface there is. */
 		struct Sample
 		{
-			glm::vec3 albedo  = glm::vec3(0.0f);
-			glm::vec3 normal  = glm::vec3(0.0f);
-			float     depth   = -std::numeric_limits<float>::infinity();
-			bool      covered = false;
+			glm::vec3 albedo    = glm::vec3(0.0f);
+			glm::vec3 normal    = glm::vec3(0.0f);
+			float     occlusion = 1.0f;
+			float     roughness = 1.0f;
+			float     metallic  = 0.0f;
+			float     depth     = -std::numeric_limits<float>::infinity();
+			bool      covered   = false;
 		};
 
 		/** One texel of the first mip, before quantising. */
 		struct Texel
 		{
-			glm::vec3 albedo   = glm::vec3(0.0f);
-			glm::vec3 normal   = glm::vec3(0.0f, 1.0f, 0.0f);
-			float     depth    = 0.0f;
-			float     coverage = 0.0f;
+			glm::vec3 albedo    = glm::vec3(0.0f);
+			glm::vec3 normal    = glm::vec3(0.0f, 1.0f, 0.0f);
+			float     occlusion = 1.0f;
+			float     depth     = 0.0f;
+			float     coverage  = 0.0f;
+		};
+
+		/** Every covered sample's roughness and metallic, which the record averages. */
+		struct SurfaceSums
+		{
+			double roughness = 0.0;
+			double metallic  = 0.0;
+			double samples   = 0.0;
 		};
 
 		struct Vertex
@@ -118,6 +145,7 @@ namespace assetlib
 			glm::vec3 position;
 			glm::vec3 normal;
 			glm::vec2 uv;
+			glm::vec2 uv1;
 		};
 
 		struct Triangles
@@ -142,10 +170,14 @@ namespace assetlib
 					findAttribute(submesh.layout, VertexSemantic::kNormal);
 				const VertexAttribute* uv =
 					findAttribute(submesh.layout, VertexSemantic::kTexCoord0);
+				const VertexAttribute* uv1 =
+					findAttribute(submesh.layout, VertexSemantic::kTexCoord1);
 				if (normal != nullptr && normal->format != VertexFormat::kFloat32x3)
 					normal = nullptr;
 				if (uv != nullptr && uv->format != VertexFormat::kFloat32x2)
 					uv = nullptr;
+				if (uv1 != nullptr && uv1->format != VertexFormat::kFloat32x2)
+					uv1 = nullptr;
 
 				const size_t end = static_cast<size_t>(submesh.vertexByteOffset) +
 				                   static_cast<size_t>(submesh.vertexCount) * submesh.layout.stride;
@@ -166,9 +198,11 @@ namespace assetlib
 				tris.vertices.reserve(submesh.vertexCount);
 				for (uint32_t v = 0; v < submesh.vertexCount; ++v)
 				{
-					const float* p = floatsAt(source.vertexData, submesh, *position, v);
-					auto         vertex =
-						Vertex{ glm::vec3(p[0], p[1], p[2]), glm::vec3(0.0f), glm::vec2(0.0f) };
+					const float* p      = floatsAt(source.vertexData, submesh, *position, v);
+					auto         vertex = Vertex{ glm::vec3(p[0], p[1], p[2]),
+						                          glm::vec3(0.0f),
+						                          glm::vec2(0.0f),
+						                          glm::vec2(0.0f) };
 					if (normal != nullptr)
 					{
 						const float* n = floatsAt(source.vertexData, submesh, *normal, v);
@@ -178,6 +212,11 @@ namespace assetlib
 					{
 						const float* t = floatsAt(source.vertexData, submesh, *uv, v);
 						vertex.uv      = glm::vec2(t[0], t[1]);
+					}
+					if (uv1 != nullptr)
+					{
+						const float* t = floatsAt(source.vertexData, submesh, *uv1, v);
+						vertex.uv1     = glm::vec2(t[0], t[1]);
 					}
 					tris.vertices.push_back(vertex);
 				}
@@ -193,7 +232,7 @@ namespace assetlib
 			const glm::vec3&              center,
 			const float                   radius,
 			const FrameBasis&             basis,
-			const std::array<float, 256>& toLinear,
+			const Tables&                 tables,
 			std::vector<Sample>&          samples)
 		{
 			std::ranges::fill(samples, Sample());
@@ -270,14 +309,34 @@ namespace assetlib
 							if (depth <= sample.depth)
 								continue;
 
+							const glm::vec2 uv  = w0 * v[0]->uv + w1 * v[1]->uv + w2 * v[2]->uv;
+							const glm::vec2 uv1 = w0 * v[0]->uv1 + w1 * v[1]->uv1 + w2 * v[2]->uv1;
+
 							glm::vec4 color = surface.baseColorFactor;
 							if (surface.baseColor != nullptr)
-							{
-								const glm::vec2 uv = w0 * v[0]->uv + w1 * v[1]->uv + w2 * v[2]->uv;
-								color *= sampleLinear(*surface.baseColor, uv, toLinear);
-							}
+								color *= sampleLinear(*surface.baseColor, uv, tables.srgb);
 							if (surface.alphaTest && color.a < surface.alphaCutoff)
 								continue;
+
+							float occlusion = 1.0f;
+							if (surface.occlusion != nullptr)
+							{
+								const float r = sampleLinear(
+													*surface.occlusion,
+													surface.occlusionTexCoord == 1 ? uv1 : uv,
+													tables.unorm)
+								                    .r;
+								occlusion     = 1.0f + surface.occlusionStrength * (r - 1.0f);
+							}
+							float roughness = surface.roughnessFactor;
+							float metallic  = surface.metallicFactor;
+							if (surface.metallicRoughness != nullptr)
+							{
+								const glm::vec4 mr =
+									sampleLinear(*surface.metallicRoughness, uv, tables.unorm);
+								roughness *= mr.g;
+								metallic *= mr.b;
+							}
 
 							glm::vec3 normal =
 								w0 * v[0]->normal + w1 * v[1]->normal + w2 * v[2]->normal;
@@ -286,7 +345,8 @@ namespace assetlib
 							if (!front)
 								normal = -normal;
 
-							sample = Sample{ glm::vec3(color), normal, depth, true };
+							sample = Sample{ glm::vec3(color), normal, occlusion, roughness,
+								             metallic,         depth,  true };
 						}
 					}
 				}
@@ -297,6 +357,7 @@ namespace assetlib
 		void
 		resolveFrame(
 			const std::vector<Sample>& samples,
+			SurfaceSums&               sums,
 			std::vector<Texel>&        atlas,
 			const uint32_t             originX,
 			const uint32_t             originY)
@@ -309,6 +370,7 @@ namespace assetlib
 					auto     sum     = Texel();
 					uint32_t covered = 0;
 					sum.normal       = glm::vec3(0.0f);
+					sum.occlusion    = 0.0f;
 					for (uint32_t sy = 0; sy < c_Supersample; ++sy)
 					{
 						for (uint32_t sx = 0; sx < c_Supersample; ++sx)
@@ -321,19 +383,24 @@ namespace assetlib
 							++covered;
 							sum.albedo += sample.albedo;
 							sum.normal += sample.normal;
+							sum.occlusion += sample.occlusion;
 							sum.depth += sample.depth;
+							sums.roughness += sample.roughness;
+							sums.metallic += sample.metallic;
+							sums.samples += 1.0;
 						}
 					}
 					Texel& texel = frame[ty * c_ImpostorFrameTexels + tx];
 					if (covered == 0)
 						continue;
-					const float n  = static_cast<float>(covered);
-					texel.albedo   = sum.albedo / n;
-					texel.normal   = glm::dot(sum.normal, sum.normal) > 1e-12f ?
-					                     glm::normalize(sum.normal) :
-					                     glm::vec3(0.0f, 1.0f, 0.0f);
-					texel.depth    = sum.depth / n;
-					texel.coverage = n / static_cast<float>(c_Supersample * c_Supersample);
+					const float n   = static_cast<float>(covered);
+					texel.albedo    = sum.albedo / n;
+					texel.normal    = glm::dot(sum.normal, sum.normal) > 1e-12f ?
+					                      glm::normalize(sum.normal) :
+					                      glm::vec3(0.0f, 1.0f, 0.0f);
+					texel.occlusion = sum.occlusion / n;
+					texel.depth     = sum.depth / n;
+					texel.coverage  = n / static_cast<float>(c_Supersample * c_Supersample);
 				}
 			}
 
@@ -391,21 +458,25 @@ namespace assetlib
 			{
 				for (uint32_t x = 0; x < half; ++x)
 				{
-					auto  sum    = Texel();
-					auto  plain  = Texel();
-					float weight = 0.0f;
-					sum.normal   = glm::vec3(0.0f);
-					plain.normal = glm::vec3(0.0f);
+					auto  sum       = Texel();
+					auto  plain     = Texel();
+					float weight    = 0.0f;
+					sum.normal      = glm::vec3(0.0f);
+					plain.normal    = glm::vec3(0.0f);
+					sum.occlusion   = 0.0f;
+					plain.occlusion = 0.0f;
 					for (uint32_t k = 0; k < 4; ++k)
 					{
 						const Texel& t = mip[(2 * y + k / 2) * side + 2 * x + k % 2];
 						sum.albedo += t.albedo * t.coverage;
 						sum.normal += t.normal * t.coverage;
 						sum.depth += t.depth * t.coverage;
+						sum.occlusion += t.occlusion * t.coverage;
 						weight += t.coverage;
 						plain.albedo += t.albedo;
 						plain.normal += t.normal;
 						plain.depth += t.depth;
+						plain.occlusion += t.occlusion;
 					}
 					const Texel& from = weight > 0.0f ? sum : plain;
 					const float  n    = weight > 0.0f ? weight : 4.0f;
@@ -415,10 +486,24 @@ namespace assetlib
 					                        glm::normalize(from.normal) :
 					                        glm::vec3(0.0f, 1.0f, 0.0f);
 					t.depth           = from.depth / n;
+					t.occlusion       = from.occlusion / n;
 					t.coverage        = weight / 4.0f;
 				}
 			}
 			return out;
+		}
+
+		/** A unit vector on the octahedron, its lower half folded out over the corners, in [-1, 1]. */
+		[[nodiscard]] glm::vec2
+		octahedral(const glm::vec3& n) noexcept
+		{
+			const glm::vec3 v = n / (std::abs(n.x) + std::abs(n.y) + std::abs(n.z));
+			if (v.z >= 0.0f)
+				return glm::vec2(v.x, v.y);
+			const auto sign = [](const float a) { return a >= 0.0f ? 1.0f : -1.0f; };
+			return glm::vec2(
+				(1.0f - std::abs(v.y)) * sign(v.x),
+				(1.0f - std::abs(v.x)) * sign(v.y));
 		}
 
 		[[nodiscard]] uint8_t
@@ -437,9 +522,10 @@ namespace assetlib
 				albedo[4 * i + 1]      = unorm8(t.albedo.g);
 				albedo[4 * i + 2]      = unorm8(t.albedo.b);
 				albedo[4 * i + 3]      = unorm8(t.coverage);
-				normalDepth[4 * i]     = unorm8(t.normal.x * 0.5f + 0.5f);
-				normalDepth[4 * i + 1] = unorm8(t.normal.y * 0.5f + 0.5f);
-				normalDepth[4 * i + 2] = unorm8(t.normal.z * 0.5f + 0.5f);
+				const glm::vec2 e      = octahedral(t.normal);
+				normalDepth[4 * i]     = unorm8(e.x * 0.5f + 0.5f);
+				normalDepth[4 * i + 1] = unorm8(e.y * 0.5f + 0.5f);
+				normalDepth[4 * i + 2] = unorm8(t.occlusion);
 				normalDepth[4 * i + 3] = unorm8(t.depth * 0.5f + 0.5f);
 			}
 		}
@@ -494,9 +580,10 @@ namespace assetlib
 				radius = std::max(radius, glm::length(mesh.vertices[index].position - center));
 		radius = std::max(radius, 1e-6f);
 
-		const std::array<float, 256> toLinear = srgbToLinearTable();
-		auto samples = std::vector<Sample>(static_cast<size_t>(c_RasterSide) * c_RasterSide);
-		auto mip =
+		const auto tables  = Tables();
+		auto       sums    = SurfaceSums();
+		auto       samples = std::vector<Sample>(static_cast<size_t>(c_RasterSide) * c_RasterSide);
+		auto       mip =
 			std::vector<Texel>(static_cast<size_t>(c_ImpostorAtlasTexels) * c_ImpostorAtlasTexels);
 		for (uint32_t fy = 0; fy < c_ImpostorFramesPerSide; ++fy)
 		{
@@ -508,19 +595,29 @@ namespace assetlib
 					center,
 					radius,
 					basisOf(impostorFrameDirection(fx, fy)),
-					toLinear,
+					tables,
 					samples);
-				resolveFrame(samples, mip, fx * c_ImpostorFrameTexels, fy * c_ImpostorFrameTexels);
+				resolveFrame(
+					samples,
+					sums,
+					mip,
+					fx * c_ImpostorFrameTexels,
+					fy * c_ImpostorFrameTexels);
 			}
 		}
 
 		auto baked   = BakedImpostor();
-		baked.record = MeshImpostor{ .mesh              = 0,
-			                         .albedoOffset      = 0,
-			                         .normalDepthOffset = c_ImpostorAtlasBytes,
-			                         .minPixels         = 0.0f,
-			                         .center            = center,
-			                         .radius            = radius };
+		baked.record = MeshImpostor{
+			.mesh              = 0,
+			.albedoOffset      = 0,
+			.normalDepthOffset = c_ImpostorAtlasBytes,
+			.minPixels         = 0.0f,
+			.center            = center,
+			.radius            = radius,
+			.roughness =
+				sums.samples > 0.0 ? static_cast<float>(sums.roughness / sums.samples) : 1.0f,
+			.metallic = sums.samples > 0.0 ? static_cast<float>(sums.metallic / sums.samples) : 0.0f
+		};
 		baked.texels.resize(2 * static_cast<size_t>(c_ImpostorAtlasBytes));
 
 		size_t   offset = 0;

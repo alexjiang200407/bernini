@@ -154,8 +154,9 @@ TEST_CASE("a frame shows the mesh's silhouette, colour and normal from its direc
 	CHECK(middle.g == 51);
 
 	const Texel normal = TexelAt(baked, true, 0, c_FrontX, c_FrontY, 64, 64);
-	CHECK(normal.b == 255);  // +z
-	CHECK(normal.r == 128);
+	CHECK(normal.r == 128);  // +z, the octahedron's centre
+	CHECK(normal.g == 128);
+	CHECK(normal.b == 255);                    // nothing occludes it
 	CHECK(static_cast<int>(normal.a) == 128);  // the square passes through the sphere's centre
 
 	// From above the square is edge on.
@@ -172,7 +173,9 @@ TEST_CASE(
 
 	const BakedImpostor both = square.Bake({ .doubleSided = true });
 	CHECK(FrameCoverage(both, c_BackX, c_BackY) == Catch::Approx(0.5f).margin(0.02f));
-	CHECK(TexelAt(both, true, 0, c_BackX, c_BackY, 64, 64).b == 0);  // -z, toward that viewer
+	const Texel back = TexelAt(both, true, 0, c_BackX, c_BackY, 64, 64);
+	CHECK(back.r == 255);  // -z, toward that viewer: folded out to the octahedron's corner
+	CHECK(back.g == 255);
 }
 
 TEST_CASE("a frame's mips never take another frame's view", "[impostor]")
@@ -210,6 +213,34 @@ TEST_CASE(
 			square.Bake({ .baseColor = &cutout, .alphaTest = true }),
 			c_FrontX,
 			c_FrontY) == 0.0f);
+}
+
+TEST_CASE(
+	"an impostor keeps the material's occlusion per texel, its roughness and metallic whole",
+	"[impostor]")
+{
+	const Square square;
+
+	// Occlusion through TEXCOORD_0 here (the square has no second set), at the glTF's strength.
+	const std::array<uint8_t, 4> half     = { 128, 255, 255, 255 };
+	const ImpostorImage          occluded = { 1, 1, half };
+	const BakedImpostor          baked    = square.Bake(
+		{ .occlusion         = &occluded,
+	      .occlusionStrength = 0.5f,
+	      .roughnessFactor   = 0.5f,
+	      .metallicFactor    = 0.25f });
+	// 1 + 0.5 * (128/255 - 1) = 0.751, 191.5 of 255
+	CHECK(static_cast<int>(TexelAt(baked, true, 0, c_FrontX, c_FrontY, 64, 64).b) == 192);
+	CHECK(baked.record.roughness == Catch::Approx(0.5f));
+	CHECK(baked.record.metallic == Catch::Approx(0.25f));
+
+	// The metallic-roughness texture scales both factors, as glTF reads its g and b.
+	const std::array<uint8_t, 4> mr      = { 0, 51, 255, 255 };
+	const ImpostorImage          texture = { 1, 1, mr };
+	const BakedImpostor          scaled  = square.Bake(
+		{ .metallicRoughness = &texture, .roughnessFactor = 1.0f, .metallicFactor = 1.0f });
+	CHECK(scaled.record.roughness == Catch::Approx(0.2f));
+	CHECK(scaled.record.metallic == Catch::Approx(1.0f));
 }
 
 TEST_CASE("a bake with nothing to draw is refused", "[impostor]")
@@ -251,7 +282,9 @@ namespace
 		document["meshes"]      = { mesh };
 		document["materials"]   = { { { "name", "Leaf" },
 			                          { "pbrMetallicRoughness",
-			                            { { "baseColorFactor", { 0.25, 0.5, 0.125, 1.0 } } } } } };
+			                            { { "baseColorFactor", { 0.25, 0.5, 0.125, 1.0 } },
+			                              { "roughnessFactor", 0.75 },
+			                              { "metallicFactor", 0.0 } } } } };
 		document["bufferViews"] = buffer.views;
 		document["accessors"]   = buffer.accessors;
 		if (edit)
@@ -273,7 +306,9 @@ TEST_CASE(
 		CHECK(mesh.impostors.records[0].mesh == 0);
 		CHECK(mesh.impostors.texels.size() == 2 * size_t{ c_ImpostorAtlasBytes });
 
-		// The glTF's own base colour, with no material import: regeneration runs without one.
+		// The glTF's own base colour and roughness, with no material import: regeneration runs
+		// without one.
+		CHECK(mesh.impostors.records[0].roughness == Catch::Approx(0.75f));
 		CHECK(
 			mesh.impostors.texels
 				[(c_FrontY * c_ImpostorFrameTexels + 64) * 4 * c_ImpostorAtlasTexels +

@@ -228,8 +228,20 @@ struct ImpostorSample
     float3 albedo;
     float coverage;
     float3 normal; // local space, unnormalised
-    float depth;   // toward the viewer across the sphere, in radii
+    float occlusion;
+    float depth; // toward the viewer across the sphere, in radii
 };
+
+// The bake's octahedral normal (assetlib's `octahedral`): its lower half folded out over the corners.
+float3 DecodeOctahedral(float2 e)
+{
+    var n = float3(e.x, e.y, 1.0 - abs(e.x) - abs(e.y));
+    if (n.z < 0.0)
+    {
+        n.xy = (1.0 - abs(n.yx)) * float2(n.x >= 0.0 ? 1.0 : -1.0, n.y >= 0.0 ? 1.0 : -1.0);
+    }
+    return normalize(n);
+}
 
 // One frame's surface where the pixel's point on the quad projects into it along the frame's view.
 ImpostorSample SampleFrame(Placement p, uint2 frame, float3 local, float weight, float mip)
@@ -242,6 +254,7 @@ ImpostorSample SampleFrame(Placement p, uint2 frame, float3 local, float weight,
         none.albedo = float3(0.0, 0.0, 0.0);
         none.coverage = 0.0;
         none.normal = float3(0.0, 0.0, 0.0);
+        none.occlusion = 0.0;
         none.depth = 0.0;
         return none;
     }
@@ -264,7 +277,8 @@ ImpostorSample SampleFrame(Placement p, uint2 frame, float3 local, float weight,
     ImpostorSample s;
     s.albedo = albedo.rgb * w;
     s.coverage = w;
-    s.normal = (normalDepth.rgb * 2.0 - 1.0) * w;
+    s.normal = DecodeOctahedral(normalDepth.rg * 2.0 - 1.0) * w;
+    s.occlusion = normalDepth.b * w;
     s.depth = (normalDepth.a * 2.0 - 1.0) * w;
     return s;
 }
@@ -320,6 +334,7 @@ ImpostorPixel Program(ImpostorVSOut input)
     let albedo = (a.albedo + b.albedo + c.albedo) / coverage;
     let normal = normalize(p.mesh.TransformDirection(a.normal + b.normal + c.normal));
     let depth = (a.depth + b.depth + c.depth) / coverage;
+    let occlusion = (a.occlusion + b.occlusion + c.occlusion) / coverage;
 
     // The surface the frames saw: back from the near quad by how far its baked depth falls short
     // of it -- never forward, which the conservative depth promises.
@@ -337,9 +352,11 @@ ImpostorPixel Program(ImpostorVSOut input)
     surface.prevClip = input.prevClip;
     surface.cameraPrevClip = input.cameraPrevClip;
 
-    // The atlas bakes base colour alone, so the rest is a matte dielectric's: PbrSurface()'s.
+    // Occlusion per texel; roughness and metallic the whole impostor's, which no texel needs its own
+    // of at this size. The rest is PbrSurface()'s: a flat normal map, glTF's specular.
     var lit = PbrSurface();
     lit.baseColor = float4(albedo, 1.0);
+    lit.orm = float3(occlusion, p.impostor.roughness, p.impostor.metallic);
 
     ImpostorPixel pixel;
     pixel.output.color = float4(materialData.ShadeSurface(surface, lit, true), 1.0);

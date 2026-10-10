@@ -346,7 +346,7 @@ TEST_CASE("a writer's output cannot change without its bake token", "[canary][io
 	{
 		CheckCanary(
 			AssetCodec<BMesh>::c_BakeToken,
-			Pin{ .token = 0xb6c66678f3145d39ull, .hash = 0xe4730cf26fc40276ull },
+			Pin{ .token = 0xcb31dfee0c2276bbull, .hash = 0x051e1cbfaf9b3e93ull },
 			AssetCodec<BMesh>::Serialize(CanaryMesh()));
 	}
 

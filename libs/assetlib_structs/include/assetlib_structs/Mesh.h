@@ -154,10 +154,13 @@ namespace assetlib
 	 * frame (x, y) is seen from the hemi-octahedral decode of the grid point (x, y) /
 	 * (c_ImpostorFramesPerSide - 1), so the corner frames look along the horizon.
 	 *
-	 * The albedo atlas holds linear base colour in rgb and coverage in a; the normal-depth atlas
-	 * holds the surface normal in the mesh's local space, as `n * 0.5 + 0.5` in rgb, and in a the
-	 * depth toward the viewer across the bake sphere, 0 at its far side and 1 at its near. A texel
-	 * no surface covers has coverage 0. Both are linear RGBA8, `c_ImpostorAtlasBytes` each.
+	 * The albedo atlas holds linear base colour in rgb and coverage in a. The normal-depth atlas
+	 * holds the surface normal in the mesh's local space octahedrally encoded in rg, `e * 0.5 +
+	 * 0.5`; the material's ambient occlusion in b; and in a the depth toward the viewer across the
+	 * bake sphere, 0 at its far side and 1 at its near. A texel no surface covers has coverage 0.
+	 * Both are linear RGBA8, `c_ImpostorAtlasBytes` each. What a texel cannot tell apart at an
+	 * impostor's size -- how rough and how metallic the surface is -- is the record's, averaged over
+	 * every covered texel.
 	 */
 	struct MeshImpostor
 	{
@@ -173,7 +176,10 @@ namespace assetlib
 		// sphere's diameter across, facing its view direction from the centre.
 		glm::vec3 center;
 		float     radius;
+
+		float roughness = 1.0f;
+		float metallic  = 0.0f;
 	};
 
-	static_assert(sizeof(MeshImpostor) == 32);
+	static_assert(sizeof(MeshImpostor) == 40);
 }

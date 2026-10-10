@@ -2042,8 +2042,25 @@ namespace assetlib
 					continue;
 				}
 
-				auto views    = std::vector<ImpostorImage>(level0.size());
-				auto surfaces = std::vector<ImpostorSurface>(level0.size());
+				// Three images a submesh at most, held where their surface's pointers stay put.
+				auto       views    = std::vector<ImpostorImage>(3 * level0.size());
+				auto       surfaces = std::vector<ImpostorSurface>(level0.size());
+				const auto imageOf  = [&](const int    texture,
+				                          const size_t slot) -> const ImpostorImage* {
+					if (texture < 0 || static_cast<size_t>(texture) >= model.textures.size() ||
+					    model.textures[static_cast<size_t>(texture)].source < 0)
+						return nullptr;
+					const auto source =
+						static_cast<size_t>(model.textures[static_cast<size_t>(texture)].source);
+					auto [it, inserted] = images.try_emplace(source);
+					if (inserted)
+						it->second = decodeImage(model, path, source);
+					if (!it->second.has_value())
+						return nullptr;
+					views[slot] =
+						ImpostorImage{ it->second->width, it->second->height, it->second->rgba };
+					return &views[slot];
+				};
 				for (size_t s = 0; s < level0.size(); ++s)
 				{
 					if (level0[s].material >= model.materials.size())
@@ -2057,7 +2074,9 @@ namespace assetlib
 							static_cast<float>(pbr.baseColorFactor[1]),
 							static_cast<float>(pbr.baseColorFactor[2]),
 							static_cast<float>(pbr.baseColorFactor[3]));
-					surface.doubleSided = material.doubleSided;
+					surface.roughnessFactor = static_cast<float>(pbr.roughnessFactor);
+					surface.metallicFactor  = static_cast<float>(pbr.metallicFactor);
+					surface.doubleSided     = material.doubleSided;
 					// An impostor is a cutout, so a blended material is cut at half coverage: a leaf card's
 					// clear texels would otherwise bake as its colour.
 					surface.alphaTest =
@@ -2066,22 +2085,19 @@ namespace assetlib
 					                          static_cast<float>(material.alphaCutoff) :
 					                          0.5f;
 
-					const int texture = pbr.baseColorTexture.index;
-					if (texture < 0 || pbr.baseColorTexture.texCoord != 0 ||
-					    static_cast<size_t>(texture) >= model.textures.size() ||
-					    model.textures[static_cast<size_t>(texture)].source < 0)
-						continue;
-					const auto source =
-						static_cast<size_t>(model.textures[static_cast<size_t>(texture)].source);
-					auto [it, inserted] = images.try_emplace(source);
-					if (inserted)
-						it->second = decodeImage(model, path, source);
-					if (it->second.has_value())
+					if (pbr.baseColorTexture.texCoord == 0)
+						surface.baseColor = imageOf(pbr.baseColorTexture.index, 3 * s);
+					if (pbr.metallicRoughnessTexture.texCoord == 0)
+						surface.metallicRoughness =
+							imageOf(pbr.metallicRoughnessTexture.index, 3 * s + 1);
+					if (material.occlusionTexture.texCoord == 0 ||
+					    material.occlusionTexture.texCoord == 1)
 					{
-						views[s]          = ImpostorImage{ it->second->width,
-							                               it->second->height,
-							                               it->second->rgba };
-						surface.baseColor = &views[s];
+						surface.occlusion = imageOf(material.occlusionTexture.index, 3 * s + 2);
+						surface.occlusionTexCoord =
+							static_cast<uint32_t>(material.occlusionTexture.texCoord);
+						surface.occlusionStrength =
+							static_cast<float>(material.occlusionTexture.strength);
 					}
 				}
 

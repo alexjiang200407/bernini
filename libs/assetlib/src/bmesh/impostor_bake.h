@@ -16,14 +16,27 @@ namespace assetlib
 		std::span<const uint8_t> rgba;
 	};
 
-	/** What one submesh's material contributes to its impostor: the glTF's own base colour. */
+	/**
+	 * What one submesh's material contributes to its impostor, as the glTF says it: base colour,
+	 * occlusion, roughness and metallic. Images are null where the material has none; base colour
+	 * is sRGB, the others data.
+	 */
 	struct ImpostorSurface
 	{
 		glm::vec4            baseColorFactor = glm::vec4(1.0f);
-		const ImpostorImage* baseColor   = nullptr;  // sampled through TEXCOORD_0; null for none
-		bool                 doubleSided = false;
-		bool                 alphaTest   = false;
-		float                alphaCutoff = 0.5f;
+		const ImpostorImage* baseColor       = nullptr;  // through TEXCOORD_0
+
+		const ImpostorImage* occlusion         = nullptr;  // r, through occlusionTexCoord
+		uint32_t             occlusionTexCoord = 0;        // 0 or 1
+		float                occlusionStrength = 1.0f;
+
+		const ImpostorImage* metallicRoughness = nullptr;  // g roughness, b metallic, TEXCOORD_0
+		float                roughnessFactor   = 1.0f;
+		float                metallicFactor    = 0.0f;
+
+		bool  doubleSided = false;
+		bool  alphaTest   = false;
+		float alphaCutoff = 0.5f;
 	};
 
 	/** The geometry a bake reads: one mesh entry's level 0, out of a cooked mesh's pools. */

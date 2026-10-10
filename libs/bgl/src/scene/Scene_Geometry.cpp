@@ -1170,6 +1170,8 @@ namespace bgl
 		payload.normalDepth   = ResolveTexture(record.impostorNormalDepth, {});
 		payload.sphere        = glm::vec4(impostor.center, impostor.radius);
 		payload.framesPerSide = assetlib::c_ImpostorFramesPerSide;
+		payload.roughness     = impostor.roughness;
+		payload.metallic      = impostor.metallic;
 		record.impostor       = m_Impostors.AddRecord(
 			ImpostorKind::kHemiOctahedral,
 			std::as_bytes(std::span(&payload, 1)));
