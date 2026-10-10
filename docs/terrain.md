@@ -101,8 +101,8 @@ area of 0 cuts no river and a count of 0 digs no lake.
 - **The cut.** A channel is a bed `depth` per metre of width below the surface at its middle, rising
   through the surface to 0.3 m above it at its banks; a lake a bowl `depth` below its level at its
   middle, rising the same way at its shore. Beyond either, the ground rises back to where it stood
-  over `bank` metres. The shore is where a slope crosses the water, never ground level with it. The field is requantised to the range
-  it holds after the cut.
+  over `bank` metres. The shore is where a slope crosses the water, never ground level with it. The
+  field is requantised to the range it holds after the cut.
 
 `TerrainWater` is five layers laid as the field is: the water's `surface` (the ground's own height
 where it is dry), its `depth`, its flow in metres a second along x and z (down a river, 0 on a
@@ -110,8 +110,9 @@ lake), and `shore`, the signed distance to the water's edge, positive on land: w
 keeps a wood back from the water. With them come each river's course, surface and width, and each
 lake's centre, radius and level. Heights are in the field's own frame, as `minHeight` is.
 
-Deterministic from the field and the desc, and linear in the samples but for the one heap of the
-flood.
+Deterministic from the field and the desc, and linear in the samples but for the flood's heap and
+the sorts of the rivers' outlets and the lakes' candidate sites. The flood is the one `lakeDepth`
+is derived by, so the carved drainage and the lakes agree on where water goes.
 
 ## Fields
 

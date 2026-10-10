@@ -127,8 +127,8 @@ path is the source of truth; when this doc disagrees, trust the struct, then fix
   authoring layout (pos/normal/uv/tangent); a producer may emit only a tightly-packed subset (e.g. a
   mesh import whose source primitive carries no UVs emits a 24-byte position/normal vertex, there
   being nothing to derive a tangent from) and describe it with a matching layout. The procedural primitives emit the **full 48-byte**
-  pos/normal/uv/tangent — see `VertexGen` in
-  [types/VertexGen.h](libs/bgl/src/types/VertexGen.h), whose field order *is* that layout. See
+  pos/normal/uv/tangent — see `bgl::MeshVertex` in
+  [bgl/types/MeshVertex.h](libs/bgl/include/bgl/types/MeshVertex.h), whose field order *is* that layout. See
   `DecodeVertex` in
   [lib/geom/vertexdecode.slang](libs/bgl/shaders/src/lib/geom/vertexdecode.slang).
 

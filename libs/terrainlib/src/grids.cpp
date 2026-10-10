@@ -2,10 +2,15 @@
 
 #include <algorithm>
 #include <cmath>
+#include <core/glm.h>
+#include <core/math.h>
 #include <core/parallel_for.h>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <limits>
+#include <queue>
+#include <utility>
 #include <vector>
 
 namespace terrain
@@ -139,4 +144,57 @@ namespace terrain
 		return mean;
 	}
 
+	Flood
+	FloodFromEdge(
+		const std::vector<float>& heights,
+		const uint32_t            samplesX,
+		const uint32_t            samplesZ)
+	{
+		const uint32_t sx    = samplesX;
+		const uint32_t sz    = samplesZ;
+		const size_t   count = heights.size();
+		using Entry          = std::pair<float, uint32_t>;
+		auto queue           = std::priority_queue<Entry, std::vector<Entry>, std::greater<>>();
+		auto flood           = Flood{ .filled   = std::vector<float>(count, 0.0f),
+			                          .receiver = std::vector<uint32_t>(count, c_NoSample),
+			                          .order    = std::vector<uint32_t>() };
+		flood.order.reserve(count);
+		auto reached = std::vector<bool>(count, false);
+		for (uint32_t z = 0; z < sz; ++z)
+		{
+			for (uint32_t x = 0; x < sx; ++x)
+			{
+				if (x == 0 || z == 0 || x == sx - 1 || z == sz - 1)
+				{
+					const size_t i  = static_cast<size_t>(z) * sx + x;
+					reached[i]      = true;
+					flood.filled[i] = heights[i];
+					queue.emplace(heights[i], static_cast<uint32_t>(i));
+				}
+			}
+		}
+		while (!queue.empty())
+		{
+			const auto [level, from] = queue.top();
+			queue.pop();
+			flood.order.push_back(from);
+			const auto x = static_cast<int>(from % sx);
+			const auto z = static_cast<int>(from / sx);
+			for (const glm::ivec2 n : core::c_Neighbours8)
+			{
+				const int nx = x + n.x;
+				const int nz = z + n.y;
+				if (nx < 0 || nz < 0 || nx >= static_cast<int>(sx) || nz >= static_cast<int>(sz))
+					continue;
+				const size_t to = static_cast<size_t>(nz) * sx + static_cast<size_t>(nx);
+				if (reached[to])
+					continue;
+				reached[to]        = true;
+				flood.receiver[to] = from;
+				flood.filled[to]   = std::max(level, heights[to]);
+				queue.emplace(flood.filled[to], static_cast<uint32_t>(to));
+			}
+		}
+		return flood;
+	}
 }

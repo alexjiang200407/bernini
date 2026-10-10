@@ -11,9 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
-#include <functional>
 #include <limits>
-#include <queue>
 #include <terrainlib/types/TerrainLayer.h>
 #include <terrainlib/types/TerrainWater.h>
 #include <terrainlib/types/WaterDesc.h>
@@ -21,13 +19,10 @@
 #include <utility>
 #include <vector>
 
-// docs/terrain.md § Water says what each step means.
-
 namespace terrain
 {
 	namespace
 	{
-		constexpr uint32_t c_None     = ~0u;
 		constexpr uint32_t c_LakeSeed = 0x5bd1e995u;
 
 		// Metres of water below which a sample counts as dry: a shore's last film is not a lake.
@@ -68,11 +63,9 @@ namespace terrain
 			}
 
 			/** Every sample whose position lies within `radius` metres of `centre`, by index. */
+			template <typename Visit>
 			void
-			ForEachNear(
-				const glm::vec2                           centre,
-				const float                               radius,
-				const std::function<void(size_t, float)>& visit) const
+			ForEachNear(const glm::vec2 centre, const float radius, Visit&& visit) const
 			{
 				const glm::vec2 lo = (centre - radius) / cellSize;
 				const glm::vec2 hi = (centre + radius) / cellSize;
@@ -154,67 +147,21 @@ namespace terrain
 		/** Where each sample drains to, and how much ground drains through it. */
 		struct Drainage
 		{
-			std::vector<uint32_t> receiver;  // c_None on the field's edge, where water leaves
+			std::vector<uint32_t> receiver;  // c_NoSample on the field's edge, where water leaves
 			std::vector<float>    area;      // square metres, the sample's own cell included
 		};
 
-		/**
-		 * A priority flood from the field's edge (Barnes, Lehman and Mulla 2014): a sample drains to
-		 * the neighbour the flood reached it from, its lowest by the ground as filled, so a hollow
-		 * drains over its rim and every sample reaches the edge.
-		 */
-		[[nodiscard]] Drainage
-		Drain(const Grid& grid, const std::vector<float>& heights)
+		/** How much ground drains through each sample, down the flood's receivers, its own cell included. */
+		[[nodiscard]] std::vector<float>
+		DrainedArea(const Grid& grid, const Flood& flood)
 		{
-			using Entry = std::pair<float, uint32_t>;
-			auto queue  = std::priority_queue<Entry, std::vector<Entry>, std::greater<>>();
-			auto drained =
-				Drainage{ .receiver = std::vector<uint32_t>(grid.Count(), c_None),
-				          .area = std::vector<float>(grid.Count(), grid.cellSize * grid.cellSize) };
-			auto reached = std::vector<bool>(grid.Count(), false);
-			auto order   = std::vector<uint32_t>();
-			order.reserve(grid.Count());
-			for (uint32_t z = 0; z < grid.samplesZ; ++z)
+			auto area = std::vector<float>(grid.Count(), grid.cellSize * grid.cellSize);
+			for (auto it = flood.order.rbegin(); it != flood.order.rend(); ++it)
 			{
-				for (uint32_t x = 0; x < grid.samplesX; ++x)
-				{
-					if (x == 0 || z == 0 || x == grid.samplesX - 1 || z == grid.samplesZ - 1)
-					{
-						const size_t i = grid.Index(x, z);
-						reached[i]     = true;
-						queue.emplace(heights[i], static_cast<uint32_t>(i));
-					}
-				}
+				if (flood.receiver[*it] != c_NoSample)
+					area[flood.receiver[*it]] += area[*it];
 			}
-			while (!queue.empty())
-			{
-				const auto [level, from] = queue.top();
-				queue.pop();
-				order.push_back(from);
-				const auto x = static_cast<int>(from % grid.samplesX);
-				const auto z = static_cast<int>(from / grid.samplesX);
-				for (const glm::ivec2 n : core::c_Neighbours8)
-				{
-					const int nx = x + n.x;
-					const int nz = z + n.y;
-					if (nx < 0 || nz < 0 || nx >= static_cast<int>(grid.samplesX) ||
-					    nz >= static_cast<int>(grid.samplesZ))
-						continue;
-					const size_t to =
-						grid.Index(static_cast<uint32_t>(nx), static_cast<uint32_t>(nz));
-					if (reached[to])
-						continue;
-					reached[to]          = true;
-					drained.receiver[to] = from;
-					queue.emplace(std::max(level, heights[to]), static_cast<uint32_t>(to));
-				}
-			}
-			for (auto it = order.rbegin(); it != order.rend(); ++it)
-			{
-				if (drained.receiver[*it] != c_None)
-					drained.area[drained.receiver[*it]] += drained.area[*it];
-			}
-			return drained;
+			return area;
 		}
 
 		/** A river being laid out: its samples from head to mouth, and the river it joins. */
@@ -223,8 +170,8 @@ namespace terrain
 			std::vector<uint32_t>  samples;
 			std::vector<glm::vec2> points;  // smoothed, one per sample, and the junction last
 			std::vector<float>     area;
-			uint32_t               joins      = c_None;  // the river this one flows into
-			uint32_t               joinsPoint = 0;       // the point of that river it ends on
+			uint32_t               joins      = c_NoSample;  // the river this one flows into
+			uint32_t               joinsPoint = 0;           // the point of that river it ends on
 		};
 
 		[[nodiscard]] float
@@ -240,14 +187,15 @@ namespace terrain
 		 * A moving average over `reach` points either side, narrowed toward each end so the head
 		 * and the mouth stay where they are.
 		 */
-		[[nodiscard]] std::vector<glm::vec2>
-		Smooth(const std::vector<glm::vec2>& points, const size_t reach)
+		template <typename T>
+		[[nodiscard]] std::vector<T>
+		Smooth(const std::vector<T>& points, const size_t reach)
 		{
 			auto smooth = points;
 			for (size_t i = 1; i + 1 < points.size(); ++i)
 			{
 				const size_t k   = std::min({ reach, i, points.size() - 1 - i });
-				auto         sum = glm::vec2(0.0f);
+				auto         sum = T(0.0f);
 				for (size_t j = i - k; j <= i + k; ++j) sum += points[j];
 				smooth[i] = sum / static_cast<float>(2 * k + 1);
 			}
@@ -261,7 +209,11 @@ namespace terrain
 		 * dropped, and every tributary of it.
 		 */
 		[[nodiscard]] std::vector<Course>
-		TraceRivers(const Grid& grid, const Drainage& drained, const RiverRule& rule)
+		TraceRivers(
+			const Grid&      grid,
+			const Drainage&  drained,
+			const RiverRule& rule,
+			const size_t     smoothing)
 		{
 			const size_t count   = grid.Count();
 			const auto   isRiver = [&](const uint32_t i) { return drained.area[i] >= rule.area; };
@@ -270,7 +222,7 @@ namespace terrain
 			auto first = std::vector<uint32_t>(count + 1, 0);
 			for (uint32_t i = 0; i < count; ++i)
 			{
-				if (isRiver(i) && drained.receiver[i] != c_None)
+				if (isRiver(i) && drained.receiver[i] != c_NoSample)
 					++first[drained.receiver[i] + 1];
 			}
 			for (size_t i = 0; i < count; ++i) first[i + 1] += first[i];
@@ -278,7 +230,7 @@ namespace terrain
 			auto filled = std::vector<uint32_t>(first.begin(), first.end() - 1);
 			for (uint32_t i = 0; i < count; ++i)
 			{
-				if (isRiver(i) && drained.receiver[i] != c_None)
+				if (isRiver(i) && drained.receiver[i] != c_NoSample)
 					donors[filled[drained.receiver[i]]++] = i;
 			}
 
@@ -292,17 +244,15 @@ namespace terrain
 			auto outlets = std::vector<uint32_t>();
 			for (uint32_t i = 0; i < count; ++i)
 			{
-				if (isRiver(i) && drained.receiver[i] == c_None)
+				if (isRiver(i) && drained.receiver[i] == c_NoSample)
 					outlets.push_back(i);
 			}
 			std::ranges::sort(outlets, [&](const uint32_t a, const uint32_t b) {
 				return drained.area[a] != drained.area[b] ? drained.area[a] > drained.area[b] :
 				                                            a < b;
 			});
-			for (const uint32_t outlet : outlets) stems.push_back({ outlet, c_None, 0 });
+			for (const uint32_t outlet : outlets) stems.push_back({ outlet, c_NoSample, 0 });
 
-			const auto reach =
-				static_cast<size_t>(std::lround(rule.smoothing / (2.0f * grid.cellSize)));
 			auto rivers   = std::vector<Course>();
 			auto branches = std::vector<std::pair<uint32_t, size_t>>();
 			while (!stems.empty())
@@ -314,11 +264,11 @@ namespace terrain
 				branches.clear();
 				for (uint32_t at = stem.start;;)
 				{
-					uint32_t best = c_None;
+					uint32_t best = c_NoSample;
 					for (uint32_t d = first[at]; d < first[at + 1]; ++d)
 					{
 						const uint32_t donor = donors[d];
-						if (best == c_None || drained.area[donor] > drained.area[best] ||
+						if (best == c_NoSample || drained.area[donor] > drained.area[best] ||
 						    (drained.area[donor] == drained.area[best] && donor < best))
 							best = donor;
 					}
@@ -327,7 +277,7 @@ namespace terrain
 						if (donors[d] != best)
 							branches.emplace_back(donors[d], upstream.size() - 1);
 					}
-					if (best == c_None)
+					if (best == c_NoSample)
 						break;
 					upstream.push_back(best);
 					at = best;
@@ -340,14 +290,14 @@ namespace terrain
 					course.points.push_back(grid.Position(s));
 					course.area.push_back(drained.area[s]);
 				}
-				if (stem.joins != c_None)
+				if (stem.joins != c_NoSample)
 				{
 					course.points.push_back(rivers[stem.joins].points[stem.joinsPoint]);
 					course.area.push_back(drained.area[course.samples.back()]);
 				}
 				if (Length(course.points) < rule.minLength || course.points.size() < 2)
 					continue;
-				course.points = Smooth(course.points, reach);
+				course.points = Smooth(course.points, smoothing);
 
 				const auto index = static_cast<uint32_t>(rivers.size());
 				const auto last  = upstream.size() - 1;
@@ -365,18 +315,18 @@ namespace terrain
 			float     radius;
 			float     level;
 			uint32_t  seed;
-			float     noise;
+			float     shoreNoise;  // of the radius
 
 			[[nodiscard]] float
 			Shore(const glm::vec2 direction) const noexcept
 			{
-				return radius * (1.0f + noise * core::gradient_noise(direction * 1.7f, seed));
+				return radius * (1.0f + shoreNoise * core::gradient_noise(direction * 1.7f, seed));
 			}
 
 			[[nodiscard]] float
 			Reach() const noexcept
 			{
-				return radius * (1.0f + noise);
+				return radius * (1.0f + shoreNoise);
 			}
 		};
 
@@ -470,12 +420,11 @@ namespace terrain
 					Basin{ .centre = centre,
 				           .radius =
 				               glm::mix(rule.minRadius, rule.maxRadius, Unit(seed ^ c_LakeSeed, n)),
-				           .level = 0.0f,
-				           .seed  = core::hash_mix32(seed ^ c_LakeSeed ^ (n + 1)),
-				           .noise = rule.shoreNoise });
+				           .level      = 0.0f,
+				           .seed       = core::hash_mix32(seed ^ c_LakeSeed ^ (n + 1)),
+				           .shoreNoise = rule.shoreNoise });
 			}
 
-			// A lake stands at the lowest point of its rim: where it would spill.
 			for (Basin& basin : basins)
 			{
 				basin.level = std::numeric_limits<float>::max();
@@ -552,12 +501,18 @@ namespace terrain
 			ground[i] = field.minHeight + static_cast<float>(field.heights[i]) * scale;
 		const std::vector<float> uncut = ground;
 
-		const Drainage   drained = Drain(grid, uncut);
+		Flood            flood   = FloodFromEdge(uncut, grid.samplesX, grid.samplesZ);
+		const auto       area    = DrainedArea(grid, flood);
+		const Drainage   drained = Drainage{ .receiver = std::move(flood.receiver), .area = area };
 		const RiverRule& rule    = desc.rivers;
-		auto courses = rule.area > 0.0f ? TraceRivers(grid, drained, rule) : std::vector<Course>();
-		auto basins  = desc.lakes.count > 0 ?
-		                   SiteLakes(grid, uncut, drained, desc.lakes, desc.seed) :
-		                   std::vector<Basin>();
+		// A course and its surface are each smoothed over this many points either side.
+		const auto smoothing =
+			static_cast<size_t>(std::lround(rule.smoothing / (2.0f * grid.cellSize)));
+		auto courses =
+			rule.area > 0.0f ? TraceRivers(grid, drained, rule, smoothing) : std::vector<Course>();
+		auto basins = desc.lakes.count > 0 ?
+		                  SiteLakes(grid, uncut, drained, desc.lakes, desc.seed) :
+		                  std::vector<Basin>();
 
 		auto water = TerrainWater();
 		water.rivers.resize(courses.size());
@@ -595,8 +550,6 @@ namespace terrain
 				}
 			}
 		}
-		const auto smoothing =
-			static_cast<size_t>(std::lround(rule.smoothing / (2.0f * grid.cellSize)));
 		for (size_t r = 0; r < courses.size(); ++r)
 		{
 			WaterRiver&         river = water.rivers[r];
@@ -615,18 +568,12 @@ namespace terrain
 
 			// Smoothed into slopes, but never above the ground: what averaging would lift past the
 			// lowest it may stand at is held there.
-			river.surface = low;
-			for (size_t p = 1; p + 1 < n; ++p)
-			{
-				const size_t k   = std::min({ smoothing, p, n - 1 - p });
-				float        sum = 0.0f;
-				for (size_t j = p - k; j <= p + k; ++j) sum += low[j];
-				river.surface[p] = std::min(sum / static_cast<float>(2 * k + 1), low[p]);
-			}
+			river.surface = Smooth(low, smoothing);
+			for (size_t p = 0; p < n; ++p) river.surface[p] = std::min(river.surface[p], low[p]);
 			for (size_t p = 1; p < n; ++p)
 				river.surface[p] = std::min(river.surface[p], river.surface[p - 1]);
 			const Course& course = courses[r];
-			if (course.joins != c_None)
+			if (course.joins != c_NoSample)
 			{
 				const float meets = water.rivers[course.joins].surface[course.joinsPoint];
 				for (float& s : river.surface) s = std::max(s, meets);
@@ -644,8 +591,6 @@ namespace terrain
 			              std::vector<float>(grid.Count(), std::numeric_limits<float>::lowest()),
 			          .flow = std::vector<glm::vec2>(grid.Count(), glm::vec2(0.0f)) };
 
-		// Each channel: a bed `depth` below the surface at its middle rising to it at the banks,
-		// then banks rising back to the ground beside them.
 		for (const WaterRiver& river : water.rivers)
 		{
 			for (size_t p = 0; p + 1 < river.course.size(); ++p)
@@ -691,8 +636,6 @@ namespace terrain
 			}
 		}
 
-		// Each lake: a bowl `depth` below its level at its middle, rising to its level at the shore,
-		// then banks rising back to the ground.
 		const LakeRule& lakes = desc.lakes;
 		for (const Basin& basin : basins)
 		{
@@ -745,12 +688,12 @@ namespace terrain
 				surface[i] = ground[i];
 			}
 		}
-		const std::vector<float> landward =
+		const std::vector<float> dryDistance =
 			DistanceInside(dry, grid.samplesX, grid.samplesZ, grid.cellSize);
-		const std::vector<float> seaward =
+		const std::vector<float> wetDistance =
 			DistanceInside(wet, grid.samplesX, grid.samplesZ, grid.cellSize);
 		auto shore = std::vector<float>(grid.Count());
-		for (size_t i = 0; i < grid.Count(); ++i) shore[i] = landward[i] - seaward[i];
+		for (size_t i = 0; i < grid.Count(); ++i) shore[i] = dryDistance[i] - wetDistance[i];
 
 		water.surface = LayerOf(grid, std::move(surface));
 		water.depth   = LayerOf(grid, std::move(depth));
