@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <nlohmann/json.hpp>
 #include <span>
 #include <stdexcept>
@@ -222,7 +223,11 @@ namespace
 {
 	/** A glb of one square, its mesh's and node's extras as given. */
 	Glb
-	SquareGlb(const char* file, const nlohmann::json& meshExtras, const nlohmann::json& nodeExtras)
+	SquareGlb(
+		const char*                                 file,
+		const nlohmann::json&                       meshExtras,
+		const nlohmann::json&                       nodeExtras,
+		const std::function<void(nlohmann::json&)>& edit = {})
 	{
 		auto                         buffer    = Buffer();
 		const std::vector<glm::vec3> positions = { { -1, -1, 0 }, { 1, -1, 0 }, { 1, 1, 0 },
@@ -249,6 +254,8 @@ namespace
 			                            { { "baseColorFactor", { 0.25, 0.5, 0.125, 1.0 } } } } } };
 		document["bufferViews"] = buffer.views;
 		document["accessors"]   = buffer.accessors;
+		if (edit)
+			edit(document);
 		return Glb(file, document, buffer);
 	}
 }
@@ -287,6 +294,28 @@ TEST_CASE(
 		const Glb off =
 			SquareGlb("bernini_impostor_off.glb", { { "bernini_impostor", false } }, nullptr);
 		CHECK(loadFromGltf(off.Path()).impostors.empty());
+	}
+
+	SECTION("a blended material is cut at half coverage, as a leaf card is drawn")
+	{
+		const auto clear = [](nlohmann::json& document) {
+			document["materials"][0]["alphaMode"]                               = "BLEND";
+			document["materials"][0]["pbrMetallicRoughness"]["baseColorFactor"] = { 0.25,
+				                                                                    0.5,
+				                                                                    0.125,
+				                                                                    0.2 };
+		};
+		const Glb glb = SquareGlb(
+			"bernini_impostor_blend.glb",
+			{ { "bernini_impostor", true } },
+			nullptr,
+			clear);
+		const imp::BMeshImport mesh = loadFromGltf(glb.Path());
+		REQUIRE(mesh.impostors.size() == 1);
+		CHECK(
+			mesh.impostorTexels
+				[(c_FrontY * c_ImpostorFrameTexels + 64) * 4 * c_ImpostorAtlasTexels +
+		         (c_FrontX * c_ImpostorFrameTexels + 64) * 4 + 3] == 0);
 	}
 
 	SECTION("a value that is not a truth is dropped, and the mesh still imports")

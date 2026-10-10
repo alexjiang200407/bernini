@@ -2056,8 +2056,13 @@ namespace assetlib
 							static_cast<float>(pbr.baseColorFactor[2]),
 							static_cast<float>(pbr.baseColorFactor[3]));
 					surface.doubleSided = material.doubleSided;
-					surface.alphaTest   = material.alphaMode == "MASK";
-					surface.alphaCutoff = static_cast<float>(material.alphaCutoff);
+					// An impostor is a cutout, so a blended material is cut at half coverage: a leaf card's
+					// clear texels would otherwise bake as its colour.
+					surface.alphaTest =
+						material.alphaMode == "MASK" || material.alphaMode == "BLEND";
+					surface.alphaCutoff = material.alphaMode == "MASK" ?
+					                          static_cast<float>(material.alphaCutoff) :
+					                          0.5f;
 
 					const int texture = pbr.baseColorTexture.index;
 					if (texture < 0 || pbr.baseColorTexture.texCoord != 0 ||
