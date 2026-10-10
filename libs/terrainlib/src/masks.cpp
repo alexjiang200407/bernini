@@ -1,18 +1,17 @@
-#include "neighbours.h"
-
 #include <algorithm>
 #include <assetlib_structs/Heightfield.h>
 #include <cmath>
 #include <core/err/util.h>
 #include <core/glm.h>
+#include <core/math.h>
 #include <core/noise.h>
 #include <core/parallel_for.h>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
-#include <terrainlib/TerrainFields.h>
-#include <terrainlib/TerrainLayer.h>
-#include <terrainlib/TerrainMasks.h>
+#include <terrainlib/fields.h>
+#include <terrainlib/layer.h>
+#include <terrainlib/masks.h>
 #include <vector>
 
 namespace terrain
@@ -161,7 +160,7 @@ namespace terrain
 					const auto z = static_cast<int>(group[g] / shape.samplesX);
 					edge |= x == 0 || z == 0 || x == static_cast<int>(shape.samplesX) - 1 ||
 					        z == static_cast<int>(shape.samplesZ) - 1;
-					for (const glm::ivec2 n : c_Neighbours)
+					for (const glm::ivec2 n : core::c_Neighbours8)
 					{
 						const int nx = x + n.x;
 						const int nz = z + n.y;

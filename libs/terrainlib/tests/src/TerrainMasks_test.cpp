@@ -9,11 +9,11 @@
 #include <functional>
 #include <numeric>
 #include <stdexcept>
-#include <terrainlib/ErosionDesc.h>
 #include <terrainlib/Generate.h>
-#include <terrainlib/TerrainFields.h>
-#include <terrainlib/TerrainLayer.h>
-#include <terrainlib/TerrainMasks.h>
+#include <terrainlib/fields.h>
+#include <terrainlib/layer.h>
+#include <terrainlib/masks.h>
+#include <terrainlib/types/ErosionDesc.h>
 #include <vector>
 
 // What a mask promises: woods and outcrops big enough to read as one, no gap in a wood too small

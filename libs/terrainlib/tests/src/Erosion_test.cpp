@@ -11,8 +11,8 @@
 #include <cstdint>
 #include <numeric>
 #include <stdexcept>
-#include <terrainlib/ErosionDesc.h>
 #include <terrainlib/Generate.h>
+#include <terrainlib/types/ErosionDesc.h>
 #include <vector>
 
 // What erosion promises: the same desc wears the same field, droplets and thermal erosion move

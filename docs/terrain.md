@@ -37,7 +37,7 @@ container a terrain is stored as later is this struct serialised; nothing stores
 
 Noise is a plain with no history: its hollows drain nowhere and its slopes carry no mark of the
 water that would have run down them. `TerrainGenerateDesc::erosion`
-([terrainlib/ErosionDesc.h](../libs/terrainlib/include/terrainlib/ErosionDesc.h)) wears the
+([terrainlib/types/ErosionDesc.h](../libs/terrainlib/include/terrainlib/types/ErosionDesc.h)) wears the
 generated heights down, on the CPU, once, before they are quantised. The default erodes nothing.
 Every length in it is in world units, so one desc erodes a battlefield and a mountain range alike.
 It runs in rounds, `passes` of them, each three steps
@@ -76,7 +76,7 @@ parallel work: 160 steps at three droplets a sample took 17 s.
 
 ## Fields
 
-`terrain::DeriveFields` ([terrainlib/TerrainFields.h](../libs/terrainlib/include/terrainlib/TerrainFields.h))
+`terrain::DeriveFields` ([terrainlib/fields.h](../libs/terrainlib/include/terrainlib/fields.h))
 reads any heightfield -- generated, eroded, or later painted or loaded -- and says what its ground
 is like at each sample, as layers laid like it:
 
@@ -94,7 +94,7 @@ draws one yet.
 
 ## Masks
 
-`terrain::GenerateMasks` ([terrainlib/TerrainMasks.h](../libs/terrainlib/include/terrainlib/TerrainMasks.h))
+`terrain::GenerateMasks` ([terrainlib/masks.h](../libs/terrainlib/include/terrainlib/masks.h))
 turns a field and its fields into where each kind of thing stands, one hard layer per kind --
 every value 0 or 1 -- so a channel painted by hand later replaces one kind without touching the
 others:
@@ -192,7 +192,7 @@ On the CPU, `terrain::HeightAt` ([terrainlib/height.h](../libs/terrainlib/includ
 is the same read: bilinear between samples, clamped at the edge, the heightfield laid at the
 origin `TerrainDesc` gives it, a sample of 0 at the origin's height plus the field's `minHeight`. It is how a game stands a camera or a unit on the ground it drew
 without a GPU readback.
-`terrain::LayerAt` ([terrainlib/TerrainLayer.h](../libs/terrainlib/include/terrainlib/TerrainLayer.h))
+`terrain::LayerAt` ([terrainlib/layer.h](../libs/terrainlib/include/terrainlib/layer.h))
 reads a `TerrainLayer` -- one float per sample, laid exactly as the heightfield is -- the same
 way, and the fields of the ground and the masks over it (`TerrainFields`, `TerrainMasks`) are
 layers, so a game asks what the ground is like where something stands by the position it stood

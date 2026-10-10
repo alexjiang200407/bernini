@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <span>
-#include <terrainlib/ErosionDesc.h>
+#include <terrainlib/types/ErosionDesc.h>
 
 namespace terrain
 {

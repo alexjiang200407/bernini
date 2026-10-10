@@ -1,6 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <core/glm.h>
+#include <core/type_traits.h>
 #include <cstdint>
 
 namespace terrain
@@ -9,7 +10,7 @@ namespace terrain
 	 * A grid of `samplesX` by `samplesZ` samples `cellSize` apart read at `local`, its offset from
 	 * sample (0, 0): bilinear between the four samples `at(x, z)` returns, clamped at the edge.
 	 */
-	template <typename At>
+	template <core::type_traits::invocable_returning<float, uint32_t, uint32_t> At>
 	[[nodiscard]] float
 	Bilinear(
 		const uint32_t  samplesX,

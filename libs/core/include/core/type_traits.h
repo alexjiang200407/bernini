@@ -19,4 +19,8 @@ namespace core::type_traits
 
 	template <typename T>
 	concept is_nothrow_destructible = std::is_nothrow_destructible_v<T>;
+
+	/** A callable taking `Args` and returning something convertible to `R`. */
+	template <typename F, typename R, typename... Args>
+	concept invocable_returning = std::is_invocable_r_v<R, F, Args...>;
 }

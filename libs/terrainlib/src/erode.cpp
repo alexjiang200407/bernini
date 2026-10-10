@@ -1,6 +1,4 @@
 #include "erode.h"
-#include "neighbours.h"
-
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -14,7 +12,7 @@
 #include <functional>
 #include <queue>
 #include <span>
-#include <terrainlib/ErosionDesc.h>
+#include <terrainlib/types/ErosionDesc.h>
 #include <utility>
 #include <vector>
 
@@ -365,7 +363,9 @@ namespace terrain
 				{
 					return 0.0f;
 				}
-				const float distance = (n.x != 0 && n.y != 0) ? cellSize * 1.41421356f : cellSize;
+				const float distance = (n.x != 0 && n.y != 0) ?
+				                           cellSize * static_cast<float>(core::c_Sqrt2) :
+				                           cellSize;
 				const float rise =
 					grid.heights[grid.Index(x, z)] -
 					grid.heights[grid.Index(static_cast<uint32_t>(nx), static_cast<uint32_t>(nz))];
@@ -378,7 +378,7 @@ namespace terrain
 				{
 					float largest = 0.0f;
 					float sum     = 0.0f;
-					for (const glm::ivec2 n : c_Neighbours)
+					for (const glm::ivec2 n : core::c_Neighbours8)
 					{
 						const float excess = excessOf(x, z, n);
 						largest            = std::max(largest, excess);
@@ -394,7 +394,7 @@ namespace terrain
 				for (uint32_t x = 0; x < grid.samplesX; ++x)
 				{
 					float gained = 0.0f;
-					for (const glm::ivec2 n : c_Neighbours)
+					for (const glm::ivec2 n : core::c_Neighbours8)
 					{
 						const int nx = static_cast<int>(x) + n.x;
 						const int nz = static_cast<int>(z) + n.y;
@@ -509,7 +509,7 @@ namespace terrain
 			queue.pop();
 			const auto x = static_cast<int>(from % samplesX);
 			const auto z = static_cast<int>(from / samplesX);
-			for (const glm::ivec2 n : c_Neighbours)
+			for (const glm::ivec2 n : core::c_Neighbours8)
 			{
 				const int nx = x + n.x;
 				const int nz = z + n.y;

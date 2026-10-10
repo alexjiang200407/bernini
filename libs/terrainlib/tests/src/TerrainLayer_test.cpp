@@ -4,10 +4,10 @@
 #include <core/glm.h>
 #include <cstddef>
 #include <cstdint>
-#include <terrainlib/TerrainFields.h>
-#include <terrainlib/TerrainLayer.h>
-#include <terrainlib/TerrainMasks.h>
+#include <terrainlib/fields.h>
 #include <terrainlib/height.h>
+#include <terrainlib/layer.h>
+#include <terrainlib/masks.h>
 
 namespace
 {

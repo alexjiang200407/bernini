@@ -1,12 +1,27 @@
 #pragma once
+#include <array>
 #include <cmath>
 #include <concepts>
 #include <core/glm.h>
+#include <glm/ext/vector_int2.hpp>
 
 namespace core
 {
 	// Long enough for a double; a float initialiser just truncates it.
-	inline constexpr double c_Pi = 3.14159265358979323846;
+	inline constexpr double c_Pi    = 3.14159265358979323846;
+	inline constexpr double c_Sqrt2 = 1.41421356237309504880;
+
+	/** The eight cells around one on a grid, as offsets along its two axes. */
+	inline const std::array<glm::ivec2, 8> c_Neighbours8{ {
+		{ -1, -1 },
+		{ 0, -1 },
+		{ 1, -1 },
+		{ -1, 0 },
+		{ 1, 0 },
+		{ -1, 1 },
+		{ 0, 1 },
+		{ 1, 1 },
+	} };
 
 	/**
 	 * Whether every component of `v` is finite -- neither infinite nor NaN.

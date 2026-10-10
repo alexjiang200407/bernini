@@ -8,9 +8,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <terrainlib/ErosionDesc.h>
 #include <terrainlib/Generate.h>
-#include <terrainlib/TerrainFields.h>
+#include <terrainlib/fields.h>
+#include <terrainlib/types/ErosionDesc.h>
 #include <vector>
 
 // What the fields say about a ground whose shape is known: a plane's slope and no curvature, a

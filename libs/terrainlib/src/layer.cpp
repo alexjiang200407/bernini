@@ -4,7 +4,7 @@
 #include <core/glm.h>
 #include <cstddef>
 #include <cstdint>
-#include <terrainlib/TerrainLayer.h>
+#include <terrainlib/layer.h>
 
 namespace terrain
 {

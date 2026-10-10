@@ -1,18 +1,17 @@
-#include "neighbours.h"
-
 #include <algorithm>
 #include <array>
 #include <assetlib_structs/Heightfield.h>
 #include <cmath>
 #include <core/err/util.h>
 #include <core/glm.h>
+#include <core/math.h>
 #include <core/parallel_for.h>
 #include <cstddef>
 #include <cstdint>
 #include <numeric>
 #include <queue>
-#include <terrainlib/TerrainFields.h>
-#include <terrainlib/TerrainLayer.h>
+#include <terrainlib/fields.h>
+#include <terrainlib/layer.h>
 #include <utility>
 #include <vector>
 
@@ -105,10 +104,10 @@ namespace terrain
 
 			auto  weights = std::array<float, 8>{};
 			float total   = 0.0f;
-			for (size_t n = 0; n < c_Neighbours.size(); ++n)
+			for (size_t n = 0; n < core::c_Neighbours8.size(); ++n)
 			{
-				const int nx = x + c_Neighbours[n].x;
-				const int nz = z + c_Neighbours[n].y;
+				const int nx = x + core::c_Neighbours8[n].x;
+				const int nz = z + core::c_Neighbours8[n].y;
 				if (nx < 0 || nz < 0 || nx >= static_cast<int>(sx) || nz >= static_cast<int>(sz))
 				{
 					continue;
@@ -118,10 +117,11 @@ namespace terrain
 				{
 					continue;
 				}
-				const bool  diagonal = c_Neighbours[n].x != 0 && c_Neighbours[n].y != 0;
-				const float run      = diagonal ? cell * 1.41421356f : cell;
-				// The contour length the flow crosses toward a neighbour: Quinn's weighting.
-				const float contour = diagonal ? 0.354f : 0.5f;
+				const bool diagonal =
+					core::c_Neighbours8[n].x != 0 && core::c_Neighbours8[n].y != 0;
+				const float run = diagonal ? cell * static_cast<float>(core::c_Sqrt2) : cell;
+				// The contour length the flow crosses toward a neighbour, in cells: Quinn's weighting.
+				const float contour = diagonal ? 0.25f * static_cast<float>(core::c_Sqrt2) : 0.5f;
 				weights[n]          = std::pow(drop / run, c_FlowExponent) * contour;
 				total += weights[n];
 			}
@@ -129,13 +129,13 @@ namespace terrain
 			{
 				continue;
 			}
-			for (size_t n = 0; n < c_Neighbours.size(); ++n)
+			for (size_t n = 0; n < core::c_Neighbours8.size(); ++n)
 			{
 				if (weights[n] > 0.0f)
 				{
 					const auto to = index(
-						static_cast<uint32_t>(x + c_Neighbours[n].x),
-						static_cast<uint32_t>(z + c_Neighbours[n].y));
+						static_cast<uint32_t>(x + core::c_Neighbours8[n].x),
+						static_cast<uint32_t>(z + core::c_Neighbours8[n].y));
 					flow[to] += flow[i] * weights[n] / total;
 				}
 			}
@@ -171,7 +171,7 @@ namespace terrain
 			queue.pop();
 			const auto x = static_cast<int>(i % sx);
 			const auto z = static_cast<int>(i / sx);
-			for (const glm::ivec2 n : c_Neighbours)
+			for (const glm::ivec2 n : core::c_Neighbours8)
 			{
 				const int nx = x + n.x;
 				const int nz = z + n.y;
