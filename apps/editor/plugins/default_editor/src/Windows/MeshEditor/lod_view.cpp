@@ -45,6 +45,8 @@ namespace editor
 			maxBound = glm::max(maxBound, submesh.aabbMax);
 		}
 		lods.levelZeroSphere = core::bounding_sphere_of(minBound, maxBound);
+		lods.impostor =
+			std::ranges::contains(mesh.impostors, meshIndex, &assetlib::MeshImpostor::mesh);
 		return lods;
 	}
 
@@ -65,7 +67,9 @@ namespace editor
 			pixelsPerUnit);
 
 		const auto count = static_cast<uint32_t>(lods.minPixels.size());
-		if (forced.has_value() && count > 0)
+		if (forced == c_ForceImpostor)
+			readout.level = count;
+		else if (forced.has_value() && count > 0)
 			readout.level = std::min(*forced, count - 1);
 		else
 			readout.level = game::ChooseLevel(lods.minPixels, readout.pixels, pixelScale, previous);
@@ -104,10 +108,11 @@ namespace editor
 	PinLod(IEditorViewport& viewport, const std::optional<uint32_t> level)
 	{
 		viewport.Invoke([&](RenderContext&, const bgl::SceneViewRef& view) {
-			auto selection       = view->GetLodSelection();
-			selection.forceLevel = level.has_value() ?
-			                           std::optional(static_cast<bgl::LodLevel>(*level)) :
-			                           std::nullopt;
+			auto selection          = view->GetLodSelection();
+			selection.forceImpostor = level == c_ForceImpostor;
+			selection.forceLevel    = level.has_value() && !selection.forceImpostor ?
+			                              std::optional(static_cast<bgl::LodLevel>(*level)) :
+			                              std::nullopt;
 			view->SetLodSelection(selection);
 		});
 	}

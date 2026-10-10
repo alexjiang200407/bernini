@@ -46,9 +46,15 @@ namespace editor
 		m_LevelCount = lods != nullptr ? static_cast<uint32_t>(lods->minPixels.size()) : 0u;
 		for (uint32_t level = 0; level < m_LevelCount; ++level)
 			addItem(Localize(m_Language, "bernini.lod.level", { level }, "LOD {0}"), level);
+		m_Impostor = lods != nullptr && lods->impostor;
+		if (m_Impostor)
+			addItem(Localize(m_Language, "bernini.lod.impostor", "Impostor"), c_ForceImpostor);
 
-		setCurrentIndex(
-			forced.has_value() && *forced < m_LevelCount ? static_cast<int>(*forced) + 1 : 0);
+		if (forced == c_ForceImpostor && m_Impostor)
+			setCurrentIndex(count() - 1);
+		else
+			setCurrentIndex(
+				forced.has_value() && *forced < m_LevelCount ? static_cast<int>(*forced) + 1 : 0);
 		setEnabled(lods != nullptr);
 	}
 
@@ -58,13 +64,16 @@ namespace editor
 		QString text = Localize(m_Language, "bernini.lod.auto", "Auto");
 		if (readout.has_value() && !GetForcedLevel().has_value())
 		{
-			text = readout->level < m_LevelCount ?
-			           Localize(
-						   m_Language,
-						   "bernini.lod.auto_level",
-						   { readout->level },
-						   "Auto: LOD {0}") :
-			           Localize(m_Language, "bernini.lod.auto_nothing", "Auto: nothing drawn");
+			if (readout->level < m_LevelCount)
+				text = Localize(
+					m_Language,
+					"bernini.lod.auto_level",
+					{ readout->level },
+					"Auto: LOD {0}");
+			else if (m_Impostor)
+				text = Localize(m_Language, "bernini.lod.auto_impostor", "Auto: Impostor");
+			else
+				text = Localize(m_Language, "bernini.lod.auto_nothing", "Auto: nothing drawn");
 		}
 		setItemText(0, text);
 	}
