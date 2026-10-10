@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <terrainlib/types/ErosionDesc.h>
+#include <terrainlib/types/TerraceDesc.h>
 #include <utility>
 
 namespace terrain
@@ -39,6 +40,9 @@ namespace terrain
 		// A scale on the shape's heights, applied before anything else reads them: below 1 the
 		// hills are gentler than the shape's own, and every slope is measured on the scaled ground.
 		float relief = 1.0f;
+
+		// How the noise is stepped into strata before it is eroded; the default steps nothing.
+		TerraceDesc terrace;
 
 		// How the noise is worn down once generated; the default leaves it as generated.
 		ErosionDesc erosion;
@@ -81,6 +85,14 @@ namespace terrain
 		SetErosion(this Self&& self, const ErosionDesc& value) noexcept
 		{
 			self.erosion = value;
+			return std::forward<Self>(self);
+		}
+
+		template <typename Self>
+		Self&&
+		SetTerrace(this Self&& self, const TerraceDesc& value) noexcept
+		{
+			self.terrace = value;
 			return std::forward<Self>(self);
 		}
 
