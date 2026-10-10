@@ -24,6 +24,7 @@
 #include "passes/TaaResolvePass.h"
 #include "passes/ToonShadingRigPass.h"
 #include "passes/TransparentSortPass.h"
+#include "passes/WaterSceneCopyPass.h"
 #include "passes/WriteInstanceBlocksPass.h"
 #include "postprocess/TonemapLut.h"
 #include "types/DrawBucketMask.h"
@@ -386,6 +387,7 @@ namespace bgl
 		SkinnedPosePass               m_SkinnedPose;
 		ToonShadingRigPass            m_ToonShadingRigs;
 		TransparentSortPass           m_TransparentSort;
+		WaterSceneCopyPass            m_WaterSceneCopy;
 
 		bgpu::SamplerHandle m_PointClampSampler;
 

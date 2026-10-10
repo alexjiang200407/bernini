@@ -7,6 +7,9 @@ public struct WaterData
     // The scene's depth as the phases before water left it: terrain, world, grass and characters.
     public Texture2D.Handle sceneDepth;
 
+    // The scene colour the same phases drew, copied by Water Scene Copy before this phase.
+    public Texture2D.Handle sceneColor;
+
     // Inverse of the view's viewProj, jitter included, so a reconstructed pixel lands where the
     // phases before rasterized it.
     public float4x4 invViewProj;

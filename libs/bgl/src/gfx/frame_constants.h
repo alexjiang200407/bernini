@@ -16,6 +16,9 @@ namespace bgl
 	constexpr std::string_view c_SceneColorName    = "sceneColor";
 	constexpr std::string_view c_DepthName         = "depth";
 
+	// The target's SceneColorCopy, imported globally on a frame that draws water.
+	constexpr std::string_view c_SceneColorCopyName = "sceneColorCopy";
+
 	constexpr std::string_view c_HistoryName = "taaHistory";
 
 	// The velocity buffer: RG is where the surface was last frame as a UV displacement, BA the part

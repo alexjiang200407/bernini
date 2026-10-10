@@ -193,8 +193,9 @@ flowchart TD
   imports, queues). Throws if a pass names a queue that was never `RegisterQueue`'d.
 * **`ImportBuffer/ImportTexture(name, handle, initial)`** — the name is prefixed by the current
   namespace; re-importing the same key overwrites. Omit `initial` to resume from last frame's
-  tracked state (undefined the first time the name is seen). `ImportGlobalBuffer` skips the
-  namespace prefix so the resource is reachable from every scope.
+  tracked state (undefined the first time the name is seen). `ImportGlobalBuffer` and
+  `ImportGlobalTexture` skip the namespace prefix so the resource is reachable from every scope, as
+  one tracked resource.
 * **`SetResourceNamespace(ns)`** — scopes nest by `:`-delimited segment; see the resolution rule
   above. An outer scope cannot name an inner scope's import relatively, only by its full key.
 * **`Reset()`** — clears the frame like `Execute`'s tail but **keeps** `m_LastState`; use to

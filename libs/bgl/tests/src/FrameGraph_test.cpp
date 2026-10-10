@@ -730,6 +730,40 @@ TEST_CASE("FrameGraph: accessing an imported buffer as a texture throws at Compi
 	CHECK_THROWS_AS(fg.Compile(&NullRm()), std::runtime_error);
 }
 
+// What a resource shared by every view of a target is imported as: one tracked texture, so the
+// second view's first access starts from the state the first view left it in -- not from a
+// per-namespace copy that would claim the import's own state again. Re-importing it under another
+// scope, as each view's draw does, is the same import.
+TEST_CASE("FrameGraph: a global texture is one resource across every scope", "[fg]")
+{
+	FrameGraph fg;
+
+	bgpu::TextureHandle tex{};
+	tex.slot.index = 6;
+
+	const auto view = [&](const char* ns, const char* writer, const char* reader) {
+		fg.SetResourceNamespace(ns);
+		fg.ImportGlobalTexture("copy", tex);
+		fg.SetResourceNamespace(std::string(ns) + "c0:");
+		fg.AddPass(PassDesc{}.SetName(writer).AddRenderTarget("copy"));
+		fg.AddPass(
+			PassDesc{}
+				.SetName(reader)
+				.AddTextureRead("copy", bgpu::BarrierSyncFlag::kPixelShader)
+				.SetSideEffect());
+	};
+	view("v0:", "Copy0", "Read0");
+	view("v1:", "Copy1", "Read1");
+
+	fg.Compile(&NullRm());
+
+	const PassBarriers& second = fg.BarriersFor("Copy1");
+	REQUIRE(second.textureDescs.size() == 1);
+	CHECK(second.textureHandles[0].slot.index == 6);
+	CHECK(second.textureDescs[0].accessBefore == bgpu::BarrierAccessFlag::kShaderResource);
+	CHECK(second.textureDescs[0].accessAfter == bgpu::BarrierAccessFlag::kRenderTarget);
+}
+
 TEST_CASE("FrameGraph: a texture that is both an attachment and an import throws", "[fg]")
 {
 	FrameGraph fg;

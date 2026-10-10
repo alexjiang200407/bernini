@@ -97,6 +97,13 @@ namespace bgl
 			bgpu::TextureHandle        handle,
 			std::optional<AccessState> initial = {});
 
+		/** ImportGlobalBuffer's texture twin: one tracked texture every scope reaches by name. */
+		FrameGraph&
+		ImportGlobalTexture(
+			std::string_view           name,
+			bgpu::TextureHandle        handle,
+			std::optional<AccessState> initial = {});
+
 		FrameGraph&
 		AddPass(PassDesc desc);
 
@@ -223,6 +230,12 @@ namespace bgl
 		ImportBufferKey(
 			std::string                key,
 			bgpu::BufferHandle         handle,
+			std::optional<AccessState> initial);
+
+		FrameGraph&
+		ImportTextureKey(
+			std::string                key,
+			bgpu::TextureHandle        handle,
 			std::optional<AccessState> initial);
 
 		[[nodiscard]] AccessState

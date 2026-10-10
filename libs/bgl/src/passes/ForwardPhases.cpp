@@ -347,6 +347,23 @@ namespace bgl
 		       ShadingOf(m_DrawBucketTable->Desc(bucket).material) == SurfaceShading::kWater;
 	}
 
+	bool
+	ForwardPhases::DemandsWater(const DrawData& draw) const
+	{
+		const auto* view = draw.view->As<SceneView>();
+		core::ensure(view != nullptr, "The water phase requires a bgl::SceneView");
+
+		const DrawBucketMask& demanded = view->DemandedDrawBuckets();
+		for (uint32_t bucket = 0, count = m_DrawBucketTable->Count(); bucket < count; ++bucket)
+		{
+			if (demanded.test(bucket) && IsWaterBucket(bucket))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	void
 	ForwardPhases::AddTransparentKernel(const PassInitContext& ctx)
 	{

@@ -155,7 +155,8 @@ layer, and a **hashed** layer calls it *twice* — see § Hashed alpha below.
 
 A water body's look is one more contract, `IWaterSurfaceSource` (`bgl.WaterSurfaceSource`, document
 model `waterSurface`): `ILitSurfaceSource`'s shape with no `Coverage`, over a reader that also
-measures the scene behind the water, the ground under it and the clock. It draws in Forward Water
+measures the scene behind the water, the ground under it and the clock, and reads the scene behind
+it through a displacement of its choosing, which is refraction. It draws in Forward Water
 alone, on the static tier; [Water](water.md) is its map.
 
 ## Where the file goes, and when it is read
@@ -388,7 +389,8 @@ Deliberate, and each is a decision rather than an omission:
 * **No hot reload**, and no export-time compile.
 * **No scene inputs.** The reader gives interpolants, the camera and the material's own fields.
   Nothing of the frame — no depth, no history. The water reader is the one exception, and it gives
-  exactly three: the depth behind, the ground below and the clock ([Water](water.md)). A lit surface additionally reads the light through
+  exactly four: the depth behind, the ground below, the clock and the scene behind it, displaced
+  ([Water](water.md)). A lit surface additionally reads the light through
   `ISurfaceLight` — the sun and the environment, and only those; a PBR surface reads no light at
   all, because the engine lights it.
 * **No say over bloom beyond `emissive`.** A surface cannot mark itself as glowing or not; bloom

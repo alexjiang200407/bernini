@@ -63,12 +63,48 @@ public struct WaterArenaReader : IWaterMaterialReader
     public float ViewDepth()
     {
         let position = inner.input.position.xy;
-        let depth = waterData.sceneDepth.Load(int3(int2(position), 0)).r;
+        return ViewDepthAt(position, waterData.sceneDepth.Load(int3(int2(position), 0)).r);
+    }
+
+    float ViewDepthAt(float2 position, float depth)
+    {
         if (depth >= 1.0)
         {
             return cNoWaterBottom;
         }
         return distance(SceneWorldAt(position, depth), inner.WorldPos());
+    }
+
+    public WaterBehind Behind(float2 offset)
+    {
+        let rect = waterData.viewportRect;
+        let size = 1.0 / rect.zw;
+        let here = inner.input.position.xy;
+
+        // Displaced in viewport UV, kept on the view's own rect: past its edge is another view, or
+        // nothing the copy holds. Read at one texel, colour and depth alike, so the rejection below
+        // judges exactly the texel whose colour is used.
+        let lo = rect.xy + 0.5;
+        let hi = rect.xy + size - 0.5;
+        var position = floor(clamp(here + offset * size, lo, hi)) + 0.5;
+        var depth = waterData.sceneDepth.Load(int3(int2(position), 0)).r;
+
+        // Nearer than the water there: something standing in front of it, which must not be seen
+        // through it. The pixel straight behind is, and it is never nearer, or the water would
+        // have been discarded.
+        if (depth < inner.input.position.z)
+        {
+            position = here;
+            depth = waterData.sceneDepth.Load(int3(int2(position), 0)).r;
+        }
+
+        // Scene colour holds exposed radiance, and Shade works before exposure.
+        let texel = waterData.sceneColor.Load(int3(int2(position), 0));
+
+        WaterBehind behind;
+        behind.color = texel.rgb / max(materialData.exposure, 1.0e-6);
+        behind.viewDepth = ViewDepthAt(position, depth);
+        return behind;
     }
 
     public float GroundDepth()
@@ -126,7 +162,8 @@ public struct NullWaterSurface : IWaterSurfaceSource
 
     public static float4 Shade<R : IWaterMaterialReader, L : ISurfaceLight>(R reader, L light, NullWaterSurfaceParams params)
     {
-        return float4(reader.ViewDepth(), reader.GroundDepth(), reader.Time(), 1.0);
+        let behind = reader.Behind(float2(0.0));
+        return float4(reader.ViewDepth() + behind.viewDepth, reader.GroundDepth(), reader.Time(), behind.color.r);
     }
 }
 

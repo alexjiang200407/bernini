@@ -65,6 +65,20 @@ namespace bgl
 		float prevTime = 0.0f;
 	};
 
+	/**
+	 * What Water Scene Copy reads and draws, and Forward Water refracts through. The copy's views
+	 * are null on a draw with no water, and on one whose copy a pool refused.
+	 */
+	struct WaterCopyTargets
+	{
+		// Scene colour as a shader resource: what is copied.
+		bgpu::SrvHandle source;
+
+		// The target's SceneColorCopy, drawn into and then read.
+		bgpu::RtvHandle copy;
+		bgpu::SrvHandle copySrv;
+	};
+
 	/** The attachments a draw renders into, all owned by the frame's render target. */
 	struct DrawTargets
 	{
@@ -79,6 +93,8 @@ namespace bgl
 
 		// What the blob-shadow decal reads to tell a blade from the ground it grows on.
 		bgpu::SrvHandle grassRootHeightSrv;
+
+		WaterCopyTargets waterCopy;
 	};
 
 	/** What a draw shades against: the image-based environment, the sun, and the sky behind it. */

@@ -29,6 +29,7 @@
 #include <bgl/types/SurfaceMaterialDesc.h>
 #include <bgl/types/TerrainDesc.h>
 #include <bgl/types/Viewport.h>
+#include <bgpu/resource/Texture.h>
 #include <bgpu/types/Barrier.h>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -111,12 +112,14 @@ namespace
 		assetlib::Heightfield field = Ramp();
 		bgl::RenderJob        job;
 
-		WaterScene()
+		explicit WaterScene(
+			const std::filesystem::path& surfaces  = bgl::test::WaterSurfaceDir(),
+			bgl::SurfaceMaterialDesc     waterDesc = { .surfaceName = "ProbeWater" })
 		{
 			auto opts                        = bgl::test::GraphicsSetup();
 			opts.gpuContext.shaderCacheDir   = bgl::test::ShaderCacheDir();
 			opts.gpuContext.enableDebugLayer = true;
-			opts.gpuContext.clientShaderDir  = bgl::test::WaterSurfaceDir();
+			opts.gpuContext.clientShaderDir  = surfaces;
 			gfx                              = bgl::test::CreateGraphics(opts);
 			REQUIRE(gfx != nullptr);
 
@@ -142,8 +145,7 @@ namespace
 			(void)scene->CreateTerrain(
 				bgl::TerrainDesc().SetHeightfield(&field).SetMaterial(ground));
 
-			water = scene->CreateSurfaceMaterial(
-				bgl::SurfaceMaterialDesc{ .surfaceName = "ProbeWater" });
+			water = scene->CreateSurfaceMaterial(waterDesc);
 			plane = bgl::test::skinned_synth::AddQuadStaticGeom(*scene, water);
 
 			auto camera = bgl::Camera();
@@ -210,6 +212,156 @@ namespace
 	{
 		return std::min({ c.r, c.g, c.b }) > 0.6f;
 	}
+}
+
+namespace
+{
+	[[nodiscard]] bool
+	Red(const bgl::test::Rgba& c)
+	{
+		return c.r > c.g + 0.15f && c.r > c.b + 0.15f;
+	}
+
+	/** RefractWater reading the scene displaced `rows` pixels down the frame. */
+	[[nodiscard]] bgl::SurfaceMaterialDesc
+	Refracting(const float rows)
+	{
+		return bgl::SurfaceMaterialDesc{
+			.surfaceName = "RefractWater",
+			.values = { { .name = "offset",
+			              .value =
+			                  glm::vec4(0.0f, rows / static_cast<float>(c_Height), 0.0f, 0.0f) } },
+		};
+	}
+
+	/** A red ball of `radius` at `centre`, lit as the ground is. */
+	void
+	AddRedBall(const WaterScene& sea, const glm::vec3 centre, const float radius)
+	{
+		auto desc            = bgl::PbrMaterialDesc();
+		desc.metallicFactor  = 0.0f;
+		desc.baseColorFactor = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+		const auto ball =
+			sea.scene->AddSphereGeom(32, 32, radius, sea.scene->CreatePbrMaterial(desc));
+		sea.view->CreateStaticMeshInstance(
+			bgl::StaticMeshInstanceDesc().SetGeom(ball).SetTransform(
+				glm::translate(glm::mat4(1.0f), centre)));
+	}
+
+	// A ball wholly under the water on the flat bed, and one standing up through it on the slope.
+	const glm::vec3 c_SunkBall       = glm::vec3(15.0f, 0.5f, 32.0f);
+	constexpr float c_SunkRadius     = 1.0f;
+	const glm::vec3 c_StandingBall   = glm::vec3(24.0f, 1.5f, 32.0f);
+	constexpr float c_StandingRadius = 1.5f;
+
+	// How far down the frame the refracting water reads: three metres of water, clear of either
+	// ball's own silhouette.
+	constexpr int c_Shift = 48;
+}
+
+TEST_CASE("Water seen straight through shows the bed under it", "[water][render][refraction]")
+{
+	const WaterScene sea(bgl::test::RefractWaterSurfaceDir(), Refracting(0.0f));
+	sea.Flood(sea.view);
+	AddRedBall(sea, c_SunkBall, c_SunkRadius);
+
+	const std::string frame = sea.Capture(sea.job, "bernini_water_straight");
+
+	CHECK(Red(At(frame, PixelX(c_SunkBall.x), c_CentreRow)));
+	CHECK_FALSE(Red(At(frame, PixelX(c_SunkBall.x), c_CentreRow - c_Shift)));
+
+	std::filesystem::remove(frame);
+}
+
+TEST_CASE(
+	"Refracting water shows the bed displaced, and nothing standing in front of it",
+	"[water][render][refraction]")
+{
+	const WaterScene sea(bgl::test::RefractWaterSurfaceDir(), Refracting(c_Shift));
+	sea.Flood(sea.view);
+	AddRedBall(sea, c_SunkBall, c_SunkRadius);
+	AddRedBall(sea, c_StandingBall, c_StandingRadius);
+
+	const std::string frame = sea.Capture(sea.job, "bernini_water_refracted");
+
+	// The sunk ball is seen where the water above it reads it from: c_Shift rows up the frame.
+	CHECK(Red(At(frame, PixelX(c_SunkBall.x), c_CentreRow - c_Shift)));
+	// And the water straight over it reads the bare bed c_Shift rows further down.
+	CHECK_FALSE(Red(At(frame, PixelX(c_SunkBall.x), c_CentreRow)));
+
+	// The standing ball's top is nearer than the water, so the water that would read it reads the
+	// bed straight under itself instead: the ball does not bleed into the lake.
+	CHECK_FALSE(Red(At(frame, PixelX(c_StandingBall.x), c_CentreRow - c_Shift)));
+	// The part of it above the water is drawn as itself.
+	CHECK(Red(At(frame, PixelX(c_StandingBall.x), c_CentreRow)));
+
+	std::filesystem::remove(frame);
+}
+
+TEST_CASE(
+	"Water seen straight through leaves the bed as it was, at any exposure",
+	"[water][render][refraction]")
+{
+	// Scene colour holds exposed radiance and Shade returns it before exposure: the reader divides
+	// by the exposure and the program multiplies it back, so an untinted read is the bed itself.
+	const WaterScene sea(bgl::test::RefractWaterSurfaceDir(), Refracting(0.0f));
+	sea.view->SetExposure(2.0f);
+
+	const std::string dry = sea.Capture(sea.job, "bernini_water_exposure_dry");
+	sea.Flood(sea.view);
+	const std::string wet = sea.Capture(sea.job, "bernini_water_exposure_wet");
+
+	for (const float x : { 14.0f, 20.0f, 27.0f })
+	{
+		INFO("x = " << x);
+		const bgl::test::Rgba under = At(wet, PixelX(x), c_CentreRow);
+		const bgl::test::Rgba bare  = At(dry, PixelX(x), c_CentreRow);
+		CHECK(under.r == Catch::Approx(bare.r).margin(0.02f));
+		CHECK(under.g == Catch::Approx(bare.g).margin(0.02f));
+		CHECK(under.b == Catch::Approx(bare.b).margin(0.02f));
+	}
+
+	std::filesystem::remove(dry);
+	std::filesystem::remove(wet);
+}
+
+TEST_CASE("A resized target refracts through a copy of its new size", "[water][render][refraction]")
+{
+	const WaterScene sea(bgl::test::RefractWaterSurfaceDir(), Refracting(0.0f));
+	sea.Flood(sea.view);
+	AddRedBall(sea, c_SunkBall, c_SunkRadius);
+	sea.gfx->DrawFrame(sea.target, sea.job);
+
+	auto*                     base   = sea.target->As<bgl::RenderTargetBase>();
+	const bgpu::TextureHandle before = base->GetSceneColorCopy().GetTexture();
+	REQUIRE_FALSE(before.IsNull());
+
+	// Half the size, the same aspect: the ball is where it was, at half the pixel.
+	sea.gfx->Resize(sea.target, c_Width / 2, c_Height / 2);
+	auto job     = sea.job;
+	job.viewport = bgl::Viewport(static_cast<float>(c_Width / 2), static_cast<float>(c_Height / 2));
+	const std::string frame = sea.Capture(job, "bernini_water_resized");
+
+	CHECK(base->GetSceneColorCopy().GetTexture() != before);
+	CHECK(
+		Red(bgl::test::MeanColor(frame, PixelX(c_SunkBall.x) / 2 - 2, c_CentreRow / 2 - 2, 4, 4)));
+
+	std::filesystem::remove(frame);
+}
+
+TEST_CASE(
+	"A target copies its scene colour only once it draws water",
+	"[water][render][refraction]")
+{
+	const WaterScene sea;
+	auto*            base = sea.target->As<bgl::RenderTargetBase>();
+
+	sea.gfx->DrawFrame(sea.target, sea.job);
+	CHECK(base->GetSceneColorCopy().GetTexture().IsNull());
+
+	sea.Flood(sea.view);
+	sea.gfx->DrawFrame(sea.target, sea.job);
+	CHECK_FALSE(base->GetSceneColorCopy().GetTexture().IsNull());
 }
 
 TEST_CASE("Water draws in bands of how deep it is, and not over dry ground", "[water][render]")

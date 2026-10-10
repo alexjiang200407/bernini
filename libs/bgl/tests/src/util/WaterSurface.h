@@ -55,9 +55,38 @@ struct ProbeWater : IWaterSurfaceSource
 )";
 
 	/**
+	 * A water surface that is nothing but its refraction: the scene behind each pixel displaced by
+	 * `offset` in viewport UV, unshaded and opaque, so the screen shows exactly what Behind read.
+	 */
+	constexpr std::string_view c_RefractWater = R"(import bgl.MaterialReader;
+import bgl.SurfaceLight;
+import bgl.WaterSurfaceSource;
+
+struct RefractWaterParams
+{
+    [Default(0.0, 0.0)]
+    float2 offset;
+};
+
+struct RefractWater : IWaterSurfaceSource
+{
+    typealias MaterialParams = RefractWaterParams;
+
+    static float4 Shade<R : IWaterMaterialReader, L : ISurfaceLight>(R reader, L light, RefractWaterParams params)
+    {
+        return float4(reader.Behind(params.offset).color, 1.0);
+    }
+};
+)";
+
+	/**
 	 * A fresh directory under the suite's temp root holding ProbeWater and the suite's Unlit lit
 	 * surface, in that slot order.
 	 */
 	[[nodiscard]] std::filesystem::path
 	WaterSurfaceDir();
+
+	/** The same, holding RefractWater and Unlit, in that slot order. */
+	[[nodiscard]] std::filesystem::path
+	RefractWaterSurfaceDir();
 }
