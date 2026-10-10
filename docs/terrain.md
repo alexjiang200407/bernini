@@ -74,6 +74,24 @@ itself is 0.04 s. It is linear in the samples at a fixed droplet density (`Erosi
 `[perf]` case). Longer droplet paths (`maxSteps`) widen the tiles and starve the phases of
 parallel work: 160 steps at three droplets a sample took 17 s.
 
+## Fields
+
+`terrain::DeriveFields` ([terrainlib/TerrainFields.h](../libs/terrainlib/include/terrainlib/TerrainFields.h))
+reads any heightfield -- generated, eroded, or later painted or loaded -- and says what its ground
+is like at each sample, as layers laid like it:
+
+| field | what | how |
+|---|---|---|
+| `slope` | rise over run | central differences; past the edge a sample repeats the edge's |
+| `curvature` | per metre: positive in a hollow, negative on a crest, 0 on any plane | the five-point Laplacian |
+| `flow` | square metres draining through the sample, its own cell included | multiple flow directions (Quinn et al. 1991): each sample, highest first, passes what reaches it to its lower neighbours by slope |
+| `wetness` | [0, 1] | `flow` on a log scale between fixed areas, 100 m² and 1 km², so it reads alike on any field |
+| `lakeDepth` | metres of standing water, were each hollow filled to where it spills | a priority flood from the edge, where water leaves |
+
+Deterministic, and linear in the samples but for one sort by height and one heap: 0.3 s for
+1001 x 1001 in release. Lake depth and flow are what a water surface will stand on; nothing
+draws one yet.
+
 ## The levels
 
 A terrain is a quadtree of **patches** of `cTerrainPatchQuads` (7) cells a side: level 0 at the
