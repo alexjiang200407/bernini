@@ -1085,6 +1085,28 @@ runs in `assetlib_cli` and in texture refresh, and neither holds a surface's slo
 map reaches a surface through the glTF's own base colour: in Blender, wire it into a Principled
 BSDF's Base Color for the export.
 
+### An impostor asked for in a mesh's extras
+
+A mesh that is seen far away more than near -- a tree in a wood -- can carry a baked **impostor**:
+the tier past its last level of detail, drawn as one quad a placement. It is asked for in the
+source, as a Blender **Custom Property** exported with **Include → Custom Properties**:
+
+| Where | Key | Value |
+|---|---|---|
+| the mesh data (glTF `meshes[i].extras`), or the object placing it (`nodes[j].extras`) | `bernini_impostor` | `true`, or a non-zero number |
+
+`loadFromGltf` reads it on every import and regeneration, as it reads `_LOD<n>` names, so the
+`.glb` is the one place it is said: there is no `.bimport` field. A value of another kind is dropped
+with a warning naming the mesh or node, and the mesh imports without one. A skinned mesh is skipped
+with a warning.
+
+The bake (`src/bmesh/impostor_bake.cpp`) is CPU code: level 0 of every submesh, rasterised from
+the 8 × 8 hemi-octahedral grid of directions (`MeshImpostor`) over the mesh's bounding sphere,
+from the glTF's own base colour -- `baseColorFactor` times `baseColorTexture` through `TEXCOORD_0`
+-- since that is what a regeneration has with no material import. A single-sided material is
+culled from behind, so an inverted-hull outline stays an outline; `MASK` is cut at its cutoff. The
+images it needs are the only ones a regeneration decodes, and only for a mesh that asks.
+
 ## Pruning unused baked maps
 
 A re-bake orphans the map its old routing named (see [Texture standards](#texture-standards)), so

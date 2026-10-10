@@ -1,4 +1,6 @@
 #include <assetlib/mesh_tangents.h>
+
+#include "bmesh/submesh_read.h"
 #include <assetlib/vertex_layout.h>
 #include <assetlib_structs/Mesh.h>
 #include <assetlib_structs/VertexLayout.h>
@@ -19,60 +21,6 @@ namespace assetlib
 {
 	namespace
 	{
-		/** A float attribute read straight out of the interleaved blob. */
-		const float*
-		floatsAt(
-			const std::vector<std::byte>& pool,
-			uint32_t                      vertexByteOffset,
-			const VertexLayout&           layout,
-			const VertexAttribute&        attribute,
-			uint32_t                      vertex) noexcept
-		{
-			const size_t offset = static_cast<size_t>(vertexByteOffset) +
-			                      static_cast<size_t>(vertex) * layout.stride + attribute.offset;
-
-			return reinterpret_cast<const float*>(pool.data() + offset);
-		}
-
-		/**
-		 * The submesh's triangles, as vertex indices local to it. Empty when it carries no index
-		 * buffer -- there is no triangle list to accumulate a UV basis over.
-		 */
-		std::vector<uint32_t>
-		readIndices(const BMesh& mesh, const Submesh& submesh)
-		{
-			auto indices = std::vector<uint32_t>();
-			if (submesh.indexType == IndexType::kNone || submesh.indexCount == 0)
-				return indices;
-
-			// The offset and count are the file's claim about the buffer, not a fact about it, and
-			// this is reachable from a path that names a .bmesh by hand.
-			const size_t width = submesh.indexType == IndexType::kUint16 ? 2 : 4;
-			const size_t end =
-				static_cast<size_t>(submesh.indexByteOffset) + submesh.indexCount * width;
-			if (end > mesh.indexData.size())
-			{
-				core::throw_runtime_error(
-					"assetlib::generateTangents: a submesh's index range runs past the pool");
-			}
-
-			indices.reserve(submesh.indexCount);
-			const std::byte* base = mesh.indexData.data() + submesh.indexByteOffset;
-
-			if (submesh.indexType == IndexType::kUint16)
-			{
-				const auto* src = reinterpret_cast<const uint16_t*>(base);
-				for (uint32_t i = 0; i < submesh.indexCount; ++i) indices.push_back(src[i]);
-			}
-			else
-			{
-				const auto* src = reinterpret_cast<const uint32_t*>(base);
-				for (uint32_t i = 0; i < submesh.indexCount; ++i) indices.push_back(src[i]);
-			}
-
-			return indices;
-		}
-
 		/**
 		 * Any unit vector perpendicular to `n`. For a vertex whose triangles cancelled out, which has
 		 * no meaningful tangent to compute -- the frame is arbitrary but at least well-formed.
@@ -96,18 +44,15 @@ namespace assetlib
 			const VertexAttribute&       uv,
 			const std::vector<uint32_t>& indices)
 		{
-			const VertexLayout& layout = submesh.layout;
-
 			auto tangents   = std::vector<glm::vec3>(submesh.vertexCount, glm::vec3(0.0f));
 			auto bitangents = std::vector<glm::vec3>(submesh.vertexCount, glm::vec3(0.0f));
 
 			const auto positionOf = [&](uint32_t v) {
-				const float* p =
-					floatsAt(mesh.vertexData, submesh.vertexByteOffset, layout, position, v);
+				const float* p = floatsAt(mesh.vertexData, submesh, position, v);
 				return glm::vec3(p[0], p[1], p[2]);
 			};
 			const auto uvOf = [&](uint32_t v) {
-				const float* t = floatsAt(mesh.vertexData, submesh.vertexByteOffset, layout, uv, v);
+				const float* t = floatsAt(mesh.vertexData, submesh, uv, v);
 				return glm::vec2(t[0], t[1]);
 			};
 
@@ -149,8 +94,7 @@ namespace assetlib
 			auto basis = std::vector<glm::vec4>(submesh.vertexCount);
 			for (uint32_t v = 0; v < submesh.vertexCount; ++v)
 			{
-				const float* n =
-					floatsAt(mesh.vertexData, submesh.vertexByteOffset, layout, normal, v);
+				const float*    n  = floatsAt(mesh.vertexData, submesh, normal, v);
 				const glm::vec3 vn = glm::normalize(glm::vec3(n[0], n[1], n[2]));
 
 				glm::vec3 t = tangents[v] - vn * glm::dot(vn, tangents[v]);
@@ -227,7 +171,7 @@ namespace assetlib
 				continue;
 			}
 
-			const std::vector<uint32_t> indices = readIndices(mesh, submesh);
+			const std::vector<uint32_t> indices = readSubmeshIndices(mesh.indexData, submesh);
 			if (indices.size() < 3)
 			{
 				++result.skipped;
