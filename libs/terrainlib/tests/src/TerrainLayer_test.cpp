@@ -85,8 +85,8 @@ TEST_CASE("fields and masks are layers a game reads by position", "[terrain]")
 		                                        .wetness   = one,
 		                                        .lakeDepth = one };
 	const auto masks =
-		terrain::TerrainMasks{ .forest = one, .forestDepth = one, .rock = one, .water = one };
+		terrain::TerrainMasks{ .forest = one, .forestEdge = one, .rock = one, .water = one };
 
 	CHECK(terrain::LayerAt(fields.wetness, glm::vec3(0.0f), { 0.5f, 0.5f }) == 1.0f);
-	CHECK(terrain::LayerAt(masks.forestDepth, glm::vec3(0.0f), { 0.5f, 0.5f }) == 1.0f);
+	CHECK(terrain::LayerAt(masks.forestEdge, glm::vec3(0.0f), { 0.5f, 0.5f }) == 1.0f);
 }

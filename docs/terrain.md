@@ -108,9 +108,10 @@ others:
   radius, so a wood follows a valley rather than every gully up its sides. The highest scorers
   become woods; clearings smaller than `minClearing` are filled, woods smaller than `minArea`
   dropped, and the share taken is corrected over a few rounds so the woods as they stand cover
-  `coverage` of the field. `forestDepth` is each wood sample's distance in metres to the nearest
-  sample outside it, by an exact Euclidean distance transform (Felzenszwalb and Huttenlocher
-  2012); the field's edge is not an edge of a wood.
+  `coverage` of the field. `forestEdge` is each sample's distance in metres to the nearest sample on
+  the other side of a wood's edge, positive inside and negative outside, by exact Euclidean
+  distance transforms (Felzenszwalb and Huttenlocher 2012): how deep in its wood a tree stands, and
+  how far past the edge one is. The field's edge is not an edge of a wood.
 - **Rock** on steep ground and ridges, never in a wood or on water, scored by noise, steepness and
   ridge, groups smaller than its `minArea` dropped.
 

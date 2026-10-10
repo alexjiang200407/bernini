@@ -249,9 +249,10 @@ namespace terrain
 		// 1 inside a wood.
 		TerrainLayer forest;
 
-		// Inside a wood, the distance in metres from the sample to the nearest sample outside it; 0
-		// outside. What sizes a tree by how deep in its wood it stands.
-		TerrainLayer forestDepth;
+		// The distance in metres from the sample to the nearest one on the other side of a wood's
+		// edge: positive inside a wood, negative outside. What sizes a tree by how deep in its wood
+		// it stands, and thins the trees past its edge.
+		TerrainLayer forestEdge;
 
 		// 1 where rock breaks through the ground.
 		TerrainLayer rock;
@@ -264,8 +265,8 @@ namespace terrain
 	/**
 	 * The masks of `field`, whose fields are `fields`, by `desc`'s rules. Water first, from the
 	 * fields alone; then woods off the water, cleaned -- woods under the rule's minimum area
-	 * dropped, clearings under its minimum filled -- and the forest's depth by an exact Euclidean
-	 * distance transform (Felzenszwalb and Huttenlocher 2012); then rock off both, under its
+	 * dropped, clearings under its minimum filled -- and the signed distance to a wood's edge by
+	 * exact Euclidean distance transforms (Felzenszwalb and Huttenlocher 2012); then rock off both, under its
 	 * minimum area dropped. A wood or an outcrop is a group of samples joined along either axis or
 	 * diagonally. A mask painted by hand later takes the noise's place and keeps the cleanup.
 	 *

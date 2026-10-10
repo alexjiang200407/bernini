@@ -231,7 +231,7 @@ namespace terrain
 			f.swap(d);
 		}
 
-		/** Inside the mask, the distance in metres to the nearest sample outside it; 0 outside. */
+		/** Inside the mask, the distance in metres to the nearest sample outside it; 0 outside. With no sample outside, a distance larger than any field. */
 		[[nodiscard]] std::vector<float>
 		Depth(const std::vector<float>& mask, const Shape& shape)
 		{
@@ -341,10 +341,10 @@ namespace terrain
 		};
 		constexpr float c_Never = -std::numeric_limits<float>::infinity();
 
-		auto                masks  = TerrainMasks{ .forest      = Empty(shape),
-			                                       .forestDepth = Empty(shape),
-			                                       .rock        = Empty(shape),
-			                                       .water       = Empty(shape) };
+		auto                masks  = TerrainMasks{ .forest     = Empty(shape),
+			                                       .forestEdge = Empty(shape),
+			                                       .rock       = Empty(shape),
+			                                       .water      = Empty(shape) };
 		std::vector<float>& water  = masks.water.values;
 		std::vector<float>& forest = masks.forest.values;
 		std::vector<float>& rock   = masks.rock.values;
@@ -410,7 +410,11 @@ namespace terrain
 			if (round + 1 == c_CoverageRounds)
 				(void)cleanForest(share);
 		}
-		masks.forestDepth.values = Depth(forest, shape);
+		auto open = std::vector<float>(count);
+		for (size_t i = 0; i < count; ++i) open[i] = 1.0f - forest[i];
+		const std::vector<float> inside  = Depth(forest, shape);
+		const std::vector<float> outside = Depth(open, shape);
+		for (size_t i = 0; i < count; ++i) masks.forestEdge.values[i] = inside[i] - outside[i];
 
 		const RockRule& rocks = desc.rock;
 		for (size_t i = 0; i < count; ++i)

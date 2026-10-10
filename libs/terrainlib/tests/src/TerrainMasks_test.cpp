@@ -113,9 +113,12 @@ TEST_CASE(
 	CHECK(At(masks.forest, 36, 36) == 0.0f);
 }
 
-TEST_CASE("a wood's depth is the distance to its own edge", "[terrain][masks]")
+TEST_CASE(
+	"a wood's edge distance is how deep in it a sample stands, or how far out",
+	"[terrain][masks]")
 {
-	// A disc of 20 samples' radius: 40 m deep at its centre, 0 past its rim.
+	// A disc of 20 samples' radius: 42 m from its centre to the nearest sample outside it, and
+	// outside, minus the distance to the nearest sample in it.
 	const auto wet = [](const int x, const int z) {
 		return std::hypot(static_cast<float>(x) - 50.0f, static_cast<float>(z) - 50.0f) <= 20.0f;
 	};
@@ -127,10 +130,12 @@ TEST_CASE("a wood's depth is the distance to its own edge", "[terrain][masks]")
 		WetWhere(wet),
 		ByWetness(static_cast<float>(disc) / static_cast<float>(c_Side * c_Side)));
 
-	CHECK(At(masks.forestDepth, 50, 50) == Catch::Approx(42.0f).margin(c_Cell));
-	CHECK(At(masks.forestDepth, 60, 50) == Catch::Approx(22.0f).margin(c_Cell));
-	CHECK(At(masks.forestDepth, 75, 50) == 0.0f);
-	CHECK(At(masks.forestDepth, 5, 5) == 0.0f);
+	CHECK(At(masks.forestEdge, 50, 50) == Catch::Approx(42.0f).margin(c_Cell));
+	CHECK(At(masks.forestEdge, 60, 50) == Catch::Approx(22.0f).margin(c_Cell));
+	CHECK(At(masks.forestEdge, 75, 50) == Catch::Approx(-10.0f).margin(c_Cell));
+	CHECK(
+		At(masks.forestEdge, 5, 5) ==
+		Catch::Approx(-2.0f * (std::hypot(45.0f, 45.0f) - 20.0f)).margin(c_Cell));
 }
 
 TEST_CASE(
