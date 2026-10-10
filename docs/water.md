@@ -5,7 +5,9 @@ for a river, placed like any other instance. The game writes the look, as it wri
 the engine draws it over the scene in a phase of its own, and hands the surface the three things
 of the frame a stylised water is made of: how far the scene behind it is, how deep the ground under
 it is, and the clock. This page is the map: the contract, the pass, what the reader measures, and
-what is deliberately not here.
+what is deliberately not here. The test project's `Authored/Shaders/ToonWater.slang` is a
+reference look; `examples/bgl_water` draws it as a sea over generated hills, and
+`bgl_ai_viewer --terrain hilly --water <bmaterial>` renders and times it ([AI Viewer](ai_viewer.md)).
 
 ## The contract
 
@@ -73,6 +75,9 @@ flowchart LR
   ([lib/forward/WaterData.slang](../libs/bgl/shaders/src/lib/forward/WaterData.slang)): the depth,
   its reconstruction, the clock and the view's terrains. `ForwardPhases::BindKernel` binds it into
   every kernel that declares it.
+
+A sea covering more than half of a 1920x1080 frame over the viewer's hilly field (`--water-level
+30 --terrain-eye 120`) costs Forward Water 0.24 ms median on an M3 Pro.
 
 `WaterRender_test` proves it at the pixel: the depth bands where the ground puts them, dry ground
 hiding the water, foam at the shore and around a sunk ball, zero motion, the TAA marker left as the

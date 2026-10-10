@@ -50,6 +50,8 @@ Bare, it renders `assets/Data`'s apples — the one project `copy_assets` stages
 | `--terrain-seed`, `--terrain-size`, `--terrain-cell` | 1, 2000, 2 | the generator's seed, the field's side in metres, and the metres between samples |
 | `--terrain-material` | a plain green PBR | a `.bmaterial` in the project the field draws through, such as the test project's `Authored/Materials/Terrain/Battlefield.bmaterial` |
 | `--terrain-eye` | 40 | how far above the field's middle the camera stands, in metres |
+| `--water` | none | with `--terrain`: a water surface `.bmaterial` laid as a sea over the whole field, such as the test project's `Authored/Materials/Water/Lake.bmaterial` ([Water](water.md)); its pass is `Forward Water` in the timings |
+| `--water-level` | 30% of the relief | with `--water`: the sea's height above the field's lowest point, in metres |
 | `--grass` | none | a `.bgrass` to grow on a patch of bare ground — with `--import`, the model stands at its centre — or with `--terrain` on the field ([Grass § On a terrain](grass.md#on-a-terrain)) |
 | `--grass-slope`, `--grass-below`, `--grass-coverage` | 90, unbounded, 1 | with `--terrain`: the steepest ground in degrees, the highest in metres and the share of the ground in patches `--grass` grows on |
 | `--patch-size`, `--patch-spacing` | twice the look's fade end, 0.25 | the patch's side and the distance between its clumps, in metres; the spacing is a terrain's grass's too |

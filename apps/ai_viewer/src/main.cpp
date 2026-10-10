@@ -145,6 +145,11 @@ namespace
 		float       terrainEye  = 40.0f;
 		std::string terrainMaterial;
 
+		// With --terrain: a sea of this project .bmaterial -- a water surface -- laid over the whole
+		// field at `waterLevel` metres above its lowest point, 30% of its relief when unset.
+		std::string          water;
+		std::optional<float> waterLevel;
+
 		// Where --grass grows on a terrain: no steeper than `grassSlope` degrees, no higher than
 		// `grassBelow` metres, over `grassCoverage` of the ground.
 		float grassSlope    = 90.0f;
@@ -701,6 +706,24 @@ namespace
 			SetViewWind(opts, view);
 		}
 
+		if (!opts.water.empty())
+		{
+			// The unit cube, which spans [-1, 1], flattened to a slab a centimetre thick: its top
+			// face is the sea, and its sides and bottom lie under it or face away and are culled.
+			constexpr float c_SeaThickness = 0.01f;
+
+			const float           level = opts.waterLevel.value_or(0.3f * field.heightRange);
+			const bgl::GeomHandle sea   = scene.AddCubeGeom(assets.AcquireMaterial(opts.water));
+			view->CreateStaticMeshInstance(
+				bgl::StaticMeshInstanceDesc().SetGeom(sea).SetTransform(
+					glm::scale(
+						glm::translate(
+							glm::mat4(1.0f),
+							glm::vec3(0.0f, level - 0.5f * c_SeaThickness, 0.0f)),
+						glm::vec3(half, 0.5f * c_SeaThickness, half))));
+			std::cout << std::format("water    {} at y = {:.1f} m\n", opts.water, level);
+		}
+
 		// The ground under the middle of the field, where the camera stands.
 		const size_t centre = static_cast<size_t>(samples / 2) * samples + samples / 2;
 		const float  groundY =
@@ -856,6 +879,18 @@ try
 			"--terrain-material",
 			opts.terrainMaterial,
 			"A .bmaterial in the project the field draws through; a plain green PBR otherwise");
+		auto* waterOption = app.add_option(
+								   "--water",
+								   opts.water,
+								   "With --terrain: a water surface .bmaterial in the project, "
+								   "laid as a sea over the field")
+		                        ->needs(terrainOption);
+		app.add_option(
+			   "--water-level",
+			   opts.waterLevel,
+			   "With --water: the sea's height in metres above the field's lowest point; 30% of "
+			   "its relief otherwise")
+			->needs(waterOption);
 		app.add_option(
 			   "--grass-slope",
 			   opts.grassSlope,
