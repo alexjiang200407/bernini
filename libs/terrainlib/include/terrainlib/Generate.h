@@ -7,8 +7,8 @@ namespace terrain
 	/**
 	 * A heightfield of `desc`'s shape, from fractal gradient noise -- ridged for the mountainous
 	 * shape -- over a warped domain, seeded by `desc.seed`, scaled by `desc.relief`, stepped into
-	 * strata as `desc.terrace` says and then eroded as `desc.erosion` says. Deterministic as the desc says, and a
-	 * different seed is a different field of the same character. The field's
+	 * strata as `desc.terrace` says and then eroded as `desc.erosion` says. Deterministic as the
+	 * desc says, and a different seed is a different field of the same character. The field's
 	 * `minHeight` and `heightRange` are the lowest and the span of what was generated, so its
 	 * 16-bit samples use their whole range.
 	 *

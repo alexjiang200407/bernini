@@ -60,8 +60,9 @@ steps nothing.
   steps, the field is smoothed over one cell after.
 
 It is deterministic by seed and linear in the samples: two box filters from summed-area tables,
-one pass over the samples, and a third filter. A 1001 x 1001 mountainous field at 2 m cells
-generated in about 80 ms with it, in a release build.
+one pass over the samples, and a third filter. gpu-battle-sim's `mountains` field, 1001 x 1001
+samples at 2 m, generated in about 80 ms with it against about 50 ms without (its report's
+`generationMs.heightfield`, a release build on 12 hardware threads).
 
 ## Erosion
 

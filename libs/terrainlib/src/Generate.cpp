@@ -32,6 +32,10 @@ namespace terrain
 
 		constexpr float c_Lacunarity = 2.0f;
 
+		// The share of a minor step its strata are offset by from the major ones, so the two never
+		// share an edge.
+		constexpr float c_MinorPhase = 0.37f;
+
 		[[nodiscard]] ShapeParams
 		ParamsOf(const TerrainShape shape) noexcept
 		{
@@ -114,28 +118,25 @@ namespace terrain
 			return (k + lift) * step;
 		}
 
-		/**
-		 * Steps `heights`, laid as `desc`'s samples, into the strata `desc.terrace` says. The steps
-		 * are cut into the land smoothed over `smoothing` metres and `detail` of what it smoothed
-		 * away is laid back over them, so a face follows the land's broad contour rather than
-		 * every bump of it.
-		 */
+		/** Steps `heights`, laid as `desc`'s samples, into the strata `desc.terrace` says. */
 		void
 		Terrace(std::vector<float>& heights, const TerrainGenerateDesc& desc)
 		{
 			const TerraceDesc& terrace = desc.terrace;
 			const float        lowest  = std::ranges::min(heights);
-			const float     angle  = static_cast<float>(core::hash_mix32(desc.seed ^ 0x5bd1e995u)) *
-			                         (6.2831853f / 4294967296.0f);
-			const glm::vec2 dip    = glm::vec2(std::cos(angle), std::sin(angle)) * terrace.tilt;
-			const int       radius = std::max(
-				1,
-				static_cast<int>(std::lround(terrace.smoothing / desc.cellSize * 0.5f)));
-			const std::vector<float> broad = BoxMean(
-				BoxMean(heights, desc.samplesX, desc.samplesZ, radius),
-				desc.samplesX,
-				desc.samplesZ,
-				radius);
+			const float     angle = static_cast<float>(core::hash_mix32(desc.seed ^ 0x5bd1e995u)) *
+			                        (6.2831853f / 4294967296.0f);
+			const glm::vec2 dip   = glm::vec2(std::cos(angle), std::sin(angle)) * terrace.tilt;
+			const int       radius =
+				static_cast<int>(std::lround(terrace.smoothing / desc.cellSize * 0.5f));
+			// Stepped raw, every bump of the noise moves a face's edge and flutes it.
+			const std::vector<float> broad =
+				radius > 0 ? BoxMean(
+								 BoxMean(heights, desc.samplesX, desc.samplesZ, radius),
+								 desc.samplesX,
+								 desc.samplesZ,
+								 radius) :
+							 heights;
 
 			core::parallel_for(desc.samplesZ, 0, "terrain terrace", [&](const size_t z) {
 				float*       row  = heights.data() + z * desc.samplesX;
@@ -157,27 +158,29 @@ namespace terrain
 					const float     wander =
 						core::fbm(q, desc.seed ^ 0x68e31da4u, 3, c_Lacunarity, 0.5f) *
 						terrace.edgeNoise;
-					const float spread =
-						core::fbm(q * 0.25f, desc.seed ^ 0xb5297a4du, 2, c_Lacunarity, 0.5f);
+					// Clamped, since fbm is only about [-1, 1]: a step never reaches zero height.
+					const float spread = glm::clamp(
+						core::fbm(q * 0.25f, desc.seed ^ 0xb5297a4du, 2, c_Lacunarity, 0.5f),
+						-1.0f,
+						1.0f);
 					const float step = terrace.stepHeight * (1.0f + terrace.jitter * spread);
 
 					const float u       = above + glm::dot(xz, dip) + wander;
 					float       stepped = Stepped(u, step, terrace.shelf, terrace.shelfRise);
 					if (terrace.minorStep > 0.0f)
 					{
-						const float minor = step * terrace.minorStep;
-						stepped +=
-							terrace.minorStrength *
-							(Stepped(u + 0.37f * minor, minor, terrace.shelf, terrace.shelfRise) -
-						     (u + 0.37f * minor));
+						const float minorHeight = step * terrace.minorStep;
+						const float minorU      = u + c_MinorPhase * minorHeight;
+						stepped += terrace.minorStrength *
+						           (Stepped(minorU, minorHeight, terrace.shelf, terrace.shelfRise) -
+						            minorU);
 					}
 					const float detail = row[x] - land[x];
 					row[x] += weight * ((stepped - u) - (1.0f - terrace.detail) * detail);
 				}
 			});
 
-			// A lip sharper than a cell is drawn as a staircase of triangles; one cell of smoothing,
-			// as much as each sample was stepped, rounds it to what the grid can hold.
+			// A lip sharper than a cell draws as a staircase of triangles.
 			const std::vector<float> rounded = BoxMean(heights, desc.samplesX, desc.samplesZ, 1);
 			for (size_t i = 0; i < heights.size(); ++i)
 			{

@@ -224,6 +224,23 @@ TEST_CASE("terracing leaves the ground below its start height as the noise made 
 	CHECK(above.heightRange == plain.heightRange);
 }
 
+TEST_CASE("terracing at the edges of its ranges keeps every height finite", "[terrain]")
+{
+	// Unsmoothed, a near-whole shelf, no minor steps, and the most jitter and tilt allowed.
+	auto desc = Terraced();
+	desc.terrace.SetSmoothing(0.0f, 1.0f)
+		.SetShelf(0.99f, 0.0f)
+		.SetMinorSteps(0.0f, 0.0f)
+		.SetJitter(0.99f)
+		.SetTilt(2.0f);
+	const assetlib::Heightfield field = terrain::Generate(desc);
+
+	CHECK(std::isfinite(field.minHeight));
+	CHECK(std::isfinite(field.heightRange));
+	CHECK(field.heightRange > 0.0f);
+	CHECK(field.heights != terrain::Generate(Terraced()).heights);
+}
+
 TEST_CASE("Generate refuses a terrace it cannot cut", "[terrain]")
 {
 	const auto refused = [](auto&& change) {
