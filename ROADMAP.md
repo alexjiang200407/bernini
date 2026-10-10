@@ -87,12 +87,10 @@ and portability.
     - [x] Link Textures to output nodes (BRDF for PBR)
 - [ ] Culling
   - [x] Frustum culling — 6 plane/sphere dots, runs first as the cheapest test.
-  - [ ] Reversed-Z — the first task of the HZB work, before anything bakes the depth convention in.
-    Today is standard Z: `glm::perspective` under `GLM_FORCE_DEPTH_ZERO_TO_ONE`, depth cleared to
-    1.0, `kLess` tests. Float depth for the precision gain, and an optional infinite far plane for
-    terrain at unbounded range. Every depth clear and test moves with it, as does every shader
-    that compares clip-space depth to a constant (the skybox's far-plane z, TAA's sky test, the
-    blob decal's cleared-texel test), the depth-bias sign and gamelib's picking ray.
+  - [x] Reversed-Z — `bgl::Camera` swaps the planes of `glm::perspective` under
+    `GLM_FORCE_DEPTH_ZERO_TO_ONE`, a `D32` depth cleared to 0 and `kGreater` tests; the sky at 0,
+    TAA's sky test, the blob decal's and water's cleared-texel tests and gamelib's picking ray
+    moved with it. The far plane stays finite: the infinite one is terrain's item below.
   - [ ] HZB build (FidelityFX SPD) — single dispatch; reduce to the **farthest** depth (min under
     reversed-Z), and handle non-power-of-two mips explicitly or the odd row/column drops the far
     sample.

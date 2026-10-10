@@ -45,7 +45,8 @@ struct Occlusion : IResolveInputs
     }
     float3 SceneLinear(float2 uv) { return float3(0.2); }
     float4 Motion(float2 uv) { return Neighbour(uv) ? float4(0.6, 0.0, 0.0, 0.0) : float4(motion, ownMotion); }
-    float Depth(float2 uv) { return Neighbour(uv) ? (scenario == 20 ? 0.9 : 0.3) : 0.6; }
+    // Reversed-Z: the nearer neighbour is the greater depth.
+    float Depth(float2 uv) { return Neighbour(uv) ? (scenario == 20 ? 0.3 : 0.9) : 0.6; }
 };
 
 [shader("compute")]

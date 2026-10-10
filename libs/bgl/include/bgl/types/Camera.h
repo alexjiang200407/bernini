@@ -3,6 +3,13 @@
 
 namespace bgl
 {
+	/**
+	 * A view and a projection. The projection is reversed-Z: clip depth runs from 1 at the near
+	 * plane to 0 at the far one, which keeps the float depth buffer's precision where the range is
+	 * widest. Perspective and Orthographic build that; SetProjection takes a matrix as given, so a
+	 * client's own must map near to 1 and far to 0 as well, or the renderer's tests and clears
+	 * reject it.
+	 */
 	class Camera
 	{
 	public:
@@ -29,17 +36,19 @@ namespace bgl
 			return *this;
 		}
 
+		// Reversed-Z is the standard projection with its planes swapped: under
+		// GLM_FORCE_DEPTH_ZERO_TO_ONE that maps nearZ to 1 and farZ to 0.
 		Camera&
 		Perspective(float fovYRadians, float aspect, float nearZ, float farZ)
 		{
-			m_Projection = glm::perspective(fovYRadians, aspect, nearZ, farZ);
+			m_Projection = glm::perspective(fovYRadians, aspect, farZ, nearZ);
 			return *this;
 		}
 
 		Camera&
 		Orthographic(float left, float right, float bottom, float top, float nearZ, float farZ)
 		{
-			m_Projection = glm::ortho(left, right, bottom, top, nearZ, farZ);
+			m_Projection = glm::ortho(left, right, bottom, top, farZ, nearZ);
 			return *this;
 		}
 

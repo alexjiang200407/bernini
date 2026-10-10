@@ -90,7 +90,7 @@ namespace bgl
 			bgpu::RasterCullMode cull;
 			bool                 depthWrite;
 			bool                 blend;
-			bgpu::ComparisonFunc depthFunc = bgpu::ComparisonFunc::kLess;
+			bgpu::ComparisonFunc depthFunc = bgpu::ComparisonFunc::kGreater;
 			std::string_view     geomSrc;
 			// The dissolve lane's entries: MSDissolve and PSDissolve, which carry and read the
 			// placement's dissolve code, beside the at-rest lane's MSMain and PSMain.
@@ -116,8 +116,8 @@ namespace bgl
 			const bool            water)
 		{
 			auto config =
-				PsoConfig{ DrawBucketPixelSrc(desc),    DrawBucketCullMode(desc),   true, false,
-				           bgpu::ComparisonFunc::kLess, DrawBucketGeometrySrc(desc) };
+				PsoConfig{ DrawBucketPixelSrc(desc),       DrawBucketCullMode(desc),   true, false,
+				           bgpu::ComparisonFunc::kGreater, DrawBucketGeometrySrc(desc) };
 			if (lane == DrawLane::kDissolve)
 			{
 				config.meshEntry  = "MSDissolve"sv;
@@ -160,7 +160,7 @@ namespace bgl
 			}
 			if (!cfg.water)
 			{
-				pipelineDesc.SetDsvFormat(bgpu::Format::D24S8);
+				pipelineDesc.SetDsvFormat(bgpu::Format::D32);
 			}
 
 			auto raster = bgpu::RasterState();
@@ -378,7 +378,7 @@ namespace bgl
 			                   bgpu::RasterCullMode::kNone,
 			                   false,
 			                   true,
-			                   bgpu::ComparisonFunc::kLess,
+			                   bgpu::ComparisonFunc::kGreater,
 			                   c_AnyGeomSrc }));
 		}
 	}

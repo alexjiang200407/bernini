@@ -270,7 +270,7 @@ catalog](docs/api_catalog.md).
 
 * **Velocity-dilated by the nearest surface in the cross.** This is the standard rule: UE4
   `TemporalAA.usf`, UE5 TSR's velocity dilation and Unity's `GetClosestFragment`. The pixel reprojects
-  by the vector of whichever of the centre and its four edge neighbours has the smallest depth, and
+  by the vector of whichever of the centre and its four edge neighbours is nearest (the greatest depth, under reversed-Z), and
   the centre wins a tie. A silhouette pixel whose centre the backdrop won still carries the
   foreground's motion, so the edge mixture reprojects with the surface that made it and the outline
   of an animating mesh does not double. The diagonals are left out: that saves 4% of the pass on the

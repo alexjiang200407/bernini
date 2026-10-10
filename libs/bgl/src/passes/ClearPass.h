@@ -64,7 +64,7 @@ namespace bgl
 				{
 					if (!depth.dsv.IsNull())
 					{
-						resourceManager->ClearDsv(cmd, depth.dsv, 1.0f, 0);
+						resourceManager->ClearDsv(cmd, depth.dsv, 0.0f, 0);
 					}
 				}
 				for (const ColorTarget& color : targets)

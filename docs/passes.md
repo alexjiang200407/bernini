@@ -408,7 +408,10 @@ rotation-only view-projection; the sky is at infinity, so a camera translation d
 
 Clears a set of color render targets and an optional depth target. Each target — depth included —
 is declared as a `TextureArg` in its write state so the graph transitions it; the pass's `exec`
-records `ClearRtv`/`ClearDsv` and nothing else. Stateless — it holds no kernel and is constructed
+records `ClearRtv`/`ClearDsv` and nothing else. The depth is a 32-bit float under **reversed-Z**
+(`bgl::Camera`: the near plane at 1, the far at 0), so it is cleared to 0 and every depth test is
+`kGreater` — the sky and the backdrop `kGreaterOrEqual` at 0 — and a texel a reader finds at 0 is
+one nothing drew. Stateless — it holds no kernel and is constructed
 inline each frame. It is the first pass of the frame, added in `BeginFrame`.
 
 * **In:** each color target + the depth target, transitioned to render-target / depth-write.
@@ -739,7 +742,7 @@ World** the non-transparent buckets of the static tier -- the world, moving plac
 its pixel the three hemi-octahedral frames nearest the view blended by their barycentric weights
 (the atlas layout is `assetlib::MeshImpostor`'s), cut at half coverage, sampled at the mip whose frames are as many texels as the quad is
 pixels, and pushed back from the quad -- which stands on the sphere's near side -- by the baked depth
-it writes as `SV_DepthGreaterEqual`, so an impostor behind what is drawn is still rejected before
+it writes as `SV_DepthLessEqual` (a depth only ever moving away from the camera, under reversed-Z), so an impostor behind what is drawn is still rejected before
 it shades; and lit through `ShadeSurface` from the baked base colour and occlusion, and the
 roughness, metallic and specular of the material the placement's first submesh draws with -- the
 bake's averages where it is no PBR kind -- so the sun and the environment light it as they light the mesh it

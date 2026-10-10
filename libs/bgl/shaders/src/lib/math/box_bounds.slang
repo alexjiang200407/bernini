@@ -14,7 +14,7 @@ public struct NdcRect
 };
 
 // The six clip planes a point lies outside of, one bit each: x and y against +-w, z against the
-// [0, w] depth range.
+// [0, w] depth range -- w the near plane and 0 the far one, under reversed-Z.
 uint ClipOutcode(float4 clip)
 {
     uint code = uint(clip.x < -clip.w);
@@ -34,7 +34,7 @@ void Include(inout NdcRect rect, float4 clip, bool take)
     rect.hi = select(bool2(take, take), max(rect.hi, ndc), rect.hi);
 }
 
-// The viewport rect the box projects to, after clipping it to the near plane (clip z = 0) and
+// The viewport rect the box projects to, after clipping it to the near plane (clip z = w) and
 // clamping to [-1, 1]. Empty when all eight corners lie outside one clip plane. Conservative
 // otherwise: a box that only crosses a frustum corner can still come back non-empty.
 //
@@ -57,11 +57,19 @@ public NdcRect ProjectBoxBounds(float4x4 viewProj, float3 corners[cBoxCorners])
     rect.hi = float2(-1.0, -1.0);
 
     // Behind the near plane a corner's divide is meaningless, so the clipped box's outline there is
-    // the points where its edges cross z = 0, and those have w = near > 0.
+    // the points where its edges cross z = w, and those have w = near > 0. `ahead` is a corner's
+    // signed distance in front of that plane.
+    float ahead[cBoxCorners];
     [unroll]
     for (uint i = 0; i < cBoxCorners; ++i)
     {
-        let inFront = clip[i].z >= 0.0;
+        ahead[i] = clip[i].w - clip[i].z;
+    }
+
+    [unroll]
+    for (uint i = 0; i < cBoxCorners; ++i)
+    {
+        let inFront = ahead[i] >= 0.0;
         Include(rect, clip[i], inFront);
 
         [unroll]
@@ -70,8 +78,8 @@ public NdcRect ProjectBoxBounds(float4x4 viewProj, float3 corners[cBoxCorners])
             if ((i & (1u << axis)) == 0)
             {
                 let j = i | (1u << axis);
-                let t = clip[i].z / (clip[i].z - clip[j].z);
-                Include(rect, lerp(clip[i], clip[j], t), inFront != (clip[j].z >= 0.0));
+                let t = ahead[i] / (ahead[i] - ahead[j]);
+                Include(rect, lerp(clip[i], clip[j], t), inFront != (ahead[j] >= 0.0));
             }
         }
     }

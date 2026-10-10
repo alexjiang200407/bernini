@@ -97,10 +97,13 @@ CheckOptions:
   # directly and not what those pull in transitively. So it is kept out of glm entirely and
   # <core/glm.h> stays the only way in.
   #
-  # The pattern is spelled to full-match on purpose, so the identical string works in .clangd:
-  # clang-tidy searches, clangd anchors, and `/glm/.*` silences only the first of them. It matches
-  # a `glm/` directory, which is vcpkg's layout on every platform; core/glm.h and bgl/glm.h are
-  # files rather than directories and are left alone.
+  # The pattern is spelled to full-match on purpose, so .clangd carries the same one up to the
+  # separator: clang-tidy searches, clangd anchors, and `/glm/.*` silences only the first of them.
+  # The separator is `[/\\]` because clang-tidy on Windows sees the path with backslashes, as the
+  # volk entries below do, where clangd normalises it; a `/`-only pattern passes on the mac and
+  # fails every glm-naming line on Windows. It matches a `glm/` directory, which is vcpkg's layout
+  # on every platform; core/glm.h and bgl/glm.h are files rather than directories and are left
+  # alone.
   #
   # And the platform C library's own internals. A POSIX symbol has no standard-header mapping
   # -- `sigaction`, `ucontext_t`, `pid_t` are not ISO C -- so include-cleaner falls back to the
@@ -139,4 +142,4 @@ CheckOptions:
   # it must be, since a Khronos header included without volk declares prototypes for functions
   # nothing links. Left to itself the tool writes <vulkan/vulkan_core.h> beside it. The Khronos
   # headers are matched by file name, so bgpu's own src/vulkan directory stays checked.
-  misc-include-cleaner.IgnoreHeaders: '.*/glm/.*;.*/glm\.h;.*/RmlUi/.*;.*/nlohmann/.*;.*/metal_cpp\.h;.*/(Metal|Foundation|QuartzCore)/.*;.*[/\\]volk_vulkan\.h;.*[/\\]volk\.h;.*[/\\]vulkan(_[a-z0-9]+)?\.h;.*[/\\]vk_platform\.h;.*[/\\]vk_video[/\\].*;.*/sys/_types/.*;.*/sys/signal\.h;.*/mach/(arm|arm64|i386|x86_64)/.*'
+  misc-include-cleaner.IgnoreHeaders: '.*[/\\]glm[/\\].*;.*[/\\]glm\.h;.*/RmlUi/.*;.*/nlohmann/.*;.*/metal_cpp\.h;.*/(Metal|Foundation|QuartzCore)/.*;.*[/\\]volk_vulkan\.h;.*[/\\]volk\.h;.*[/\\]vulkan(_[a-z0-9]+)?\.h;.*[/\\]vk_platform\.h;.*[/\\]vk_video[/\\].*;.*/sys/_types/.*;.*/sys/signal\.h;.*/mach/(arm|arm64|i386|x86_64)/.*'

@@ -164,8 +164,9 @@ namespace bgl
 	RenderTarget::CreateRenderAttachments()
 	{
 		{
+			// Float depth under reversed-Z: the precision is spent where the range is widest.
 			auto depthTextureDesc      = bgpu::TextureDesc();
-			depthTextureDesc.format    = bgpu::Format::D24S8;
+			depthTextureDesc.format    = bgpu::Format::D32;
 			depthTextureDesc.width     = GetRenderWidth();
 			depthTextureDesc.height    = GetRenderHeight();
 			depthTextureDesc.dimension = bgpu::TextureDimension::kTexture2D;
@@ -174,19 +175,19 @@ namespace bgl
 				                                             bgpu::TextureUsageFlag::kSRV };
 			depthTextureDesc.initialLayout = bgpu::BarrierLayout::kDepthWrite;
 
-			depthTextureDesc.clearValue.SetDepthStencil(1.0f, 0);
+			depthTextureDesc.clearValue.SetDepthStencil(0.0f, 0);
 
 			m_DepthBuffer.textureHandle = m_ResourceManager->CreateTexture(depthTextureDesc);
 
 			auto dsvDesc      = bgpu::DsvDesc();
-			dsvDesc.format    = bgpu::Format::D24S8;
+			dsvDesc.format    = bgpu::Format::D32;
 			dsvDesc.debugName = "Depth Buffer RTV";
 
 			m_DepthBuffer.dsvHandle =
 				m_ResourceManager->CreateDsv(m_DepthBuffer.textureHandle, dsvDesc);
 
 			auto depthSrvDesc      = bgpu::SrvDesc();
-			depthSrvDesc.format    = bgpu::Format::D24S8;
+			depthSrvDesc.format    = bgpu::Format::D32;
 			depthSrvDesc.debugName = "Depth Buffer SRV";
 
 			m_DepthBuffer.srvHandle =

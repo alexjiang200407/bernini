@@ -121,9 +121,10 @@ namespace game
 		const glm::vec2 uv = pixel / viewportSize;
 		const glm::vec2 ndc(uv.x * 2.0f - 1.0f, 1.0f - uv.y * 2.0f);
 
-		// Clip z spans [0, 1] (GLM_FORCE_DEPTH_ZERO_TO_ONE), so these are the near and far planes.
-		glm::vec4 nearPoint = inverse * glm::vec4(ndc, 0.0f, 1.0f);
-		glm::vec4 farPoint  = inverse * glm::vec4(ndc, 1.0f, 1.0f);
+		// Clip z spans [0, 1] (GLM_FORCE_DEPTH_ZERO_TO_ONE) and the projection is reversed-Z
+		// (bgl::Camera), so the near plane is 1 and the far one 0.
+		glm::vec4 nearPoint = inverse * glm::vec4(ndc, 1.0f, 1.0f);
+		glm::vec4 farPoint  = inverse * glm::vec4(ndc, 0.0f, 1.0f);
 		nearPoint /= nearPoint.w;
 		farPoint /= farPoint.w;
 

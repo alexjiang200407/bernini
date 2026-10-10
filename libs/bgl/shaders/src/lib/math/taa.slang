@@ -198,7 +198,7 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
 
             float4 tapVelocity = inputs.Motion(tapUv);
             float tapDepth = inputs.Depth(tapUv);
-            if (tapDepth < closestDepth)
+            if (tapDepth > closestDepth)
             {
                 closestDepth = tapDepth;
                 dilatedMotion = tapVelocity.xy;
@@ -228,7 +228,7 @@ public float4 TaaResolve<I : IResolveInputs>(I inputs, ResolveParams p, float2 u
     // is NaN -- the zero coefficient does not discard the operand -- and a NaN written into the
     // accumulation stays there for the life of the target.
     bool occluded = false;
-    if (onScreen && p.historyValid != 0.0 && p.cameraPairValid != 0.0 && historyDepth > 0.0 && depth < 0.99999 &&
+    if (onScreen && p.historyValid != 0.0 && p.cameraPairValid != 0.0 && historyDepth > 0.0 && depth > 0.0 &&
         dot(motion * texelsPerUv, motion * texelsPerUv) > c_ObjectTexels * c_ObjectTexels && ownTexelsSq <= c_ObjectTexels * c_ObjectTexels)
     {
         float previousDepth = abs(mul(p.viewToPrevView, view).z);

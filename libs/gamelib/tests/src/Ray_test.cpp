@@ -1,4 +1,6 @@
+#include <bgl/types/Camera.h>
 #include <catch2/catch_test_macros.hpp>
+#include <core/glm.h>
 #include <cstdlib>
 #include <gamelib/Ray.h>
 
@@ -178,9 +180,12 @@ TEST_CASE("A pixel ray leaves the near plane toward what that pixel sees", "[gam
 	const float     nearZ = 0.1f;
 	const float     farZ  = 100.0f;
 
-	const glm::mat4 view       = glm::lookAt(eye, target, glm::vec3(0.0f, 1.0f, 0.0f));
-	const glm::mat4 projection = glm::perspective(glm::radians(45.0f), 16.0f / 9.0f, nearZ, farZ);
-	const glm::mat4 viewProjection = projection * view;
+	const glm::mat4 view = glm::lookAt(eye, target, glm::vec3(0.0f, 1.0f, 0.0f));
+	const glm::mat4 viewProjection =
+		bgl::Camera()
+			.SetView(view)
+			.Perspective(glm::radians(45.0f), 16.0f / 9.0f, nearZ, farZ)
+			.GetViewProjection();
 
 	const glm::vec2 viewport(1600.0f, 900.0f);
 
