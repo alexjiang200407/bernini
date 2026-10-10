@@ -25,5 +25,6 @@ public static const uint cVisibleDissolvingBit = 4;
 
 // The placement's impostor draws: it is past its geom's last level, or dissolving into or out of
 // that tier. Set on the placement's first submesh instance only, since an impostor is one quad a
-// placement, not one a submesh.
+// placement, not one a submesh, and counted into cImpostorDrawBucket's lanes rather than the
+// instance's own bucket.
 public static const uint cVisibleImpostorBit = 8;
