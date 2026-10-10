@@ -317,9 +317,9 @@ on a blade as on its ground.
 **[Terrain](./docs/terrain.md)**
 
 A heightfield drawn as patches the mesh stage builds from its height texture: the data a terrain
-is made of and the generator that fills it, how it is cut into levels chosen by screen size with a
-rule each node applies alone, why the cuts never crack, why its pixel program is the material's
-own, and the one module anything reads the ground through.
+is made of, the generator that fills it and the rivers and lakes it carves, how it is cut into
+levels chosen by screen size with a rule each node applies alone, why the cuts never crack, why its
+pixel program is the material's own, and the one module anything reads the ground through.
 
 **[Water](./docs/water.md)**
 

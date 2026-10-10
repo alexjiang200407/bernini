@@ -2,6 +2,7 @@
 #include <assetlib_structs/Heightfield.h>
 #include <terrainlib/types/MaskDesc.h>
 #include <terrainlib/types/TerrainFields.h>
+#include <terrainlib/types/TerrainLayer.h>
 #include <terrainlib/types/TerrainMasks.h>
 
 namespace terrain
@@ -26,4 +27,19 @@ namespace terrain
 		const assetlib::Heightfield& field,
 		const TerrainFields&         fields,
 		const MaskDesc&              desc);
+
+	/**
+	 * GenerateMasks with the water given rather than found: `water` is 1 where it stands, laid as
+	 * `field` is, and `desc.water` goes unread. What a field whose water CarveWater cut takes, the
+	 * margin it keeps woods and rocks back from the shore included.
+	 *
+	 * @throws std::runtime_error as above, and when `water` holds a value count other than the
+	 *         field's.
+	 */
+	[[nodiscard]] TerrainMasks
+	GenerateMasks(
+		const assetlib::Heightfield& field,
+		const TerrainFields&         fields,
+		const MaskDesc&              desc,
+		const TerrainLayer&          water);
 }
