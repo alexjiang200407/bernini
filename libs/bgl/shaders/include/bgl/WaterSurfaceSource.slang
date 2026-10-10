@@ -1,10 +1,20 @@
 import bgl.MaterialReader;
 import bgl.SurfaceLight;
 
+/** The opaque scene behind a water pixel, as IWaterMaterialReader.Behind reads it. */
+public struct WaterBehind
+{
+    /// The scene's radiance there, before exposure, as Shade's rgb is.
+    public float3 color;
+
+    /// The metres from the water's surface to it along the view ray, as ViewDepth measures them.
+    public float viewDepth;
+};
+
 /**
- * What the engine hands a water surface: everything IMaterialReader gives, and the three things of
- * the frame water is drawn from. The interpolants are the water mesh's, so WorldPos is the point on
- * the water's surface the pixel shows.
+ * What the engine hands a water surface: everything IMaterialReader gives, and what of the frame
+ * water is drawn from: the depths, the clock and the scene behind it. The interpolants are the
+ * water mesh's, so WorldPos is the point on the water's surface the pixel shows.
  */
 public interface IWaterMaterialReader : IMaterialReader
 {
@@ -20,6 +30,13 @@ public interface IWaterMaterialReader : IMaterialReader
 
     /// The view's clock in seconds, for scrolling.
     float Time();
+
+    /// The opaque scene behind this pixel displaced by `offset` in viewport UV (x right, y down):
+    /// refraction, bent by however the surface chooses -- its ripples' normals, scaled down with
+    /// distance. Where the displaced pixel shows something nearer than the water, a leg standing
+    /// in it, the undisplaced pixel is read instead, so nothing in front bleeds into the water.
+    /// Behind(0) is the scene straight through the surface, and its viewDepth is ViewDepth().
+    WaterBehind Behind(float2 offset);
 };
 
 /**
@@ -29,7 +46,8 @@ public interface IWaterMaterialReader : IMaterialReader
  *
  * Shade's rgb is radiance before exposure, as a lit surface's; its a is how much of what is behind
  * the water it hides. The engine weights the rgb by the a and composites it over the scene, as it
- * does a lit surface's blended layer.
+ * does a lit surface's blended layer. A surface that refracts reads the scene through
+ * reader.Behind, tints it itself, and returns the whole of what the pixel shows with an a of 1.
  */
 public interface IWaterSurfaceSource
 {

@@ -15,7 +15,8 @@ namespace bgl
 	 * The static tier's water buckets, each drawn indirect over the compaction's output as the world
 	 * is, after the characters and before the transparents. No depth is attached: the depth the
 	 * phases before it wrote is read in the pixel stage, which hides the water behind the scene and
-	 * measures how deep it is. See docs/water.md.
+	 * measures how deep it is, and the scene colour Water Scene Copy took is what it refracts. See
+	 * docs/water.md.
 	 */
 	class WaterForwardPhase final : public IForwardPhase
 	{
@@ -39,7 +40,10 @@ namespace bgl
 			return "Water";
 		}
 
-		/** Whether an instance of the view has ever resolved to a water bucket. */
+		/**
+		 * Whether an instance of the view has ever resolved to a water bucket, and the draw holds
+		 * the scene colour copy it refracts through.
+		 */
 		[[nodiscard]] bool
 		HasWork(const DrawData& draw) const override;
 
@@ -61,8 +65,9 @@ namespace bgl
 
 		/**
 		 * Binds the frame water is shaded over into `kernel`'s waterData, when it declares one: the
-		 * depth, its reconstruction, the clock and the view's terrains. ForwardPhases calls it for
-		 * every kernel it binds, so only a water bucket's program pays for it.
+		 * depth, its reconstruction, the scene colour copy, the clock and the view's terrains.
+		 * ForwardPhases calls it for every kernel it binds, so only a water bucket's program pays
+		 * for it.
 		 */
 		static void
 		Bind(bgpu::MeshletKernel& kernel, const DrawData& draw, const PassContext& resources);

@@ -1,13 +1,14 @@
 # Water
 
 A water body is a static mesh drawn through a water surface: a plane for a lake or a sea, a ribbon
-for a river, placed like any other instance. The game writes the look, as it writes a terrain's;
-the engine draws it over the scene in a phase of its own, and hands the surface the three things
-of the frame a stylised water is made of: how far the scene behind it is, how deep the ground under
-it is, and the clock. This page is the map: the contract, the pass, what the reader measures, and
-what is deliberately not here. The test project's `Authored/Shaders/ToonWater.slang` is a
-reference look; `examples/bgl_water` draws it as a sea over generated hills, and
-`bgl_ai_viewer --terrain hilly --water <bmaterial>` renders and times it ([AI Viewer](ai_viewer.md)).
+for a river, placed like any other instance. The game writes the look, as it writes a terrain's; the
+engine draws it over the scene in a phase of its own, and hands the surface the things of the frame
+a stylised water is made of: how far the scene behind it is, how deep the ground under it is, the
+clock, and the scene behind it seen through a displacement the surface chooses. This page is the
+map: the contract, the pass, what the reader measures, how it refracts, and what is deliberately not
+here. The test project's `Authored/Shaders/ToonWater.slang` is a reference look;
+`examples/bgl_water` draws it as a sea over generated hills, and `bgl_ai_viewer --terrain hilly
+--water <bmaterial>` renders and times it ([AI Viewer](ai_viewer.md)).
 
 ## The contract
 
@@ -25,13 +26,14 @@ or `blend` -- the blend is the pass's, from `Shade`'s alpha. `doubleSided` reads
 off for a plane seen from above, on for a river ribbon seen from the bank. It is lit through the
 same `ISurfaceLight` as a lit surface: the sun, the irradiance, the blurred environment.
 
-`IWaterMaterialReader` is `IMaterialReader` and three methods more:
+`IWaterMaterialReader` is `IMaterialReader` and four methods more:
 
 | | measures | from |
 |---|---|---|
 | `ViewDepth()` | metres from the water to the opaque scene behind it, along the view ray | the depth buffer, reconstructed through the view's jittered `invViewProj` |
 | `GroundDepth()` | metres from the water straight down to the terrain | `TerrainHeightAt` ([Terrain § Reading the ground](terrain.md#reading-the-ground)) |
 | `Time()` | the view's clock, in seconds | the draw's clock |
+| `Behind(offset)` | the opaque scene behind the pixel displaced by `offset` in viewport UV: its colour before exposure, and its `ViewDepth` | Water Scene Copy's copy of scene colour, and the depth buffer ([Refraction](#refraction)) |
 
 Where there is nothing to measure to -- the sky behind the water, or no terrain under it -- both
 depths return 1e6. `GroundDepth` gives a shore band one width in the world from any angle; a band
@@ -51,8 +53,12 @@ placed water at all. By then the depth holds the terrain, the world, the grass a
 
 ```mermaid
 flowchart LR
-    FWS["Forward Skinned (writes depth)"] --> FWW["Forward Water"]
+    FWS["Forward Skinned (writes depth)"] --> WSC["Water Scene Copy"]
+    WSC --> FWW["Forward Water"]
     FWW --> FWT["Forward Transparent"]
+    C -- "copied" --> WSC
+    WSC --> CC[("sceneColorCopy")]
+    CC -- "pixel-shader read" --> FWW
     D[("depth")] -- "pixel-shader read" --> FWW
     FWW -- "premultiplied RGB" --> C[("scene colour")]
     FWW -- "the water's own motion" --> V[("velocity")]
@@ -61,7 +67,7 @@ flowchart LR
 * **No depth is attached.** The transparent pipeline attaches depth for its test, bgpu has no
   read-only depth view, and Metal cannot sample the attachment being drawn to, so the water pass
   does what Blob Shadows does: it reads `depth` as a texture and discards where the scene is
-  nearer than the water. Nothing is copied -- no depth copy, no scene-colour copy.
+  nearer than the water. The depth is not copied; scene colour is, for refraction.
 * **Its buckets are the static tier's,** keyed like any surface's, `(kStaticMesh, slot, kOpaque)`:
   what marks one as water is its slot's contract (`ForwardPhases::IsWaterBucket`), and Forward World
   skips those. Culling, compaction, levels of detail and the dissolve lane are the world's; each
@@ -73,7 +79,7 @@ flowchart LR
   zero motion, and under a moving one reprojects as any static surface does.
 * **`waterData`** is the one constant buffer only water programs carry
   ([lib/forward/WaterData.slang](../libs/bgl/shaders/src/lib/forward/WaterData.slang)): the depth,
-  its reconstruction, the clock and the view's terrains. `ForwardPhases::BindKernel` binds it into
+  its reconstruction, the scene colour copy, the clock and the view's terrains. `ForwardPhases::BindKernel` binds it into
   every kernel that declares it.
 
 A sea covering more than half of a 1920x1080 frame over the viewer's hilly field (`--water-level
@@ -83,12 +89,36 @@ A sea covering more than half of a 1920x1080 frame over the viewer's hilly field
 hiding the water, foam at the shore and around a sunk ball, zero motion, the TAA marker left as the
 ground's, and a second view's water reading the scene's terrain.
 
+## Refraction
+
+Forward Water draws into scene colour, so it cannot sample it. **Water Scene Copy**
+([Passes](passes.md#water-scene-copy)) copies it first, after everything opaque has drawn, into a
+texture the target owns at the render size. The copy is made the first frame the target draws water,
+so a target that never does allocates nothing, and the pass runs only on a view that places water.
+What the copy holds is what refraction can show: the terrain, the world, the grass, the blob shadows
+and the characters. Transparents draw after water and are not in it, and neither is another water
+body, because one copy serves the whole phase.
+
+`Behind(offset)` reads the copy at the pixel displaced by `offset`, a fraction of the viewport in
+each axis, x right and y down. How far to bend is the surface's call: a look typically takes its
+ripples' normal and scales it down with distance, so a far lake does not swim. The colour comes back
+before exposure, so it composes with `Shade`'s own radiance, and a surface that refracts tints it
+itself and returns the result with an `a` of 1: the blend then leaves the water's colour alone on
+the screen. Two guarantees hold:
+
+* **Nothing in front bleeds in.** Where the displaced pixel shows something nearer than the water,
+  such as a leg standing in it, `Behind` reads the pixel straight behind instead, which is never
+  nearer, or the water would have been discarded there.
+* **The read stays on the view.** The displaced pixel is clamped to the view's own viewport, so a
+  bend at the edge of one view never reads another view of the same target.
+
+`viewDepth` is measured at the displaced pixel, so a look that tints by depth tints what it shows.
+
 ## Not here
 
 Each is a decision, not an omission:
 
-* **No refraction**: it needs a copy of scene colour, and a mid-frame blit was measured at
-  0.10-0.32 ms on Metal for Blob Shadows, which did without.
+* **No view from under the water**: no fog, and no refraction looking up through the surface.
 * **No screen-space or planar reflections.** The sky tint is the environment, blurred.
 * **No vertex displacement, simulation, splashes or caustics.**
 * **Water writes no depth**, so a transparent drawn below the surface composites over it.

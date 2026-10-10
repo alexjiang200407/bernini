@@ -79,6 +79,13 @@ namespace bgl
 
 		// What the blob-shadow decal reads to tell a blade from the ground it grows on.
 		bgpu::SrvHandle grassRootHeightSrv;
+
+		// Scene colour as a shader resource, which Water Scene Copy reads, and the copy it draws:
+		// what Forward Water refracts through. The copy's views are null on a draw with no water,
+		// and on one whose copy a pool refused.
+		bgpu::SrvHandle sceneColorSrv;
+		bgpu::RtvHandle sceneColorCopy;
+		bgpu::SrvHandle sceneColorCopySrv;
 	};
 
 	/** What a draw shades against: the image-based environment, the sun, and the sky behind it. */

@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <optional>
 #include <ranges>
+#include <string>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
@@ -197,13 +198,29 @@ namespace bgl
 		bgpu::TextureHandle        handle,
 		std::optional<AccessState> initial)
 	{
-		const std::string key = std::string(m_CurrentNamespace).append(name);
+		return ImportTextureKey(std::string(m_CurrentNamespace).append(name), handle, initial);
+	}
 
+	FrameGraph&
+	FrameGraph::ImportGlobalTexture(
+		std::string_view           name,
+		bgpu::TextureHandle        handle,
+		std::optional<AccessState> initial)
+	{
+		return ImportTextureKey(std::string(name), handle, initial);
+	}
+
+	FrameGraph&
+	FrameGraph::ImportTextureKey(
+		std::string                key,
+		bgpu::TextureHandle        handle,
+		std::optional<AccessState> initial)
+	{
 		ImportedRes res;
 		res.handle  = handle;
 		res.initial = ResolveInitialState(KeyOf(res.handle), initial);
 		res.current = res.initial;
-		m_Imported.insert_or_assign(key, res);
+		m_Imported.insert_or_assign(std::move(key), res);
 		return *this;
 	}
 

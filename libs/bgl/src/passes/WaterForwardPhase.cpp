@@ -40,9 +40,9 @@ namespace bgl
 			"terrainHeights3"sv,
 		};
 
-		constexpr std::array<std::string_view, 8> c_Fields = {
-			"sceneDepth"sv,   "invViewProj"sv,    "viewportRect"sv, "time"sv,
-			"terrainCount"sv, "terrainRecords"sv, "terrains"sv,     "heightSampler"sv,
+		constexpr std::array<std::string_view, 9> c_Fields = {
+			"sceneDepth"sv,   "sceneColor"sv,     "invViewProj"sv, "viewportRect"sv,  "time"sv,
+			"terrainCount"sv, "terrainRecords"sv, "terrains"sv,    "heightSampler"sv,
 		};
 
 		[[nodiscard]] const SceneView&
@@ -69,6 +69,7 @@ namespace bgl
 		auto& uniforms = *found;
 
 		uniforms["sceneDepth"]  = draw.targets.depthSrv;
+		uniforms["sceneColor"]  = draw.targets.sceneColorCopySrv;
 		uniforms["invViewProj"] = glm::inverse(draw.viewState.viewProj);
 
 		const bgpu::Viewport& viewport = draw.viewState.viewport;
@@ -98,16 +99,9 @@ namespace bgl
 	bool
 	WaterForwardPhase::HasWork(const DrawData& draw) const
 	{
-		const DrawBucketMask&  demanded = ViewOf(draw).DemandedDrawBuckets();
-		const DrawBucketTable& table    = m_Kernels.DrawBuckets();
-		for (uint32_t bucket = 0, count = table.Count(); bucket < count; ++bucket)
-		{
-			if (demanded.test(bucket) && m_Kernels.IsWaterBucket(bucket))
-			{
-				return true;
-			}
-		}
-		return false;
+		// No copy is a pool that refused it, and water is then skipped rather than refracting
+		// through a null view.
+		return !draw.targets.sceneColorCopySrv.IsNull() && m_Kernels.DemandsWater(draw);
 	}
 
 	void
@@ -116,6 +110,7 @@ namespace bgl
 		desc.AddRenderTarget(c_MotionVectorsName)
 			.AddIndirectArgs(c_CompactDispatchArgsName)
 			.AddTextureRead(c_DepthName, bgpu::BarrierSyncFlag::kPixelShader)
+			.AddTextureRead(c_SceneColorCopyName, bgpu::BarrierSyncFlag::kPixelShader)
 			.AddBufferRead(c_TerrainBufferName, bgpu::BarrierSyncFlag::kPixelShader);
 	}
 

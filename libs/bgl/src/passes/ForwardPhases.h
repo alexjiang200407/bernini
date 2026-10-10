@@ -116,6 +116,13 @@ namespace bgl
 		[[nodiscard]] bool
 		IsWaterBucket(uint32_t bucket) const noexcept;
 
+		/**
+		 * Whether `draw`'s view has ever placed an instance in a water bucket: the question that
+		 * decides whether the frame copies scene colour for Forward Water to refract through.
+		 */
+		[[nodiscard]] bool
+		DemandsWater(const DrawData& draw) const;
+
 		[[nodiscard]] bool
 		DrawBucketInitialized(uint32_t bucket) const noexcept
 		{

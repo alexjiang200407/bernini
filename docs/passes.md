@@ -56,7 +56,8 @@ flowchart TD
         GC --> GRS["Forward Grass (only when a drawn geom or a terrain has grass; one dispatch per grass bucket and terrain)"]
         GRS --> BLOB["Blob Shadows (only when the view has a disc; reads the depth as it stands)"]
         BLOB --> FWS["Forward Skinned (indirect dispatch per skinned-tier bucket)"]
-        FWS --> FWW["Forward Water (only when the view places water; indirect dispatch per water bucket; reads the depth)"]
+        FWS --> WSC["Water Scene Copy (only when the view places water; scene colour into the target's copy)"]
+        WSC --> FWW["Forward Water (only when the view places water; indirect dispatch per water bucket; reads the depth and the copy)"]
         FWW --> FWT["Forward Transparent (one dispatch for the sorted list)"]
         FWT --> SM["Outline Mask (only when the view has a selection)"]
     end
@@ -724,7 +725,8 @@ World** the non-transparent buckets of the static tier -- the world, moving plac
 **Forward Grass** the grass those placements and the terrains grow; **Forward Skinned** the skinned tier's;
 **Forward Water** the static tier's water buckets, which attaches no depth: it reads the depth the
 phases before it wrote, as Blob Shadows does, discarding where the scene is nearer
-(`IForwardPhase::WritesDepth`); **Forward Transparent** the depth-sorted list, every tier. After the grass the depth holds the
+(`IForwardPhase::WritesDepth`), and refracts through the copy [Water Scene Copy](#water-scene-copy)
+took of scene colour just before it; **Forward Transparent** the depth-sorted list, every tier. After the grass the depth holds the
 terrain, the world and its grass alone -- everything a blob shadow lands on, the seam
 [Blob Shadows](#blob-shadows) draws at, and where the HZB of two-phase occlusion culling will be
 built (ROADMAP.md § Culling). One object owns every phase's kernels, since a kernel is per bucket and a bucket is one
@@ -963,6 +965,21 @@ be darkest.
   `grassRootHeight` as shader resources.
 * **Out:** scene colour (blended).
 * **Skipped** when the view has no disc.
+
+### Water Scene Copy — [passes/WaterSceneCopyPass.{h,cpp}](libs/bgl/src/passes/WaterSceneCopyPass.cpp)
+
+Copies scene colour, texel for texel, into the target's `SceneColorCopy` over the view's viewport,
+right before Forward Water: the water draws into scene colour, so it cannot sample it, and the copy
+is what it refracts through ([Water § Refraction](water.md#refraction)). One fullscreen triangle,
+scissored to the viewport, loading rather than sampling.
+
+* **In:** `sceneColor`, as everything opaque left it: terrain, world, grass, blob shadows and
+  characters.
+* **Out:** `sceneColorCopy`, an `RGBA16_FLOAT` texture at the render size, owned by the target
+  beside its bloom chain and made the first frame the target draws water. It is imported globally
+  (`ImportGlobalTexture`), so a second view's copy orders after the first view's water.
+* **Skipped** -- no pass attached, and Forward Water with it -- when the view places no water, and
+  when a resource pool refused the copy, which is logged once per size.
 
 ### Outline Mask — [passes/OutlineMaskPass.{h,cpp}](libs/bgl/src/passes/OutlineMaskPass.cpp)
 

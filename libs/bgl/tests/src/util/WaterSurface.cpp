@@ -5,23 +5,41 @@
 #include <filesystem>
 #include <fstream>
 #include <ios>
+#include <string>
+#include <string_view>
 
 namespace bgl::test
 {
+	namespace
+	{
+		std::filesystem::path
+		SurfaceDir(const char* dirName, const char* surfaceName, std::string_view source)
+		{
+			const std::filesystem::path dir = std::filesystem::temp_directory_path() / dirName;
+			std::filesystem::remove_all(dir);
+			std::filesystem::create_directories(dir);
+
+			std::ofstream out(
+				dir / (std::string(surfaceName) + ".slang"),
+				std::ios::binary | std::ios::trunc);
+			REQUIRE(out.is_open());
+			out << source;
+			out.close();
+
+			std::filesystem::copy_file("./shaders/tests/surfaces/Unlit.slang", dir / "Unlit.slang");
+			return dir;
+		}
+	}
+
 	std::filesystem::path
 	WaterSurfaceDir()
 	{
-		const std::filesystem::path dir =
-			std::filesystem::temp_directory_path() / "bernini_water_surfaces";
-		std::filesystem::remove_all(dir);
-		std::filesystem::create_directories(dir);
+		return SurfaceDir("bernini_water_surfaces", "ProbeWater", c_ProbeWater);
+	}
 
-		std::ofstream out(dir / "ProbeWater.slang", std::ios::binary | std::ios::trunc);
-		REQUIRE(out.is_open());
-		out << c_ProbeWater;
-		out.close();
-
-		std::filesystem::copy_file("./shaders/tests/surfaces/Unlit.slang", dir / "Unlit.slang");
-		return dir;
+	std::filesystem::path
+	RefractWaterSurfaceDir()
+	{
+		return SurfaceDir("bernini_refract_water_surfaces", "RefractWater", c_RefractWater);
 	}
 }

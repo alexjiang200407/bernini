@@ -1,5 +1,6 @@
 #pragma once
 #include "fg/PassTimer.h"
+#include "gfx/SceneColorCopy.h"
 #include "gfx/frame_constants.h"
 #include "postprocess/BloomChain.h"
 #include "postprocess/post_process.h"
@@ -245,6 +246,16 @@ namespace bgl
 		GetBloomChain() noexcept
 		{
 			return m_BloomChain;
+		}
+
+		/**
+		 * The scene colour a water surface refracts through, created by the render context at the
+		 * first frame that draws water. Held here because its size is this target's render size.
+		 */
+		[[nodiscard]] SceneColorCopy&
+		GetSceneColorCopy() noexcept
+		{
+			return m_SceneColorCopy;
 		}
 
 		/**
@@ -523,8 +534,9 @@ namespace bgl
 
 		// Like the reconstruction width: shader constants, never an allocation -- the bloom chain is
 		// the render context's, sized lazily at the first frame that blooms.
-		PostProcess m_PostProcess;
-		BloomChain  m_BloomChain;
+		PostProcess    m_PostProcess;
+		BloomChain     m_BloomChain;
+		SceneColorCopy m_SceneColorCopy;
 
 		bool                                           m_GpuTimingEnabled = false;
 		bgpu::TimestampHeapRef                         m_TimingHeap;

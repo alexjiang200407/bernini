@@ -11,6 +11,7 @@
 #include "gfx/ExternalBuffer.h"
 #include "gfx/Frustum.h"
 #include "gfx/RenderTargetBase.h"
+#include "gfx/SceneColorCopy.h"
 #include "gfx/jitter.h"
 #include "instance_block/MeshInstanceWriter.h"
 #include "overlay/Overlay.h"
@@ -280,7 +281,8 @@ namespace bgl
 		m_OverlayPass(startup.context), m_OutlineMask(startup.context),
 		m_TaaResolve(startup.context), m_CompactInstances(startup.context),
 		m_RigFrames(startup.context), m_SkinnedPose(startup.context),
-		m_ToonShadingRigs(startup.context), m_TransparentSort(startup.context)
+		m_ToonShadingRigs(startup.context), m_TransparentSort(startup.context),
+		m_WaterSceneCopy(startup.context)
 #if defined(BERNINI_GPU_DEBUG)
 		,
 		m_BufferPoisoner(m_ResourceManager), m_DebugBuffer(m_ResourceManager, c_DebugBufferCapacity)
@@ -317,6 +319,7 @@ namespace bgl
 		m_BloomPass.CheckBindings();
 		m_OverlayPass.CheckBindings();
 		m_TaaResolve.CheckBindings();
+		m_WaterSceneCopy.CheckBindings();
 
 		m_PointClampSampler = m_ResourceManager->CreateSampler(
 			bgpu::SamplerDesc().SetAllFilters(false).SetAllAddressModes(
@@ -915,6 +918,7 @@ namespace bgl
 		draw.targets.outlineMask          = m_ActiveTarget->GetOutlineMaskRtv();
 		draw.targets.grassRootHeight      = m_ActiveTarget->GetGrassRootHeightRtv();
 		draw.targets.grassRootHeightSrv   = m_ActiveTarget->GetGrassRootHeightSrv();
+		draw.targets.sceneColorSrv        = m_ActiveTarget->GetSceneColorSrv();
 
 		draw.materialArena            = scene->GetMaterialBinding();
 		draw.samplers.anisoLinearWrap = scene->GetSampler(Scene::StandardSampler::kAnisoLinearWrap);
@@ -1011,6 +1015,24 @@ namespace bgl
 		// belongs at.
 		m_BlobShadows.AttachToFrameGraph(m_FrameGraph, draw);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kSkinned);
+
+		// One copy every view of the target shares: imported globally, so each view's copy orders
+		// after the last view's water.
+		if (m_Forward.DemandsWater(draw))
+		{
+			SceneColorCopy& copy = m_ActiveTarget->GetSceneColorCopy();
+			copy.Ensure(
+				m_ResourceManager,
+				m_ActiveTarget->GetRenderWidth(),
+				m_ActiveTarget->GetRenderHeight());
+			if (!copy.GetTexture().IsNull())
+			{
+				m_FrameGraph.ImportGlobalTexture(c_SceneColorCopyName, copy.GetTexture());
+				draw.targets.sceneColorCopy    = copy.GetRtv();
+				draw.targets.sceneColorCopySrv = copy.GetSrv();
+			}
+		}
+		m_WaterSceneCopy.AttachToFrameGraph(m_FrameGraph, draw);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kWater);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kTransparent);
 
