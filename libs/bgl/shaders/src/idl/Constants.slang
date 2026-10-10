@@ -126,6 +126,11 @@ public static const uint cMaxPoseClips = cBlendSlots * 2;
 // rig with more bones than this strides.
 public static const uint cPoseGroupSize = 64;
 
+// Levels an HZB ladder may hold, and the handles the cull's constant buffer carries for them: a
+// level 0 of up to 4096 texels, built from a depth of up to 8192. A render target wider than that
+// stops at the last level, where a box it cannot cover reads as visible.
+public static const uint cMaxHzbLevels = 12;
+
 // CullView.lodForcedLevel when no level is forced and every placement is chosen by its size.
 public static const uint cLodForceNone = uint32_t(-1);
 

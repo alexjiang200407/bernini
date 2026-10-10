@@ -13,6 +13,7 @@
 #include "passes/BrdfLutGenPass.h"
 #include "passes/CompactInstancesPass.h"
 #include "passes/ForwardPhases.h"
+#include "passes/HzbBuildPass.h"
 #include "passes/OutlineMaskPass.h"
 #include "passes/OverlayPass.h"
 #include "passes/PassInitContext.h"
@@ -382,6 +383,7 @@ namespace bgl
 		OutlineMaskPass               m_OutlineMask;
 		TaaResolvePass                m_TaaResolve;
 		CompactInstancesPass          m_CompactInstances;
+		HzbBuildPass                  m_HzbBuild;
 		WriteInstanceBlocksPass       m_WriteInstanceBlocks;
 		RigFramesPass                 m_RigFrames;
 		SkinnedPosePass               m_SkinnedPose;

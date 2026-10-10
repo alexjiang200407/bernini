@@ -101,8 +101,9 @@ carries it, so `<core/glm.h>` counts as the header providing `glm::vec3` rather 
 tolerated. Where even that is not enough, the header is excluded outright: an export reaches only
 what a header includes directly, so glm is additionally named in
 `misc-include-cleaner.IgnoreHeaders` and `.clangd`'s `IgnoreHeader` to stop a vendor `detail/`
-header being offered in `<core/glm.h>`'s place. Both take the same pattern only because it is
-written to full-match -- clangd anchors, clang-tidy searches.
+header being offered in `<core/glm.h>`'s place. Both take the same pattern, written to full-match
+-- clangd anchors, clang-tidy searches -- but for the separator: clang-tidy on Windows sees the
+path with backslashes, so its entry matches either, where clangd normalises them.
 
 The same library backs clangd, configured in [`.clangd`](../.clangd), so the editor underlines what
 the hook would refuse.

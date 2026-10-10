@@ -1,5 +1,6 @@
 #include "scene/CullState.h"
 #include "fg/FrameGraph.h"
+#include "scene/HzbChain.h"
 #include "scene/scene_buffer_names.h"
 #include <algorithm>
 #include <bgl/idl/CullView.h>
@@ -11,6 +12,7 @@
 #include <bgpu/resource/ResourceManager.h>
 #include <cstdint>
 #include <format>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -52,6 +54,36 @@ namespace bgl
 				.SetElement<idl::InstanceVisibility>()
 				.SetInitialCount(paddedInstances)
 				.SetDebugName("Instance Visibility")),
+		m_DrawnHistory(
+			resourceManager,
+			bgpu::ComputeBufferDesc()
+				.SetElement<uint32_t>()
+				.SetInitialCount(paddedInstances)
+				.SetDebugName("Drawn History")),
+		m_Phase2Visibility(
+			resourceManager,
+			bgpu::ComputeBufferDesc()
+				.SetElement<idl::InstanceVisibility>()
+				.SetInitialCount(paddedInstances)
+				.SetDebugName("Phase 2 Visibility")),
+		m_Phase2Compacted(
+			resourceManager,
+			bgpu::ComputeBufferDesc()
+				.SetElement<uint32_t>()
+				.SetInitialCount(paddedInstances * 2)
+				.SetDebugName("Phase 2 Compacted Instances")),
+		m_Phase2PrefixSum(
+			resourceManager,
+			bgpu::ComputeBufferDesc()
+				.SetElement<uint32_t>()
+				.SetInitialCount(idl::cMaxDrawLanes)
+				.SetDebugName("Phase 2 Prefix Sum")),
+		m_Phase2DispatchArgs(
+			resourceManager,
+			bgpu::ComputeBufferDesc()
+				.SetElement<idl::DispatchArgs>()
+				.SetInitialCount(idl::cMaxDrawLanes)
+				.SetDebugName("Phase 2 Dispatch Args")),
 		m_DrawBucketPrefixSum(
 			resourceManager,
 			bgpu::ComputeBufferDesc()
@@ -78,6 +110,9 @@ namespace bgl
 		{
 			m_CompactedInstances.Resize(paddedInstances * 2);
 			m_InstanceVisibility.Resize(paddedInstances);
+			m_DrawnHistory.Resize(paddedInstances);
+			m_Phase2Visibility.Resize(paddedInstances);
+			m_Phase2Compacted.Resize(paddedInstances * 2);
 		}
 
 		if (placements > m_InstanceLod[0].GetDesc().initialCount)
@@ -139,6 +174,9 @@ namespace bgl
 	{
 		m_CompactedInstances.Update(cmdList);
 		m_InstanceVisibility.Update(cmdList);
+		m_DrawnHistory.Update(cmdList);
+		m_Phase2Visibility.Update(cmdList);
+		m_Phase2Compacted.Update(cmdList);
 		for (bgpu::ComputeBuffer& words : m_InstanceLod) words.Update(cmdList);
 	}
 
@@ -157,6 +195,7 @@ namespace bgl
 
 		importUpdated(c_CompactedInstancesName, m_CompactedInstances);
 		importUpdated(c_InstanceVisibilityName, m_InstanceVisibility);
+		importUpdated(c_CullDrawnHistoryName, m_DrawnHistory);
 
 		fg.ImportBuffer(c_DrawBucketPrefixSumName, m_DrawBucketPrefixSum.GetBufferHandle());
 		fg.ImportBuffer(c_CompactDispatchArgsName, m_CompactedDispatchArgs.GetBufferHandle());
@@ -165,5 +204,23 @@ namespace bgl
 		fg.ImportBuffer(
 			c_InstanceLodPreviousName,
 			m_InstanceLod[m_LodCurrent ^ 1u].GetBufferHandle());
+
+		const std::span<const HzbChain::Level> levels = m_Hzb.GetLevels();
+		for (uint32_t i = 0; i < static_cast<uint32_t>(levels.size()); ++i)
+		{
+			fg.ImportTexture(HzbLevelName(i), levels[i].texture);
+		}
+
+		const auto phase2 = std::format("{}{}", scope, c_Phase2Scope);
+		fg.SetResourceNamespace(phase2);
+		const auto importPhase2 = [&](std::string_view name, const bgpu::ComputeBuffer& buffer) {
+			fg.ImportBuffer(name, buffer.GetBufferHandle());
+			updateArgs.push_back(std::format("{}{}", phase2, name));
+		};
+		importPhase2(c_CompactedInstancesName, m_Phase2Compacted);
+		importPhase2(c_InstanceVisibilityName, m_Phase2Visibility);
+		fg.ImportBuffer(c_DrawBucketPrefixSumName, m_Phase2PrefixSum.GetBufferHandle());
+		fg.ImportBuffer(c_CompactDispatchArgsName, m_Phase2DispatchArgs.GetBufferHandle());
+		fg.SetResourceNamespace(std::string(scope));
 	}
 }

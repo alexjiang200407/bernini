@@ -641,8 +641,7 @@ TEST_CASE(
 	job.camera   = camera;
 	job.viewport = bgl::Viewport(static_cast<float>(c_Width), static_cast<float>(c_Height));
 
-	const glm::mat4 viewProj = glm::perspective(glm::radians(60.0f), aspect, 0.5f, 500.0f) *
-	                           glm::lookAt(eye, lookAt, glm::vec3(0.0f, 1.0f, 0.0f));
+	const glm::mat4 viewProj = camera.GetViewProjection();
 
 	const auto pixelOf = [&](const glm::vec3& world) {
 		const glm::vec4 clip = viewProj * glm::vec4(world, 1.0f);

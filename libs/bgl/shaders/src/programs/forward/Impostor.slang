@@ -51,7 +51,7 @@ struct ImpostorVSOut
 
     // Where on the quad, in units of the sphere's radius: (-1, -1) at its lower left. Interpolated
     // per sample, which runs the pixel stage at sample frequency -- what D3D requires of a stage
-    // writing SV_DepthGreaterEqual whose position is not read at the centroid, and which Metal will
+    // writing SV_DepthLessEqual whose position is not read at the centroid, and which Metal will
     // not let a position attribute say. The targets are single-sample, so it costs nothing.
     sample float2 corner : IMPOSTORCORNER;
 
@@ -166,7 +166,7 @@ ImpostorVSOut QuadCorner(ImpostorPayload payload, uint v)
 
     let corner = float2((v & 1u) != 0u ? 1.0 : -1.0, (v & 2u) != 0u ? 1.0 : -1.0);
     // On the sphere's near side, so the depth a pixel writes only ever moves away from the camera
-    // (SV_DepthGreaterEqual) and the raster still rejects an impostor behind what is drawn before
+    // (SV_DepthLessEqual, under reversed-Z) and the raster still rejects an impostor behind what is drawn before
     // shading it. Shrunk by its nearness, so it covers on screen what one through the centre would.
     let world = sphere.xyz + toCamera * NearOffset(sphere) + (corner.x * right + corner.y * up) * sphere.w * NearScale(sphere);
 
@@ -291,7 +291,7 @@ ImpostorSample SampleFrame(Placement p, uint2 frame, float3 local, float weight,
 struct ImpostorPixel
 {
     ForwardPSOut output;
-    float depth : SV_DepthGreaterEqual;
+    float depth : SV_DepthLessEqual;
 };
 
 // How the surface reflects, from the material the placement's first submesh draws with -- the one

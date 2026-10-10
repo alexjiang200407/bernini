@@ -45,7 +45,7 @@ namespace bgl
 
 		pipelineDesc.AddRtvFormat(bgpu::Format::RGBA16_FLOAT);
 		pipelineDesc.AddRtvFormat(c_MotionVectorFormat);
-		pipelineDesc.SetDsvFormat(bgpu::Format::D24S8);
+		pipelineDesc.SetDsvFormat(bgpu::Format::D32);
 
 		auto raster = bgpu::RasterState();
 		raster.SetFillMode(bgpu::RasterFillMode::kSolid)
@@ -56,7 +56,7 @@ namespace bgl
 		auto depth = bgpu::DepthStencilState{};
 		depth.SetDepthTestEnable(true)
 			.SetDepthWriteEnable(false)
-			.SetDepthFunc(bgpu::ComparisonFunc::kLessOrEqual)
+			.SetDepthFunc(bgpu::ComparisonFunc::kGreaterOrEqual)
 			.SetStencilEnable(false);
 
 		pipelineDesc.renderState =

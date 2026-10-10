@@ -1,6 +1,7 @@
 #pragma once
 #include <bgl/GeomType.h>
 #include <bgl/MaterialType.h>
+#include <bgl/SurfaceType.h>
 #include <bgl/idl/DrawBucket.h>
 #include <bgl/types/LayerType.h>
 #include <bgl/types/MaterialHandle.h>
@@ -103,6 +104,26 @@ namespace bgl
 		Transparent(uint32_t bucket) const noexcept;
 
 		/**
+		 * The registered surfaces' contracts, indexed by game slot: what decides whether a game
+		 * material's bucket draws a water surface, and so whether it is an occludee. Re-flags every
+		 * bucket allocated so far. @pre called once, before any game material resolves.
+		 */
+		void
+		SetSurfaceShading(std::vector<SurfaceShading> slots);
+
+		/** @pre bucket < Count(). Whether the bucket draws a water surface, and so in Forward Water. */
+		[[nodiscard]] bool
+		Water(uint32_t bucket) const noexcept;
+
+		/**
+		 * @pre bucket < Count(). Whether the occlusion cull tests what draws through the bucket and
+		 * draws it in two phases: the static stage's opaque buckets, water excepted, and the
+		 * impostor bucket, whose entries are the placements drawn as their impostor.
+		 */
+		[[nodiscard]] bool
+		Occludee(uint32_t bucket) const noexcept;
+
+		/**
 		 * One idl::DrawBucketFlag word per draw bucket, ceiling-sized: the upload source for the
 		 * flags the GPU reads (TransparentDepthKeys).
 		 */
@@ -113,8 +134,15 @@ namespace bgl
 		}
 
 	private:
+		[[nodiscard]] uint32_t
+		FlagsOf(const DrawBucketDesc& desc) const noexcept;
+
+		[[nodiscard]] bool
+		HasFlag(uint32_t bucket, idl::DrawBucketFlag flag) const noexcept;
+
 		std::vector<DrawBucketDesc>            m_Descs;
 		std::vector<uint32_t>                  m_Flags;
+		std::vector<SurfaceShading>            m_SurfaceShading;
 		std::unordered_map<uint64_t, uint32_t> m_KeyToDrawBucket;
 		std::unordered_set<uint64_t>           m_Refused;
 		uint32_t                               m_Ceiling;

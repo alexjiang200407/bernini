@@ -20,9 +20,11 @@
 #include "passes/DrawData.h"
 #include "passes/PassInitContext.h"
 #include "postprocess/BloomChain.h"
+#include "scene/HzbChain.h"
 #include "scene/Scene.h"
 #include "scene/SceneView.h"
 #include "scene/ground_color.h"
+#include "types/DrawBucketMask.h"
 #include "util/util.h"
 #include <algorithm>
 #include <array>
@@ -51,6 +53,7 @@
 #include <bgpu/types/Format.h>
 #include <bgpu/types/QueueType.h>
 #include <bgpu/types/Rect.h>
+#include <bgpu/types/Viewport.h>
 #include <cmath>
 #include <core/containers/fixed_buffer.h>
 #include <core/err/util.h>
@@ -208,6 +211,40 @@ namespace bgl
 			return std::format("{}{}", c_HistoryName, index);
 		}
 
+		// What the cull needs of the ladder: the view-projection the ladder was drawn through, the
+		// draw's viewport in level-0 texels (one covers two depth pixels), the level sizes, and
+		// whether to test at all and against what.
+		void
+		ResolveOcclusion(
+			idl::CullView&        cullView,
+			const HzbChain&       hzb,
+			const bool            test,
+			const glm::mat4&      prevViewProj,
+			const bgpu::Viewport& viewport)
+		{
+			const std::span<const HzbChain::Level> levels = hzb.GetLevels();
+			cullView.prevViewProj                         = prevViewProj;
+			cullView.hzbRect                              = glm::vec4(
+				viewport.minX * 0.5f,
+				viewport.minY * 0.5f,
+				(viewport.maxX - viewport.minX) * 0.5f,
+				(viewport.maxY - viewport.minY) * 0.5f);
+			cullView.hzbLevel0Size = levels.empty() ? glm::vec2(0.0f) :
+			                                          glm::vec2(
+														  static_cast<float>(levels[0].width),
+														  static_cast<float>(levels[0].height));
+			cullView.hzbLevelCount = static_cast<uint32_t>(levels.size());
+			cullView.occlusion     = 0u;
+			if (test && !levels.empty())
+			{
+				cullView.occlusion |= idl::cOcclusionTestBit;
+				if (hzb.IsValid())
+				{
+					cullView.occlusion |= idl::cOcclusionHzbValidBit;
+				}
+			}
+		}
+
 		std::string
 		GetBloomDownName(uint32_t level)
 		{
@@ -280,7 +317,7 @@ namespace bgl
 		m_Backdrop(startup.context), m_PostProcess(startup.context), m_BloomPass(startup.context),
 		m_OverlayPass(startup.context), m_OutlineMask(startup.context),
 		m_TaaResolve(startup.context), m_CompactInstances(startup.context),
-		m_RigFrames(startup.context), m_SkinnedPose(startup.context),
+		m_HzbBuild(startup.context), m_RigFrames(startup.context), m_SkinnedPose(startup.context),
 		m_ToonShadingRigs(startup.context), m_TransparentSort(startup.context),
 		m_WaterSceneCopy(startup.context)
 #if defined(BERNINI_GPU_DEBUG)
@@ -294,6 +331,7 @@ namespace bgl
 			m_GameSurfaceShading.emplace_back(type.shading);
 		}
 		m_Forward.SetSurfaceShading(m_GameSurfaceShading);
+		m_DrawBucketTable->SetSurfaceShading(m_GameSurfaceShading);
 
 		// Registered so a deferred destroy cannot reclaim a slot this queue may still be reading.
 		m_CommandQueue = m_Device->CreateGraphicsCommandQueue();
@@ -320,6 +358,7 @@ namespace bgl
 		m_OverlayPass.CheckBindings();
 		m_TaaResolve.CheckBindings();
 		m_WaterSceneCopy.CheckBindings();
+		m_HzbBuild.CheckBindings();
 
 		m_PointClampSampler = m_ResourceManager->CreateSampler(
 			bgpu::SamplerDesc().SetAllFilters(false).SetAllAddressModes(
@@ -893,23 +932,41 @@ namespace bgl
 
 		scene->AttachToFrameGraph(m_FrameGraph, drawIdx);
 		// Before the view imports its resources: the ground-colour texture is made the first time
-		// it is needed, and imported only once it exists.
+		// it is needed, and imported only once it exists, and so is the camera frustum's HZB.
 		view->PrepareGroundColor(glm::vec3(invView[3]));
+		HzbChain& hzb = view->GetCullState(c_CameraCullIdx).GetHzb();
+		// Only a view that places an occludee pays for the ladder and the second phase.
+		const DrawBucketMask& viewBuckets = view->DemandedDrawBuckets();
+		bool                  occludes    = false;
+		for (uint32_t bucket = 0, count = m_DrawBucketTable->Count(); bucket < count && !occludes;
+		     ++bucket)
+		{
+			occludes = viewBuckets.test(bucket) && m_DrawBucketTable->Occludee(bucket);
+		}
+		const bool occlusion = view->GetOcclusionCulling() && occludes;
+		if (occlusion)
+		{
+			hzb.Ensure(
+				m_ResourceManager,
+				m_ActiveTarget->GetRenderWidth(),
+				m_ActiveTarget->GetRenderHeight());
+		}
 		view->AttachToFrameGraph(m_FrameGraph, drawIdx);
 
-		auto draw                         = DrawData();
-		draw.drawIdx                      = drawIdx;
-		draw.view                         = job.view;
-		draw.cullIdx                      = c_CameraCullIdx;
-		draw.cullState                    = &view->GetCullState(c_CameraCullIdx);
-		draw.viewState.viewport           = viewport;
-		draw.viewState.viewProj           = viewProj;
-		draw.viewState.prevViewProj       = prevCamera.viewProj;
-		draw.viewState.jitter             = jitter;
-		draw.viewState.prevJitter         = prevCamera.jitter;
-		draw.clock.time                   = job.time;
-		draw.clock.prevTime               = prevCamera.time;
-		draw.viewState.cullView           = BuildCullView(viewProj);
+		auto draw                   = DrawData();
+		draw.drawIdx                = drawIdx;
+		draw.view                   = job.view;
+		draw.cullIdx                = c_CameraCullIdx;
+		draw.cullState              = &view->GetCullState(c_CameraCullIdx);
+		draw.viewState.viewport     = viewport;
+		draw.viewState.viewProj     = viewProj;
+		draw.viewState.prevViewProj = prevCamera.viewProj;
+		draw.viewState.jitter       = jitter;
+		draw.viewState.prevJitter   = prevCamera.jitter;
+		draw.clock.time             = job.time;
+		draw.clock.prevTime         = prevCamera.time;
+		draw.viewState.cullView     = BuildCullView(viewProj);
+		ResolveOcclusion(draw.viewState.cullView, hzb, occlusion, prevCamera.viewProj, viewport);
 		draw.viewState.unjitteredViewProj = camera.unjitteredViewProj;
 		draw.targets.sceneColor           = m_ActiveTarget->GetSceneColorRtv();
 		draw.targets.depth                = m_ActiveTarget->GetDepthDsv();
@@ -1007,13 +1064,35 @@ namespace bgl
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kTerrain);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kWorld);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kImpostor);
+
+		// Phase 2: what phase 1 left as candidates is tested against the depth phase 1 drew, and
+		// drawn now if visible. Only once the ladder is valid: before that, phase 1 left none.
+		if ((draw.viewState.cullView.occlusion & idl::cOcclusionHzbValidBit) != 0u)
+		{
+			const std::string cullScope = view->GetCullNamespace(draw.cullIdx);
+			m_HzbBuild.AttachToFrameGraph(m_FrameGraph, draw, "Phase");
+			m_CompactInstances.AttachPhase2(m_FrameGraph, draw, cullScope);
+			m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kWorldPhase2);
+			m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kImpostorPhase2);
+			m_FrameGraph.SetResourceNamespace(cullScope);
+		}
+
 		m_Forward.AttachGroundColor(
 			m_FrameGraph,
 			GroundColorDraw(draw, view->GetGroundColor().rect),
 			m_ResourceManager.Get());
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kGrass);
-		// The depth holds the terrain, the world and its grass alone here: the seam an HZB build
-		// belongs at.
+		// The depth holds the terrain, the world and its grass alone here: everything that
+		// occludes, so the HZB the next draw's cull tests against is built from it.
+		if (occlusion && !hzb.GetLevels().empty())
+		{
+			m_HzbBuild.AttachToFrameGraph(m_FrameGraph, draw, "Frame");
+			hzb.MarkBuilt();
+		}
+		else
+		{
+			hzb.Invalidate();
+		}
 		m_BlobShadows.AttachToFrameGraph(m_FrameGraph, draw);
 		m_Forward.AttachToFrameGraph(m_FrameGraph, draw, ForwardPhase::kSkinned);
 

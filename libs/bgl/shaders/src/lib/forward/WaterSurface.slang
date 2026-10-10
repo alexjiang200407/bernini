@@ -68,7 +68,7 @@ public struct WaterArenaReader : IWaterMaterialReader
 
     float ViewDepthAt(float2 position, float depth)
     {
-        if (depth >= 1.0)
+        if (depth <= 0.0)
         {
             return cNoWaterBottom;
         }
@@ -91,8 +91,8 @@ public struct WaterArenaReader : IWaterMaterialReader
 
         // Nearer than the water there: something standing in front of it, which must not be seen
         // through it. The pixel straight behind is, and it is never nearer, or the water would
-        // have been discarded.
-        if (depth < inner.input.position.z)
+        // have been discarded. Reversed-Z: nearer is greater.
+        if (depth > inner.input.position.z)
         {
             position = here;
             depth = waterData.sceneDepth.Load(int3(int2(position), 0)).r;
@@ -174,8 +174,9 @@ public extension MaterialData
     // Shade's a for the premultiplied blend; the velocity is the water surface's own.
     public ForwardPSOut GameWaterProgram<G : IWaterSurfaceSource>(ForwardVSOut input, bool isFrontFace)
     {
+        // Reversed-Z: a greater depth is nearer.
         let sceneDepth = waterData.sceneDepth.Load(int3(int2(input.position.xy), 0)).r;
-        if (sceneDepth < input.position.z)
+        if (sceneDepth > input.position.z)
         {
             discard;
         }

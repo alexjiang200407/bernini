@@ -292,6 +292,18 @@ namespace bgl
 			return m_LodSelection;
 		}
 
+		void
+		SetOcclusionCulling(const bool enabled) noexcept override
+		{
+			m_OcclusionCulling = enabled;
+		}
+
+		[[nodiscard]] bool
+		GetOcclusionCulling() const noexcept override
+		{
+			return m_OcclusionCulling;
+		}
+
 		MeshInstanceBlockHandle
 		CreateMeshInstanceBlock(const MeshInstanceBlockDesc& desc) override;
 
@@ -928,6 +940,7 @@ namespace bgl
 		float                           m_Exposure = 1.0f;
 		WindDesc                        m_Wind;
 		LodSelectionDesc                m_LodSelection;
+		bool                            m_OcclusionCulling = true;
 
 		core::slot_vector<MeshInstanceBlock> m_InstanceBlocks;
 

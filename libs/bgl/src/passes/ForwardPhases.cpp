@@ -90,7 +90,7 @@ namespace bgl
 			bgpu::RasterCullMode cull;
 			bool                 depthWrite;
 			bool                 blend;
-			bgpu::ComparisonFunc depthFunc = bgpu::ComparisonFunc::kLess;
+			bgpu::ComparisonFunc depthFunc = bgpu::ComparisonFunc::kGreater;
 			std::string_view     geomSrc;
 			// The dissolve lane's entries: MSDissolve and PSDissolve, which carry and read the
 			// placement's dissolve code, beside the at-rest lane's MSMain and PSMain.
@@ -116,8 +116,8 @@ namespace bgl
 			const bool            water)
 		{
 			auto config =
-				PsoConfig{ DrawBucketPixelSrc(desc),    DrawBucketCullMode(desc),   true, false,
-				           bgpu::ComparisonFunc::kLess, DrawBucketGeometrySrc(desc) };
+				PsoConfig{ DrawBucketPixelSrc(desc),       DrawBucketCullMode(desc),   true, false,
+				           bgpu::ComparisonFunc::kGreater, DrawBucketGeometrySrc(desc) };
 			if (lane == DrawLane::kDissolve)
 			{
 				config.meshEntry  = "MSDissolve"sv;
@@ -160,7 +160,7 @@ namespace bgl
 			}
 			if (!cfg.water)
 			{
-				pipelineDesc.SetDsvFormat(bgpu::Format::D24S8);
+				pipelineDesc.SetDsvFormat(bgpu::Format::D32);
 			}
 
 			auto raster = bgpu::RasterState();
@@ -294,7 +294,7 @@ namespace bgl
 				const DrawBucketDesc&               desc    = m_DrawBucketTable->Desc(bucket);
 				const std::optional<SurfaceShading> shading = ShadingOf(desc.material);
 				const bool toon  = shading == SurfaceShading::kToonCharacter;
-				const bool water = shading == SurfaceShading::kWater;
+				const bool water = m_DrawBucketTable->Water(bucket);
 				core::ensure(
 					!water || desc.geom == GeometryStage::kStaticMesh,
 					"Water draws on the static tier alone; every other door refuses it");
@@ -343,8 +343,7 @@ namespace bgl
 	bool
 	ForwardPhases::IsWaterBucket(const uint32_t bucket) const noexcept
 	{
-		return bucket < m_DrawBucketTable->Count() &&
-		       ShadingOf(m_DrawBucketTable->Desc(bucket).material) == SurfaceShading::kWater;
+		return bucket < m_DrawBucketTable->Count() && m_DrawBucketTable->Water(bucket);
 	}
 
 	bool
@@ -379,7 +378,7 @@ namespace bgl
 			                   bgpu::RasterCullMode::kNone,
 			                   false,
 			                   true,
-			                   bgpu::ComparisonFunc::kLess,
+			                   bgpu::ComparisonFunc::kGreater,
 			                   c_AnyGeomSrc }));
 		}
 	}
@@ -429,6 +428,10 @@ namespace bgl
 			return m_World;
 		case ForwardPhase::kImpostor:
 			return m_Impostor;
+		case ForwardPhase::kWorldPhase2:
+			return m_WorldPhase2;
+		case ForwardPhase::kImpostorPhase2:
+			return m_ImpostorPhase2;
 		case ForwardPhase::kGrass:
 			return m_Grass;
 		case ForwardPhase::kSkinned:

@@ -362,8 +362,8 @@ float4 PSMain(VSOut input) : SV_Target
     let pixel = uint2(input.position.xy);
     let depth = gBlobShadowData.worldDepth.Load(int3(pixel, 0)).r;
 
-    // A cleared texel has no receiver under it.
-    if (depth >= 1.0)
+    // A cleared texel, the far plane under reversed-Z, has no receiver under it.
+    if (depth <= 0.0)
     {
         discard;
     }

@@ -587,6 +587,11 @@ flowchart TD
   that says which level a placement draws runs the same size test on the CPU,
   [lod_select.h](libs/gamelib/include/gamelib/lod_select.h), which the renderer computes its own inputs
   through and `LodSelect_test` pins to the GPU's choice.
+* **`SetOcclusionCulling(on)` / `GetOcclusionCulling()`** — whether the view culls its occludees,
+  the static tier's opaque placements, against the depth of its own previous draw (the HZB the cull
+  builds, [Passes § Compact Instances](passes.md)) before drawing them. On by default. Per view,
+  and **not** an epoch change: the frame is the same either way, only its cost differs, which is
+  what a benchmark turns it off to measure.
 
 ---
 

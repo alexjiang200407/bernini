@@ -112,5 +112,12 @@ namespace bgl
 		"compactedInstances.compactDispatchArgs"sv;
 	constexpr std::string_view c_TransparentDispatchArgsName = "transparentSort.dispatchArgs"sv;
 	constexpr std::string_view c_CullViewName                = "cull.view"sv;
-	constexpr std::string_view c_CullStatsName               = "cull.stats"sv;
+	// The scope phase 2 of the occlusion cull compacts under, nested in its frustum's: its own
+	// visibility words, compacted list, prefix sums and dispatch args, under the names phase 1's
+	// carry, so the counting sort and Forward World run unchanged against them.
+	constexpr std::string_view c_Phase2Scope = "p2:"sv;
+
+	// One word per instance slot, across frames: whether it drew last frame, in either phase.
+	constexpr std::string_view c_CullDrawnHistoryName = "cull.drawnHistory"sv;
+	constexpr std::string_view c_CullStatsName        = "cull.stats"sv;
 }

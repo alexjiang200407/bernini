@@ -4,6 +4,7 @@
 #include "util/TestOptions.h"
 #include <array>
 #include <bgl/IGraphics.h>
+#include <bgl/types/Camera.h>
 #include <bgpu/cmd/CommandAllocator.h>
 #include <bgpu/cmd/CommandList.h>
 #include <bgpu/cmd/CommandQueue.h>
@@ -167,7 +168,8 @@ TEST_CASE(
 	"A box's screen rect is clipped to the near plane and empty off-frustum",
 	"[boxbounds][compute]")
 {
-	const glm::mat4 proj = glm::perspective(glm::radians(60.0f), c_Aspect, c_Near, c_Far);
+	const glm::mat4 proj =
+		bgl::Camera().Perspective(glm::radians(60.0f), c_Aspect, c_Near, c_Far).GetProjection();
 	const glm::mat4 view = glm::lookAt(
 		glm::vec3(0.0f, c_EyeY, 0.0f),
 		glm::vec3(0.0f, c_EyeY, -1.0f),

@@ -18,8 +18,8 @@ namespace bgl
 			row(3) - row(0),  // right
 			row(3) + row(1),  // bottom
 			row(3) - row(1),  // top
-			row(2),           // near: z' >= 0 alone, because clip depth starts at 0, not -w
-			row(3) - row(2),  // far
+			row(3) - row(2),  // near: z' <= w, since reversed-Z puts the near plane at 1
+			row(2),           // far: z' >= 0 alone, because clip depth ends at 0, not -w
 		} };
 
 		for (glm::vec4& plane : frustum.planes)

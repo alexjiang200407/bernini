@@ -30,7 +30,7 @@ namespace bgl
 		constexpr bgpu::Format c_BackbufferFormat = bgpu::Format::SBGRA8_UNORM;
 		// The layer's spelling of the same format; CreateOutputAttachments checks the two agree.
 		constexpr MTL::PixelFormat c_BackbufferPixelFormat = MTL::PixelFormatBGRA8Unorm_sRGB;
-		constexpr bgpu::Format     c_DepthFormat           = bgpu::Format::D24S8;
+		constexpr bgpu::Format     c_DepthFormat           = bgpu::Format::D32;
 
 		// Linear HDR: the geometry passes write exposed radiance and the tonemap reads it back.
 		// Alpha is carried because the blend state writes destination alpha and the capture path
@@ -195,7 +195,7 @@ namespace bgl
 			                                          bgpu::TextureUsageFlag::kSRV };
 		depthDesc.initialLayout = bgpu::BarrierLayout::kDepthWrite;
 		depthDesc.debugName     = "Depth Buffer";
-		depthDesc.clearValue.SetDepthStencil(1.0f, 0);
+		depthDesc.clearValue.SetDepthStencil(0.0f, 0);
 
 		m_DepthTexture = m_ResourceManager->CreateTexture(depthDesc);
 

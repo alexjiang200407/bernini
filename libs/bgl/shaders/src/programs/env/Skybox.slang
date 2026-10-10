@@ -48,10 +48,11 @@ void MSMain(uint gtid: SV_GroupThreadID, OutputVertices<VSOut, 3> verts, OutputI
         float2 ndc = uv * float2(2.0, -2.0) + float2(-1.0, 1.0);
 
         VSOut vout;
-        vout.position = float4(ndc, 1.0, 1.0);
+        // The far plane: clip z 0 under reversed-Z.
+        vout.position = float4(ndc, 0.0, 1.0);
         vout.ndc = ndc;
 
-        float4 world = mul(gSkyboxData.clipToWorld, float4(ndc, 1.0, 1.0));
+        float4 world = mul(gSkyboxData.clipToWorld, float4(ndc, 0.0, 1.0));
         vout.dir = world.xyz / world.w;
 
         verts[gtid] = vout;

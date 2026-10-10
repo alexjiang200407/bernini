@@ -5,6 +5,7 @@
 #include <bgl/types/MaterialHandle.h>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <utility>
 
 using bgl::DrawBucketTable;
 using bgl::GeometryStage;
@@ -74,9 +75,83 @@ TEST_CASE("only the blend layer is transparent, and the flags mirror it", "[draw
 	// an unallocated lane reads 0, never garbage.
 	const auto flags = table.Flags();
 	REQUIRE(flags.size() == bgl::idl::cMaxDrawBuckets);
-	CHECK(flags[blend] == 1u);
-	CHECK(flags[hashed] == 0u);
+	CHECK(flags[blend] == std::to_underlying(bgl::idl::DrawBucketFlag::kTransparent));
+	CHECK(flags[hashed] == std::to_underlying(bgl::idl::DrawBucketFlag::kOccludee));
 	CHECK(flags[table.Count()] == 0u);
+}
+
+TEST_CASE(
+	"the static stage's opaque buckets are occludees, water and the rest are not",
+	"[drawbucket]")
+{
+	DrawBucketTable table;
+
+	// Three game surfaces: a lit one, a toon character and a water surface.
+	table.SetSurfaceShading(
+		{ bgl::SurfaceShading::kLit,
+	      bgl::SurfaceShading::kToonCharacter,
+	      bgl::SurfaceShading::kWater });
+	const auto lit   = MaterialType::kGameStart;
+	const auto water = static_cast<MaterialType>(std::to_underlying(MaterialType::kGameStart) + 2);
+
+	const auto opaque =
+		table.Resolve(GeometryStage::kStaticMesh, MaterialType::kPBR, LayerType::kOpaque);
+	const auto hashed =
+		table.Resolve(GeometryStage::kStaticMesh, MaterialType::kPBR, LayerType::kHashed);
+	const auto blend =
+		table.Resolve(GeometryStage::kStaticMesh, MaterialType::kPBR, LayerType::kBlend);
+	const auto game = table.Resolve(GeometryStage::kStaticMesh, lit, LayerType::kOpaque);
+	const auto pond = table.Resolve(GeometryStage::kStaticMesh, water, LayerType::kOpaque);
+	const auto skinned =
+		table.Resolve(GeometryStage::kSkinnedMesh, MaterialType::kPBR, LayerType::kOpaque);
+	const auto grass = table.Resolve(GeometryStage::kGrass, MaterialType::kPBR, LayerType::kOpaque);
+	const auto terrain =
+		table.Resolve(GeometryStage::kTerrain, MaterialType::kPBR, LayerType::kOpaque);
+
+	CHECK(table.Occludee(opaque));
+	CHECK(table.Occludee(hashed));
+	CHECK(table.Occludee(game));
+	CHECK_FALSE(table.Occludee(blend));
+	CHECK_FALSE(table.Occludee(pond));
+	CHECK_FALSE(table.Occludee(skinned));
+	CHECK_FALSE(table.Occludee(grass));
+	CHECK_FALSE(table.Occludee(terrain));
+
+	// The impostor bucket is an occludee: a placement drawn as its impostor is tested by its
+	// whole-mesh sphere, as its mesh would be.
+	CHECK(table.Occludee(bgl::idl::cImpostorDrawBucket));
+	CHECK(
+		table.Flags()[bgl::idl::cImpostorDrawBucket] ==
+		std::to_underlying(bgl::idl::DrawBucketFlag::kOccludee));
+
+	// The unlit seed is static and opaque: an occludee like any other.
+	CHECK(table.Occludee(0u));
+
+	CHECK(table.Water(pond));
+	CHECK_FALSE(table.Water(game));
+	CHECK_FALSE(table.Water(opaque));
+
+	const auto     flags    = table.Flags();
+	const uint32_t occludee = std::to_underlying(bgl::idl::DrawBucketFlag::kOccludee);
+	CHECK(flags[opaque] == occludee);
+	CHECK(flags[blend] == std::to_underlying(bgl::idl::DrawBucketFlag::kTransparent));
+	CHECK(flags[pond] == 0u);
+}
+
+TEST_CASE("the shadings re-flag the buckets resolved before them", "[drawbucket]")
+{
+	DrawBucketTable table;
+
+	// Resolved before the table knows the surface is water: an occludee until it does.
+	const auto water = MaterialType::kGameStart;
+	const auto pond  = table.Resolve(GeometryStage::kStaticMesh, water, LayerType::kOpaque);
+	CHECK(table.Occludee(pond));
+	CHECK_FALSE(table.Water(pond));
+
+	table.SetSurfaceShading({ bgl::SurfaceShading::kWater });
+	CHECK_FALSE(table.Occludee(pond));
+	CHECK(table.Water(pond));
+	CHECK(table.Flags()[pond] == 0u);
 }
 
 TEST_CASE("a material handle resolves as its (type, layer); invalid falls to unlit", "[drawbucket]")

@@ -42,6 +42,7 @@
 #include <iterator>
 #include <span>
 #include <utility>
+#include <vector>
 
 // Drives the CullInstances kernel against a crafted scene: unit-radius spheres placed at known
 // points around a known camera, one instance each. Reading back the visibility word proves the
@@ -183,6 +184,15 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	// Every placement unchosen: the cull picks each one's level afresh.
 	auto lodPrevious = makeCompute(bgl::idl::InstanceLod{}, c_LiveCount + 1, "Lod Previous");
 	auto lodCurrent  = makeCompute(bgl::idl::InstanceLod{}, c_LiveCount + 1, "Lod Current");
+	// The occlusion cull's inputs, which this frustum-only cull leaves untested: no bucket is an
+	// occludee and the view asks for no test, but the kernel writes the drawn word regardless.
+	auto drawnHistory = makeCompute(uint32_t{}, padded, "Drawn History");
+	auto bucketFlags  = bgpu::UploadBuffer<uint32_t>(
+		resourceManager,
+		bgpu::UploadBufferDesc()
+			.SetInitialCount(bgl::idl::cMaxDrawBuckets)
+			.SetDebugName("Draw Bucket Flags"));
+	bucketFlags.Assign(std::vector<uint32_t>(bgl::idl::cMaxDrawBuckets, 0u));
 
 	auto cull = device->CreateComputeKernel(
 		bgpu::ComputePipelineDesc()
@@ -202,6 +212,8 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 	fg.ImportBuffer("stats", stats.GetBufferHandle());
 	fg.ImportBuffer("lodPrevious", lodPrevious.GetBufferHandle());
 	fg.ImportBuffer("lodCurrent", lodCurrent.GetBufferHandle());
+	fg.ImportBuffer("drawnHistory", drawnHistory.GetBufferHandle());
+	fg.ImportBuffer("bucketFlags", bucketFlags.GetBufferHandle());
 
 	fg.AddPass(
 		bgl::PassDesc()
@@ -215,6 +227,8 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 			.AddCopyDest("stats")
 			.AddCopyDest("lodPrevious")
 			.AddCopyDest("lodCurrent")
+			.AddCopyDest("drawnHistory")
+			.AddCopyDest("bucketFlags")
 			.SetExec([&](const bgl::PassContext& ctx) {
 				auto* cmd = ctx.GetCommandList();
 				submeshBuffer.Update(cmd);
@@ -225,6 +239,8 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 				stats.Clear(cmd);
 				lodPrevious.Clear(cmd);
 				lodCurrent.Clear(cmd);
+				drawnHistory.Clear(cmd);
+				bucketFlags.Update(cmd);
 				cullView.Update(cmd);
 			}));
 
@@ -240,17 +256,21 @@ TEST_CASE("Instances outside the frustum are culled, those inside survive", "[cu
 			.AddBufferReadWrite("stats", bgpu::BarrierSyncFlag::kComputeShader)
 			.AddBufferRead("lodPrevious", bgpu::BarrierSyncFlag::kComputeShader)
 			.AddBufferReadWrite("lodCurrent", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferReadWrite("drawnHistory", bgpu::BarrierSyncFlag::kComputeShader)
+			.AddBufferRead("bucketFlags", bgpu::BarrierSyncFlag::kComputeShader)
 			.SetExec([&](const bgl::PassContext& ctx) {
 				auto* cmd = ctx.GetCommandList();
 
-				cull["gUniforms"]["cullView"]       = cullView.GetBufferHandle();
-				cull["gUniforms"]["instanceBuffer"] = instanceBuffer.GetBufferHandle();
-				cull["gUniforms"]["meshBuffer"]     = meshBuffer.GetBufferHandle();
-				cull["gUniforms"]["geomBuffer"]     = geomBuffer.GetBufferHandle();
-				cull["gUniforms"]["submeshBuffer"]  = submeshBuffer.GetBufferHandle();
-				cull["gUniforms"]["visibility"]     = visibility.GetBufferHandle();
-				cull["gUniforms"]["lodPrevious"]    = lodPrevious.GetBufferHandle();
-				cull["gUniforms"]["lodCurrent"]     = lodCurrent.GetBufferHandle();
+				cull["gUniforms"]["cullView"]        = cullView.GetBufferHandle();
+				cull["gUniforms"]["instanceBuffer"]  = instanceBuffer.GetBufferHandle();
+				cull["gUniforms"]["meshBuffer"]      = meshBuffer.GetBufferHandle();
+				cull["gUniforms"]["geomBuffer"]      = geomBuffer.GetBufferHandle();
+				cull["gUniforms"]["submeshBuffer"]   = submeshBuffer.GetBufferHandle();
+				cull["gUniforms"]["visibility"]      = visibility.GetBufferHandle();
+				cull["gUniforms"]["lodPrevious"]     = lodPrevious.GetBufferHandle();
+				cull["gUniforms"]["lodCurrent"]      = lodCurrent.GetBufferHandle();
+				cull["gUniforms"]["drawnHistory"]    = drawnHistory.GetBufferHandle();
+				cull["gUniforms"]["drawBucketFlags"] = bucketFlags.GetBufferHandle();
 #if defined(BERNINI_GPU_DEBUG)
 				cull["gUniforms"]["stats"] = stats.GetBufferHandle();
 #endif
